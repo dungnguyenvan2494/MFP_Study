@@ -1,0 +1,1455 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap">
+<title>Giải phẫu USB Subsystem</title>
+<style>
+  :root{
+    --bg:#eaeef2; --surface:#f7f9fb; --surface-2:#dde5ec;
+    --ink:#14202c; --muted:#5a6b7b; --line:#c3d0da;
+    --hw:#a8500f; --irq:#6d3fa8;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f151b; --surface:#161e26; --surface-2:#212d38;
+      --ink:#e2e9ef; --muted:#93a3b1; --line:#2c3a47;
+      --hw:#e0894a; --irq:#b18ce0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f151b; --surface:#161e26; --surface-2:#212d38;
+    --ink:#e2e9ef; --muted:#93a3b1; --line:#2c3a47;
+    --hw:#e0894a; --irq:#b18ce0;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:47rem;margin:0 auto;padding:clamp(1.4rem,4vw,3.2rem) clamp(1rem,4vw,2rem) 4rem}
+
+  header.ph{border-bottom:2px solid var(--ink);padding-bottom:1.5rem;margin-bottom:1.2rem}
+  .eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.7rem;
+    letter-spacing:.15em;text-transform:uppercase;color:var(--hw);margin:0 0 .9rem}
+  h1{font-family:"Barlow","Helvetica Neue",Arial,sans-serif;font-weight:700;
+    font-size:clamp(1.95rem,5.4vw,2.8rem);line-height:1.03;letter-spacing:-.025em;
+    margin:0 0 .8rem;text-wrap:balance}
+  .lead{font-size:1.06rem;margin:0 0 1.3rem;max-width:37rem}
+  .meta{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.74rem;
+    color:var(--muted);line-height:1.9;margin:0}
+  .meta b{color:var(--ink);font-weight:500}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.5rem 1.1rem;font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:.72rem;color:var(--muted);margin:1.2rem 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:.45rem}
+  .sw{width:1.5rem;border-top:2.5px solid;display:inline-block}
+  .sw-hw{border-color:var(--hw)} .sw-irq{border-color:var(--irq)}
+  .sw-ink{border-color:var(--ink)}
+
+  section{margin-top:2.7rem}
+  h2{font-family:"Barlow",sans-serif;font-weight:700;font-size:1.34rem;
+    letter-spacing:-.015em;margin:0 0 .25rem;text-wrap:balance;scroll-margin-top:1rem}
+  h2 .n{color:var(--hw);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:.82rem;font-weight:500;margin-right:.55rem}
+  h3{font-family:"Barlow",sans-serif;font-weight:600;font-size:1.02rem;margin:1.5rem 0 .4rem;
+    letter-spacing:-.005em}
+  p{margin:0 0 .9rem;max-width:39rem}
+  code,.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.84em;
+    background:var(--surface-2);padding:.04em .3em;border-radius:3px}
+  ul,ol{margin:.25rem 0 .95rem;padding-left:1.25rem;max-width:39rem}
+  li{margin:.24rem 0}
+  li code{background:none;padding:0}
+  strong{font-weight:600}
+
+  /* citation chip — the repeating typographic object of this page */
+  .src{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.7rem;
+    color:var(--muted);white-space:nowrap;border-bottom:1px dotted var(--line)}
+  .srcline{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.71rem;
+    color:var(--muted);margin:0 0 .9rem}
+  /* verdict badges */
+  .v{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.62rem;
+    letter-spacing:.07em;padding:.1em .45em;border-radius:3px;border:1px solid var(--line);
+    color:var(--muted);white-space:nowrap;vertical-align:.08em}
+  .v-f{color:var(--ink);border-color:var(--ink)}
+  .v-i{color:var(--irq);border-color:var(--irq)}
+  .v-u{color:var(--hw);border-color:var(--hw);border-style:dashed}
+
+  figure{margin:1.5rem 0 0;padding:1.05rem;background:var(--surface);
+    border:1px solid var(--line);border-radius:6px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:.83rem;color:var(--muted);margin-top:.9rem;line-height:1.55}
+
+  .scroll{overflow-x:auto}
+  table.tbl{width:100%;border-collapse:collapse;font-size:.82rem;margin:.4rem 0 1rem;min-width:28rem}
+  .tbl th,.tbl td{text-align:left;padding:.4rem .55rem;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl th{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.65rem;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+  .tbl td code{font-size:.82em;background:var(--surface-2)}
+  .tbl tr:last-child td{border-bottom:0}
+  .tbl a{color:var(--ink)}
+
+  .q{border-left:2px solid var(--hw);padding-left:.85rem;margin:1.1rem 0}
+  .q h3{margin-top:0}
+
+  footer{margin-top:3.4rem;border-top:1px solid var(--line);padding-top:1.3rem;
+    font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.72rem;
+    color:var(--muted);line-height:1.95}
+  footer b{color:var(--ink);font-weight:500}
+  a{color:var(--hw)}
+  :focus-visible{outline:2px solid var(--hw);outline-offset:2px}
+  @media (prefers-reduced-motion:no-preference){
+    body{animation:fade .35s ease both}@keyframes fade{from{opacity:0}to{opacity:1}}
+  }
+
+  /* diagram primitives */
+  .b{fill:var(--surface-2);stroke:var(--ink);stroke-width:1.4}
+  .b-hw{stroke:var(--hw)} .b-irq{stroke:var(--irq)}
+  .b-gh{fill:none;stroke:var(--line);stroke-width:1.2;stroke-dasharray:4 4}
+  .f{stroke:var(--ink);stroke-width:1.4;fill:none}
+  .f-hw{stroke:var(--hw)} .f-irq{stroke:var(--irq)}
+  .f-d{stroke-dasharray:5 4}
+  .ll{stroke:var(--line);stroke-width:1.2;stroke-dasharray:3 4}
+  .rule-hw{stroke:var(--hw);stroke-width:1.2;stroke-dasharray:7 5}
+  .t{fill:var(--ink);font-family:"Barlow",system-ui,sans-serif;font-weight:600}
+  .m{fill:var(--muted);font-family:"JetBrains Mono",ui-monospace,monospace}
+  .mh{fill:var(--hw);font-family:"JetBrains Mono",ui-monospace,monospace}
+  .mi{fill:var(--irq);font-family:"JetBrains Mono",ui-monospace,monospace}
+  .ah{fill:var(--ink)} .ah-hw{fill:var(--hw)} .ah-irq{fill:var(--irq)}
+</style>
+
+<div class="wrap">
+
+  <header class="ph">
+    <p class="eyebrow">reverse-engineering · Kernel/K-S800/Src · linux 5.10.241</p>
+    <h1>Giải phẫu USB Subsystem</h1>
+    <p class="lead">Dựng lại toàn bộ đường đi của một byte USB — từ chân cắm tới userspace và
+      ngược lại — chỉ bằng mã nguồn thật trong repo. Mỗi khẳng định đều neo vào
+      <span class="mono">file:line</span>.</p>
+    <p class="meta">
+      <b>Kernel</b> 5.10.241 <span class="src">Makefile:2-4</span> &nbsp;·&nbsp;
+      <b>Board</b> Marvell Armada (CP110) — bizhub S800<br>
+      <b>HCD</b> xhci-mvebu + ehci-orion <span class="src">EagleBK_defconfig</span> &nbsp;·&nbsp;
+      <b>DTS</b> <code>usb3@500000</code> generic-xhci <span class="src">armada-cp110.dtsi:159</span><br>
+      <b>Gadget</b> USB_G_PRINTER=m — board vừa là host vừa là device
+    </p>
+    <div class="legend">
+      <span><i class="sw sw-ink"></i> phần mềm · process context</span>
+      <span><i class="sw sw-irq"></i> interrupt / atomic — <b>không được sleep</b></span>
+      <span><i class="sw sw-hw"></i> phần cứng · DMA · ranh giới silicon</span>
+    </div>
+    <div class="legend" style="margin-top:.55rem">
+      <span><b class="v v-f">FACT</b> đọc trực tiếp từ source</span>
+      <span><b class="v v-i">INFER</b> suy luận từ source</span>
+      <span><b class="v v-u">UNKNOWN</b> không xác định được trong repo</span>
+    </div>
+  </header>
+
+  <section id="map">
+    <h2><span class="n">00</span>USB Knowledge Map — 26 chủ đề, 5 tầng</h2>
+    <p class="srcline">bản đồ định vị trước khi đọc code · mỗi ô neo vào thư mục nguồn thật</p>
+    <p>Trước khi mở bất kỳ file nào: 26 chủ đề A–Z bạn liệt kê không nằm rời rạc — chúng phân bố
+      vào 5 tầng, và <em>vị trí</em> của một chủ đề quyết định nó được debug bằng công cụ gì và
+      chạy trong context nào.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Bản đồ 26 chủ đề USB xếp vào 5 tầng: Userspace (usbfs, sysfs, usbmon, debug); USB Device Driver (usb_driver, endpoint, transfer types, error recovery); USB Core (descriptor, enumeration, hub, URB, PM, hotplug, device model); HCD Framework rồi tách thành xHCI/EHCI/OHCI/UHCI (DMA, interrupt, transfer descriptor); và USB Protocol/Hardware (điện, topology, tín hiệu). Ranh giới silicon nằm dưới cùng.">
+        <defs>
+          <marker id="a0" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <text class="m" x="14" y="22" font-size="9">TẦNG 5</text>
+        <rect class="b" x="88" y="10" width="590" height="42" rx="4"/>
+        <text class="t" x="100" y="27" font-size="11">Userspace / Applications</text>
+        <text class="m" x="100" y="43" font-size="8.5">Z usbfs(devio.c) · sysfs · Y debugfs/usbmon/ftrace · libusb · lsusb</text>
+        <text class="m" x="686" y="34" font-size="8">drivers/usb/mon</text>
+
+        <text class="m" x="14" y="86" font-size="9">TẦNG 4</text>
+        <rect class="b" x="88" y="66" width="590" height="46" rx="4"/>
+        <text class="t" x="100" y="83" font-size="11">USB Device Driver</text>
+        <text class="m" x="100" y="99" font-size="8.5">L usb_driver · N endpoint · O transfer types · X error recovery · storage/hid/serial/gadget</text>
+        <text class="m" x="686" y="92" font-size="8">drivers/usb/{storage,serial,class}</text>
+
+        <text class="m" x="14" y="152" font-size="9">TẦNG 3</text>
+        <rect class="b" x="88" y="126" width="590" height="58" rx="4"/>
+        <text class="t" x="100" y="143" font-size="11">USB Core — usbcore.ko</text>
+        <text class="m" x="100" y="159" font-size="8.5">D descriptor · E enumeration · F core · M URB · R hub · S/V/W PM+suspend · T hotplug</text>
+        <text class="m" x="100" y="173" font-size="8.5">U of.c/usb-acpi.c · device model (usb_bus_type) · Q completion dispatch</text>
+        <text class="m" x="686" y="158" font-size="8">drivers/usb/core</text>
+
+        <text class="m" x="14" y="218" font-size="9">TẦNG 3b</text>
+        <rect class="b" x="88" y="198" width="590" height="36" rx="4"/>
+        <text class="t" x="100" y="215" font-size="11">HCD Framework — usb_hcd + hc_driver (vtable)</text>
+        <text class="m" x="100" y="229" font-size="8.5">G hcd · P DMA mapping · Q irq demux · root-hub emulation</text>
+        <text class="m" x="686" y="220" font-size="8">core/hcd.c</text>
+
+        <text class="m" x="14" y="272" font-size="9">TẦNG 2</text>
+        <rect class="b b-hw" x="88" y="248" width="140" height="46" rx="4"/>
+        <text class="t" x="158" y="266" font-size="10.5" text-anchor="middle">H xHCI</text>
+        <text class="m" x="158" y="281" font-size="8" text-anchor="middle">TRB · Ring · Doorbell</text>
+        <rect class="b b-hw" x="238" y="248" width="140" height="46" rx="4"/>
+        <text class="t" x="308" y="266" font-size="10.5" text-anchor="middle">I EHCI</text>
+        <text class="m" x="308" y="281" font-size="8" text-anchor="middle">QH · qTD · schedule</text>
+        <rect class="b b-hw b-gh" x="388" y="248" width="140" height="46" rx="4" fill="none"/>
+        <text class="m" x="458" y="266" font-size="10.5" text-anchor="middle">J OHCI</text>
+        <text class="m" x="458" y="281" font-size="8" text-anchor="middle">ED · TD</text>
+        <rect class="b b-hw b-gh" x="538" y="248" width="140" height="46" rx="4" fill="none"/>
+        <text class="m" x="608" y="266" font-size="10.5" text-anchor="middle">K UHCI</text>
+        <text class="m" x="608" y="281" font-size="8" text-anchor="middle">frame list · TD</text>
+        <text class="m" x="88" y="308" font-size="8">có trong repo &amp; bật cho board</text>
+        <text class="m" x="388" y="308" font-size="8">có trong repo, board không bật</text>
+
+        <line class="rule-hw" x1="88" y1="326" x2="678" y2="326"/>
+        <text class="mh" x="88" y="340" font-size="8.5">RANH GIỚI SILICON — dưới đây không còn C code</text>
+
+        <text class="m" x="14" y="372" font-size="9">TẦNG 1</text>
+        <rect class="b b-hw" x="88" y="350" width="590" height="42" rx="4"/>
+        <text class="t" x="100" y="367" font-size="11">USB Protocol / Hardware</text>
+        <text class="m" x="100" y="383" font-size="8.5">A protocol · B điện (D+/D−, VBUS, NRZI) · C topology (tiered star, ≤7 tầng) · PHY</text>
+
+        <line class="f" x1="74" y1="52" x2="74" y2="66" marker-end="url(#a0)"/>
+        <line class="f" x1="74" y1="112" x2="74" y2="126" marker-end="url(#a0)"/>
+        <line class="f" x1="74" y1="184" x2="74" y2="198" marker-end="url(#a0)"/>
+        <line class="f" x1="74" y1="234" x2="74" y2="248" marker-end="url(#a0)"/>
+      </svg>
+      <figcaption>Chữ cái A–Z là chủ đề bạn liệt kê. Ô nét đứt = driver tồn tại trong cây nguồn
+        nhưng defconfig của board <strong>không bật</strong>
+        <span class="src">EagleBK_defconfig</span> <span class="v v-f">FACT</span>. Toàn bộ phần
+        còn lại của trang đi từ dưới lên và từ trên xuống qua đúng 5 tầng này.</figcaption>
+    </figure>
+
+    <h3>Nơi mỗi tầng sống trong repo</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Tầng</th><th>Thư mục</th><th>Struct chủ đạo</th><th>Sở hữu dữ liệu</th><th>Context</th></tr></thead>
+      <tbody>
+        <tr><td>Userspace</td><td><code>core/devio.c</code>, <code>mon/</code></td><td><code>usb_dev_state</code>, <code>usbdevfs_urb</code></td><td>process của app</td><td>syscall</td></tr>
+        <tr><td>Device driver</td><td><code>storage/</code> <code>serial/</code> <code>class/</code></td><td><code>usb_driver</code>, private_data</td><td>driver cấp phát URB + buffer</td><td>process + completion</td></tr>
+        <tr><td>USB Core</td><td><code>core/</code></td><td><code>usb_device</code> <code>usb_interface</code> <code>urb</code></td><td>core sở hữu cây thiết bị</td><td>hub_wq + process</td></tr>
+        <tr><td>HCD framework</td><td><code>core/hcd.c</code></td><td><code>usb_hcd</code>, <code>hc_driver</code></td><td>hcd sở hữu URB sau submit</td><td>mọi context</td></tr>
+        <tr><td>HCD cụ thể</td><td><code>host/xhci*</code> <code>host/ehci*</code></td><td><code>xhci_hcd</code> / <code>ehci_hcd</code>, hcd_priv</td><td>ring/queue + DMA memory</td><td>hardirq + spinlock</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="a01">
+    <h2><span class="n">01</span>Master Architecture — cái gì đi qua mỗi ranh giới</h2>
+    <p class="srcline">artifact 01 · nguồn: include/linux/usb.h · include/linux/usb/hcd.h · core/hcd.c</p>
+    <p>Một sơ đồ tầng chỉ ghi tên tầng thì vô dụng. Điều đáng vẽ là <strong>vật thể nào thực sự
+      băng qua từng ranh giới</strong> — vì đó chính là chỗ bạn đặt breakpoint khi debug.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 470" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Năm tầng USB với vật thể băng qua từng ranh giới: userspace gửi usbdevfs_urb qua ioctl xuống usbfs; driver gửi struct urb qua usb_submit_urb xuống core; core gọi hc_driver->urb_enqueue xuống HCD sau khi map DMA; HCD ghi transfer descriptor vào bộ nhớ DMA và ring doorbell xuống phần cứng. Chiều ngược lại: hardware raise IRQ, HCD gọi usb_hcd_giveback_urb, core gọi urb->complete, driver đánh thức process.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="a1i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="ah-irq" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="a1h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <text class="m" x="196" y="20" font-size="8.5" text-anchor="middle">XUỐNG — submit path</text>
+        <text class="mi" x="560" y="20" font-size="8.5" text-anchor="middle">LÊN — completion path</text>
+
+        <rect class="b" x="238" y="32" width="270" height="38" rx="4"/>
+        <text class="t" x="373" y="49" font-size="11" text-anchor="middle">Application (userspace)</text>
+        <text class="m" x="373" y="63" font-size="8" text-anchor="middle">read/write/ioctl trên /dev/bus/usb/BBB/DDD</text>
+
+        <line class="f" x1="196" y1="70" x2="196" y2="104" marker-end="url(#a1)"/>
+        <text class="m" x="188" y="90" font-size="8" text-anchor="end">usbdevfs_urb</text>
+        <line class="f f-irq" x1="560" y1="104" x2="560" y2="70" marker-end="url(#a1i)"/>
+        <text class="mi" x="568" y="90" font-size="8">poll/reap</text>
+
+        <rect class="b" x="238" y="106" width="270" height="38" rx="4"/>
+        <text class="t" x="373" y="123" font-size="11" text-anchor="middle">USB Device Driver</text>
+        <text class="m" x="373" y="137" font-size="8" text-anchor="middle">usb_driver.probe() giữ endpoint + private_data</text>
+        <text class="m" x="518" y="128" font-size="8">storage/usb.c:1153</text>
+
+        <line class="f" x1="196" y1="144" x2="196" y2="178" marker-end="url(#a1)"/>
+        <text class="m" x="188" y="158" font-size="8" text-anchor="end">struct urb</text>
+        <text class="m" x="188" y="169" font-size="8" text-anchor="end">usb_submit_urb()</text>
+        <line class="f f-irq" x1="560" y1="178" x2="560" y2="144" marker-end="url(#a1i)"/>
+        <text class="mi" x="568" y="158" font-size="8">urb-&gt;complete(urb)</text>
+        <text class="mi" x="568" y="169" font-size="8">hcd.c:1673</text>
+
+        <rect class="b" x="238" y="180" width="270" height="38" rx="4"/>
+        <text class="t" x="373" y="197" font-size="11" text-anchor="middle">USB Core (usbcore)</text>
+        <text class="m" x="373" y="211" font-size="8" text-anchor="middle">kiểm hợp lệ URB, sở hữu cây usb_device</text>
+        <text class="m" x="518" y="202" font-size="8">core/urb.c:367</text>
+
+        <line class="f" x1="196" y1="218" x2="196" y2="252" marker-end="url(#a1)"/>
+        <text class="m" x="188" y="232" font-size="8" text-anchor="end">usb_hcd_submit_urb()</text>
+        <text class="m" x="188" y="243" font-size="8" text-anchor="end">hcd.c:1531</text>
+        <line class="f f-irq" x1="560" y1="252" x2="560" y2="218" marker-end="url(#a1i)"/>
+        <text class="mi" x="568" y="232" font-size="8">usb_hcd_giveback_urb()</text>
+        <text class="mi" x="568" y="243" font-size="8">hcd.c:1744</text>
+
+        <rect class="b" x="238" y="254" width="270" height="38" rx="4"/>
+        <text class="t" x="373" y="271" font-size="11" text-anchor="middle">HCD Framework</text>
+        <text class="m" x="373" y="285" font-size="8" text-anchor="middle">map DMA rồi gọi vtable hc_driver</text>
+        <text class="m" x="518" y="276" font-size="8">hcd.h:253</text>
+
+        <line class="f f-hw" x1="196" y1="292" x2="196" y2="326" marker-end="url(#a1h)"/>
+        <text class="mh" x="188" y="306" font-size="8" text-anchor="end">-&gt;urb_enqueue()</text>
+        <text class="mh" x="188" y="317" font-size="8" text-anchor="end">+ dma_map_single()</text>
+        <line class="f f-irq" x1="560" y1="326" x2="560" y2="292" marker-end="url(#a1i)"/>
+        <text class="mi" x="568" y="306" font-size="8">hardirq handler</text>
+        <text class="mi" x="568" y="317" font-size="8">hcd.c:2351</text>
+
+        <rect class="b b-hw" x="238" y="328" width="270" height="38" rx="4"/>
+        <text class="t" x="373" y="345" font-size="11" text-anchor="middle">xHCI / EHCI driver</text>
+        <text class="m" x="373" y="359" font-size="8" text-anchor="middle">dịch URB → TRB / qTD trong bộ nhớ DMA</text>
+        <text class="m" x="518" y="350" font-size="8">xhci.c:1514</text>
+
+        <line class="rule-hw" x1="60" y1="384" x2="680" y2="384"/>
+        <text class="mh" x="60" y="379" font-size="8.5">RANH GIỚI SILICON</text>
+        <line class="f f-hw" x1="196" y1="366" x2="196" y2="404" marker-end="url(#a1h)"/>
+        <text class="mh" x="188" y="400" font-size="8" text-anchor="end">writel() doorbell</text>
+        <line class="f f-irq" x1="560" y1="404" x2="560" y2="366" marker-end="url(#a1i)"/>
+        <text class="mi" x="568" y="400" font-size="8">IRQ line</text>
+
+        <rect class="b b-hw" x="238" y="406" width="270" height="38" rx="4"/>
+        <text class="t" x="373" y="423" font-size="11" text-anchor="middle">Host Controller (Armada CP110)</text>
+        <text class="m" x="373" y="437" font-size="8" text-anchor="middle">bus-master đọc TD, đẩy packet lên dây D+/D−</text>
+
+        <text class="m" x="373" y="462" font-size="8.5" text-anchor="middle">↓ USB cable → thiết bị</text>
+      </svg>
+      <figcaption>Chiều xuống (trái, mực) chạy <strong>process context</strong>; chiều lên (phải,
+        tím) bắt đầu trong <strong>hardirq</strong> rồi có thể bị đẩy sang tasklet.
+        <span class="v v-f">FACT</span> — mọi mũi tên đều là một lời gọi hàm có thật, xem
+        <a href="#a13">artifact 13</a> cho context chính xác của từng chặng.</figcaption>
+    </figure>
+  </section>
+
+  <section id="a02">
+    <h2><span class="n">02</span>USB Core — đồ thị đối tượng và trường liên kết</h2>
+    <p class="srcline">artifact 02 · nguồn: include/linux/usb.h</p>
+    <p>Câu hỏi thực dụng: đang cầm một <code>struct urb*</code> trong completion handler, làm sao
+      lần ngược ra bus? Sơ đồ dưới ghi <strong>tên trường thật</strong> trên mỗi cạnh — đó là
+      đường đi bạn gõ trong gdb.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Đồ thị đối tượng USB core: usb_bus chứa root_hub trỏ tới usb_device; usb_device có trường bus trỏ ngược lại bus, ep0 nhúng sẵn, mảng config và actconfig trỏ tới usb_host_config; usb_host_config có mảng interface trỏ tới usb_interface; usb_interface có altsetting và cur_altsetting trỏ tới usb_host_interface; usb_host_interface có mảng endpoint trỏ tới usb_host_endpoint; usb_host_endpoint có urb_list và hcpriv; struct urb có trường dev trỏ về usb_device và ep trỏ về usb_host_endpoint.">
+        <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a2h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="20" y="20" width="150" height="40" rx="4"/>
+        <text class="t" x="95" y="38" font-size="10.5" text-anchor="middle">usb_bus</text>
+        <text class="m" x="95" y="52" font-size="8" text-anchor="middle">usb.h:429 · 1 / controller</text>
+
+        <rect class="b" x="20" y="100" width="150" height="52" rx="4"/>
+        <text class="t" x="95" y="118" font-size="10.5" text-anchor="middle">usb_device</text>
+        <text class="m" x="95" y="131" font-size="8" text-anchor="middle">usb.h:632</text>
+        <text class="m" x="95" y="143" font-size="8" text-anchor="middle">devnum · speed · state</text>
+
+        <line class="f" x1="95" y1="60" x2="95" y2="98" marker-end="url(#a2)"/>
+        <text class="m" x="102" y="76" font-size="8">-&gt;root_hub</text>
+        <line class="f f-d" x1="26" y1="100" x2="26" y2="62" marker-end="url(#a2)"/>
+        <text class="m" x="18" y="82" font-size="8" text-anchor="end">-&gt;bus</text>
+
+        <rect class="b" x="20" y="192" width="150" height="46" rx="4"/>
+        <text class="t" x="95" y="210" font-size="10.5" text-anchor="middle">usb_host_config</text>
+        <text class="m" x="95" y="224" font-size="8" text-anchor="middle">usb.h:379</text>
+        <line class="f" x1="95" y1="152" x2="95" y2="190" marker-end="url(#a2)"/>
+        <text class="m" x="102" y="166" font-size="8">-&gt;config[]</text>
+        <text class="m" x="102" y="177" font-size="8">-&gt;actconfig</text>
+
+        <rect class="b" x="20" y="278" width="150" height="46" rx="4"/>
+        <text class="t" x="95" y="296" font-size="10.5" text-anchor="middle">usb_interface</text>
+        <text class="m" x="95" y="310" font-size="8" text-anchor="middle">usb.h:232 · có struct device</text>
+        <line class="f" x1="95" y1="238" x2="95" y2="276" marker-end="url(#a2)"/>
+        <text class="m" x="102" y="258" font-size="8">-&gt;interface[i]</text>
+
+        <rect class="b" x="255" y="278" width="160" height="46" rx="4"/>
+        <text class="t" x="335" y="296" font-size="10.5" text-anchor="middle">usb_host_interface</text>
+        <text class="m" x="335" y="310" font-size="8" text-anchor="middle">usb.h:82 · altsetting</text>
+        <line class="f" x1="170" y1="301" x2="253" y2="301" marker-end="url(#a2)"/>
+        <text class="m" x="211" y="294" font-size="8" text-anchor="middle">-&gt;cur_altsetting</text>
+
+        <rect class="b" x="490" y="278" width="160" height="46" rx="4"/>
+        <text class="t" x="570" y="296" font-size="10.5" text-anchor="middle">usb_host_endpoint</text>
+        <text class="m" x="570" y="310" font-size="8" text-anchor="middle">usb.h:67</text>
+        <line class="f" x1="415" y1="301" x2="488" y2="301" marker-end="url(#a2)"/>
+        <text class="m" x="451" y="294" font-size="8" text-anchor="middle">-&gt;endpoint[n]</text>
+
+        <rect class="b" x="490" y="192" width="160" height="52" rx="4"/>
+        <text class="t" x="570" y="210" font-size="10.5" text-anchor="middle">struct urb</text>
+        <text class="m" x="570" y="223" font-size="8" text-anchor="middle">usb.h:1572</text>
+        <text class="m" x="570" y="235" font-size="8" text-anchor="middle">kref · use_count · status</text>
+        <line class="f" x1="570" y1="276" x2="570" y2="246" marker-end="url(#a2)"/>
+        <text class="m" x="578" y="264" font-size="8">-&gt;urb_list</text>
+
+        <path class="f f-d" d="M490,208 C300,190 220,150 172,126" marker-end="url(#a2)"/>
+        <text class="m" x="330" y="176" font-size="8" text-anchor="middle">urb-&gt;dev</text>
+        <path class="f f-d" d="M560,244 C556,258 560,268 566,276"/>
+        <text class="m" x="600" y="262" font-size="8">urb-&gt;ep</text>
+
+        <rect class="b" x="255" y="100" width="160" height="52" rx="4"/>
+        <text class="t" x="335" y="118" font-size="10.5" text-anchor="middle">usb_device.ep0</text>
+        <text class="m" x="335" y="131" font-size="8" text-anchor="middle">nhúng sẵn, không alloc</text>
+        <text class="m" x="335" y="143" font-size="8" text-anchor="middle">+ ep_in[16] / ep_out[16]</text>
+        <line class="f" x1="170" y1="126" x2="253" y2="126" marker-end="url(#a2)"/>
+
+        <rect class="b b-hw" x="490" y="100" width="160" height="52" rx="4"/>
+        <text class="t" x="570" y="118" font-size="10.5" text-anchor="middle">hcpriv (void *)</text>
+        <text class="m" x="570" y="131" font-size="8" text-anchor="middle">xhci_virt_ep / ehci_qh</text>
+        <text class="m" x="570" y="143" font-size="8" text-anchor="middle">HCD sở hữu, core không đụng</text>
+        <line class="f f-hw" x1="570" y1="276" x2="570" y2="248"/>
+        <path class="f f-hw" d="M650,301 C690,301 700,180 654,140" marker-end="url(#a2h)"/>
+        <text class="mh" x="700" y="230" font-size="8" text-anchor="middle">ep-&gt;hcpriv</text>
+      </svg>
+      <figcaption>Nét liền = quan hệ chứa (cha → con); nét đứt = con trỏ ngược. Đường đồng màu
+        <span style="color:var(--hw)">copper</span> là <code>hcpriv</code> — vùng HCD tự quản lý,
+        USB core <em>không bao giờ</em> dereference. Trong gdb:
+        <code>urb-&gt;dev-&gt;bus-&gt;busnum</code> và
+        <code>urb-&gt;ep-&gt;desc.bEndpointAddress</code>. <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <h3>Vòng đời &amp; ai cấp phát</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Object</th><th>Cấp phát bởi</th><th>Giải phóng bởi</th><th>Refcount</th></tr></thead>
+      <tbody>
+        <tr><td><code>usb_bus</code></td><td>nhúng trong <code>usb_hcd.self</code> <span class="src">hcd.h:87</span></td><td><code>usb_remove_hcd</code> <span class="src">hcd.c:2892</span></td><td><code>hcd-&gt;kref</code></td></tr>
+        <tr><td><code>usb_device</code></td><td><code>usb_alloc_dev()</code> trong <code>hub_port_connect</code> <span class="src">hub.c:5485</span></td><td><code>usb_disconnect</code> → <code>put_device</code> <span class="src">hub.c:2293</span></td><td><code>dev.kobj</code></td></tr>
+        <tr><td><code>usb_host_config</code></td><td><code>usb_get_configuration()</code> kzalloc <span class="src">config.c:906</span></td><td><code>usb_destroy_configuration</code></td><td>— (theo udev)</td></tr>
+        <tr><td><code>usb_interface</code></td><td><code>usb_set_configuration()</code> <span class="src">message.c:2088-2095</span></td><td><code>device_del</code> khi unconfigure</td><td><code>intf-&gt;dev.kobj</code></td></tr>
+        <tr><td><code>urb</code></td><td><strong>driver</strong>: <code>usb_alloc_urb()</code> <span class="src">urb.c:70</span></td><td><code>usb_free_urb()</code> <span class="src">urb.c:93</span></td><td><code>kref</code> + <code>use_count</code></td></tr>
+      </tbody>
+    </table></div>
+    <p><span class="v v-f">FACT</span> — <code>urb</code> là object <strong>duy nhất</strong> do
+      device driver sở hữu; toàn bộ phần còn lại của cây do core dựng trong enumeration.</p>
+  </section>
+
+  <section id="a03">
+    <h2><span class="n">03</span>Enumeration — trace đầy đủ, có context lane</h2>
+    <p class="srcline">artifact 03 · nguồn: core/hub.c · core/message.c · core/config.c</p>
+    <p>Đây là flow bạn yêu cầu đào sâu nhất. Điểm mấu chốt mà mô tả lý thuyết luôn bỏ sót:
+      <strong>enumeration không chạy trong interrupt</strong>. <code>hub_irq()</code> chỉ chép
+      bitmap port rồi <code>kick_hub_wq()</code>; toàn bộ việc thật xảy ra trong workqueue
+      <code>hub_wq</code>, nơi được phép ngủ và gửi control transfer đồng bộ.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 560" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Trace enumeration ba làn context: làn hardirq chỉ có hub_irq chép bitmap port rồi kick_hub_wq; làn workqueue hub_wq chạy hub_event, port_event, hub_port_connect, usb_alloc_dev, hub_port_init với reset, SET_ADDRESS, GET_DESCRIPTOR, sau đó usb_new_device, usb_enumerate_device đọc configuration, rồi device_add; làn driver-core chạy usb_device_match, usb_generic_driver_probe, usb_set_configuration tạo interface, device_add cho interface, usb_probe_interface và cuối cùng driver probe.">
+        <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a3i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-irq" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a3h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b b-irq" x="16" y="12" width="150" height="26" rx="4"/>
+        <text class="t" x="91" y="29" font-size="9.5" text-anchor="middle">hardirq · atomic</text>
+        <rect class="b" x="186" y="12" width="330" height="26" rx="4"/>
+        <text class="t" x="351" y="29" font-size="9.5" text-anchor="middle">workqueue hub_wq · ngủ được</text>
+        <rect class="b" x="536" y="12" width="190" height="26" rx="4"/>
+        <text class="t" x="631" y="29" font-size="9.5" text-anchor="middle">driver core (cùng thread)</text>
+        <line class="ll" x1="176" y1="42" x2="176" y2="548"/>
+        <line class="ll" x1="526" y1="42" x2="526" y2="548"/>
+
+        <rect class="b b-hw" x="16" y="52" width="150" height="30" rx="4"/>
+        <text class="t" x="91" y="66" font-size="9" text-anchor="middle">T0 cắm dây</text>
+        <text class="m" x="91" y="77" font-size="7.5" text-anchor="middle">D+/D− pull-up → port change</text>
+
+        <rect class="b b-irq" x="16" y="94" width="150" height="34" rx="4"/>
+        <text class="t" x="91" y="108" font-size="9" text-anchor="middle">hub_irq()</text>
+        <text class="m" x="91" y="119" font-size="7.5" text-anchor="middle">hub.c:758 · chép event_bits</text>
+        <line class="f f-hw" x1="91" y1="82" x2="91" y2="92" marker-end="url(#a3h)"/>
+        <text class="mh" x="99" y="90" font-size="7">IRQ ep1-in của hub</text>
+
+        <rect class="b b-irq" x="16" y="140" width="150" height="30" rx="4"/>
+        <text class="t" x="91" y="154" font-size="9" text-anchor="middle">kick_hub_wq()</text>
+        <text class="m" x="91" y="165" font-size="7.5" text-anchor="middle">hub.c:693 · queue_work</text>
+        <line class="f f-irq" x1="91" y1="128" x2="91" y2="138" marker-end="url(#a3i)"/>
+
+        <line class="f f-irq" x1="166" y1="155" x2="220" y2="172" marker-end="url(#a3i)"/>
+        <text class="mi" x="180" y="150" font-size="7.5">chuyển context</text>
+
+        <rect class="b" x="186" y="174" width="330" height="28" rx="4"/>
+        <text class="t" x="200" y="192" font-size="9.5">hub_event()</text>
+        <text class="m" x="508" y="192" font-size="7.5" text-anchor="end">hub.c:5888 · usb_lock_device(hdev)</text>
+
+        <rect class="b" x="186" y="210" width="330" height="28" rx="4"/>
+        <text class="t" x="200" y="228" font-size="9.5">port_event()</text>
+        <text class="m" x="508" y="228" font-size="7.5" text-anchor="end">hub.c:5764 · đọc C_CONNECTION</text>
+        <line class="f" x1="351" y1="202" x2="351" y2="208" marker-end="url(#a3)"/>
+
+        <rect class="b" x="186" y="246" width="330" height="28" rx="4"/>
+        <text class="t" x="200" y="264" font-size="9.5">hub_port_connect()</text>
+        <text class="m" x="508" y="264" font-size="7.5" text-anchor="end">hub.c:5410 · vòng PORT_INIT_TRIES</text>
+        <line class="f" x1="351" y1="238" x2="351" y2="244" marker-end="url(#a3)"/>
+
+        <rect class="b" x="200" y="282" width="302" height="26" rx="4"/>
+        <text class="t" x="212" y="299" font-size="9">usb_alloc_dev() + choose_devnum()</text>
+        <text class="m" x="494" y="299" font-size="7.5" text-anchor="end">hub.c:5485</text>
+        <line class="f" x1="351" y1="274" x2="351" y2="280" marker-end="url(#a3)"/>
+
+        <rect class="b" x="200" y="316" width="302" height="96" rx="4"/>
+        <text class="t" x="212" y="333" font-size="9.5">hub_port_init()   hub.c:4892</text>
+        <line class="ll" x1="212" y1="339" x2="490" y2="339"/>
+        <text class="m" x="220" y="353" font-size="8">① hub_port_reset() → USB_STATE_DEFAULT</text>
+        <text class="m" x="440" y="353" font-size="7.5">:4929</text>
+        <text class="m" x="220" y="367" font-size="8">② GET_DESCRIPTOR(DEVICE, 8B) → bMaxPacketSize0</text>
+        <text class="m" x="440" y="367" font-size="7.5">:5134</text>
+        <text class="m" x="220" y="381" font-size="8">③ hub_set_address() → USB_STATE_ADDRESS</text>
+        <text class="m" x="440" y="381" font-size="7.5">:5088</text>
+        <text class="m" x="220" y="395" font-size="8">④ usb_get_device_descriptor() 18B đầy đủ</text>
+        <text class="m" x="440" y="395" font-size="7.5">:5198</text>
+        <text class="m" x="220" y="408" font-size="8">⑤ usb_get_bos_descriptor() (USB≥2.1)</text>
+        <text class="m" x="440" y="408" font-size="7.5">:5229</text>
+        <line class="f" x1="351" y1="308" x2="351" y2="314" marker-end="url(#a3)"/>
+        <text class="mh" x="510" y="370" font-size="7.5">EP0 · control</text>
+        <text class="mh" x="510" y="381" font-size="7.5">addr 0 → devnum</text>
+
+        <rect class="b" x="200" y="420" width="302" height="54" rx="4"/>
+        <text class="t" x="212" y="437" font-size="9.5">usb_new_device()   hub.c:2631</text>
+        <text class="m" x="220" y="451" font-size="8">usb_enumerate_device() :2510 → usb_get_configuration()</text>
+        <text class="m" x="220" y="464" font-size="8">→ parse config/intf/ep → cache string descriptors</text>
+        <line class="f" x1="351" y1="412" x2="351" y2="418" marker-end="url(#a3)"/>
+
+        <rect class="b" x="200" y="482" width="302" height="26" rx="4"/>
+        <text class="t" x="212" y="499" font-size="9">device_add(&amp;udev-&gt;dev)</text>
+        <text class="m" x="494" y="499" font-size="7.5" text-anchor="end">hub.c:2684</text>
+        <line class="f" x1="351" y1="474" x2="351" y2="480" marker-end="url(#a3)"/>
+
+        <line class="f" x1="502" y1="495" x2="546" y2="470" marker-end="url(#a3)"/>
+
+        <rect class="b" x="536" y="440" width="190" height="30" rx="4"/>
+        <text class="t" x="546" y="455" font-size="8.5">usb_device_match()</text>
+        <text class="m" x="546" y="466" font-size="7.5">driver.c:928 · usb_bus_type</text>
+
+        <rect class="b" x="536" y="386" width="190" height="44" rx="4"/>
+        <text class="t" x="546" y="401" font-size="8.5">usb_generic_driver_probe()</text>
+        <text class="m" x="546" y="412" font-size="7.5">generic.c:226</text>
+        <text class="m" x="546" y="423" font-size="7.5">→ usb_set_configuration() :238</text>
+        <line class="f" x1="631" y1="440" x2="631" y2="432" marker-end="url(#a3)"/>
+
+        <rect class="b" x="536" y="326" width="190" height="46" rx="4"/>
+        <text class="t" x="546" y="341" font-size="8.5">tạo N × usb_interface</text>
+        <text class="m" x="546" y="352" font-size="7.5">message.c:2088 dev.bus=usb</text>
+        <text class="m" x="546" y="363" font-size="7.5">device_add(intf) :2160</text>
+        <line class="f" x1="631" y1="386" x2="631" y2="374" marker-end="url(#a3)"/>
+
+        <rect class="b" x="536" y="266" width="190" height="46" rx="4"/>
+        <text class="t" x="546" y="281" font-size="8.5">usb_match_id() → id_table</text>
+        <text class="m" x="546" y="292" font-size="7.5">driver.c:876 · VID/PID/class</text>
+        <text class="m" x="546" y="303" font-size="7.5">usb_probe_interface() :388</text>
+        <line class="f" x1="631" y1="326" x2="631" y2="314" marker-end="url(#a3)"/>
+
+        <rect class="b" x="536" y="212" width="190" height="40" rx="4"/>
+        <text class="t" x="631" y="230" font-size="10" text-anchor="middle">driver-&gt;probe(intf, id)</text>
+        <text class="m" x="631" y="243" font-size="7.5" text-anchor="middle">driver.c:466 — T8</text>
+        <line class="f" x1="631" y1="266" x2="631" y2="254" marker-end="url(#a3)"/>
+      </svg>
+      <figcaption>Ba làn = ba context. Chỉ hộp tím chạy atomic. Bước ② và ③ bị
+        <strong>đan xen</strong> có chủ ý: kernel đọc 8 byte descriptor <em>trước</em>
+        SET_ADDRESS để biết <code>bMaxPacketSize0</code> — comment ở <code>hub.c:5030</code> giải
+        thích đây là bắt chước Windows để tương thích thiết bị lỗi.
+        <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <h3>Trạng thái <code>usb_device.state</code> đổi ở đâu</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Từ → đến</th><th>Hàm</th><th>Nguồn</th><th>Giao dịch USB</th></tr></thead>
+      <tbody>
+        <tr><td>— → POWERED</td><td><code>hub_port_connect</code></td><td><span class="src">hub.c:5499</span></td><td>không (VBUS)</td></tr>
+        <tr><td>POWERED → DEFAULT</td><td><code>hub_port_reset</code></td><td><span class="src">hub.c:3095</span></td><td>SET_PORT_FEATURE(RESET)</td></tr>
+        <tr><td>DEFAULT → ADDRESS</td><td><code>hub_set_address</code></td><td><span class="src">hub.c:4742</span></td><td>SET_ADDRESS trên EP0 addr 0</td></tr>
+        <tr><td>ADDRESS → CONFIGURED</td><td><code>usb_set_configuration</code></td><td><span class="src">message.c:1947</span></td><td>SET_CONFIGURATION</td></tr>
+        <tr><td>* → NOTATTACHED</td><td><code>usb_disconnect</code></td><td><span class="src">hub.c:2305</span></td><td>không (rút dây)</td></tr>
+      </tbody>
+    </table></div>
+    <p><strong>Chi tiết đáng chú ý</strong> <span class="v v-f">FACT</span> — trên xHCI,
+      <code>hub_set_address()</code> <em>không</em> gửi control transfer: nếu HCD có
+      <code>address_device</code> thì controller tự chọn địa chỉ
+      (<code>hcd-&gt;driver-&gt;address_device(...)</code> <span class="src">hub.c:4757</span>,
+      cài bởi <code>xhci_address_device</code>). Đây là khác biệt cốt lõi xHCI vs EHCI ở tầng
+      enumeration, xem <a href="#a09">artifact 09</a>.</p>
+  </section>
+
+  <section id="a04">
+    <h2><span class="n">04</span>Descriptor — ai hỏi, ai parse, byte nằm ở đâu</h2>
+    <p class="srcline">artifact 04 · nguồn: uapi/linux/usb/ch9.h · core/message.c · core/config.c</p>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Descriptor</th><th>struct</th><th>Ai request</th><th>Ai parse</th><th>Lưu vào</th></tr></thead>
+      <tbody>
+        <tr><td>Device</td><td><code>usb_device_descriptor</code> <span class="src">ch9.h:292</span></td><td><code>hub_port_init</code> <span class="src">hub.c:5198</span></td><td>gán thẳng</td><td><code>udev-&gt;descriptor</code></td></tr>
+        <tr><td>Configuration</td><td><code>usb_config_descriptor</code> <span class="src">ch9.h:352</span></td><td><code>usb_get_configuration</code> <span class="src">config.c:882</span></td><td><code>usb_parse_configuration</code> <span class="src">config.c:626</span></td><td><code>udev-&gt;config[]</code> + <code>rawdescriptors[]</code></td></tr>
+        <tr><td>Interface</td><td><code>usb_interface_descriptor</code> <span class="src">ch9.h:392</span></td><td>đi kèm config (một lần đọc)</td><td><code>usb_parse_interface</code> <span class="src">config.c:519</span></td><td><code>usb_host_interface.desc</code></td></tr>
+        <tr><td>Endpoint</td><td><code>usb_endpoint_descriptor</code> <span class="src">ch9.h:410</span></td><td>đi kèm config</td><td><code>usb_parse_endpoint</code> <span class="src">config.c:263</span></td><td><code>usb_host_endpoint.desc</code></td></tr>
+        <tr><td>String</td><td><code>usb_string_descriptor</code> <span class="src">ch9.h:378</span></td><td><code>usb_cache_string</code> <span class="src">hub.c:2528</span></td><td>UTF-16→UTF-8</td><td><code>udev-&gt;product/manufacturer/serial</code></td></tr>
+        <tr><td>BOS</td><td><code>usb_bos_descriptor</code> <span class="src">ch9.h:847</span></td><td><code>usb_get_bos_descriptor</code> <span class="src">config.c:1015</span></td><td>cùng hàm</td><td><code>udev-&gt;bos</code></td></tr>
+        <tr><td>Device Qualifier</td><td><code>usb_qualifier_descriptor</code> <span class="src">ch9.h:730</span></td><td><code>hub_port_init</code> <span class="src">hub.c:5263</span></td><td>chỉ để dò tốc độ khác</td><td>không lưu</td></tr>
+      </tbody>
+    </table></div>
+
+    <figure>
+      <svg viewBox="0 0 740 300" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Vòng đi của GET_DESCRIPTOR: usb_get_descriptor gọi usb_control_msg, hàm này cấp URB, fill control URB với setup packet 8 byte, submit rồi ngủ chờ completion; trên dây EP0 diễn ra ba giai đoạn SETUP, DATA IN nhiều gói theo maxpacket, và STATUS OUT; dữ liệu trả về được usb_parse_configuration bóc thành mảng interface và endpoint trong bộ nhớ kernel.">
+        <defs><marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a4h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="m" x="16" y="18" font-size="8.5">PHẦN MỀM</text>
+        <rect class="b" x="16" y="26" width="200" height="30" rx="4"/>
+        <text class="t" x="26" y="45" font-size="9">usb_get_descriptor()</text>
+        <text class="m" x="208" y="45" font-size="7.5" text-anchor="end">message.c:782</text>
+
+        <rect class="b" x="16" y="66" width="200" height="44" rx="4"/>
+        <text class="t" x="26" y="82" font-size="9">usb_control_msg()</text>
+        <text class="m" x="26" y="94" font-size="7.5">message.c:136 · cấp urb + dr</text>
+        <text class="m" x="26" y="105" font-size="7.5">usb_start_wait_urb() :49 — NGỦ</text>
+        <line class="f" x1="116" y1="56" x2="116" y2="64" marker-end="url(#a4)"/>
+
+        <rect class="b" x="16" y="120" width="200" height="40" rx="4"/>
+        <text class="t" x="26" y="136" font-size="9">usb_fill_control_urb()</text>
+        <text class="m" x="26" y="149" font-size="7.5">setup_packet = 8 byte ctrlrequest</text>
+        <line class="f" x1="116" y1="110" x2="116" y2="118" marker-end="url(#a4)"/>
+
+        <rect class="b" x="16" y="170" width="200" height="28" rx="4"/>
+        <text class="t" x="26" y="188" font-size="9">usb_submit_urb() → HCD</text>
+        <line class="f" x1="116" y1="160" x2="116" y2="168" marker-end="url(#a4)"/>
+
+        <line class="rule-hw" x1="248" y1="14" x2="248" y2="288"/>
+        <text class="mh" x="256" y="24" font-size="8">DÂY USB — EP0, control pipe</text>
+
+        <rect class="b b-hw" x="270" y="40" width="200" height="30" rx="4"/>
+        <text class="t" x="370" y="53" font-size="9" text-anchor="middle">SETUP stage</text>
+        <text class="m" x="370" y="65" font-size="7.5" text-anchor="middle">80 06 0200 0000 wLength</text>
+        <line class="f f-hw" x1="216" y1="184" x2="264" y2="70" marker-end="url(#a4h)"/>
+
+        <rect class="b b-hw" x="270" y="86" width="200" height="42" rx="4"/>
+        <text class="t" x="370" y="100" font-size="9" text-anchor="middle">DATA stage (IN)</text>
+        <text class="m" x="370" y="112" font-size="7.5" text-anchor="middle">n gói, mỗi gói ≤ bMaxPacketSize0</text>
+        <text class="m" x="370" y="123" font-size="7.5" text-anchor="middle">gói ngắn hoặc đủ wLength = hết</text>
+        <line class="f f-hw" x1="370" y1="70" x2="370" y2="84" marker-end="url(#a4h)"/>
+
+        <rect class="b b-hw" x="270" y="144" width="200" height="28" rx="4"/>
+        <text class="t" x="370" y="162" font-size="9" text-anchor="middle">STATUS stage (OUT, zero-length)</text>
+        <line class="f f-hw" x1="370" y1="128" x2="370" y2="142" marker-end="url(#a4h)"/>
+
+        <text class="m" x="270" y="196" font-size="8">HCD tự sinh 3 stage này từ 1 URB —</text>
+        <text class="m" x="270" y="208" font-size="8">driver chỉ thấy một lần completion.</text>
+        <text class="m" x="270" y="222" font-size="7.5">xhci_queue_ctrl_tx() xhci-ring.c:3671</text>
+
+        <line class="f" x1="470" y1="110" x2="516" y2="110" marker-end="url(#a4)"/>
+        <text class="m" x="493" y="103" font-size="7.5" text-anchor="middle">bytes</text>
+
+        <text class="m" x="520" y="18" font-size="8.5">BỘ NHỚ KERNEL</text>
+        <rect class="b" x="520" y="26" width="204" height="26" rx="4"/>
+        <text class="t" x="530" y="43" font-size="8.5">udev-&gt;rawdescriptors[cfgno]</text>
+
+        <rect class="b" x="520" y="88" width="204" height="44" rx="4"/>
+        <text class="t" x="530" y="104" font-size="8.5">usb_parse_configuration()</text>
+        <text class="m" x="530" y="116" font-size="7.5">config.c:626 — duyệt tuần tự</text>
+        <text class="m" x="530" y="127" font-size="7.5">theo bLength/bDescriptorType</text>
+        <line class="f" x1="622" y1="52" x2="622" y2="86" marker-end="url(#a4)"/>
+
+        <rect class="b" x="520" y="148" width="204" height="26" rx="4"/>
+        <text class="t" x="530" y="165" font-size="8.5">usb_host_config.interface[]</text>
+        <line class="f" x1="622" y1="132" x2="622" y2="146" marker-end="url(#a4)"/>
+        <rect class="b" x="520" y="184" width="204" height="26" rx="4"/>
+        <text class="t" x="530" y="201" font-size="8.5">usb_host_interface.endpoint[]</text>
+        <line class="f" x1="622" y1="174" x2="622" y2="182" marker-end="url(#a4)"/>
+        <rect class="b" x="520" y="220" width="204" height="26" rx="4"/>
+        <text class="t" x="530" y="237" font-size="8.5">udev-&gt;ep_in[] / ep_out[]</text>
+        <line class="f" x1="622" y1="210" x2="622" y2="218" marker-end="url(#a4)"/>
+        <text class="m" x="520" y="264" font-size="7.5">bảng tra nhanh theo số EP,</text>
+        <text class="m" x="520" y="275" font-size="7.5">dùng ở usb_submit_urb để lấy urb-&gt;ep</text>
+      </svg>
+      <figcaption>Một <code>GET_DESCRIPTOR</code> = <strong>ba</strong> giai đoạn trên dây nhưng
+        <strong>một</strong> URB trong phần mềm — HCD chịu trách nhiệm sinh đủ SETUP/DATA/STATUS.
+        Config descriptor được đọc <em>hai lần</em>: 9 byte đầu để biết
+        <code>wTotalLength</code>, rồi đọc trọn <span class="src">config.c:921-955</span>.
+        <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <p><strong>Patch riêng của board</strong> <span class="v v-f">FACT</span> — KM bọc lần đọc
+      config descriptor đầu tiên trong vòng retry <code>USB_GETDESCRIPTOR_RETRY_MAX</code> dưới
+      <code>#if defined(CONFIG_KM_BIZHUB)</code> <span class="src">config.c:890, 921-933</span>,
+      kèm comment ticket <code>CQ:356936 / CQ:357358</code>. Kernel mainline không có vòng lặp
+      này — nghĩa là board từng gặp thiết bị trả lỗi ở lần đọc đầu.</p>
+  </section>
+
+  <section id="a05">
+    <h2><span class="n">05</span>URB Lifecycle — quyền sở hữu và hai bộ đếm</h2>
+    <p class="srcline">artifact 05 · nguồn: core/urb.c · core/hcd.c</p>
+    <p>URB có <strong>hai</strong> bộ đếm khác nhau và lẫn lộn chúng là nguồn bug kinh điển:
+      <code>kref</code> giữ cho vùng nhớ URB còn sống; <code>use_count</code> đếm số lần submit
+      đang bay. <code>usb_kill_urb()</code> chờ <code>use_count</code>, không phải
+      <code>kref</code>.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 430" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Vòng đời URB: driver gọi usb_alloc_urb đặt kref bằng 1, usb_fill_ điền trường, usb_submit_urb kiểm tra rồi usb_hcd_submit_urb tăng kref và use_count, map DMA, gọi urb_enqueue của HCD; phần cứng xử lý rồi raise IRQ; HCD gọi usb_hcd_giveback_urb, có thể qua tasklet, tới __usb_hcd_giveback_urb unmap DMA, gán urb->status, gọi urb->complete, giảm use_count và kref; driver có thể resubmit hoặc usb_free_urb.">
+        <defs><marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a5i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-irq" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a5h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="m" x="16" y="16" font-size="8.5">DRIVER sở hữu</text>
+        <text class="m" x="266" y="16" font-size="8.5">CORE + HCD sở hữu — driver KHÔNG được chạm</text>
+        <text class="m" x="640" y="16" font-size="8.5">trả về driver</text>
+        <line class="ll" x1="256" y1="22" x2="256" y2="360"/>
+        <line class="ll" x1="628" y1="22" x2="628" y2="360"/>
+
+        <rect class="b" x="16" y="30" width="220" height="34" rx="4"/>
+        <text class="t" x="26" y="46" font-size="9">usb_alloc_urb(iso_pkts, gfp)</text>
+        <text class="m" x="26" y="58" font-size="7.5">urb.c:70 · kref=1 use_count=0</text>
+
+        <rect class="b" x="16" y="76" width="220" height="46" rx="4"/>
+        <text class="t" x="26" y="92" font-size="9">usb_fill_bulk/int/control_urb()</text>
+        <text class="m" x="26" y="104" font-size="7.5">usb.h:1613+ · điền dev, pipe,</text>
+        <text class="m" x="26" y="115" font-size="7.5">transfer_buffer, complete, context</text>
+        <line class="f" x1="126" y1="64" x2="126" y2="74" marker-end="url(#a5)"/>
+
+        <rect class="b" x="16" y="134" width="220" height="34" rx="4"/>
+        <text class="t" x="26" y="150" font-size="9">usb_submit_urb(urb, gfp)</text>
+        <text class="m" x="26" y="162" font-size="7.5">urb.c:367 · kiểm ep, maxp, flags</text>
+        <line class="f" x1="126" y1="122" x2="126" y2="132" marker-end="url(#a5)"/>
+
+        <line class="f" x1="236" y1="151" x2="288" y2="151" marker-end="url(#a5)"/>
+        <text class="m" x="240" y="144" font-size="7.5">urb.c:585</text>
+
+        <rect class="b" x="290" y="130" width="240" height="56" rx="4"/>
+        <text class="t" x="300" y="146" font-size="9">usb_hcd_submit_urb()  hcd.c:1531</text>
+        <text class="m" x="300" y="159" font-size="7.5">usb_get_urb() → kref=2</text>
+        <text class="m" x="300" y="170" font-size="7.5">atomic_inc(use_count) → 1</text>
+        <text class="m" x="300" y="181" font-size="7.5">usbmon_urb_submit() ← usbmon thấy ở đây</text>
+
+        <rect class="b b-hw" x="290" y="198" width="240" height="40" rx="4"/>
+        <text class="t" x="300" y="214" font-size="9">map_urb_for_dma()  hcd.c:1409</text>
+        <text class="m" x="300" y="227" font-size="7.5">transfer_buffer → transfer_dma</text>
+        <line class="f" x1="410" y1="186" x2="410" y2="196" marker-end="url(#a5)"/>
+
+        <rect class="b b-hw" x="290" y="250" width="240" height="34" rx="4"/>
+        <text class="t" x="300" y="266" font-size="9">hcd-&gt;driver-&gt;urb_enqueue()</text>
+        <text class="m" x="300" y="278" font-size="7.5">hcd.c:1560 · xhci hoặc ehci</text>
+        <line class="f" x1="410" y1="238" x2="410" y2="248" marker-end="url(#a5)"/>
+
+        <rect class="b b-hw" x="290" y="296" width="240" height="30" rx="4"/>
+        <text class="t" x="410" y="315" font-size="9" text-anchor="middle">PHẦN CỨNG chuyển dữ liệu</text>
+        <line class="f f-hw" x1="410" y1="284" x2="410" y2="294" marker-end="url(#a5h)"/>
+
+        <line class="f f-irq" x1="530" y1="311" x2="562" y2="311" marker-end="url(#a5i)"/>
+        <line class="f f-irq" x1="574" y1="305" x2="574" y2="196" marker-end="url(#a5i)"/>
+        <text class="mi" x="582" y="270" font-size="7.5">IRQ</text>
+
+        <rect class="b b-irq" x="290" y="352" width="240" height="0" rx="4" fill="none"/>
+
+        <rect class="b b-irq" x="290" y="66" width="240" height="52" rx="4"/>
+        <text class="t" x="300" y="82" font-size="9">__usb_hcd_giveback_urb()  hcd.c:1646</text>
+        <text class="m" x="300" y="95" font-size="7.5">unmap_urb_for_dma() :1658</text>
+        <text class="m" x="300" y="106" font-size="7.5">urb-&gt;status = unlinked; usbmon_urb_complete</text>
+        <line class="f f-irq" x1="574" y1="180" x2="574" y2="92" marker-end="url(#a5i)"/>
+        <line class="f f-irq" x1="562" y1="92" x2="534" y2="92" marker-end="url(#a5i)"/>
+        <text class="mi" x="586" y="140" font-size="7.5">hcd.c:1744</text>
+        <text class="mi" x="586" y="151" font-size="7.5">giveback_urb</text>
+        <text class="mi" x="586" y="162" font-size="7.5">(có thể qua</text>
+        <text class="mi" x="586" y="173" font-size="7.5">tasklet :1692)</text>
+
+        <rect class="b" x="290" y="30" width="240" height="30" rx="4"/>
+        <text class="t" x="410" y="49" font-size="9.5" text-anchor="middle">urb-&gt;complete(urb)   hcd.c:1673</text>
+        <line class="f f-irq" x1="410" y1="66" x2="410" y2="60" marker-end="url(#a5i)"/>
+
+        <line class="f" x1="530" y1="45" x2="644" y2="45" marker-end="url(#a5)"/>
+        <rect class="b" x="646" y="30" width="80" height="30" rx="4"/>
+        <text class="t" x="686" y="49" font-size="9" text-anchor="middle">driver</text>
+
+        <rect class="b" x="646" y="76" width="80" height="42" rx="4"/>
+        <text class="t" x="686" y="92" font-size="8.5" text-anchor="middle">resubmit?</text>
+        <text class="m" x="686" y="105" font-size="7.5" text-anchor="middle">int/iso: có</text>
+        <text class="m" x="686" y="115" font-size="7.5" text-anchor="middle">→ về submit</text>
+        <line class="f" x1="686" y1="60" x2="686" y2="74" marker-end="url(#a5)"/>
+        <path class="f f-d" d="M646,97 C560,97 200,110 126,132" marker-end="url(#a5)"/>
+
+        <rect class="b" x="646" y="132" width="80" height="42" rx="4"/>
+        <text class="t" x="686" y="148" font-size="8.5" text-anchor="middle">usb_free_urb</text>
+        <text class="m" x="686" y="160" font-size="7.5" text-anchor="middle">urb.c:93</text>
+        <text class="m" x="686" y="170" font-size="7.5" text-anchor="middle">kref−− → 0</text>
+        <line class="f" x1="686" y1="118" x2="686" y2="130" marker-end="url(#a5)"/>
+
+        <rect class="b b-irq" x="290" y="352" width="240" height="60" rx="4"/>
+        <text class="t" x="300" y="368" font-size="9">Sau complete() — vẫn trong giveback</text>
+        <text class="m" x="300" y="381" font-size="7.5">atomic_dec(use_count) → 0  hcd.c:1679</text>
+        <text class="m" x="300" y="392" font-size="7.5">if (urb-&gt;reject) wake_up(usb_kill_urb_queue)</text>
+        <text class="m" x="300" y="403" font-size="7.5">usb_put_urb() → kref 2→1</text>
+        <line class="f f-irq" x1="280" y1="56" x2="270" y2="56"/>
+        <path class="f f-irq f-d" d="M290,382 C266,382 264,120 288,96"/>
+        <text class="mi" x="200" y="382" font-size="7.5">thứ tự trong cùng hàm ↑</text>
+
+        <text class="m" x="16" y="200" font-size="8.5">Ranh giới sở hữu:</text>
+        <text class="m" x="16" y="214" font-size="7.5">sau usb_submit_urb() trả 0, driver</text>
+        <text class="m" x="16" y="225" font-size="7.5">KHÔNG được đọc/ghi urb hay</text>
+        <text class="m" x="16" y="236" font-size="7.5">transfer_buffer cho tới khi</text>
+        <text class="m" x="16" y="247" font-size="7.5">complete() được gọi.</text>
+        <text class="m" x="16" y="266" font-size="7.5">Hủy: usb_unlink_urb() :664 (async)</text>
+        <text class="m" x="16" y="277" font-size="7.5">     usb_kill_urb() :703 (ngủ chờ)</text>
+        <text class="m" x="16" y="296" font-size="7.5">Free trong complete() hợp lệ vì</text>
+        <text class="m" x="16" y="307" font-size="7.5">giveback giữ thêm 1 kref.</text>
+      </svg>
+      <figcaption>Hai bộ đếm chạy song song. <code>usb_get_urb()</code> lúc submit đảm bảo driver
+        có thể gọi <code>usb_free_urb()</code> <em>ngay trong</em> completion handler mà không
+        use-after-free — <code>usb_put_urb()</code> cuối giveback mới thực sự giải phóng.
+        <span class="v v-f">FACT</span> <span class="src">hcd.c:1537-1540, 1687</span></figcaption>
+    </figure>
+
+    <h3>Trường URB: ai ghi, khi nào đọc</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Trường</th><th>Chiều</th><th>Ghi bởi</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td><code>dev, pipe, ep</code></td><td>in</td><td>driver (qua <code>usb_fill_*</code>)</td><td><code>ep</code> do core tra từ <code>ep_in/ep_out[]</code></td></tr>
+        <tr><td><code>transfer_buffer</code></td><td>in</td><td>driver — <strong>không được ở stack</strong></td><td><code>WARN_ONCE</code> <span class="src">hcd.c:1500</span></td></tr>
+        <tr><td><code>transfer_dma</code></td><td>internal</td><td><code>map_urb_for_dma</code></td><td>chỉ hợp lệ giữa map và unmap</td></tr>
+        <tr><td><code>setup_packet</code></td><td>in</td><td>driver (control) — cũng không được ở stack</td><td><span class="src">hcd.c:1438</span></td></tr>
+        <tr><td><code>status</code></td><td>return</td><td><code>__usb_hcd_giveback_urb</code></td><td>0 / −EPIPE / −EPROTO / −ECONNRESET…</td></tr>
+        <tr><td><code>actual_length</code></td><td>return</td><td>HCD khi hoàn tất TD</td><td>ngắn hơn yêu cầu = short packet</td></tr>
+        <tr><td><code>transfer_flags</code></td><td>in/internal</td><td>driver đặt <code>URB_SHORT_NOT_OK</code>; core đặt <code>URB_DMA_MAP_*</code></td><td><span class="src">hcd.c:1516</span></td></tr>
+        <tr><td><code>hcpriv</code></td><td>private</td><td>HCD</td><td>bị xóa NULL đầu giveback <span class="src">hcd.c:1652</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="a06">
+    <h2><span class="n">06</span>Bốn kiểu transfer — khác nhau ở băng thông, không ở API</h2>
+    <p class="srcline">artifact 06 · nguồn: ch9.h:435-439 · usb.h:1944-1966 · xhci-ring.c</p>
+    <p>API giống hệt nhau (đều là URB). Khác biệt thật nằm ở <strong>ai được cấp băng thông
+      trước</strong> và <strong>điều gì xảy ra khi lỗi</strong>.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 190" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Ngân sách một khung USB high-speed 125 microsecond: phần đầu dành cho isochronous và interrupt đã đặt chỗ tối đa 80 phần trăm, phần còn lại control được ưu tiên 10 phần trăm, cuối cùng bulk lấy phần dư nên không có bảo đảm thời gian.">
+        <text class="t" x="16" y="20" font-size="10">Ngân sách 1 microframe (125 µs, high-speed)</text>
+
+        <rect class="b b-hw" x="16" y="34" width="200" height="34" rx="3"/>
+        <text class="t" x="116" y="50" font-size="9" text-anchor="middle">ISOCHRONOUS</text>
+        <text class="m" x="116" y="62" font-size="7.5" text-anchor="middle">đặt chỗ trước, không retry</text>
+
+        <rect class="b b-hw" x="220" y="34" width="150" height="34" rx="3"/>
+        <text class="t" x="295" y="50" font-size="9" text-anchor="middle">INTERRUPT</text>
+        <text class="m" x="295" y="62" font-size="7.5" text-anchor="middle">đặt chỗ, có retry</text>
+
+        <rect class="b" x="374" y="34" width="110" height="34" rx="3"/>
+        <text class="t" x="429" y="50" font-size="9" text-anchor="middle">CONTROL</text>
+        <text class="m" x="429" y="62" font-size="7.5" text-anchor="middle">tối thiểu 10%</text>
+
+        <rect class="b" x="488" y="34" width="236" height="34" rx="3"/>
+        <text class="t" x="606" y="50" font-size="9" text-anchor="middle">BULK — phần dư</text>
+        <text class="m" x="606" y="62" font-size="7.5" text-anchor="middle">không bảo đảm thời gian, có retry</text>
+
+        <line class="rule-hw" x1="16" y1="78" x2="370" y2="78"/>
+        <text class="mh" x="16" y="92" font-size="8">PERIODIC — tối đa 80% khung (high-speed)</text>
+        <text class="m" x="488" y="92" font-size="8">ASYNC — chia nhau phần còn lại</text>
+
+        <text class="m" x="16" y="118" font-size="8">Core theo dõi ngân sách:  usb_bus.bandwidth_allocated / bandwidth_int_reqs / bandwidth_isoc_reqs</text>
+        <text class="m" x="16" y="130" font-size="7.5">usb.h:456-462 — nếu vượt, usb_submit_urb hoặc usb_set_interface trả −ENOSPC</text>
+        <text class="m" x="16" y="150" font-size="8">EHCI: hai danh sách vật lý riêng — periodic frame list vs async ring   ehci.h:111</text>
+        <text class="m" x="16" y="162" font-size="8">xHCI: một Transfer Ring cho mỗi endpoint; lịch periodic do controller tự tính từ Endpoint Context</text>
+        <text class="m" x="16" y="178" font-size="7.5">→ đây là lý do xHCI không có khái niệm "reclaim bandwidth" thủ công như EHCI</text>
+      </svg>
+      <figcaption>Vì sao chia thế này quan trọng: một driver isochronous (camera UVC) làm
+        <em>hỏng</em> khả năng cắm thêm thiết bị interrupt trên cùng bus, còn bulk (usb-storage)
+        thì không. Lỗi <code>-ENOSPC</code> khi <code>usb_set_interface()</code> chính là biểu
+        hiện của sơ đồ này. <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th></th><th>Control</th><th>Bulk</th><th>Interrupt</th><th>Isochronous</th></tr></thead>
+      <tbody>
+        <tr><td>Hằng</td><td><code>XFER_CONTROL=0</code></td><td><code>XFER_BULK=2</code></td><td><code>XFER_INT=3</code></td><td><code>XFER_ISOC=1</code></td></tr>
+        <tr><td>Endpoint</td><td>EP0 (luôn có) + tùy chọn</td><td>chỉ non-EP0</td><td>non-EP0</td><td>non-EP0</td></tr>
+        <tr><td>Bảo đảm</td><td>băng thông tối thiểu</td><td>không</td><td>độ trễ tối đa</td><td>băng thông cố định</td></tr>
+        <tr><td>CRC retry</td><td>có</td><td>có</td><td>có</td><td><strong>không</strong></td></tr>
+        <tr><td>URB field riêng</td><td><code>setup_packet</code></td><td>—</td><td><code>interval</code></td><td><code>number_of_packets</code>, <code>iso_frame_desc[]</code>, <code>start_frame</code>, <code>error_count</code></td></tr>
+        <tr><td>Hàm xHCI</td><td><code>xhci_queue_ctrl_tx</code> <span class="src">:3671</span></td><td><code>xhci_queue_bulk_tx</code> <span class="src">:3510</span></td><td><code>xhci_queue_intr_tx</code> <span class="src">:3382</span></td><td><code>xhci_queue_isoc_tx_prepare</code></td></tr>
+        <tr><td>Hàm EHCI</td><td colspan="2"><code>qh_urb_transaction</code>+<code>submit_async</code> <span class="src">ehci-q.c:575,1102</span></td><td><code>intr_submit</code></td><td><code>itd_submit</code>/<code>sitd_submit</code></td></tr>
+        <tr><td>Hàng đợi dừng khi lỗi</td><td>có (trừ −EREMOTEIO)</td><td>có</td><td>có</td><td><strong>không</strong> — chạy tiếp, để lại lỗ</td></tr>
+        <tr><td>Ví dụ dùng</td><td>enumeration, SET_*</td><td>usb-storage, printer</td><td>hub status, HID</td><td>UVC, audio</td></tr>
+      </tbody>
+    </table></div>
+    <p><span class="v v-f">FACT</span> — hành vi &ldquo;hàng đợi dừng khi lỗi&rdquo; được ghi rõ
+      trong comment của <code>usb_submit_urb</code> <span class="src">urb.c:643-651</span>: bulk
+      và interrupt <em>bảo đảm</em> dừng; isochronous <em>không</em> vì phải tiến theo nhịp cố
+      định.</p>
+  </section>
+
+  <section id="a07">
+    <h2><span class="n">07</span>HCD Framework — vtable và cú rẽ root-hub</h2>
+    <p class="srcline">artifact 07 · nguồn: include/linux/usb/hcd.h · core/hcd.c</p>
+    <p>Cơ chế đáng vẽ nhất ở tầng này là một câu <code>if</code> duy nhất trong
+      <code>usb_hcd_submit_urb</code>: URB gửi tới <strong>root hub</strong> không bao giờ chạm
+      phần cứng — nó được <em>giả lập bằng phần mềm</em>. Mọi thứ khác mới đi qua DMA.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 340" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Cú rẽ trong usb_hcd_submit_urb: nếu is_root_hub thì rh_urb_enqueue giả lập, control đi qua rh_call_control tổng hợp descriptor giả và gọi hub_control của HCD, status đi qua timer rh_timer polling hub_status_data, cả hai giveback không hề chạm DMA; nhánh còn lại map_urb_for_dma rồi gọi hc_driver urb_enqueue xuống phần cứng thật.">
+        <defs><marker id="a7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a7h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="270" y="14" width="200" height="34" rx="4"/>
+        <text class="t" x="370" y="30" font-size="9.5" text-anchor="middle">usb_hcd_submit_urb()</text>
+        <text class="m" x="370" y="42" font-size="7.5" text-anchor="middle">hcd.c:1531</text>
+
+        <path class="f" d="M330,48 C300,64 220,66 180,80" marker-end="url(#a7)"/>
+        <path class="f f-hw" d="M410,48 C440,64 520,66 560,80" marker-end="url(#a7h)"/>
+        <text class="m" x="222" y="66" font-size="8" text-anchor="middle">is_root_hub(urb-&gt;dev)</text>
+        <text class="m" x="238" y="77" font-size="7.5" text-anchor="middle">hcd.c:1553 — TRUE</text>
+        <text class="mh" x="518" y="66" font-size="8" text-anchor="middle">FALSE — thiết bị thật</text>
+
+        <rect class="b" x="16" y="84" width="330" height="34" rx="4"/>
+        <text class="t" x="26" y="100" font-size="9">rh_urb_enqueue()   hcd.c:844</text>
+        <text class="m" x="26" y="112" font-size="7.5">KHÔNG map DMA, KHÔNG chạm ring</text>
+
+        <rect class="b" x="16" y="132" width="160" height="66" rx="4"/>
+        <text class="t" x="26" y="148" font-size="8.5">control pipe</text>
+        <text class="m" x="26" y="160" font-size="7.5">rh_call_control() :478</text>
+        <text class="m" x="26" y="171" font-size="7.5">tổng hợp device/config</text>
+        <text class="m" x="26" y="182" font-size="7.5">descriptor GIẢ trong C</text>
+        <text class="m" x="26" y="193" font-size="7.5">→ driver-&gt;hub_control()</text>
+        <line class="f" x1="96" y1="118" x2="96" y2="130" marker-end="url(#a7)"/>
+
+        <rect class="b" x="186" y="132" width="160" height="66" rx="4"/>
+        <text class="t" x="196" y="148" font-size="8.5">interrupt pipe (status)</text>
+        <text class="m" x="196" y="160" font-size="7.5">giữ trong hcd-&gt;status_urb</text>
+        <text class="m" x="196" y="171" font-size="7.5">rh_timer 250 ms :2490</text>
+        <text class="m" x="196" y="182" font-size="7.5">usb_hcd_poll_rh_status :753</text>
+        <text class="m" x="196" y="193" font-size="7.5">→ driver-&gt;hub_status_data()</text>
+        <line class="f" x1="266" y1="118" x2="266" y2="130" marker-end="url(#a7)"/>
+
+        <rect class="b b-hw" x="394" y="84" width="330" height="34" rx="4"/>
+        <text class="t" x="404" y="100" font-size="9">map_urb_for_dma()   hcd.c:1409</text>
+        <text class="m" x="404" y="112" font-size="7.5">dma_map_single / dma_map_sg → transfer_dma</text>
+
+        <rect class="b b-hw" x="394" y="132" width="330" height="34" rx="4"/>
+        <text class="t" x="404" y="148" font-size="9">hcd-&gt;driver-&gt;urb_enqueue()   hcd.c:1560</text>
+        <text class="m" x="404" y="160" font-size="7.5">vtable — xhci_urb_enqueue / ehci_urb_enqueue</text>
+        <line class="f f-hw" x1="559" y1="118" x2="559" y2="130" marker-end="url(#a7h)"/>
+
+        <rect class="b b-hw" x="394" y="180" width="330" height="30" rx="4"/>
+        <text class="t" x="559" y="199" font-size="9" text-anchor="middle">TD trong bộ nhớ DMA + doorbell/register</text>
+        <line class="f f-hw" x1="559" y1="166" x2="559" y2="178" marker-end="url(#a7h)"/>
+
+        <line class="f" x1="180" y1="198" x2="180" y2="228" marker-end="url(#a7)"/>
+        <line class="f f-hw" x1="559" y1="210" x2="559" y2="228" marker-end="url(#a7h)"/>
+        <rect class="b" x="270" y="230" width="200" height="30" rx="4"/>
+        <text class="t" x="370" y="249" font-size="9" text-anchor="middle">usb_hcd_giveback_urb()  :1744</text>
+        <path class="f" d="M180,228 C180,244 250,246 268,246"/>
+        <path class="f f-hw" d="M559,228 C559,244 490,246 472,246"/>
+
+        <text class="m" x="16" y="284" font-size="8">Hệ quả thực dụng — hub driver không phân biệt được root hub với hub rời:</text>
+        <text class="m" x="16" y="298" font-size="8">cùng gọi usb_submit_urb() trên một interrupt endpoint, cùng nhận hub_irq() callback.</text>
+        <text class="m" x="16" y="312" font-size="8">Khác biệt duy nhất: root hub được HCD giả lập bằng timer, hub rời gửi packet thật.</text>
+        <text class="m" x="16" y="330" font-size="7.5">→ đây là lý do lsusb luôn thấy một "Linux Foundation root hub" ở đầu mỗi bus.</text>
+      </svg>
+      <figcaption>Root hub là <strong>thiết bị ảo</strong>: descriptor của nó được sinh bằng C
+        trong <code>rh_call_control()</code>, trạng thái port lấy bằng cách đọc thanh ghi qua
+        <code>hub_status_data()</code>, và &ldquo;ngắt&rdquo; của nó thật ra là
+        <code>rh_timer</code>. <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <h3>Thứ tự bring-up một HCD</h3>
+    <ol>
+      <li><code>usb_create_hcd()</code> <span class="src">hcd.c:2543</span> → <code>__usb_create_hcd()</code> <span class="src">:2444</span> cấp <code>usb_hcd</code> + <code>hcd_priv[]</code> theo <code>driver-&gt;hcd_priv_size</code>, <code>timer_setup(&amp;hcd-&gt;rh_timer)</code> <span class="src">:2490</span></li>
+      <li><code>usb_add_hcd(hcd, irqnum, flags)</code> <span class="src">:2666</span>:
+        <ul>
+          <li><code>usb_alloc_dev(NULL, &amp;hcd-&gt;self, 0)</code> tạo root hub device <span class="src">:2736</span></li>
+          <li><code>hcd-&gt;driver-&gt;reset(hcd)</code> <span class="src">:2794</span> — với xHCI là <code>xhci_gen_setup</code> <span class="src">xhci.c:5240</span></li>
+          <li><code>usb_hcd_request_irqs()</code> <span class="src">:2821</span> → <code>request_irq(usb_hcd_irq)</code> <span class="src">:2608</span></li>
+          <li><code>hcd-&gt;driver-&gt;start(hcd)</code> <span class="src">:2827</span> — <code>xhci_run</code> <span class="src">xhci.c:644</span></li>
+          <li><code>register_root_hub()</code> <span class="src">:2846</span> → <code>usb_new_device(rhdev)</code> → hub driver probe root hub</li>
+        </ul>
+      </li>
+      <li>Hub driver <code>hub_probe()</code> <span class="src">hub.c:1848</span> → <code>hub_configure()</code> <span class="src">:1434</span> cấp interrupt URB <span class="src">:1704</span>, <code>usb_fill_int_urb(..., hub_irq, ...)</code> <span class="src">:1710</span> → <code>hub_activate()</code> <span class="src">:1064</span> submit <span class="src">:1317</span>.</li>
+    </ol>
+    <p>Từ thời điểm này bus &ldquo;sống&rdquo;: mọi lần cắm thiết bị đều đi vào
+      <a href="#a03">artifact 03</a>.</p>
+  </section>
+
+  <section id="a08">
+    <h2><span class="n">08</span>EHCI — URB thành danh sách qTD treo dưới QH</h2>
+    <p class="srcline">artifact 08 · nguồn: host/ehci-hcd.c · host/ehci-q.c · host/ehci.h</p>
+    <p>Mô hình EHCI: <strong>phần mềm</strong> dựng và nối danh sách liên kết trong bộ nhớ DMA,
+      controller đi bộ trên đó. Một endpoint = một <code>ehci_qh</code>; một URB = một chuỗi
+      <code>ehci_qtd</code>.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 330" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="EHCI: một URB được qh_urb_transaction cắt thành chuỗi qTD, mỗi qTD trỏ tới tối đa 5 trang buffer; submit_async móc QH của endpoint vào async ring qua qh_link_async; controller đọc ASYNCLISTADDR đi vòng ring, xử lý qTD, khi xong raise IRQ; ehci_irq gọi qh_completions duyệt qTD đã hoàn tất và ehci_urb_done trả URB.">
+        <defs><marker id="a8" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a8h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a8i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-irq" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="20" width="140" height="34" rx="4"/>
+        <text class="t" x="86" y="36" font-size="9.5" text-anchor="middle">struct urb</text>
+        <text class="m" x="86" y="48" font-size="7.5" text-anchor="middle">4 KB bulk OUT</text>
+
+        <line class="f" x1="156" y1="37" x2="196" y2="37" marker-end="url(#a8)"/>
+        <text class="m" x="176" y="30" font-size="7" text-anchor="middle">qh_urb_transaction()</text>
+        <text class="m" x="176" y="52" font-size="7" text-anchor="middle">ehci-q.c:575</text>
+
+        <rect class="b b-hw" x="198" y="14" width="104" height="46" rx="3"/>
+        <text class="t" x="250" y="30" font-size="8.5" text-anchor="middle">ehci_qtd #0</text>
+        <text class="m" x="250" y="42" font-size="7" text-anchor="middle">hw_token: len,PID</text>
+        <text class="m" x="250" y="53" font-size="7" text-anchor="middle">hw_buf[5] ≤ 5 trang</text>
+        <rect class="b b-hw" x="316" y="14" width="104" height="46" rx="3"/>
+        <text class="t" x="368" y="30" font-size="8.5" text-anchor="middle">ehci_qtd #1</text>
+        <text class="m" x="368" y="42" font-size="7" text-anchor="middle">ehci.h:288</text>
+        <text class="m" x="368" y="53" font-size="7" text-anchor="middle">32-byte aligned</text>
+        <rect class="b b-hw b-gh" x="434" y="14" width="70" height="46" rx="3" fill="none"/>
+        <text class="m" x="469" y="40" font-size="8" text-anchor="middle">…</text>
+        <line class="f f-hw" x1="302" y1="37" x2="314" y2="37" marker-end="url(#a8h)"/>
+        <line class="f f-hw" x1="420" y1="37" x2="432" y2="37" marker-end="url(#a8h)"/>
+        <text class="mh" x="308" y="72" font-size="7">hw_next (địa chỉ DMA)</text>
+
+        <rect class="b b-hw" x="198" y="98" width="220" height="52" rx="4"/>
+        <text class="t" x="308" y="115" font-size="9.5" text-anchor="middle">ehci_qh — một cho MỖI endpoint</text>
+        <text class="m" x="308" y="128" font-size="7.5" text-anchor="middle">ehci.h:405 · hw-&gt;hw_qtd_next trỏ qTD đầu</text>
+        <text class="m" x="308" y="140" font-size="7.5" text-anchor="middle">hw_info1: devaddr, ep, maxp, speed</text>
+        <line class="f f-hw" x1="250" y1="60" x2="250" y2="96" marker-end="url(#a8h)"/>
+        <text class="mh" x="150" y="82" font-size="7.5">ep-&gt;hcpriv</text>
+
+        <rect class="b b-hw" x="470" y="90" width="254" height="68" rx="4"/>
+        <text class="t" x="597" y="107" font-size="9.5" text-anchor="middle">ASYNC RING (vòng tròn)</text>
+        <text class="m" x="597" y="120" font-size="7.5" text-anchor="middle">QH → QH → QH → về đầu</text>
+        <text class="m" x="597" y="132" font-size="7.5" text-anchor="middle">qh_link_async()  ehci-q.c:981</text>
+        <text class="m" x="597" y="145" font-size="7.5" text-anchor="middle">thanh ghi ASYNCLISTADDR trỏ vào đây</text>
+        <line class="f f-hw" x1="418" y1="124" x2="468" y2="124" marker-end="url(#a8h)"/>
+        <text class="mh" x="443" y="117" font-size="7" text-anchor="middle">submit_async :1102</text>
+
+        <text class="m" x="16" y="112" font-size="8">PERIODIC:</text>
+        <text class="m" x="16" y="124" font-size="7.5">frame list riêng,</text>
+        <text class="m" x="16" y="135" font-size="7.5">intr_submit / itd_submit</text>
+        <text class="m" x="16" y="146" font-size="7.5">— hai lịch tách biệt</text>
+
+        <line class="rule-hw" x1="16" y1="176" x2="724" y2="176"/>
+        <text class="mh" x="16" y="190" font-size="8">CONTROLLER đi bộ trên hai danh sách mỗi microframe, ghi ngược status vào hw_token</text>
+
+        <rect class="b b-irq" x="470" y="206" width="254" height="46" rx="4"/>
+        <text class="t" x="480" y="222" font-size="9">ehci_irq()   ehci-hcd.c:712</text>
+        <text class="m" x="480" y="234" font-size="7.5">đọc STS, ghi 1 để clear, đặt bh flag</text>
+        <text class="m" x="480" y="245" font-size="7.5">→ ehci_work() duyệt QH đang chờ</text>
+        <line class="f f-irq" x1="597" y1="176" x2="597" y2="204" marker-end="url(#a8i)"/>
+
+        <rect class="b b-irq" x="198" y="206" width="254" height="46" rx="4"/>
+        <text class="t" x="208" y="222" font-size="9">qh_completions()   ehci-q.c:289</text>
+        <text class="m" x="208" y="234" font-size="7.5">duyệt qtd_list, cộng actual_length,</text>
+        <text class="m" x="208" y="245" font-size="7.5">dịch QTD_STS_* → urb-&gt;status</text>
+        <line class="f f-irq" x1="468" y1="229" x2="454" y2="229" marker-end="url(#a8i)"/>
+
+        <rect class="b b-irq" x="198" y="268" width="254" height="34" rx="4"/>
+        <text class="t" x="208" y="284" font-size="9">ehci_urb_done() → usb_hcd_giveback_urb()</text>
+        <text class="m" x="208" y="296" font-size="7.5">ehci-q.c:251 · gọi giveback tại :278</text>
+        <line class="f f-irq" x1="325" y1="252" x2="325" y2="266" marker-end="url(#a8i)"/>
+
+        <text class="m" x="16" y="284" font-size="7.5">Bit lỗi đọc</text>
+        <text class="m" x="16" y="295" font-size="7.5">từ hw_token:</text>
+        <text class="m" x="16" y="306" font-size="7.5">HALT/BABBLE/</text>
+        <text class="m" x="16" y="317" font-size="7.5">XACT/DBE</text>
+      </svg>
+      <figcaption>Đặc trưng EHCI: <strong>phần mềm sở hữu cấu trúc hàng đợi</strong> — muốn hủy
+        một URB, driver phải tự gỡ qTD ra khỏi danh sách và đồng bộ với controller
+        (<code>end_unlink_async</code> <span class="src">ehci-q.c:1311</span>). Bit trạng thái
+        lỗi nằm ngay trong <code>hw_token</code> <span class="src">ehci.h:293-306</span>.
+        <span class="v v-f">FACT</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="a09">
+    <h2><span class="n">09</span>xHCI — ring do phần cứng tiêu thụ, sự kiện quay về ring khác</h2>
+    <p class="srcline">artifact 09 · nguồn: host/xhci.c · host/xhci-ring.c · host/xhci.h</p>
+    <p>Khác biệt cốt lõi với EHCI không phải &ldquo;nhanh hơn&rdquo; mà là
+      <strong>đảo chiều quyền sở hữu</strong>: phần mềm chỉ <em>ghi thêm</em> vào một ring và
+      bấm chuông; phần cứng tự quản lý lịch, và <em>trả kết quả qua một ring thứ hai</em> thay vì
+      ghi ngược vào descriptor.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="xHCI: xhci_urb_enqueue rẽ theo loại endpoint sang bốn hàm queue, các hàm này gọi queue_trb ghi TRB vào Transfer Ring của endpoint và inc_enq dịch con trỏ enqueue, rồi xhci_ring_ep_doorbell ghi thanh ghi doorbell; phần cứng đọc Device Context Array tìm Endpoint Context để biết ring ở đâu, thực hiện chuyển dữ liệu, rồi ghi Transfer Event TRB vào Event Ring và raise interrupt; xhci_irq gọi xhci_handle_event, handle_tx_event, finish_td và xhci_giveback_urb_in_irq.">
+        <defs><marker id="a9" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a9h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a9i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-irq" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="16" width="230" height="42" rx="4"/>
+        <text class="t" x="26" y="32" font-size="9">xhci_urb_enqueue()   xhci.c:1514</text>
+        <text class="m" x="26" y="44" font-size="7.5">slot_id = urb-&gt;dev-&gt;slot_id</text>
+        <text class="m" x="26" y="55" font-size="7.5">ep_index = xhci_get_endpoint_index()</text>
+
+        <rect class="b" x="16" y="72" width="230" height="56" rx="4"/>
+        <text class="t" x="26" y="88" font-size="8.5">switch (usb_endpoint_type)  :1600</text>
+        <text class="m" x="26" y="100" font-size="7.5">CONTROL → xhci_queue_ctrl_tx  :3671</text>
+        <text class="m" x="26" y="111" font-size="7.5">BULK    → xhci_queue_bulk_tx  :3510</text>
+        <text class="m" x="26" y="122" font-size="7.5">INT/ISOC→ xhci_queue_intr_tx  :3382</text>
+        <line class="f" x1="131" y1="58" x2="131" y2="70" marker-end="url(#a9)"/>
+
+        <rect class="b" x="16" y="142" width="230" height="44" rx="4"/>
+        <text class="t" x="26" y="158" font-size="8.5">queue_trb()   xhci-ring.c:3123</text>
+        <text class="m" x="26" y="170" font-size="7.5">ghi 4 dword vào TRB kế tiếp</text>
+        <text class="m" x="26" y="181" font-size="7.5">inc_enq() :204 dịch enqueue + cycle bit</text>
+        <line class="f" x1="131" y1="128" x2="131" y2="140" marker-end="url(#a9)"/>
+
+        <rect class="b b-hw" x="290" y="72" width="200" height="114" rx="4"/>
+        <text class="t" x="390" y="89" font-size="9.5" text-anchor="middle">TRANSFER RING</text>
+        <text class="m" x="390" y="101" font-size="7.5" text-anchor="middle">xhci.h:1614 · 1 ring / endpoint</text>
+        <rect class="b b-hw" x="304" y="110" width="172" height="18" rx="2"/>
+        <text class="m" x="390" y="123" font-size="7" text-anchor="middle">TRB — Normal · buf_ptr(64b) · len · flags</text>
+        <rect class="b b-hw" x="304" y="132" width="172" height="18" rx="2"/>
+        <text class="m" x="390" y="145" font-size="7" text-anchor="middle">TRB — cycle bit = SW/HW ai sở hữu</text>
+        <rect class="b b-hw b-gh" x="304" y="154" width="172" height="18" rx="2" fill="none"/>
+        <text class="m" x="390" y="167" font-size="7" text-anchor="middle">Link TRB → vòng lại segment đầu</text>
+        <line class="f" x1="246" y1="164" x2="288" y2="150" marker-end="url(#a9)"/>
+
+        <rect class="b b-hw" x="290" y="204" width="200" height="40" rx="4"/>
+        <text class="t" x="390" y="220" font-size="9" text-anchor="middle">xhci_ring_ep_doorbell()</text>
+        <text class="m" x="390" y="233" font-size="7.5" text-anchor="middle">xhci-ring.c:404 · writel() tại :425</text>
+        <line class="f f-hw" x1="390" y1="186" x2="390" y2="202" marker-end="url(#a9h)"/>
+
+        <rect class="b b-hw" x="534" y="72" width="190" height="114" rx="4"/>
+        <text class="t" x="629" y="89" font-size="9" text-anchor="middle">Device Context (trong RAM)</text>
+        <text class="m" x="629" y="103" font-size="7.5" text-anchor="middle">DCBAA  xhci.h:1070</text>
+        <text class="m" x="629" y="116" font-size="7.5" text-anchor="middle">↓ theo slot_id</text>
+        <text class="m" x="629" y="129" font-size="7.5" text-anchor="middle">Slot Context  :622</text>
+        <text class="m" x="629" y="142" font-size="7.5" text-anchor="middle">Endpoint Context ×31  :706</text>
+        <text class="m" x="629" y="158" font-size="7.5" text-anchor="middle">chứa TR Dequeue Pointer,</text>
+        <text class="m" x="629" y="170" font-size="7.5" text-anchor="middle">maxp, interval, ep type</text>
+        <line class="f f-hw f-d" x1="532" y1="129" x2="492" y2="129" marker-end="url(#a9h)"/>
+        <text class="mh" x="512" y="122" font-size="6.5" text-anchor="middle">HW tra</text>
+
+        <line class="rule-hw" x1="16" y1="266" x2="724" y2="266"/>
+        <text class="mh" x="16" y="260" font-size="8">RANH GIỚI SILICON — doorbell là ghi thanh ghi, phần còn lại là bus-master đọc RAM</text>
+        <line class="f f-hw" x1="390" y1="244" x2="390" y2="264" marker-end="url(#a9h)"/>
+
+        <rect class="b b-hw" x="290" y="278" width="200" height="30" rx="4"/>
+        <text class="t" x="390" y="297" font-size="9" text-anchor="middle">xHC chuyển dữ liệu trên dây</text>
+
+        <rect class="b b-irq" x="534" y="278" width="190" height="52" rx="4"/>
+        <text class="t" x="629" y="295" font-size="9" text-anchor="middle">EVENT RING</text>
+        <text class="m" x="629" y="308" font-size="7.5" text-anchor="middle">xhci_transfer_event  xhci.h:1083</text>
+        <text class="m" x="629" y="320" font-size="7.5" text-anchor="middle">ERST :1646 · HW ghi, SW đọc</text>
+        <line class="f f-hw" x1="490" y1="296" x2="532" y2="300" marker-end="url(#a9h)"/>
+
+        <rect class="b b-irq" x="290" y="336" width="200" height="52" rx="4"/>
+        <text class="t" x="300" y="352" font-size="8.5">xhci_irq()  xhci-ring.c:3029</text>
+        <text class="m" x="300" y="364" font-size="7.5">→ xhci_handle_event() :2918</text>
+        <text class="m" x="300" y="375" font-size="7.5">→ handle_tx_event() :2449 → finish_td() :2082</text>
+        <line class="f f-irq" x1="532" y1="330" x2="492" y2="352" marker-end="url(#a9i)"/>
+
+        <rect class="b b-irq" x="16" y="336" width="256" height="52" rx="4"/>
+        <text class="t" x="26" y="352" font-size="8.5">xhci_giveback_urb_in_irq()  :734</text>
+        <text class="m" x="26" y="364" font-size="7.5">→ usb_hcd_giveback_urb() tại :751</text>
+        <text class="m" x="26" y="375" font-size="7.5">HCD_BH flag → có thể đẩy sang tasklet</text>
+        <line class="f f-irq" x1="288" y1="362" x2="274" y2="362" marker-end="url(#a9i)"/>
+      </svg>
+      <figcaption><strong>Cycle bit</strong> là toàn bộ giao thức sở hữu: phần mềm ghi TRB với
+        cycle = trạng thái hiện tại của ring, phần cứng chỉ tiêu thụ TRB có cycle khớp — không
+        cần khóa. <code>xhci_handle_event</code> kiểm đúng bit này để biết có event mới
+        <span class="src">xhci-ring.c:2932-2936</span>. <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <h3>xHCI vs EHCI — sự khác biệt thật</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th></th><th>EHCI</th><th>xHCI</th><th>Hệ quả khi debug</th></tr></thead>
+      <tbody>
+        <tr><td>Đơn vị mô tả</td><td><code>ehci_qtd</code> + <code>ehci_qh</code></td><td><code>union xhci_trb</code> 16 byte <span class="src">xhci.h:1350</span></td><td>dump khác nhau hoàn toàn</td></tr>
+        <tr><td>Cấu trúc</td><td>danh sách liên kết, SW nối</td><td>ring vòng + Link TRB, SW chỉ append</td><td>xHCI không &ldquo;gỡ&rdquo; được TRB</td></tr>
+        <tr><td>Trả kết quả</td><td>HW ghi ngược <code>hw_token</code> của qTD</td><td>HW ghi <strong>Event Ring riêng</strong></td><td>xHCI: đọc event ring, không đọc transfer ring</td></tr>
+        <tr><td>Địa chỉ thiết bị</td><td>SW gửi SET_ADDRESS</td><td>HW cấp qua <code>address_device</code> <span class="src">hub.c:4757</span></td><td>xHCI có &ldquo;slot&rdquo;, EHCI không</td></tr>
+        <tr><td>Kích hoạt</td><td>ghi ASYNCLISTADDR / chờ lịch</td><td><code>writel()</code> doorbell theo slot</td><td>quên doorbell = treo im lặng</td></tr>
+        <tr><td>Ngữ cảnh EP</td><td>trong <code>ehci_qh.hw_info1</code></td><td>Endpoint Context trong DCBAA</td><td>đổi altsetting = Configure Endpoint command</td></tr>
+        <tr><td>Hủy URB</td><td>gỡ qTD + đồng bộ</td><td>Stop Endpoint command + Set TR Dequeue</td><td>xHCI hủy là giao dịch bất đồng bộ</td></tr>
+      </tbody>
+    </table></div>
+    <p><span class="v v-f">FACT</span> — board dùng <code>compatible = "generic-xhci"</code>
+      <span class="src">armada-cp110.dtsi:160</span> nên đường đi thật trên phần cứng này là
+      <code>xhci-plat.c</code> → <code>xhci-mvebu.c</code>; EHCI (<code>ehci-orion</code>) chỉ
+      dùng cho cổng USB 2.0 rời nếu bật.</p>
+  </section>
+
+  <section id="a10">
+    <h2><span class="n">10</span>Driver Model — vì sao <code>probe()</code> được gọi</h2>
+    <p class="srcline">artifact 10 · nguồn: core/driver.c · core/generic.c · core/message.c</p>
+    <p>USB cắm vào driver model của Linux ở đúng một điểm:
+      <code>usb_bus_type.match = usb_device_match</code> <span class="src">driver.c:2279-2284</span>.
+      Điều gây bối rối nhất là trên bus USB có <strong>hai loại device và hai loại driver</strong>
+      — và chúng không bao giờ khớp chéo.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 380" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Cây quyết định matching: device_add đưa vào bus usb, usb_device_match kiểm is_usb_device hay is_usb_interface; nhánh device chỉ khớp usb_device_driver và thực tế luôn là usb_generic_driver, probe của nó gọi usb_choose_configuration và usb_set_configuration để tạo các usb_interface; mỗi interface lại device_add lần nữa, đi vào nhánh interface, khớp usb_driver qua usb_match_id với id_table, rồi usb_probe_interface gọi driver->probe.">
+        <defs><marker id="a10" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="270" y="14" width="200" height="30" rx="4"/>
+        <text class="t" x="370" y="33" font-size="9.5" text-anchor="middle">device_add() → bus usb</text>
+
+        <rect class="b" x="250" y="58" width="240" height="34" rx="4"/>
+        <text class="t" x="370" y="74" font-size="9.5" text-anchor="middle">usb_device_match()</text>
+        <text class="m" x="370" y="86" font-size="7.5" text-anchor="middle">driver.c:928</text>
+        <line class="f" x1="370" y1="44" x2="370" y2="56" marker-end="url(#a10)"/>
+
+        <path class="f" d="M310,92 C250,110 190,110 160,124" marker-end="url(#a10)"/>
+        <text class="m" x="196" y="108" font-size="7.5" text-anchor="middle">is_usb_device(dev)</text>
+        <path class="f" d="M430,92 C500,110 560,110 590,124" marker-end="url(#a10)"/>
+        <text class="m" x="556" y="108" font-size="7.5" text-anchor="middle">is_usb_interface(dev)</text>
+
+        <rect class="b" x="16" y="126" width="290" height="46" rx="4"/>
+        <text class="t" x="26" y="142" font-size="8.5">chỉ khớp usb_device_driver  usb.h:1253</text>
+        <text class="m" x="26" y="154" font-size="7.5">"interface drivers never match devices" :936</text>
+        <text class="m" x="26" y="165" font-size="7.5">thực tế chỉ có MỘT: usb_generic_driver</text>
+
+        <rect class="b" x="16" y="186" width="290" height="42" rx="4"/>
+        <text class="t" x="26" y="202" font-size="8.5">usb_generic_driver_probe()  generic.c:226</text>
+        <text class="m" x="26" y="214" font-size="7.5">usb_choose_configuration() :56</text>
+        <text class="m" x="26" y="224" font-size="7.5">usb_set_configuration(udev, c) :238</text>
+        <line class="f" x1="161" y1="172" x2="161" y2="184" marker-end="url(#a10)"/>
+
+        <rect class="b" x="16" y="242" width="290" height="54" rx="4"/>
+        <text class="t" x="26" y="258" font-size="8.5">tạo N × usb_interface  message.c:1947</text>
+        <text class="m" x="26" y="270" font-size="7.5">intf-&gt;dev.bus  = &amp;usb_bus_type   :2088</text>
+        <text class="m" x="26" y="281" font-size="7.5">intf-&gt;dev.type = &amp;usb_if_device_type :2089</text>
+        <text class="m" x="26" y="291" font-size="7.5">dev_set_name "B-P:C.I"           :2095</text>
+        <line class="f" x1="161" y1="228" x2="161" y2="240" marker-end="url(#a10)"/>
+
+        <rect class="b" x="16" y="310" width="290" height="30" rx="4"/>
+        <text class="t" x="161" y="329" font-size="9" text-anchor="middle">device_add(&amp;intf-&gt;dev)   message.c:2160</text>
+        <line class="f" x1="161" y1="296" x2="161" y2="308" marker-end="url(#a10)"/>
+        <path class="f f-d" d="M306,325 C420,325 460,120 470,92" marker-end="url(#a10)"/>
+        <text class="m" x="430" y="290" font-size="7.5" text-anchor="middle">quay lại bus match,</text>
+        <text class="m" x="430" y="301" font-size="7.5" text-anchor="middle">lần này là INTERFACE</text>
+
+        <rect class="b" x="434" y="126" width="290" height="58" rx="4"/>
+        <text class="t" x="444" y="142" font-size="8.5">usb_match_id(intf, drv-&gt;id_table)  :876</text>
+        <text class="m" x="444" y="154" font-size="7.5">→ usb_match_one_id() :783</text>
+        <text class="m" x="444" y="165" font-size="7.5">→ usb_match_device() + _one_id_intf() :748</text>
+        <text class="m" x="444" y="176" font-size="7.5">rồi thử usb_match_dynamic_id() :954</text>
+
+        <rect class="b" x="434" y="198" width="290" height="70" rx="4"/>
+        <text class="t" x="444" y="214" font-size="8.5">match_flags quyết định so trường nào</text>
+        <text class="m" x="444" y="227" font-size="7.5">MATCH_VENDOR / PRODUCT      → idVendor, idProduct</text>
+        <text class="m" x="444" y="238" font-size="7.5">MATCH_DEV_CLASS             → bDeviceClass…</text>
+        <text class="m" x="444" y="249" font-size="7.5">MATCH_INT_CLASS/SUBCLASS/</text>
+        <text class="m" x="444" y="260" font-size="7.5">PROTOCOL/NUMBER             → cur_altsetting-&gt;desc</text>
+        <line class="f" x1="579" y1="184" x2="579" y2="196" marker-end="url(#a10)"/>
+
+        <rect class="b" x="434" y="282" width="290" height="42" rx="4"/>
+        <text class="t" x="444" y="298" font-size="8.5">usb_probe_interface()   driver.c:388</text>
+        <text class="m" x="444" y="310" font-size="7.5">id = usb_match_id() lần nữa để lấy id :415</text>
+        <text class="m" x="444" y="320" font-size="7.5">kiểm authorized, LPM, altsetting0</text>
+        <line class="f" x1="579" y1="268" x2="579" y2="280" marker-end="url(#a10)"/>
+
+        <rect class="b" x="434" y="338" width="290" height="30" rx="4"/>
+        <text class="t" x="579" y="357" font-size="9.5" text-anchor="middle">driver-&gt;probe(intf, id)   driver.c:466</text>
+        <line class="f" x1="579" y1="324" x2="579" y2="336" marker-end="url(#a10)"/>
+      </svg>
+      <figcaption>Vòng lặp hai nhịp: <code>device_add</code> chạy <strong>hai lần</strong> cho
+        mỗi thiết bị — một lần cho <code>usb_device</code> (chọn configuration), một lần cho mỗi
+        <code>usb_interface</code> (bind driver thật). Một thiết bị composite (máy in + scanner)
+        có nhiều interface nên nhiều driver cùng bind một thiết bị vật lý.
+        <span class="v v-f">FACT</span></figcaption>
+    </figure>
+
+    <h3>Ví dụ thật: usb-storage <span class="v v-f">FACT</span></h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Thành phần</th><th>Nguồn</th><th>Vai trò</th></tr></thead>
+      <tbody>
+        <tr><td><code>usb_storage_driver</code></td><td><span class="src">storage/usb.c:1153</span></td><td>đủ 8 callback: probe/disconnect/suspend/resume/reset_resume/pre_reset/post_reset</td></tr>
+        <tr><td><code>storage_probe()</code></td><td><span class="src">storage/usb.c:1103</span></td><td>→ <code>usb_stor_probe1()</code> :944 → <code>probe2()</code> :1007</td></tr>
+        <tr><td>private_data</td><td><code>struct us_data</code></td><td>gắn bằng <code>usb_set_intfdata()</code>, giữ <code>current_urb</code></td></tr>
+        <tr><td>Kernel thread</td><td><code>usb_stor_control_thread</code> <span class="src">:302</span>, tạo ở <code>:801</code></td><td>process context — chỗ được phép ngủ chờ URB</td></tr>
+        <tr><td>Truyền dữ liệu</td><td><code>usb_stor_bulk_transfer_buf</code> <span class="src">transport.c:385</span></td><td><code>usb_fill_bulk_urb</code> :393 → <code>usb_submit_urb</code> :143</td></tr>
+        <tr><td>Completion</td><td><code>usb_stor_blocking_completion</code> <span class="src">transport.c:101</span></td><td>chỉ <code>complete()</code> đánh thức thread — <strong>mẫu chuẩn</strong></td></tr>
+      </tbody>
+    </table></div>
+    <p>Đây là khuôn mẫu để đọc bất kỳ USB driver nào: <em>một struct private gắn vào interface,
+      một hoặc vài URB dùng lại, một completion handler chỉ đánh thức, và toàn bộ logic nằm trong
+      process context.</em></p>
+  </section>
+
+  <section id="a11">
+    <h2><span class="n">11</span>Hub — root hub giả lập vs hub rời thật</h2>
+    <p class="srcline">artifact 11 · nguồn: core/hub.c · core/hcd.c</p>
+    <p>Hub driver là một <code>usb_driver</code> bình thường
+      (<code>hub_probe</code> <span class="src">hub.c:1848</span>) — nó không biết mình đang lái
+      root hub hay hub rời. Đó là điểm thiết kế: HCD giả lập root hub <em>đủ giống</em> để dùng
+      chung một driver.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 300" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="So sánh hai đường lấy trạng thái port: hub rời có interrupt endpoint thật, controller gửi packet, HCD giveback URB, hub_irq chạy; root hub không có endpoint thật, rh_timer 250ms gọi usb_hcd_poll_rh_status, hàm này gọi hub_status_data của HCD đọc thanh ghi PORTSC rồi tự giveback chính URB đó, cũng dẫn tới hub_irq. Từ hub_irq trở đi hai đường hoàn toàn giống nhau.">
+        <defs><marker id="a11" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a11h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="t" x="180" y="18" font-size="10" text-anchor="middle">HUB RỜI (external)</text>
+        <text class="t" x="556" y="18" font-size="10" text-anchor="middle">ROOT HUB (giả lập trong HCD)</text>
+        <line class="ll" x1="368" y1="10" x2="368" y2="212"/>
+
+        <rect class="b b-hw" x="60" y="30" width="240" height="34" rx="4"/>
+        <text class="t" x="180" y="46" font-size="8.5" text-anchor="middle">chip hub thật gửi packet trên EP1-IN</text>
+        <text class="m" x="180" y="58" font-size="7.5" text-anchor="middle">1 byte bitmap: bit n = port n đổi trạng thái</text>
+
+        <rect class="b b-hw" x="436" y="30" width="240" height="34" rx="4"/>
+        <text class="t" x="556" y="46" font-size="8.5" text-anchor="middle">KHÔNG có endpoint vật lý</text>
+        <text class="m" x="556" y="58" font-size="7.5" text-anchor="middle">trạng thái nằm trong thanh ghi PORTSC</text>
+
+        <rect class="b" x="60" y="80" width="240" height="34" rx="4"/>
+        <text class="t" x="180" y="96" font-size="8.5" text-anchor="middle">HCD hoàn tất URB thật</text>
+        <text class="m" x="180" y="108" font-size="7.5" text-anchor="middle">xhci/ehci → usb_hcd_giveback_urb()</text>
+        <line class="f f-hw" x1="180" y1="64" x2="180" y2="78" marker-end="url(#a11h)"/>
+
+        <rect class="b" x="436" y="80" width="240" height="46" rx="4"/>
+        <text class="t" x="556" y="95" font-size="8.5" text-anchor="middle">rh_timer — mỗi 250 ms</text>
+        <text class="m" x="556" y="107" font-size="7.5" text-anchor="middle">usb_hcd_poll_rh_status()  hcd.c:753</text>
+        <text class="m" x="556" y="118" font-size="7.5" text-anchor="middle">→ driver-&gt;hub_status_data() :766</text>
+        <line class="f" x1="556" y1="64" x2="556" y2="78" marker-end="url(#a11)"/>
+
+        <rect class="b b-hw" x="436" y="140" width="240" height="34" rx="4"/>
+        <text class="t" x="556" y="156" font-size="8.5" text-anchor="middle">đọc thanh ghi → dựng bitmap giống hệt</text>
+        <text class="m" x="556" y="168" font-size="7.5" text-anchor="middle">rồi tự giveback hcd-&gt;status_urb :771</text>
+        <line class="f" x1="556" y1="126" x2="556" y2="138" marker-end="url(#a11)"/>
+
+        <line class="f" x1="180" y1="114" x2="180" y2="216" marker-end="url(#a11)"/>
+        <path class="f" d="M556,174 C556,196 400,200 372,216" marker-end="url(#a11)"/>
+
+        <rect class="b b-irq" x="60" y="218" width="616" height="34" rx="4"/>
+        <text class="t" x="368" y="234" font-size="9.5" text-anchor="middle">hub_irq()   hub.c:758 — TỪ ĐÂY HAI ĐƯỜNG GIỐNG HỆT NHAU</text>
+        <text class="m" x="368" y="246" font-size="7.5" text-anchor="middle">gom bitmap vào hub-&gt;event_bits[0] :783 → kick_hub_wq() :791 → hub_event()</text>
+
+        <text class="m" x="60" y="274" font-size="8">Hệ quả: cắm thiết bị vào cổng root hub có độ trễ phát hiện tới 250 ms (timer),</text>
+        <text class="m" x="60" y="286" font-size="8">còn qua hub rời thì gần như tức thì — nhưng hub rời thêm một chặng store-and-forward.</text>
+        <text class="m" x="60" y="298" font-size="7.5">HCD hiện đại đặt hcd-&gt;uses_new_polling để bỏ timer và tự gọi usb_hcd_poll_rh_status từ IRQ port-change.</text>
+      </svg>
+      <figcaption>Cả hai đường đều kết thúc ở <code>hub_irq()</code> với cùng định dạng bitmap.
+        <code>hub_configure()</code> cấp URB interrupt bằng <code>usb_fill_int_urb(..., hub_irq,
+        ..., endpoint-&gt;bInterval)</code> <span class="src">hub.c:1710</span> — với root hub,
+        <code>bInterval</code> đến từ endpoint descriptor <em>giả</em> do
+        <code>hcd.c</code> tổng hợp. <span class="v v-f">FACT</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="a12">
+    <h2><span class="n">12</span>DMA — ba không gian địa chỉ, một buffer</h2>
+    <p class="srcline">artifact 12 · nguồn: core/hcd.c:1409-1530</p>
+    <p>Bug DMA trong USB gần như luôn là một trong ba thứ: buffer nằm trên stack, driver đọc
+      buffer khi vẫn đang map, hoặc dùng nhầm không gian địa chỉ. Sơ đồ này vẽ đúng ba không gian
+      đó.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 330" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Ba không gian địa chỉ trong đường DMA của USB: CPU dùng virtual address trỏ vào transfer_buffer trong kernel heap; dma_map_single trả về dma_addr_t là địa chỉ thiết bị nhìn thấy, có thể khác physical address nếu có IOMMU hoặc bounce buffer; controller bus-master dùng địa chỉ đó đọc RAM. Ba trường hợp map khác nhau là single, page và scatter-gather.">
+        <defs><marker id="a12" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a12h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-hw" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="t" x="16" y="18" font-size="9.5">① CPU · virtual address</text>
+        <rect class="b" x="16" y="26" width="210" height="52" rx="4"/>
+        <text class="t" x="26" y="42" font-size="8.5">urb-&gt;transfer_buffer</text>
+        <text class="m" x="26" y="54" font-size="7.5">kmalloc / usb_alloc_coherent</text>
+        <text class="m" x="26" y="65" font-size="7.5">KHÔNG được là biến stack —</text>
+        <text class="m" x="26" y="75" font-size="7.5">WARN_ONCE hcd.c:1500</text>
+
+        <text class="t" x="265" y="18" font-size="9.5">② dma_addr_t · thiết bị nhìn thấy</text>
+        <rect class="b b-hw" x="265" y="26" width="210" height="52" rx="4"/>
+        <text class="t" x="275" y="42" font-size="8.5">urb-&gt;transfer_dma</text>
+        <text class="m" x="275" y="54" font-size="7.5">dma_map_single(hcd-&gt;self.sysdev,</text>
+        <text class="m" x="275" y="65" font-size="7.5">  transfer_buffer, len, dir)</text>
+        <text class="m" x="275" y="75" font-size="7.5">hcd.c:1503</text>
+        <line class="f f-hw" x1="226" y1="52" x2="263" y2="52" marker-end="url(#a12h)"/>
+
+        <text class="t" x="514" y="18" font-size="9.5">③ physical / IOVA</text>
+        <rect class="b b-hw" x="514" y="26" width="210" height="52" rx="4"/>
+        <text class="t" x="524" y="42" font-size="8.5">RAM thật</text>
+        <text class="m" x="524" y="54" font-size="7.5">nếu có IOMMU (SMMU trên Armada):</text>
+        <text class="m" x="524" y="65" font-size="7.5">② là IOVA, phần cứng dịch tiếp</text>
+        <text class="m" x="524" y="75" font-size="7.5">nếu bounce buffer: ② ≠ ③ nội dung</text>
+        <line class="f f-hw" x1="475" y1="52" x2="512" y2="52" marker-end="url(#a12h)"/>
+
+        <text class="m" x="16" y="102" font-size="8">Quan trọng: dma_map_single dùng <tspan class="mh">hcd-&gt;self.sysdev</tspan>, không phải hcd-&gt;self.controller —</text>
+        <text class="m" x="16" y="114" font-size="8">vì thiết bị thực hiện DMA có thể là node cha trong device tree (glue layer). hcd.c:1503</text>
+
+        <line class="ll" x1="16" y1="130" x2="724" y2="130"/>
+
+        <text class="t" x="16" y="150" font-size="9.5">Ba nhánh trong usb_hcd_map_urb_for_dma()  hcd.c:1409</text>
+
+        <rect class="b" x="16" y="160" width="228" height="62" rx="4"/>
+        <text class="t" x="26" y="176" font-size="8.5">A · buffer đơn</text>
+        <text class="m" x="26" y="188" font-size="7.5">dma_map_single()  :1503</text>
+        <text class="m" x="26" y="199" font-size="7.5">cờ URB_DMA_MAP_SINGLE :1509</text>
+        <text class="m" x="26" y="211" font-size="7.5">— trường hợp thường gặp nhất</text>
+
+        <rect class="b" x="256" y="160" width="228" height="62" rx="4"/>
+        <text class="t" x="266" y="176" font-size="8.5">B · scatter-gather</text>
+        <text class="m" x="266" y="188" font-size="7.5">dma_map_sg(urb-&gt;sg, num_sgs) :1474</text>
+        <text class="m" x="266" y="199" font-size="7.5">URB_DMA_MAP_SG :1482</text>
+        <text class="m" x="266" y="211" font-size="7.5">n &lt; num_sgs → DMA_SG_COMBINED</text>
+
+        <rect class="b" x="496" y="160" width="228" height="62" rx="4"/>
+        <text class="t" x="506" y="176" font-size="8.5">C · localmem pool</text>
+        <text class="m" x="506" y="188" font-size="7.5">hcd_alloc_coherent() :1425</text>
+        <text class="m" x="506" y="199" font-size="7.5">URB_SETUP_MAP_LOCAL</text>
+        <text class="m" x="506" y="211" font-size="7.5">— HCD có SRAM riêng, phải copy</text>
+
+        <text class="m" x="16" y="246" font-size="8">Control transfer: setup_packet map RIÊNG (8 byte, DMA_TO_DEVICE) trước data buffer. hcd.c:1421-1445</text>
+        <text class="m" x="16" y="258" font-size="8">Nếu hcd-&gt;self.uses_pio_for_control: bỏ qua hoàn toàn — HCD tự copy bằng CPU. :1424</text>
+
+        <line class="ll" x1="16" y1="272" x2="724" y2="272"/>
+        <text class="t" x="16" y="290" font-size="9.5">Gỡ map: usb_hcd_unmap_urb_for_dma()  hcd.c:1362</text>
+        <text class="m" x="16" y="304" font-size="8">Được gọi ở ĐẦU __usb_hcd_giveback_urb() (:1658) — TRƯỚC urb-&gt;complete().</text>
+        <text class="m" x="16" y="316" font-size="8">→ đó là lý do driver được phép đọc transfer_buffer ngay trong completion handler.</text>
+      </svg>
+      <figcaption>Thứ tự unmap-trước-complete là hợp đồng quan trọng nhất của DMA trong USB: nó
+        đảm bảo cache đã được đồng bộ khi driver đọc dữ liệu. Driver <strong>không bao giờ</strong>
+        tự gọi <code>dma_map_*</code> cho URB thường. <span class="v v-f">FACT</span>
+        <span class="src">hcd.c:1658, 1673</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="a13">
+    <h2><span class="n">13</span>Context — ở đâu được ngủ, ở đâu không</h2>
+    <p class="srcline">artifact 13 · nguồn: hcd.h:67-80 · core/hcd.c · core/hub.c</p>
+    <p>Đây là bảng bạn cần dán lên tường. Gọi sai một API trong sai context = deadlock hoặc
+      &ldquo;scheduling while atomic&rdquo;.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 300" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Bốn context trong đường USB xếp theo trục dọc: hardirq chạy usb_hcd_irq và handler của HCD, không được ngủ, dùng GFP_ATOMIC; tasklet giveback_urb_bh chạy urb->complete cho HCD có cờ HCD_BH, vẫn không ngủ được; workqueue hub_wq chạy toàn bộ enumeration, ngủ được, dùng GFP_NOIO; process context của driver hoặc syscall chạy usb_control_msg và usb_bulk_msg đồng bộ, ngủ được, dùng GFP_KERNEL.">
+        <defs><marker id="a13" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b b-irq" x="16" y="16" width="708" height="60" rx="4"/>
+        <text class="t" x="28" y="34" font-size="10">HARDIRQ — không ngủ, không mutex, GFP_ATOMIC</text>
+        <text class="m" x="28" y="48" font-size="8">usb_hcd_irq() hcd.c:2351 → hcd-&gt;driver-&gt;irq() → xhci_irq :3029 / ehci_irq :712</text>
+        <text class="m" x="28" y="60" font-size="8">handle_tx_event → finish_td → xhci_giveback_urb_in_irq :734</text>
+        <text class="m" x="28" y="72" font-size="7.5">Được phép: usb_hcd_giveback_urb, spin_lock_irqsave, readl/writel.  Cấm: msleep, mutex_lock, usb_control_msg</text>
+
+        <rect class="b b-irq" x="16" y="88" width="708" height="52" rx="4"/>
+        <text class="t" x="28" y="106" font-size="10">TASKLET / BH — vẫn atomic</text>
+        <text class="m" x="28" y="120" font-size="8">usb_giveback_urb_bh() hcd.c:1692 — chỉ dùng khi hc_driver có cờ HCD_BH (hcd.h:265)</text>
+        <text class="m" x="28" y="132" font-size="8">giveback_urb_bh có high_prio_bh cho int/iso và low_prio_bh cho bulk/ctrl  hcd.c:1758-1762</text>
+        <text class="mi" x="716" y="106" font-size="7.5" text-anchor="end">urb-&gt;complete() thường chạy Ở ĐÂY</text>
+
+        <rect class="b" x="16" y="152" width="708" height="58" rx="4"/>
+        <text class="t" x="28" y="170" font-size="10">WORKQUEUE hub_wq — ngủ được, GFP_NOIO</text>
+        <text class="m" x="28" y="184" font-size="8">hub_event() hub.c:5888 → port_event → hub_port_connect → hub_port_init</text>
+        <text class="m" x="28" y="196" font-size="8">Giữ usb_lock_device(hdev) + hcd-&gt;address0_mutex  hub.c:5482</text>
+        <text class="m" x="28" y="207" font-size="7.5">Dùng GFP_NOIO chứ không GFP_KERNEL (hub.c:4909) — tránh đệ quy khi thiết bị là ổ đĩa gốc</text>
+
+        <rect class="b" x="16" y="222" width="708" height="52" rx="4"/>
+        <text class="t" x="28" y="240" font-size="10">PROCESS — ngủ tự do, GFP_KERNEL</text>
+        <text class="m" x="28" y="254" font-size="8">usb_control_msg() message.c:136 · usb_bulk_msg() :367 — đều gọi usb_start_wait_urb() :49 và NGỦ</text>
+        <text class="m" x="28" y="266" font-size="8">driver kthread (vd usb_stor_control_thread storage/usb.c:302) · syscall qua devio.c</text>
+
+        <line class="f" x1="8" y1="16" x2="8" y2="274"/>
+        <text class="mi" x="4" y="46" font-size="7.5" transform="rotate(-90 4 46)" text-anchor="middle">atomic</text>
+
+        <text class="m" x="16" y="292" font-size="8">Quy tắc rút gọn: nếu bạn đang trong urb-&gt;complete() → coi như atomic; muốn ngủ thì schedule_work().</text>
+      </svg>
+      <figcaption>Ranh giới quan trọng nhất: <code>urb-&gt;complete()</code> có thể chạy trong
+        <strong>hardirq hoặc tasklet</strong> tùy cờ <code>HCD_BH</code> của HCD — driver phải
+        viết completion handler như thể luôn atomic. <span class="v v-f">FACT</span>
+        <span class="src">hcd.c:1753-1774</span></figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Thao tác</th><th>Context cho phép</th><th>GFP</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td><code>usb_alloc_urb()</code></td><td>mọi</td><td>theo tham số</td><td>truyền GFP_ATOMIC nếu trong completion</td></tr>
+        <tr><td><code>usb_submit_urb()</code></td><td>mọi, kể cả IRQ</td><td>GFP_ATOMIC trong IRQ</td><td>đường resubmit của interrupt URB</td></tr>
+        <tr><td><code>usb_unlink_urb()</code></td><td>mọi</td><td>—</td><td>bất đồng bộ, trả ngay</td></tr>
+        <tr><td><code>usb_kill_urb()</code></td><td><strong>chỉ process</strong></td><td>—</td><td>ngủ chờ <code>use_count==0</code> <span class="src">urb.c:703</span></td></tr>
+        <tr><td><code>usb_control_msg()</code> / <code>usb_bulk_msg()</code></td><td><strong>chỉ process</strong></td><td>GFP_NOIO/KERNEL</td><td>gọi <code>wait_for_completion_timeout</code></td></tr>
+        <tr><td><code>usb_set_interface()</code></td><td>process, giữ device lock</td><td>—</td><td>gửi control transfer</td></tr>
+        <tr><td><code>usb_hcd_giveback_urb()</code></td><td>mọi</td><td>—</td><td>tự chọn trực tiếp hay tasklet</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</div>

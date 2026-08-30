@@ -1,0 +1,675 @@
+<title>Samsung I2S CPU DAI</title>
+<meta name="description" content="Sơ đồ cơ chế của sound/soc/samsung/i2s.c: vòng đời callback, bản đồ thanh ghi theo một flow giao tiếp I2S, cấu trúc dữ liệu, vai trò trong ASoC, power management và checklist cần để ý.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Public+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --bg:#ecebe7;
+    --surface:#faf9f6;
+    --surface-2:#f1efe9;
+    --ink:#221f1b;
+    --muted:#6a655c;
+    --line:#d4d0c6;
+    --line-strong:#a09a8c;
+    --accent:#0f7c86;
+    --accent-soft:#dbedf0;
+    --warn:#a5631a;
+    --warn-soft:#f1e5d3;
+    --shadow:0 1px 2px rgba(30,25,15,.06),0 10px 26px rgba(30,25,15,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#131519;
+      --surface:#1b1e23;
+      --surface-2:#21252b;
+      --ink:#e3e0d9;
+      --muted:#948e83;
+      --line:#2d313a;
+      --line-strong:#454b55;
+      --accent:#45b8c3;
+      --accent-soft:#173236;
+      --warn:#d99b50;
+      --warn-soft:#312819;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#131519;
+    --surface:#1b1e23;
+    --surface-2:#21252b;
+    --ink:#e3e0d9;
+    --muted:#948e83;
+    --line:#2d313a;
+    --line-strong:#454b55;
+    --accent:#45b8c3;
+    --accent-soft:#173236;
+    --warn:#d99b50;
+    --warn-soft:#312819;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Public Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 100px}
+  .prose{max-width:74ch}
+  .prose p,.prose li{max-width:74ch}
+
+  code,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.85em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.05em .36em}
+
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:500;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--accent)}
+
+  h1{
+    font-family:"JetBrains Mono",monospace;font-weight:700;
+    font-size:clamp(27px,4.4vw,40px);line-height:1.14;letter-spacing:-.02em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18px);margin:0 0 22px;max-width:70ch}
+  .meta{
+    font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);
+    display:flex;flex-wrap:wrap;gap:6px 20px;padding-top:16px;border-top:1px solid var(--line);
+  }
+  .meta b{color:var(--ink);font-weight:500}
+
+  h2{
+    font-family:"JetBrains Mono",monospace;font-weight:700;
+    font-size:clamp(18px,2.5vw,22px);letter-spacing:-.01em;
+    margin:66px 0 6px;text-wrap:balance;
+  }
+  h2 .num{color:var(--accent);margin-right:.55em}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 24px;max-width:72ch}
+  p{margin:0 0 16px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 7px}
+  a{color:var(--accent);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  figure{margin:0 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:660px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:76ch}
+  .fig-tag{
+    font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"Public Sans",sans-serif;font-size:12.5px}
+  .diagram .t-mono{font-family:"JetBrains Mono",monospace}
+  .diagram .t-b{font-weight:600}
+  .diagram .lbl{fill:var(--muted);font-size:11px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"JetBrains Mono",monospace;font-size:10.5px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.25}
+  .diagram .box-hi{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.6}
+  .diagram .badge{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1}
+  .diagram .edge{stroke:var(--line-strong);stroke-width:1.4;fill:none}
+  .diagram .edge-thin{stroke:var(--line-strong);stroke-width:1.15;fill:none}
+  .diagram .edge-dash{stroke:var(--line-strong);stroke-width:1.3;fill:none;stroke-dasharray:5 4}
+  .diagram .clk{stroke:var(--accent);stroke-width:2.3;fill:none}
+  .diagram .clk-t{fill:var(--accent);font-weight:600;font-family:"JetBrains Mono",monospace;font-size:10.5px}
+  .diagram .data2{stroke:currentColor;stroke-width:2.6;fill:none;opacity:.55}
+  .diagram .warn{stroke:var(--warn);stroke-width:1.5;fill:none}
+  .diagram .warn-t{fill:var(--warn);font-weight:600}
+  .diagram .warn-box{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.2}
+  [id^="mk-arr"] path{fill:var(--line-strong)}
+  [id^="mk-clk"] path{fill:var(--accent)}
+  [id^="mk-dat"] path{fill:currentColor}
+  [id^="mk-wrn"] path{fill:var(--warn)}
+
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:6px 0 0}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  td.mono{font-family:"JetBrains Mono",monospace;font-size:12px}
+  tbody tr:last-child td{border-bottom:none}
+
+  .watch{
+    background:var(--warn-soft);border:1px solid var(--warn);border-radius:12px;
+    padding:20px 22px 8px;margin:8px 0 0;
+  }
+  .watch h3{
+    font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--warn);margin:0 0 12px;font-weight:600;
+  }
+  .watch ul{padding-left:20px}
+  .watch li{margin-bottom:9px}
+
+  .kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;font-size:13.5px;margin:0 0 16px}
+  .kv .k{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--accent)}
+
+  footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:76ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">sound/soc/samsung/i2s.c · ASoC CPU DAI · Jaswinder Singh, 2010</p>
+    <h1>Samsung I2S CPU DAI</h1>
+    <p class="lede">
+      File này lái <b>khối phần cứng I2S</b> bên trong SoC Samsung/Exynos. Trong mô
+      hình ASoC 4 lớp (Machine ↔ Platform/DMA ↔ <b>CPU DAI</b> ↔ Codec) nó là “đầu I2S
+      phía CPU”: <b>sinh xung clock âm thanh</b> và <b>mở cửa FIFO</b> để mẫu PCM chạy
+      ra chân chip tới codec. Nó không chép dữ liệu từ RAM, không biết loa/mic nối đâu,
+      không cấu hình codec.
+    </p>
+    <div class="meta">
+      <span><b>Vai trò</b> CPU DAI (clock + FIFO)</span>
+      <span><b>IP</b> v3 → v7 (S3C6410 → Exynos7)</span>
+      <span><b>2 DAI</b> primary + secondary (QUIRK_SEC_DAI)</span>
+    </div>
+  </header>
+
+  <!-- ============ 1 ============ -->
+  <section>
+    <h2><span class="num">1</span>Các hàm quan trọng — vòng đời một luồng</h2>
+    <p class="claim">
+      Lõi ASoC gọi bảng <code>snd_soc_dai_ops</code> theo đúng thứ tự này mỗi khi ứng
+      dụng phát/thu. Bốn bước đầu chạy một lần lúc mở; <code>trigger</code> chạy mỗi
+      lần chạy/dừng.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — pipeline callback (high level)</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 214" role="img"
+          aria-label="Sáu bước nối tiếp: startup đánh dấu DAI_OPENED và chọn DAI manager giữ clock chung; set_fmt dịch cờ DAIFMT thành bit SDF LRP MSS trong I2SMOD tức định dạng và master hay slave; set_sysclk chọn nguồn RCLK opclk0 hoặc opclk1 và gate hoặc phát MCLK ra codec; hw_params đưa số kênh và độ rộng mẫu vào I2SMOD rồi trao địa chỉ FIFO cho lớp DMA; trigger START gọi config_setup chốt BFS RFS và tính prescaler I2SPSR rồi bật CON_ACTIVE cộng TXDMA; trigger STOP và shutdown tắt hướng truyền flush FIFO xoá cờ OPENED và bỏ ràng buộc rfs bfs.">
+          <defs>
+            <marker id="mk-arr-1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <line class="edge-thin" x1="16" y1="34" x2="661" y2="34"/>
+          <text class="lbl-m" x="16" y="27">MỘT LẦN · khi mở luồng</text>
+          <line class="edge-thin" x1="674" y1="34" x2="984" y2="34"/>
+          <text class="lbl-m" x="674" y="27">MỖI LẦN · start / stop</text>
+
+          <g>
+            <rect class="box" x="16" y="44" width="153" height="46" rx="7"/>
+            <text class="t-mono t-b" x="92" y="72" text-anchor="middle">startup()</text>
+            <rect class="box" x="179" y="44" width="153" height="46" rx="7"/>
+            <text class="t-mono t-b" x="255" y="72" text-anchor="middle">set_fmt()</text>
+            <rect class="box" x="342" y="44" width="153" height="46" rx="7"/>
+            <text class="t-mono t-b" x="418" y="72" text-anchor="middle">set_sysclk()</text>
+            <rect class="box" x="505" y="44" width="153" height="46" rx="7"/>
+            <text class="t-mono t-b" x="581" y="72" text-anchor="middle">hw_params()</text>
+            <rect class="box-hi" x="674" y="44" width="153" height="46" rx="7"/>
+            <text class="t-mono t-b" x="750" y="66" text-anchor="middle">trigger(START)</text>
+            <text class="lbl-m" x="750" y="82" text-anchor="middle">→ config_setup()</text>
+            <rect class="box" x="837" y="44" width="147" height="46" rx="7"/>
+            <text class="t-mono t-b" x="910" y="66" text-anchor="middle">trigger(STOP)</text>
+            <text class="lbl-m" x="910" y="82" text-anchor="middle">shutdown()</text>
+          </g>
+
+          <g>
+            <line class="edge" x1="169" y1="67" x2="178" y2="67" marker-end="url(#mk-arr-1)"/>
+            <line class="edge" x1="332" y1="67" x2="341" y2="67" marker-end="url(#mk-arr-1)"/>
+            <line class="edge" x1="495" y1="67" x2="504" y2="67" marker-end="url(#mk-arr-1)"/>
+            <line class="edge" x1="658" y1="67" x2="673" y2="67" marker-end="url(#mk-arr-1)"/>
+            <line class="edge" x1="827" y1="67" x2="836" y2="67" marker-end="url(#mk-arr-1)"/>
+          </g>
+
+          <g class="lbl" text-anchor="middle" font-size="9.6">
+            <text x="92"  y="112">đánh dấu DAI_OPENED</text>
+            <text x="92"  y="126">chọn DAI “manager”</text>
+            <text x="92"  y="140">giữ clock dùng chung</text>
+
+            <text x="255" y="112">DAIFMT → bit I2SMOD</text>
+            <text x="255" y="126">SDF · LRP · MSS</text>
+            <text x="255" y="140">định dạng, master/slave</text>
+
+            <text x="418" y="112">chọn nguồn RCLK</text>
+            <text x="418" y="126">opclk0 / opclk1</text>
+            <text x="418" y="140">gate hoặc phát MCLK</text>
+
+            <text x="581" y="112">kênh + độ rộng mẫu</text>
+            <text x="581" y="126">→ I2SMOD (BLC, DCn)</text>
+            <text x="581" y="140">trao addr FIFO cho DMA</text>
+
+            <text x="750" y="112">chốt BFS / RFS</text>
+            <text x="750" y="126">tính prescaler I2SPSR</text>
+            <text x="750" y="140">bật CON_ACTIVE + TXDMA</text>
+
+            <text x="910" y="112">tắt hướng truyền</text>
+            <text x="910" y="126">flush FIFO</text>
+            <text x="910" y="140">xoá OPENED · rfs/bfs = 0</text>
+          </g>
+
+          <text class="warn-t" x="16" y="188" font-size="10.5" font-family="JetBrains Mono, monospace">Mỗi hàm set_* : nếu khối đang chạy và giá trị mới ≠ giá trị đang chạy → trả -EAGAIN (“Other DAI busy”), không phải lỗi.</text>
+        </svg>
+      </div>
+      <figcaption>
+        Ý nghĩa từng action: <b>startup</b> — mở “cổng” DAI, một trong hai DAI nhận vai
+        <code>DAI_MANAGER</code> để chịu trách nhiệm clock chung. <b>set_fmt</b> — dịch
+        <code>SND_SOC_DAIFMT_*</code> (I2S/Left-J/Right-J, polarity, ai là master)
+        thành bit trong <code>I2SMOD</code>. <b>set_sysclk</b> — chọn nguồn sinh RCLK và
+        quyết định gate hay phát <code>MCLK/CDCLK</code> ra codec. <b>hw_params</b> —
+        sau khi ALSA chốt rate/kênh/định dạng: bật multi-channel, đặt độ rộng mẫu, và
+        <code>snd_soc_dai_init_dma_data()</code> giao địa chỉ FIFO cho lớp DMA.
+        <b>trigger(START)</b> → <code>config_setup()</code> chốt BFS/RFS và tính
+        prescaler ngay trước khi chạy, rồi <code>i2s_txctrl(1)</code> bật kênh.
+        <b>trigger(STOP)/shutdown</b> — tắt hướng truyền, flush FIFO, trả lại vai
+        manager, xoá ràng buộc.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 2 ============ -->
+  <section>
+    <h2><span class="num">2</span>Bản đồ thanh ghi — theo một lần giao tiếp I2S</h2>
+    <p class="claim">
+      Ví dụ: phát nhạc <b>48 kHz · stereo · 16-bit</b> ra codec, CPU làm master, MCLK =
+      256 × fs. Sáu bước dưới đây chạm vào thanh ghi nào, và vì sao.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — 6 bước bring-up ↔ 7 thanh ghi (offset trong i2s-regs.h)</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 500" role="img"
+          aria-label="Bên trái sáu bước: 1 chọn định dạng khung I2S master RFS 256 BFS 32 mẫu 16 bit ghi vào I2SMOD; 2 chia clock nguồn 49.152 MHz xuống RCLK bằng 256 nhân 48000 ghi vào I2SPSR; 3 flush FIFO qua I2SFIC; 4 bật kênh truyền và DMA qua I2SCON; 5 DMA bơm mẫu 16 bit vào cửa sổ I2STXD lặp lại; 6 khi chạy đọc cờ FIFO đầy rỗng ở I2SCON và số frame còn lại ở I2SFIC. Bên phải bảy thẻ thanh ghi: I2SCON offset 0 control status; I2SMOD offset 4 mode là thanh ghi quan trọng nhất; I2SFIC offset 8 và I2SFICS offset 0x18 điều khiển FIFO; I2SPSR offset 0xc prescaler; I2STXD offset 0x10 và I2SRXD offset 0x14 cửa sổ dữ liệu FIFO; I2STXDS offset 0x1c FIFO của DAI thứ hai.">
+          <defs>
+            <marker id="mk-arr-2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-clk-2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-dat-2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <!-- steps -->
+          <g>
+            <circle class="badge" cx="34" cy="52" r="13"/><text class="t-mono t-b" x="34" y="56" text-anchor="middle" font-size="12">1</text>
+            <text class="t-b" x="56" y="46">Định dạng khung</text>
+            <text class="lbl" x="56" y="62">I2S · master · RFS 256 · BFS 32 · 16-bit</text>
+
+            <circle class="badge" cx="34" cy="134" r="13"/><text class="t-mono t-b" x="34" y="138" text-anchor="middle" font-size="12">2</text>
+            <text class="t-b" x="56" y="128">Chia clock nguồn</text>
+            <text class="lbl" x="56" y="144">49.152 MHz → RCLK = 256 × 48000</text>
+
+            <circle class="badge" cx="34" cy="216" r="13"/><text class="t-mono t-b" x="34" y="220" text-anchor="middle" font-size="12">3</text>
+            <text class="t-b" x="56" y="210">Dọn FIFO</text>
+            <text class="lbl" x="56" y="226">flush trước khi chạy, tránh rác</text>
+
+            <circle class="badge" cx="34" cy="298" r="13"/><text class="t-mono t-b" x="34" y="302" text-anchor="middle" font-size="12">4</text>
+            <text class="t-b" x="56" y="292">Bật kênh + DMA</text>
+            <text class="lbl" x="56" y="308">cho phần cứng bắt đầu kéo mẫu</text>
+
+            <circle class="badge" cx="34" cy="380" r="13"/><text class="t-mono t-b" x="34" y="384" text-anchor="middle" font-size="12">5</text>
+            <text class="t-b" x="56" y="374">Bơm mẫu</text>
+            <text class="lbl" x="56" y="390">DMA ghi vào cửa sổ FIFO, lặp</text>
+
+            <circle class="badge" cx="34" cy="458" r="13"/><text class="t-mono t-b" x="34" y="462" text-anchor="middle" font-size="12">6</text>
+            <text class="t-b" x="56" y="452">Theo dõi khi chạy</text>
+            <text class="lbl" x="56" y="468">FIFO đầy/rỗng · độ trễ (frame còn lại)</text>
+          </g>
+
+          <line class="edge-thin" x1="392" y1="24" x2="392" y2="484"/>
+
+          <!-- register cards -->
+          <g font-size="12.5">
+            <rect class="box" x="440" y="24" width="546" height="62" rx="8"/>
+            <rect class="badge" x="452" y="38" width="86" height="34" rx="5"/>
+            <text class="t-mono" x="495" y="59" text-anchor="middle" font-size="11">0x00</text>
+            <text class="t-mono t-b" x="552" y="46">I2SCON</text>
+            <text class="lbl-m" x="552" y="64">control / status — bật·tắt kênh & DMA · pause · reset · cờ FIFO đầy/rỗng</text>
+
+            <rect class="box-hi" x="440" y="96" width="546" height="72" rx="8"/>
+            <rect class="badge" x="452" y="112" width="86" height="34" rx="5"/>
+            <text class="t-mono" x="495" y="133" text-anchor="middle" font-size="11">0x04</text>
+            <text class="t-mono t-b" x="552" y="120">I2SMOD  <tspan class="clk-t">◆ quan trọng nhất</tspan></text>
+            <text class="lbl-m" x="552" y="138">định dạng (SDF) · polarity (LRP) · master/slave (MSS) · RFS · BFS</text>
+            <text class="lbl-m" x="552" y="154">độ rộng mẫu (BLC) · hướng TX/RX · đa kênh (DCn) · nguồn RCLK · gate CDCLK</text>
+
+            <rect class="box" x="440" y="178" width="546" height="52" rx="8"/>
+            <rect class="badge" x="452" y="190" width="86" height="28" rx="5"/>
+            <text class="t-mono" x="495" y="209" text-anchor="middle" font-size="10">0x08·0x18</text>
+            <text class="t-mono t-b" x="552" y="199">I2SFIC / I2SFICS</text>
+            <text class="lbl-m" x="552" y="216">FIFO control — flush TX/RX · đọc mức FIFO (TXCOUNT / RXCOUNT)</text>
+
+            <rect class="box" x="440" y="240" width="546" height="52" rx="8"/>
+            <rect class="badge" x="452" y="252" width="86" height="28" rx="5"/>
+            <text class="t-mono" x="495" y="271" text-anchor="middle" font-size="11">0x0c</text>
+            <text class="t-mono t-b" x="552" y="261">I2SPSR</text>
+            <text class="lbl-m" x="552" y="278">prescaler — PSR_PSREN + giá trị chia (bit 8..13) để ra RCLK đúng</text>
+
+            <rect class="box" x="440" y="302" width="546" height="52" rx="8"/>
+            <rect class="badge" x="452" y="314" width="86" height="28" rx="5"/>
+            <text class="t-mono" x="495" y="333" text-anchor="middle" font-size="10">0x10·0x14</text>
+            <text class="t-mono t-b" x="552" y="323">I2STXD / I2SRXD</text>
+            <text class="lbl-m" x="552" y="340">data — cửa sổ FIFO; DMA ghi (TX) / đọc (RX) mẫu tại đây</text>
+
+            <rect class="box" x="440" y="364" width="546" height="46" rx="8"/>
+            <rect class="badge" x="452" y="374" width="86" height="26" rx="5"/>
+            <text class="t-mono" x="495" y="391" text-anchor="middle" font-size="11">0x1c</text>
+            <text class="t-mono t-b" x="552" y="383">I2STXDS</text>
+            <text class="lbl-m" x="552" y="400">secondary TX data — FIFO riêng của DAI thứ hai</text>
+          </g>
+
+          <!-- step -> register arrows -->
+          <path class="clk" d="M120 48 C260 44 320 120 438 128" marker-end="url(#mk-clk-2)"/>
+          <text class="clk-t" x="250" y="70" text-anchor="middle">SDF·MSS·RFS·BFS·BLC</text>
+
+          <path class="clk" d="M120 132 C280 150 330 250 438 262" marker-end="url(#mk-clk-2)"/>
+          <text class="clk-t" x="250" y="176" text-anchor="middle">psr = 49.152M ÷ 48k ÷ 256 − 1</text>
+
+          <path class="edge" d="M120 214 C270 214 320 200 438 202" marker-end="url(#mk-arr-2)"/>
+          <text class="lbl-m" x="250" y="206" text-anchor="middle">FIC_TXFLUSH</text>
+
+          <path class="edge" d="M120 296 C250 296 320 60 438 54" marker-end="url(#mk-arr-2)"/>
+          <text class="lbl-m" x="250" y="300" text-anchor="middle">CON_ACTIVE | CON_TXDMA_ACTIVE</text>
+
+          <path class="data2" d="M120 378 C260 378 320 332 438 328" marker-end="url(#mk-dat-2)"/>
+          <text class="lbl-m" x="250" y="372" text-anchor="middle">DMA ghi mẫu 16-bit</text>
+
+          <path class="edge" d="M120 456 C280 456 330 78 438 70" marker-end="url(#mk-arr-2)"/>
+          <path class="edge" d="M120 460 C300 460 340 210 438 210" marker-end="url(#mk-arr-2)"/>
+          <text class="lbl-m" x="250" y="460" text-anchor="middle">đọc cờ FIFO · TXCOUNT</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Vì sao phải qua thanh ghi:</b> khối I2S là phần cứng tách rời CPU — cách duy
+        nhất điều khiển nó là ghi/đọc vùng nhớ ánh xạ. <b>Khi nào &amp; ở đâu:</b>
+        <code>I2SMOD</code> + <code>I2SPSR</code> được đặt <i>một lần</i> lúc cấu hình
+        (bước 1–2) vì chúng định hình clock; <code>I2SFIC</code> ở bước dọn dẹp (3, và
+        lúc stop); <code>I2SCON</code> ở lằn ranh chạy/dừng (4) và để <i>hỏi</i> trạng
+        thái khi chạy (6); <code>I2STXD</code> bị DMA chạm liên tục (5). Có
+        <code>samsung_i2s_variant_regs</code> vì qua các đời IP (v3→v7) vị trí bit trong
+        <code>I2SMOD</code> bị dời — driver gói offset vào struct, chọn theo
+        <code>compatible</code> DT, nên cùng một <code>set_rfs()</code> chạy cho mọi đời.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 3 ============ -->
+  <section>
+    <h2><span class="num">3</span>Cấu trúc dữ liệu</h2>
+    <p class="claim">
+      Hai struct chính: một cho cả controller, một cho mỗi “cổng” DAI. Một khối I2S
+      Samsung có thể trưng ra 2 DAI dùng chung phần cứng.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — samsung_i2s_priv chứa mảng i2s_dai</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 430" role="img"
+          aria-label="Hộp lớn samsung_i2s_priv là cả controller, gồm addr là vùng thanh ghi đã ioremap, clk và op_clk, variant_regs và quirks đặc tả đời IP, rclk_srcrate để tính prescaler, clk_table và clk_data khi tự làm clock provider, suspend_i2smod con psr lưu khi suspend, hai spinlock lock và pcm_lock, slave_mode, và mảng dai. Mảng dai trỏ sang hộp i2s_dai bên phải, mỗi i2s_dai gồm rfs bfs là ràng buộc từ machine, pri_dai và sec_dai trỏ chéo nhau, mode mang cờ DAI_OPENED và DAI_MANAGER, và dma_playback dma_capture idma_playback trao cho lớp DMA. Primary luôn có, secondary chỉ khi QUIRK_SEC_DAI và chỉ phát, có FIFO riêng I2STXDS.">
+          <defs>
+            <marker id="mk-arr-3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="30" y="30" width="440" height="372" rx="10"/>
+          <rect x="30" y="30" width="440" height="34" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.25"/>
+          <text class="t-mono t-b" x="46" y="52">struct samsung_i2s_priv</text>
+          <text class="lbl" x="330" y="52">— cả controller</text>
+
+          <g font-size="11">
+            <g class="t-mono"><text x="46" y="88" class="clk-t">addr</text><text x="46" y="116">clk · op_clk</text><text x="46" y="144">variant_regs</text><text x="46" y="172">quirks</text><text x="46" y="200">rclk_srcrate</text><text x="46" y="228">clk_table[3]</text><text x="46" y="256">suspend_i2s…</text><text x="46" y="284" class="warn-t">lock · pcm_lock</text><text x="46" y="312">slave_mode</text><text x="46" y="356" class="t-mono t-b" style="font-family:'JetBrains Mono',monospace">dai[]</text></g>
+            <g class="lbl"><text x="176" y="88">vùng thanh ghi đã ioremap → Fig 2</text><text x="176" y="116">clock chạy khối / clock nguồn audio</text><text x="176" y="144">offset bit theo đời IP (v3…v7)</text><text x="176" y="172">cờ khác biệt HW (SEC_DAI, RSTCLR…)</text><text x="176" y="200">tần số nguồn RCLK — tính prescaler</text><text x="176" y="228">khi driver tự làm clock provider</text><text x="176" y="256">lưu MOD/CON/PSR để phục hồi</text><text x="176" y="284">2 spinlock (thanh ghi / trạng thái mở)</text><text x="176" y="312">true nếu codec làm master</text></g>
+            <text x="176" y="356" class="t-b" font-size="11.5">mảng cổng DAI  ───▶</text>
+          </g>
+
+          <rect class="box" x="560" y="30" width="410" height="228" rx="10"/>
+          <rect x="560" y="30" width="410" height="34" rx="10" fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1.25"/>
+          <text class="t-mono t-b" x="576" y="52">struct i2s_dai</text>
+          <text class="lbl" x="830" y="52">— một “cổng” DAI</text>
+          <g font-size="11">
+            <g class="t-mono"><text x="576" y="90">rfs · bfs</text><text x="576" y="120">pri_dai/sec_dai</text><text x="576" y="150" class="warn-t">mode</text><text x="576" y="180">dma_playback</text><text x="576" y="210">dma_capture</text><text x="576" y="240">idma_playback</text></g>
+            <g class="lbl"><text x="716" y="90">ràng buộc machine ép (0 = tự chọn)</text><text x="716" y="120">con trỏ chéo giữa 2 DAI cùng khối</text><text x="716" y="150">DAI_OPENED · DAI_MANAGER</text><text x="716" y="180">địa chỉ FIFO · tên kênh · độ rộng</text><text x="716" y="210">(chỉ primary)</text><text x="716" y="240">SRAM on-chip (chỉ secondary)</text></g>
+          </g>
+
+          <rect class="warn-box" x="560" y="286" width="410" height="86" rx="10"/>
+          <text class="t-mono t-b" x="576" y="310" font-size="11.5">primary  (SAMSUNG_I2S_ID_PRIMARY)</text>
+          <text class="lbl-m" x="576" y="328">luôn có · phát + thu · DMA ngoài</text>
+          <text class="t-mono t-b" x="576" y="350" font-size="11.5">secondary  (chỉ khi QUIRK_SEC_DAI)</text>
+          <text class="lbl-m" x="576" y="368">chỉ phát · FIFO riêng I2STXDS · trộn 2 luồng không tắt clock</text>
+
+          <path class="edge" d="M400 356 C480 356 500 150 558 130" marker-end="url(#mk-arr-3)"/>
+          <path class="edge-dash" d="M765 258 L765 284" marker-end="url(#mk-arr-3)"/>
+        </svg>
+      </div>
+      <figcaption>
+        <code>samsung_i2s_priv</code> giữ mọi thứ dùng chung: vùng thanh ghi, clock, đặc
+        tả đời IP, các bản lưu cho PM và 2 spinlock. <code>i2s_dai</code> là một hướng
+        giao tiếp — primary (phát+thu, DMA ngoài) và tuỳ chọn secondary (chỉ phát, FIFO
+        <code>I2STXDS</code> riêng, có thể dùng iDMA/SRAM) để trộn 2 luồng nhạc mà không
+        phải bật/tắt clock. Cờ <code>DAI_MANAGER</code> trong <code>mode</code> đánh dấu
+        DAI nào đang “cầm trịch” các thiết lập clock chung.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 4 ============ -->
+  <section>
+    <h2><span class="num">4</span>Chức năng chính &amp; vai trò trong flow I2S</h2>
+    <p class="claim">
+      Bốn nhóm việc: (a) dịch cấu hình DAIFMT → thanh ghi; (b) sinh &amp; chia clock
+      audio; (c) mở/đóng kênh + FIFO; (d) đăng ký component + lớp DMA + clock provider
+      lúc probe. Trong bức tranh cả chương trình, <code>i2s.c</code> là <b>máy phát
+      clock</b> và <b>cửa FIFO</b> — không phải nơi dữ liệu đi qua.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 4 — i2s.c trong ASoC 4 lớp: đường clock vs đường data</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 520" role="img"
+          aria-label="Trên cùng ứng dụng ALSA gọi PCM open write xuống machine driver odroid.c, nơi khai codec nào, routing loa mic, và dai_fmt tức I2S ai làm master. Machine gọi set_fmt set_sysclk xuống hộp CPU DAI i2s.c được tô nổi bật, và cấu hình codec qua I2C tới codec driver riêng. Hàng giữa ba hộp: i2s.c, dmaengine.c lớp platform DMA, và codec driver. Đường clock màu nhấn: i2s.c chia clock nguồn trong khối I2S để sinh BCLK và LRCLK ra codec, đồng thời phát MCLK CDCLK ra codec. Đường data mờ đôi nét: RAM qua dmaengine.c chép vào FIFO I2STXD nằm trong khối I2S rồi ra dây SDATA tới codec rồi ra loa. Ghi chú: i2s.c không chép data, không biết loa nối đâu, không cấu hình codec.">
+          <defs>
+            <marker id="mk-arr-4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-clk-4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-dat-4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="380" y="20" width="240" height="38" rx="7"/>
+          <text class="t-mono t-b" x="500" y="44" text-anchor="middle">Ứng dụng / ALSA</text>
+
+          <rect class="box" x="300" y="86" width="400" height="46" rx="7"/>
+          <text class="t-mono t-b" x="500" y="106" text-anchor="middle">Machine — odroid.c</text>
+          <text class="lbl" x="500" y="122" text-anchor="middle">codec nào · routing loa/mic · dai_fmt (ai master)</text>
+
+          <rect class="box-hi" x="60" y="180" width="270" height="66" rx="8"/>
+          <text class="t-mono t-b" x="195" y="206" text-anchor="middle">CPU DAI — i2s.c</text>
+          <text class="lbl" x="195" y="224" text-anchor="middle">sinh clock · mở FIFO</text>
+
+          <rect class="box" x="380" y="180" width="240" height="66" rx="8"/>
+          <text class="t-mono t-b" x="500" y="206" text-anchor="middle">Platform/DMA</text>
+          <text class="lbl" x="500" y="224" text-anchor="middle">dmaengine.c — chép RAM↔FIFO</text>
+
+          <rect class="box" x="670" y="180" width="270" height="66" rx="8"/>
+          <text class="t-mono t-b" x="805" y="206" text-anchor="middle">Codec driver</text>
+          <text class="lbl" x="805" y="224" text-anchor="middle">WM8994… qua I2C</text>
+
+          <rect class="box" x="60" y="330" width="270" height="60" rx="8"/>
+          <text class="t-mono t-b" x="195" y="356" text-anchor="middle">Khối I2S trong SoC</text>
+          <text class="lbl" x="195" y="374" text-anchor="middle">thanh ghi + FIFO I2STXD</text>
+
+          <rect class="box" x="670" y="330" width="270" height="60" rx="8"/>
+          <text class="t-mono t-b" x="805" y="356" text-anchor="middle">Codec chip</text>
+          <text class="lbl" x="805" y="374" text-anchor="middle">ADC / DAC</text>
+
+          <rect class="box" x="720" y="440" width="170" height="40" rx="8"/>
+          <text class="t-mono t-b" x="805" y="464" text-anchor="middle">loa / tai nghe</text>
+
+          <rect x="60" y="440" width="150" height="40" rx="8" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".6"/>
+          <text class="t-mono" x="135" y="464" text-anchor="middle" opacity=".7">RAM (bộ đệm)</text>
+
+          <!-- control -->
+          <line class="edge" x1="500" y1="58" x2="500" y2="84" marker-end="url(#mk-arr-4)"/>
+          <text class="lbl-m" x="508" y="76">PCM open / write</text>
+          <path class="edge" d="M300 120 C210 128 200 160 195 178" marker-end="url(#mk-arr-4)"/>
+          <text class="lbl-m" x="150" y="150">set_fmt · set_sysclk</text>
+          <path class="edge-dash" d="M700 118 C790 130 800 160 805 178" marker-end="url(#mk-arr-4)"/>
+          <text class="lbl-m" x="812" y="150">cấu hình qua I2C</text>
+
+          <!-- clock path -->
+          <path class="clk" d="M195 246 L195 328" marker-end="url(#mk-clk-4)"/>
+          <text class="clk-t" x="203" y="292">chia clock nguồn</text>
+          <path class="clk" d="M330 356 L668 356" marker-end="url(#mk-clk-4)"/>
+          <text class="clk-t" x="500" y="348" text-anchor="middle">BCLK · LRCLK</text>
+          <path class="clk" d="M330 200 C520 150 660 250 690 328" marker-end="url(#mk-clk-4)"/>
+          <text class="clk-t" x="545" y="168" text-anchor="middle">MCLK / CDCLK → codec</text>
+
+          <!-- data path -->
+          <path class="data2" d="M135 440 L135 250 C135 210 250 200 378 210" marker-end="url(#mk-dat-4)"/>
+          <text class="lbl-m" x="120" y="330">RAM → DMA</text>
+          <path class="data2" d="M420 246 C360 280 250 290 210 320" marker-end="url(#mk-dat-4)"/>
+          <text class="lbl-m" x="300" y="300" text-anchor="middle">chép vào FIFO I2STXD</text>
+          <path class="data2" d="M330 372 L668 372" marker-end="url(#mk-dat-4)"/>
+          <text class="lbl-m" x="500" y="388" text-anchor="middle">SDATA (dây dữ liệu)</text>
+          <path class="data2" d="M805 390 L805 438" marker-end="url(#mk-dat-4)"/>
+
+          <text class="warn-t" x="60" y="504" font-size="11" font-family="JetBrains Mono, monospace">i2s.c: KHÔNG chép data từ RAM · KHÔNG biết loa nối đâu · KHÔNG cấu hình codec</text>
+        </svg>
+      </div>
+      <figcaption>
+        Đường <span style="color:var(--accent);font-weight:600">clock</span> là phần
+        việc riêng của <code>i2s.c</code>: chia clock nguồn (prescaler) ra
+        <code>BCLK/LRCLK</code>, và phát <code>MCLK</code> cho codec chạy ADC/DAC. Đường
+        <span style="opacity:.7">data</span> chỉ <i>đi ngang qua</i> lãnh địa của
+        <code>i2s.c</code> — DMA (<code>dmaengine.c</code>) chép mẫu từ RAM vào cửa sổ
+        <code>I2STXD</code>, khối I2S nối tiếp hoá ra <code>SDATA</code>. Machine driver
+        (<code>odroid.c</code>) mới là bên biết codec nào và loa nối đâu; codec có driver
+        riêng nói chuyện qua I2C.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 5 ============ -->
+  <section>
+    <h2><span class="num">5</span>Power management</h2>
+    <p class="claim">
+      Toàn bộ cấu hình khối I2S nằm gọn trong <b>3 thanh ghi</b>
+      (<code>I2SMOD</code>, <code>I2SCON</code>, <code>I2SPSR</code>). PM chỉ cần lưu 3
+      cái đó, tắt clock, và ghi trả lại khi tỉnh dậy.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 5 — runtime PM: tắt clock giữa hai lần dùng</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 920 340" role="img"
+          aria-label="Hai trạng thái. ACTIVE nghĩa là clk và op_clk đang bật, thanh ghi đọc ghi được. SUSPENDED nghĩa là clock tắt. Mũi tên từ ACTIVE sang SUSPENDED là runtime_suspend: bước một lưu I2SMOD I2SCON I2SPSR vào suspend_ ; bước hai clk_disable_unprepare cả clk lẫn op_clk. Mũi tên từ SUSPENDED về ACTIVE là runtime_resume: bước một clk_prepare_enable; bước hai ghi trả ba thanh ghi theo đúng thứ tự CON rồi MOD rồi PSR. Vòng lặp trên ACTIVE: mọi hàm chạm thanh ghi bọc pm_runtime_get_sync và pm_runtime_put. Ghi chú: system sleep gọi pm_runtime_force_suspend và force_resume nên dùng lại đúng hai nhánh này; FIFO data không cần lưu vì luồng đã dừng.">
+          <defs>
+            <marker id="mk-arr-5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box-hi" x="70" y="120" width="250" height="86" rx="12"/>
+          <text class="t-mono t-b" x="195" y="156" text-anchor="middle">ACTIVE</text>
+          <text class="lbl" x="195" y="176" text-anchor="middle">clk + op_clk bật · thanh ghi dùng được</text>
+
+          <rect class="box" x="600" y="120" width="250" height="86" rx="12"/>
+          <text class="t-mono t-b" x="725" y="156" text-anchor="middle">SUSPENDED</text>
+          <text class="lbl" x="725" y="176" text-anchor="middle">clock tắt</text>
+
+          <path class="edge" d="M320 138 C430 96 500 96 598 138" marker-end="url(#mk-arr-5)"/>
+          <text class="t-mono t-b" x="459" y="86" text-anchor="middle" font-size="11">runtime_suspend</text>
+          <text class="lbl-m" x="459" y="104" text-anchor="middle">① lưu MOD/CON/PSR → suspend_*  ② clk_disable_unprepare</text>
+
+          <path class="edge" d="M598 190 C500 232 430 232 322 190" marker-end="url(#mk-arr-5)"/>
+          <text class="t-mono t-b" x="460" y="250" text-anchor="middle" font-size="11">runtime_resume</text>
+          <text class="lbl-m" x="460" y="268" text-anchor="middle">① clk_prepare_enable  ② ghi trả theo thứ tự CON → MOD → PSR</text>
+
+          <path class="edge-thin" d="M120 120 C110 84 190 74 210 96 C224 110 220 116 214 120" marker-end="url(#mk-arr-5)"/>
+          <text class="lbl-m" x="70" y="66">mọi truy cập thanh ghi: pm_runtime_get_sync() … put()</text>
+
+          <text class="warn-t" x="70" y="312" font-size="10.5" font-family="JetBrains Mono, monospace">System sleep (i2s_suspend/resume) = pm_runtime_force_suspend/resume → chạy lại đúng 2 nhánh trên. FIFO data không lưu (luồng đã dừng).</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Khi sleep/suspend:</b> lưu <code>I2SMOD/I2SCON/I2SPSR</code> vào
+        <code>suspend_*</code>, rồi <code>clk_disable_unprepare()</code> cả clock khối
+        lẫn clock nguồn — khối I2S mất điện logic, ngừng tiêu thụ. <b>Khi resume:</b>
+        bật clock trước, rồi <i>ghi trả</i> 3 thanh ghi theo thứ tự
+        <code>CON → MOD → PSR</code> (khôi phục trạng thái kênh trước, rồi định dạng,
+        rồi tỉ lệ chia clock). Cấu hình được phục nguyên nên stream có thể chạy tiếp mà
+        không cần cấu hình lại từ machine. Vì mọi hàm chạm thanh ghi đều bọc
+        <code>pm_runtime_get_sync()…put()</code>, khối chỉ “thức” đúng lúc có việc.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 6 ============ -->
+  <section class="prose">
+    <h2><span class="num">6</span>Quan sát &amp; debug qua file system</h2>
+    <p>
+      <code>i2s.c</code> <b>không tự tạo</b> entry <code>sysfs</code>/<code>debugfs</code>
+      nào. Nhưng trạng thái của nó lộ ra qua các giao diện kernel chuẩn:
+    </p>
+    <div class="kv">
+      <span class="k">/sys/kernel/debug/asoc/</span>
+      <span>DAPM widget/route — thấy “Playback Mixer”, “Mixer DAI TX”, luồng primary/secondary có active không.</span>
+      <span class="k">/sys/kernel/debug/clk/clk_summary</span>
+      <span>Nếu driver làm clock provider: <code>rclk_src</code> (mux), <code>prescaler</code> (divider), <code>cdclk</code> (gate = MCLK) và tần số thực đang chạy.</span>
+      <span class="k">/proc/asound/cardN/pcm*/sub*/status</span>
+      <span>Trường <code>delay</code> lấy từ <code>i2s_delay()</code> — số frame còn kẹt trong FIFO phần cứng.</span>
+      <span class="k">…/power/runtime_status</span>
+      <span>Dưới <code>/sys/devices/platform/*i2s*/</code>: <code>active</code>/<code>suspended</code>, <code>runtime_suspended_time</code> — xem runtime PM có thực sự tắt clock không.</span>
+      <span class="k">dmesg</span>
+      <span>Log <code>"Other DAI busy"</code> khi primary/secondary tranh chấp cấu hình; log <code>err_*</code> khi probe hỏng.</span>
+    </div>
+  </section>
+
+  <!-- ============ 7 ============ -->
+  <section class="prose">
+    <h2><span class="num">7</span>Tổng kết — những gì cần để ý</h2>
+    <div class="watch">
+      <h3>Watch list</h3>
+      <ul>
+        <li><b>Primary &amp; secondary dùng chung 1 khối.</b> Gần như mọi <code>set_*</code> có nhánh “khối đang chạy + giá trị mới khác → <code>-EAGAIN</code> / <code>"Other DAI busy"</code>”. Đây là <i>từ chối an toàn</i>, không phải bug — machine phải cấu hình 2 luồng cùng rate/format.</li>
+        <li><b>Hai spinlock, đừng lẫn.</b> <code>priv->lock</code> bảo vệ read-modify-write lên <code>I2SMOD/I2SCON/I2SPSR</code>; <code>priv->pcm_lock</code> bảo vệ <code>i2s->mode</code> (OPENED/MANAGER) khi 2 DAI mở/đóng song song.</li>
+        <li><b>Khái niệm “manager”.</b> Chỉ DAI giữ <code>DAI_MANAGER</code> mới đổi clock chung. Khi nó đóng phải nhường lại cho DAI kia nếu bên kia còn mở.</li>
+        <li><b>variant_regs theo đời IP.</b> Bit trong <code>I2SMOD</code> dời chỗ giữa v3→v7. Luôn tính offset qua <code>priv->variant_regs->*_off</code>, không hardcode.</li>
+        <li><b>CDCLK gate mặc định.</b> <code>dai_probe</code> gate MCLK ngay từ đầu để không rò clock ra codec khi chưa dùng — đừng “sửa” thành bật sẵn.</li>
+        <li><b>Công thức prescaler là trung tâm:</b> <code>psr = rclk_srcrate / frmclk / rfs</code>, ghi <code>I2SPSR = ((psr-1)&lt;&lt;8) | PSR_PSREN</code>. Sai <code>rclk_srcrate</code> ⇒ sai toàn bộ sample rate.</li>
+        <li><b>slave mode</b> (codec làm master): bỏ qua prescaler hoàn toàn — BCLK/LRCLK do codec cấp.</li>
+        <li><b>PM order khi resume:</b> <code>CON → MOD → PSR</code>. Mọi hàm chạm thanh ghi phải nằm trong <code>pm_runtime_get_sync()…put()</code>.</li>
+        <li><b>Thiết bị phụ <code>-sec</code></b> chỉ tồn tại để lớp DMA có một <code>device</code> riêng cho kênh “tx-sec”; nhánh <code>if (!id) return 0;</code> trong probe cố ý bỏ qua nó.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Dựng từ ghi chú <code>Kernel/Driver/I2S/MACHINE DRIVER (odroid.c).md</code> —
+    giải thích <code>sound/soc/samsung/i2s.c</code>. Sơ đồ vẽ tay bằng inline SVG,
+    không phụ thuộc thư viện; đổi sáng/tối bằng nút góc trên.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "i2s-samsung-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>

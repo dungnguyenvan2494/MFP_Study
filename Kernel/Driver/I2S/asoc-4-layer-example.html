@@ -1,0 +1,547 @@
+<title>One Playback, Four Layers</title>
+<meta name="description" content="Một ví dụ cụ thể — phát file 48kHz/16-bit/stereo trên Odroid + codec MAX98090 — truy vết qua cả 4 lớp ASoC để thấy rõ vai trò và ranh giới của Machine, CPU DAI (I2S), Platform/DMA và Codec.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap">
+
+<style>
+  :root{
+    --bg:#eef0f1;
+    --surface:#ffffff;
+    --surface-2:#f2f4f5;
+    --ink:#1c2226;
+    --muted:#5d6a71;
+    --line:#ccd4d8;
+    --line-strong:#95a2a9;
+    --clk:#2f7d52;
+    --clk-soft:#dcece2;
+    --data:#b0642a;
+    --data-soft:#f2e6d9;
+    --accent:#2f7d52;
+    --shadow:0 1px 2px rgba(20,30,35,.06),0 10px 26px rgba(20,30,35,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1316;
+      --surface:#171c20;
+      --surface-2:#1d2327;
+      --ink:#e0e4e6;
+      --muted:#8d9aa1;
+      --line:#2b333a;
+      --line-strong:#434e56;
+      --clk:#5fc490;
+      --clk-soft:#16281f;
+      --data:#e0a45f;
+      --data-soft:#2f2417;
+      --accent:#5fc490;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1316;
+    --surface:#171c20;
+    --surface-2:#1d2327;
+    --ink:#e0e4e6;
+    --muted:#8d9aa1;
+    --line:#2b333a;
+    --line-strong:#434e56;
+    --clk:#5fc490;
+    --clk-soft:#16281f;
+    --data:#e0a45f;
+    --data-soft:#2f2417;
+    --accent:#5fc490;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 100px}
+  .prose{max-width:72ch}
+  .prose p,.prose li{max-width:72ch}
+
+  code,.mono{font-family:"Fira Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.85em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.05em .36em}
+
+  .eyebrow{
+    font-family:"Fira Mono",monospace;font-size:12px;font-weight:500;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--accent)}
+
+  h1{
+    font-family:"Fira Sans",sans-serif;font-weight:700;
+    font-size:clamp(28px,4.8vw,44px);line-height:1.1;letter-spacing:-.02em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18.5px);margin:0 0 22px;max-width:68ch}
+  .scenario{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:8px;padding:14px 18px;font-size:14px;margin:0 0 6px;max-width:70ch;
+  }
+  .scenario b{font-weight:600}
+  .scenario .mono{font-size:12.5px;color:var(--muted)}
+
+  h2{
+    font-family:"Fira Sans",sans-serif;font-weight:700;
+    font-size:clamp(19px,2.6vw,24px);letter-spacing:-.01em;
+    margin:66px 0 6px;text-wrap:balance;
+  }
+  h2 .num{
+    font-family:"Fira Mono",monospace;color:var(--accent);font-size:.7em;
+    margin-right:.7em;font-weight:500;
+  }
+  .claim{color:var(--muted);font-size:15px;margin:0 0 24px;max-width:70ch}
+  p{margin:0 0 16px}
+  ul{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--accent);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  .layers{display:grid;gap:14px;margin:0 0 8px}
+  @media (min-width:720px){.layers{grid-template-columns:1fr 1fr}}
+  .layer{
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;box-shadow:var(--shadow);
+  }
+  .layer h3{
+    margin:0 0 8px;font-size:15px;font-weight:600;
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .layer h3 .tag{
+    font-family:"Fira Mono",monospace;font-size:10.5px;font-weight:500;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
+    border:1px solid var(--accent);border-radius:4px;padding:1px 6px;
+  }
+  .layer p{margin:0;font-size:13.5px;color:var(--ink)}
+  .layer .file{font-family:"Fira Mono",monospace;font-size:12px;color:var(--muted);display:block;margin-top:8px}
+
+  figure{margin:0 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:680px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:78ch}
+  .fig-tag{
+    font-family:"Fira Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"Fira Sans",sans-serif;font-size:12.5px}
+  .diagram .t-mono{font-family:"Fira Mono",monospace}
+  .diagram .t-b{font-weight:600}
+  .diagram .lbl{fill:var(--muted);font-size:11px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"Fira Mono",monospace;font-size:10px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.25}
+  .diagram .box-hi{fill:var(--clk-soft);stroke:var(--accent);stroke-width:1.6}
+  .diagram .box-data{fill:var(--data-soft);stroke:var(--data);stroke-width:1.4}
+  .diagram .ctl{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .ctl-dash{stroke:var(--line-strong);stroke-width:1.3;fill:none;stroke-dasharray:5 4}
+  .diagram .clk{stroke:var(--clk);stroke-width:2.2;fill:none}
+  .diagram .clk-t{fill:var(--clk);font-weight:600;font-family:"Fira Mono",monospace;font-size:10px}
+  .diagram .data{stroke:var(--data);stroke-width:2.6;fill:none}
+  .diagram .data-t{fill:var(--data);font-weight:600;font-family:"Fira Mono",monospace;font-size:10px}
+  .diagram .seam{stroke:var(--data);stroke-width:3;fill:none}
+  [id^="mk-arr"] path{fill:var(--line-strong)}
+  [id^="mk-clk"] path{fill:var(--clk)}
+  [id^="mk-dat"] path{fill:var(--data)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:11.5px;color:var(--muted);margin:10px 2px 0;font-family:"Fira Mono",monospace}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .legend i{width:24px;border-top:2.4px solid;display:inline-block}
+  .lg-ctl{border-color:var(--line-strong)!important}
+  .lg-clk{border-color:var(--clk)!important}
+  .lg-dat{border-color:var(--data)!important;border-top-width:2.8px!important}
+
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0 0}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{
+    font-family:"Fira Mono",monospace;font-size:10.5px;font-weight:500;
+    letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+  }
+  td.step{font-family:"Fira Mono",monospace;font-size:12px;white-space:nowrap}
+  td.mono{font-family:"Fira Mono",monospace;font-size:11.5px}
+  .hit{color:var(--ink)}
+  .miss{color:var(--muted);opacity:.5}
+  tbody tr:last-child td{border-bottom:none}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow)}
+  .tbl-wrap table{min-width:640px}
+  .tbl-wrap th,.tbl-wrap td{padding-left:14px;padding-right:14px}
+
+  footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:76ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"Fira Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">ASoC · mô hình 4 lớp · I2S.md §1.1</p>
+    <h1>One Playback, Four Layers</h1>
+    <p class="lede">
+      Bốn lớp của ASoC dễ nhớ theo tên nhưng khó thấy ranh giới. Cách rõ nhất là bám
+      một luồng cụ thể: chạy <code>aplay</code> một file WAV trên board Odroid và xem
+      <b>đúng lúc nào lớp nào chạm vào cái gì</b>.
+    </p>
+    <p class="scenario">
+      <b>Ví dụ xuyên suốt:</b> <code>aplay song.wav</code> — 48000 Hz, S16_LE, 2 kênh —
+      trên <b>Odroid</b> (SoC Exynos), khối I2S tại <code>3830000.i2s</code>, codec
+      <b>MAX98090</b> nối qua I2C.<br>
+      <span class="mono">dai_fmt = I2S | NB_NF | CBS_CFS → codec là slave, I2S sinh BCLK/LRCLK · RFS 256 · BFS 32</span>
+    </p>
+  </header>
+
+  <section>
+    <h2><span class="num">A</span>Trong ví dụ này, mỗi lớp làm gì</h2>
+    <p class="claim">
+      Cùng một lần bấm play, bốn lớp làm bốn việc không chồng lấn. Đọc bốn thẻ này
+      trước, rồi xem Fig 1 để thấy chúng nối vào nhau ra sao.
+    </p>
+    <div class="layers">
+      <div class="layer">
+        <h3><span class="tag">Lớp 4 · keo dán</span> Machine — odroid.c</h3>
+        <p>
+          Khai “board này ghép I2S <code>3830000.i2s</code> với codec MAX98090, định
+          dạng I2S, CPU làm master”. Trong <code>odroid_card_be_hw_params()</code> nó
+          tính ra <b>MCLK = 256 × 48000 = 12.288 MHz</b>, gọi
+          <code>clk_set_rate("sclk_i2s")</code> và
+          <code>snd_soc_dai_set_sysclk(codec_dai, …)</code>. Không chạm thanh ghi I2S,
+          không chạm DMA.
+        </p>
+        <span class="file">snd_soc_card + snd_soc_dai_link[] + dai_fmt + clock</span>
+      </div>
+      <div class="layer">
+        <h3><span class="tag">Lớp 2 · CPU DAI</span> I2S — i2s.c</h3>
+        <p>
+          Nhận rate/format đã chốt: ghi <code>I2SMOD</code> (SDF = I2S, mẫu 16-bit,
+          stereo), tính prescaler và ghi <code>I2SPSR</code> để chia clock nguồn xuống
+          đúng <b>BCLK 1.536 MHz / LRCLK 48 kHz</b>. Rồi <b>đưa địa chỉ FIFO</b>
+          <code>0x3830000 + I2STXD = 0x3830010</code> cho lớp Platform qua
+          <code>snd_soc_dai_init_dma_data()</code>. <b>Không tự đọc/ghi RAM.</b>
+        </p>
+        <span class="file">snd_soc_dai_driver + samsung_i2s_dai_ops</span>
+      </div>
+      <div class="layer">
+        <h3><span class="tag">Lớp 3 · PCM</span> Platform/DMA — dmaengine.c</h3>
+        <p>
+          Cấp phát <b>ring buffer trong RAM</b>, khai <code>snd_pcm_hardware</code>
+          (kích thước period, số period…), rồi lập trình một kênh <b>dmaengine</b> chép
+          mẫu <b>RAM → <code>0x3830010</code></b> theo chu kỳ. Nó chỉ biết “địa chỉ đích”
+          — do lớp CPU DAI đưa; không biết đó là thanh ghi gì.
+        </p>
+        <span class="file">devm_snd_dmaengine_pcm_register()</span>
+      </div>
+      <div class="layer">
+        <h3><span class="tag">Lớp 1 · Codec DAI</span> MAX98090</h3>
+        <p>
+          Qua <b>bus I2C</b> (tách hẳn khỏi dây I2S), cấu hình DAC cho 48 kHz / 16-bit,
+          nhận MCLK. DAPM bật đường tín hiệu <code>AIF Playback → DAC → HP amp →
+          HPOUT</code> theo route khai trong Device Tree. Cùng file này chạy y hệt trên
+          SoC khác.
+        </p>
+        <span class="file">snd_soc_dai_driver + snd_soc_component (DAPM widgets)</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">B</span>Một lần play, truy vết qua 4 lớp</h2>
+    <p class="claim">
+      Ba loại đường đi chạy đồng thời: <b>điều khiển</b> (ai gọi ai),
+      <b style="color:var(--clk)">clock</b> (I2S sinh ra, cấp cho codec),
+      <b style="color:var(--data)">dữ liệu audio</b> (RAM → FIFO → dây → loa). Con số
+      trên mỗi mũi tên là giá trị thật của ví dụ.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — aplay 48k/16-bit/stereo trên Odroid + MAX98090</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 620" role="img"
+          aria-label="Truy vết một lần phát nhạc qua bốn lớp ASoC. Ứng dụng aplay mở PCM xuống ASoC core soc-pcm, rồi xuống Machine odroid.c. Machine đặt dai_fmt và trong hw_params tính clock rồi lan hw_params xuống ba lớp: Platform DMA dmaengine.c, CPU DAI I2S i2s.c, và Codec DAI MAX98090. Codec cấu hình DAC qua bus I2C tách biệt. CPU DAI là master: nó ghi I2SPSR trong config_setup và cấp cho khối I2S; khối I2S phát MCLK 12.288 MHz, BCLK 1.536 MHz, LRCLK 48 kHz sang codec chip. Đường dữ liệu: bộ đệm RAM do Platform cấp phát; CPU DAI trao địa chỉ FIFO 0x3830010 cho Platform qua init_dma_data; Platform dùng DMA chép RAM vào FIFO theo chu kỳ; khối I2S nối tiếp hoá ra dây SDATA tới codec chip; codec chip đưa ra analog tới tai nghe.">
+          <defs>
+            <marker id="mk-arr-1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-clk-1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-dat-1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <g font-family="Fira Mono, monospace" font-size="10">
+            <line class="ctl" x1="720" y1="20" x2="744" y2="20" marker-end="url(#mk-arr-1)"/>
+            <text class="lbl" x="750" y="24">điều khiển</text>
+            <line class="clk" x1="720" y1="40" x2="744" y2="40" marker-end="url(#mk-clk-1)"/>
+            <text class="lbl" x="750" y="44">clock (I2S sinh)</text>
+            <line class="data" x1="720" y1="60" x2="744" y2="60" marker-end="url(#mk-dat-1)"/>
+            <text class="lbl" x="750" y="64">dữ liệu audio</text>
+          </g>
+
+          <!-- app -->
+          <rect class="box" x="390" y="18" width="220" height="44" rx="7"/>
+          <text class="t-mono t-b" x="500" y="38" text-anchor="middle">aplay song.wav</text>
+          <text class="lbl-m" x="500" y="53" text-anchor="middle">48000 Hz · S16_LE · 2ch</text>
+
+          <!-- core -->
+          <rect class="box" x="250" y="96" width="500" height="38" rx="7"/>
+          <text class="t-mono t-b" x="500" y="120" text-anchor="middle">ASoC core — soc-pcm / soc-dai</text>
+
+          <!-- machine -->
+          <rect class="box" x="190" y="168" width="620" height="52" rx="7"/>
+          <text class="t-mono t-b" x="500" y="188" text-anchor="middle">MACHINE — odroid.c</text>
+          <text class="lbl-m" x="500" y="206" text-anchor="middle">dai_fmt = I2S | NB_NF | CBS_CFS   ·   odroid_card_be_hw_params()</text>
+
+          <!-- three layers -->
+          <rect class="box" x="40" y="278" width="280" height="70" rx="8"/>
+          <text class="t-mono t-b" x="180" y="302" text-anchor="middle">PLATFORM / DMA</text>
+          <text class="lbl" x="180" y="320" text-anchor="middle">dmaengine.c</text>
+          <text class="lbl-m" x="180" y="337" text-anchor="middle">cấp buffer · lập trình DMA</text>
+
+          <rect class="box-hi" x="360" y="278" width="280" height="70" rx="8"/>
+          <text class="t-mono t-b" x="500" y="302" text-anchor="middle">CPU DAI (I2S)</text>
+          <text class="lbl" x="500" y="320" text-anchor="middle">i2s.c — dai_ops</text>
+          <text class="clk-t" x="500" y="337" text-anchor="middle">= master (CBS_CFS)</text>
+
+          <rect class="box" x="680" y="278" width="280" height="70" rx="8"/>
+          <text class="t-mono t-b" x="820" y="302" text-anchor="middle">CODEC DAI</text>
+          <text class="lbl" x="820" y="320" text-anchor="middle">max98090</text>
+          <text class="lbl-m" x="820" y="337" text-anchor="middle">+ DAPM widgets</text>
+
+          <!-- hardware -->
+          <rect class="box-data" x="40" y="430" width="210" height="54" rx="8"/>
+          <text class="t-mono t-b" x="145" y="452" text-anchor="middle" font-size="11">RAM — ring buffer</text>
+          <text class="lbl-m" x="145" y="469" text-anchor="middle">period × N</text>
+
+          <rect class="box" x="300" y="430" width="340" height="54" rx="8"/>
+          <text class="t-mono t-b" x="470" y="452" text-anchor="middle" font-size="11">Khối I2S — SFR + TX FIFO</text>
+          <text class="data-t" x="470" y="469" text-anchor="middle">FIFO @ 0x3830010</text>
+
+          <rect class="box" x="680" y="430" width="280" height="54" rx="8"/>
+          <text class="t-mono t-b" x="820" y="452" text-anchor="middle" font-size="11">Codec chip — DAC → HP amp</text>
+
+          <rect class="box" x="740" y="548" width="180" height="40" rx="8"/>
+          <text class="t-mono t-b" x="830" y="572" text-anchor="middle" font-size="11">tai nghe / loa</text>
+
+          <!-- control edges -->
+          <line class="ctl" x1="500" y1="62" x2="500" y2="94" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="508" y="82">open + write</text>
+          <line class="ctl" x1="500" y1="134" x2="500" y2="166" marker-end="url(#mk-arr-1)"/>
+
+          <path class="ctl" d="M300 214 C230 232 195 250 182 276" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="205" y="250" text-anchor="end">hw_params</text>
+          <line class="ctl" x1="480" y1="220" x2="480" y2="276" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="466" y="250" text-anchor="end">hw_params · set_fmt</text>
+          <path class="ctl" d="M700 214 C770 232 805 250 818 276" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="795" y="250">hw_params</text>
+
+          <path class="ctl-dash" d="M840 348 L840 428" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="848" y="392">I2C — cấu hình DAC</text>
+          <text class="lbl-m" x="848" y="405">(bus điều khiển ≠ dây I2S)</text>
+
+          <!-- clock edges -->
+          <path class="clk" d="M560 220 C588 240 600 256 600 276" marker-end="url(#mk-clk-1)"/>
+          <text class="clk-t" x="612" y="250">clk_set_rate(sclk_i2s) = 12.288 MHz</text>
+          <path class="clk" d="M500 348 L480 428" marker-end="url(#mk-clk-1)"/>
+          <text class="clk-t" x="360" y="392">config_setup(): I2SPSR ← psr</text>
+          <path class="clk" d="M640 452 L676 452" marker-end="url(#mk-clk-1)"/>
+          <text class="clk-t" x="660" y="422" text-anchor="middle">MCLK 12.288M · BCLK 1.536M · LRCLK 48k</text>
+
+          <!-- data edges -->
+          <path class="data" d="M145 430 L145 350" marker-end="url(#mk-dat-1)"/>
+          <text class="data-t" x="60" y="400">buffer trong RAM</text>
+          <path class="seam" d="M358 313 L322 313" marker-end="url(#mk-dat-1)"/>
+          <text class="data-t" x="340" y="270" text-anchor="middle">① init_dma_data</text>
+          <text class="data-t" x="340" y="258" text-anchor="middle">addr = 0x3830010</text>
+          <path class="data" d="M190 348 C220 380 320 400 398 428" marker-end="url(#mk-dat-1)"/>
+          <text class="data-t" x="250" y="392" text-anchor="middle">DMA: RAM → FIFO (chu kỳ)</text>
+          <path class="data" d="M640 466 L676 466" marker-end="url(#mk-dat-1)"/>
+          <text class="data-t" x="660" y="478" text-anchor="middle">SDATA</text>
+          <path class="data" d="M830 484 L830 546" marker-end="url(#mk-dat-1)"/>
+          <text class="data-t" x="838" y="518">analog</text>
+        </svg>
+      </div>
+      <figcaption>
+        Điểm mấu chốt: <b>CPU DAI không nằm trên đường dữ liệu</b> — nó chỉ trao địa chỉ
+        thanh ghi FIFO <code>0x3830010</code> cho lớp Platform (mũi tên ①), rồi lớp
+        Platform mới là bên chép RAM vào đó. Và <b>bus điều khiển codec (I2C) tách hẳn
+        khỏi dây dữ liệu (SDATA)</b>. CPU DAI với Codec DAI không gọi nhau trực tiếp:
+        quan hệ master/slave và định dạng do Machine áp qua <code>dai_fmt</code>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="prose">
+    <h2><span class="num">C</span>Thứ tự runtime — lớp nào chạy ở bước nào</h2>
+    <p class="claim">
+      ASoC core gọi các callback theo thứ tự cố định. Bảng này cho thấy
+      <code>hw_params</code> chạm cả ba lớp, còn <code>prepare</code> gần như chỉ là
+      việc của CPU DAI.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Bước (ASoC core)</th><th>Machine</th><th>Codec DAI</th><th>CPU DAI (I2S)</th><th>Platform/DMA</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step">open / startup</td>
+            <td class="mono hit">.startup ops</td>
+            <td class="mono hit">.startup</td>
+            <td class="mono hit">i2s_startup()</td>
+            <td class="mono miss">—</td>
+          </tr>
+          <tr>
+            <td class="step">hw_params</td>
+            <td class="mono hit">tính clock, set_sysclk</td>
+            <td class="mono hit">DAC 48k/16-bit (I2C)</td>
+            <td class="mono hit">I2SMOD, chọn dma_playback</td>
+            <td class="mono hit">cấp buffer, cấu hình kênh DMA</td>
+          </tr>
+          <tr>
+            <td class="step">prepare</td>
+            <td class="mono miss">—</td>
+            <td class="mono miss">—</td>
+            <td class="mono hit">config_setup(): RFS/BFS/PSR</td>
+            <td class="mono miss">—</td>
+          </tr>
+          <tr>
+            <td class="step">trigger(START)</td>
+            <td class="mono miss">—</td>
+            <td class="mono miss">—</td>
+            <td class="mono hit">i2s_trigger(): CON_TXDMA + FIFO</td>
+            <td class="mono hit">khởi động DMA RAM→FIFO</td>
+          </tr>
+          <tr>
+            <td class="step">DAPM (chạy nền)</td>
+            <td class="mono hit">route trong DT</td>
+            <td class="mono hit">mở DAC → HP amp → HPOUT</td>
+            <td class="mono miss">—</td>
+            <td class="mono miss">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:16px">
+      Sau <code>trigger(START)</code>: DMA bơm mẫu vào FIFO, khối I2S phát
+      BCLK/LRCLK/SDATA ra dây, codec (đã bật đường DAPM) nhận và đẩy ra loa. Khi ứng
+      dụng đóng: <code>trigger(STOP)</code> → <code>shutdown</code> theo thứ tự ngược.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">D</span>Vì sao tách 4 lớp — các giao diện đông cứng</h2>
+    <p class="claim">
+      Mỗi cặp lớp nối nhau qua một “hợp đồng” hẹp. Đổi một hộp thì hợp đồng không đổi,
+      nên ba hộp kia không phải sửa. Đó là toàn bộ lý do có 4 lớp.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — 3 giao diện cố định giữ cho việc thay thế an toàn</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 940 360" role="img"
+          aria-label="Machine odroid.c ở trên, nối xuống ba hộp bằng ba mũi tên nét đứt gọi là giao diện 3: dai_link chọn một phần tử mỗi lớp cộng dai_fmt cộng clock. Ba hộp hàng dưới: Platform DMA dmaengine.c, CPU DAI I2S i2s.c ở giữa tô nổi bật, và Codec DAI wm8994 hoặc max98090. Giữa Platform và CPU DAI là giao diện 1: địa chỉ FIFO 0x3830010 cộng snd_pcm_hardware. Giữa CPU DAI và Codec là giao diện 2: dai_fmt tức I2S và ai làm master, cộng rate và format phải khớp. Dưới mỗi hộp ghi khi nào phải sửa file nào: đổi bộ điều khiển DMA thì sửa dmaengine.c; đổi SoC hoặc IP I2S thì sửa i2s.c dùng lại cho mọi Exynos; đổi chip codec thì sửa wm8994.c hoặc max98090.c; đổi bo mạch thì chỉ sửa odroid.c.">
+          <defs>
+            <marker id="mk-arr-2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="330" y="26" width="280" height="44" rx="8"/>
+          <text class="t-mono t-b" x="470" y="46" text-anchor="middle">MACHINE — odroid.c</text>
+          <text class="lbl-m" x="470" y="61" text-anchor="middle">snd_soc_card + dai_link[]</text>
+          <text class="lbl-m" x="470" y="90" text-anchor="middle">đổi bo mạch  ⇒  chỉ sửa file này</text>
+
+          <rect class="box" x="30" y="150" width="270" height="66" rx="8"/>
+          <text class="t-mono t-b" x="165" y="178" text-anchor="middle">PLATFORM / DMA</text>
+          <text class="lbl" x="165" y="196" text-anchor="middle">dmaengine.c</text>
+
+          <rect class="box-hi" x="335" y="150" width="270" height="66" rx="8"/>
+          <text class="t-mono t-b" x="470" y="178" text-anchor="middle">CPU DAI (I2S)</text>
+          <text class="lbl" x="470" y="196" text-anchor="middle">i2s.c</text>
+
+          <rect class="box" x="640" y="150" width="270" height="66" rx="8"/>
+          <text class="t-mono t-b" x="775" y="178" text-anchor="middle">CODEC DAI</text>
+          <text class="lbl" x="775" y="196" text-anchor="middle">wm8994 / max98090</text>
+
+          <!-- machine -> 3 : interface 3 -->
+          <path class="ctl-dash" d="M400 70 C300 100 200 122 165 148" marker-end="url(#mk-arr-2)"/>
+          <path class="ctl-dash" d="M470 70 L470 148" marker-end="url(#mk-arr-2)"/>
+          <path class="ctl-dash" d="M540 70 C640 100 740 122 775 148" marker-end="url(#mk-arr-2)"/>
+          <text class="lbl-m" x="486" y="116">③ dai_link + dai_fmt + clock</text>
+
+          <!-- interface 1 & 2 -->
+          <path class="seam" d="M302 183 L333 183" marker-end="url(#mk-arr-2)" marker-start="url(#mk-arr-2)"/>
+          <path class="seam" d="M607 183 L638 183" marker-end="url(#mk-arr-2)" marker-start="url(#mk-arr-2)"/>
+          <text class="data-t" x="317" y="240" text-anchor="middle">①  addr FIFO 0x3830010</text>
+          <text class="data-t" x="317" y="253" text-anchor="middle">+ snd_pcm_hardware</text>
+          <text class="data-t" x="623" y="240" text-anchor="middle">②  dai_fmt (I2S, ai master)</text>
+          <text class="data-t" x="623" y="253" text-anchor="middle">+ rate / format khớp</text>
+
+          <text class="lbl-m" x="165" y="292" text-anchor="middle">đổi DMA controller ⇒ dmaengine.c</text>
+          <text class="lbl-m" x="470" y="292" text-anchor="middle">đổi SoC / IP I2S ⇒ i2s.c</text>
+          <text class="lbl-m" x="775" y="292" text-anchor="middle">đổi chip codec ⇒ wm8994.c…</text>
+
+          <line class="ctl" x1="30" y1="322" x2="910" y2="322" opacity=".4"/>
+          <text class="t-b" x="470" y="344" text-anchor="middle" font-size="12">①②③ là hợp đồng cố định — đổi 1 hộp, 3 hộp kia không đụng tới.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>i2s.c</code> dùng lại cho mọi Exynos; <code>dmaengine.c</code> dùng lại cho
+        mọi board dùng dmaengine chuẩn; driver codec dùng lại trên mọi SoC. Chỉ
+        <b>machine driver</b> là viết mới cho từng bo mạch (<code>odroid.c</code>,
+        <code>arndale.c</code>, <code>smdk_wm8994.c</code>, <code>snow.c</code>…) — và nó
+        ngắn, vì chỉ khai <code>snd_soc_card</code> + <code>dai_link</code> + clock/format.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="prose">
+    <h2><span class="num">E</span>Ba câu để nhớ</h2>
+    <ul>
+      <li><b>Machine</b> = danh sách ghép nối của <i>một</i> bo mạch: I2S nào ↔ codec nào, format gì, clock bao nhiêu. Không có logic phần cứng.</li>
+      <li><b>CPU DAI (I2S)</b> = máy phát clock + cửa FIFO. Sinh BCLK/LRCLK/MCLK, ghi <code>I2SMOD/PSR</code>, và <i>chỉ đưa địa chỉ FIFO</i> cho Platform — không tự chuyển byte.</li>
+      <li><b>Platform/DMA</b> = người vận chuyển: RAM ↔ địa chỉ FIFO đó. <b>Codec DAI</b> = chip bên kia dây, cấu hình qua I2C, tự lo đường tín hiệu bằng DAPM.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Dựng từ <code>Kernel/Driver/I2S/I2S.md</code> §1.1 (mô hình 4 lớp ASoC) và
+    <code>odroid.c</code> / <code>i2s.c</code> / <code>dmaengine.c</code>. Con số trong
+    ví dụ (RFS 256, BFS 32, 12.288 MHz, <code>0x3830010</code>) là giá trị chuẩn cho
+    48 kHz — minh hoạ, không trích từ log thật. Sơ đồ vẽ tay bằng inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "asoc-4layer-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>

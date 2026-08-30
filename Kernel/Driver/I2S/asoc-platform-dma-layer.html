@@ -1,0 +1,611 @@
+<title>Where the Bytes Move</title>
+<meta name="description" content="Giải thích chi tiết Lớp 3 của Samsung ASoC — thành phần Platform/DMA (PCM): dmaengine.c chỉ là lớp keo 12 dòng gọi xuống soc-generic-dmaengine-pcm.c và pcm_dmaengine.c; cách địa chỉ FIFO truyền từ CPU DAI vào cấu hình kênh DMA; vòng DMA cyclic; và biến thể iDMA dùng SRAM on-chip.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@400;500;700&family=Red+Hat+Text:wght@400;500;600;700&display=swap">
+
+<style>
+  :root{
+    --bg:#ecebef;
+    --surface:#ffffff;
+    --surface-2:#f3f2f6;
+    --ink:#1f1d26;
+    --muted:#615c70;
+    --line:#d0cdd8;
+    --line-strong:#9a95a8;
+    --accent:#6d4acf;
+    --accent-soft:#e8e2f7;
+    --seam:#bd4235;
+    --seam-soft:#f5e2df;
+    --shadow:0 1px 2px rgba(25,20,40,.06),0 10px 26px rgba(25,20,40,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#100f15;
+      --surface:#18161f;
+      --surface-2:#1e1c27;
+      --ink:#e3e0ea;
+      --muted:#928da2;
+      --line:#2b2937;
+      --line-strong:#464256;
+      --accent:#ab8cf2;
+      --accent-soft:#241d38;
+      --seam:#e58a7f;
+      --seam-soft:#341f1d;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#100f15;
+    --surface:#18161f;
+    --surface-2:#1e1c27;
+    --ink:#e3e0ea;
+    --muted:#928da2;
+    --line:#2b2937;
+    --line-strong:#464256;
+    --accent:#ab8cf2;
+    --accent-soft:#241d38;
+    --seam:#e58a7f;
+    --seam-soft:#341f1d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Red Hat Text",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 100px}
+  .prose{max-width:73ch}
+  .prose p,.prose li{max-width:73ch}
+
+  code,.mono{font-family:"Red Hat Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.86em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.05em .36em}
+
+  .eyebrow{
+    font-family:"Red Hat Mono",monospace;font-size:12px;font-weight:500;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--accent)}
+
+  h1{
+    font-family:"Red Hat Mono",monospace;font-weight:700;
+    font-size:clamp(27px,4.6vw,41px);line-height:1.12;letter-spacing:-.02em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18.5px);margin:0 0 22px;max-width:69ch}
+  .lede code{font-size:.82em}
+
+  h2{
+    font-family:"Red Hat Mono",monospace;font-weight:700;
+    font-size:clamp(18px,2.5vw,23px);letter-spacing:-.01em;
+    margin:64px 0 6px;text-wrap:balance;
+  }
+  h2 .num{color:var(--accent);margin-right:.6em;font-weight:500}
+  h3{font-size:15.5px;font-weight:700;margin:28px 0 8px;font-family:"Red Hat Text",sans-serif}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 24px;max-width:71ch}
+  p{margin:0 0 16px}
+  ul{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--accent);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  .callout{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--seam);
+    border-radius:8px;padding:14px 18px;font-size:14px;margin:0 0 20px;max-width:71ch;
+  }
+  .callout b{font-weight:600}
+
+  figure{margin:22px 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:680px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:80ch}
+  .fig-tag{
+    font-family:"Red Hat Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"Red Hat Text",sans-serif;font-size:12.5px}
+  .diagram .t-mono{font-family:"Red Hat Mono",monospace}
+  .diagram .t-b{font-weight:600}
+  .diagram .lbl{fill:var(--muted);font-size:11px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"Red Hat Mono",monospace;font-size:10px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.25}
+  .diagram .box-ext{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.25;stroke-dasharray:5 4}
+  .diagram .box-acc{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+  .diagram .box-seam{fill:var(--seam-soft);stroke:var(--seam);stroke-width:1.4}
+  .diagram .ctl{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .ctl-d{stroke:var(--line-strong);stroke-width:1.3;fill:none;stroke-dasharray:5 4}
+  .diagram .flow{stroke:var(--accent);stroke-width:2.5;fill:none}
+  .diagram .flow-t{fill:var(--accent);font-weight:600;font-family:"Red Hat Mono",monospace;font-size:10px}
+  .diagram .seam{stroke:var(--seam);stroke-width:2.4;fill:none}
+  .diagram .seam-t{fill:var(--seam);font-weight:600;font-family:"Red Hat Mono",monospace;font-size:10px}
+  .diagram .period{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.3}
+  [id^="mk-arr"] path{fill:var(--line-strong)}
+  [id^="mk-flow"] path{fill:var(--accent)}
+  [id^="mk-seam"] path{fill:var(--seam)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:11.5px;color:var(--muted);margin:10px 2px 0;font-family:"Red Hat Mono",monospace}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .legend i{width:24px;border-top:2.4px solid;display:inline-block}
+  .lg-flow{border-color:var(--accent)!important;border-top-width:2.8px!important}
+  .lg-seam{border-color:var(--seam)!important}
+  .lg-ctl{border-color:var(--line-strong)!important}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);margin:6px 0 0}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:680px}
+  th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"Red Hat Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+  td.mono,td .mono{font-family:"Red Hat Mono",monospace;font-size:11.5px}
+  tbody tr:last-child td{border-bottom:none}
+
+  .watch{background:var(--seam-soft);border:1px solid var(--seam);border-radius:12px;padding:20px 22px 8px;margin:8px 0 0}
+  .watch h3{font-family:"Red Hat Mono",monospace;font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--seam);margin:0 0 12px;font-weight:700}
+  .watch ul{padding-left:20px}
+  .watch li{margin-bottom:9px}
+
+  .kv{display:grid;grid-template-columns:max-content 1fr;gap:7px 18px;font-size:13.5px;margin:0 0 16px}
+  .kv .k{font-family:"Red Hat Mono",monospace;font-size:11.5px;color:var(--accent)}
+
+  footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:78ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"Red Hat Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">Samsung ASoC · Lớp 3 · Platform / DMA (thành phần PCM)</p>
+    <h1>Where the Bytes Move</h1>
+    <p class="lede">
+      Lớp 3 là lớp <b>duy nhất chạm vào RAM</b>. Nó cấp bộ đệm, khai giới hạn phần cứng
+      cho ALSA, và lái một kênh DMA chép mẫu giữa <b>RAM và thanh ghi FIFO của khối
+      I2S</b> — tại địa chỉ mà Lớp 2 đã đưa. Điều bất ngờ:
+      <code>sound/soc/samsung/dmaengine.c</code> chỉ <b>12 dòng code thật</b>. Toàn bộ
+      việc nằm ở ba file bên dưới nó và một driver DMA <i>bên cạnh</i> ASoC.
+    </p>
+    <p class="callout">
+      <b>Lớp 3 KHÔNG:</b> không biết dữ liệu là audio (chỉ thấy “bộ đệm → địa chỉ đích”);
+      không đọc/ghi thanh ghi <code>I2SCON/MOD/PSR</code>; không biết codec tồn tại;
+      không sinh clock. Nó chỉ là <b>người vận chuyển</b>.
+    </p>
+  </header>
+
+  <!-- ================= 1 ================= -->
+  <section>
+    <h2><span class="num">1</span>12 dòng keo, 3 tầng bên dưới</h2>
+    <p class="claim">
+      <code>samsung_asoc_dma_platform_register()</code> chỉ điền một
+      <code>snd_dmaengine_pcm_config</code> rồi gọi driver PCM-dmaengine <b>generic</b>.
+      Bảng callback thật, các động từ DMA thật, và việc chuyển byte thật nằm ở ba nơi
+      khác nhau.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — stack thực thi phía sau dmaengine.c</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 500" role="img"
+          aria-label="Bốn tầng xếp dọc. Trên cùng sound/soc/samsung/dmaengine.c chỉ 12 dòng: hàm samsung_asoc_dma_platform_register cấp phát snd_dmaengine_pcm_config, đặt prepare_slave_config bằng helper generic, đặt chan_names tx và rx, cờ COMPAT, rồi gọi devm_snd_dmaengine_pcm_register. Tầng hai sound/soc/soc-generic-dmaengine-pcm.c định nghĩa dmaengine_pcm_component với probe_order LATE và các op open close hw_params trigger pointer pcm_construct sync_stop. Tầng ba sound/core/pcm_dmaengine.c là helper lõi dùng chung mọi SoC: prep_dma_cyclic, dmaengine_submit, issue_pending, terminate_async, tx_status, set_config_from_dai_data. Tầng bốn nằm ngoài ASoC vẽ nét đứt: driver DMA riêng pl330 hoặc s3c-pl330, đây mới là nơi thật sự chuyển byte. Chú thích: Samsung chỉ viết tầng trên cùng.">
+          <defs>
+            <marker id="mk-arr-1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box-acc" x="70" y="24" width="700" height="72" rx="9"/>
+          <text class="t-mono t-b" x="90" y="47">sound/soc/samsung/dmaengine.c</text>
+          <text class="lbl-m" x="90" y="66">samsung_asoc_dma_platform_register(): điền snd_dmaengine_pcm_config</text>
+          <text class="lbl-m" x="90" y="82">prepare_slave_config = generic · chan_names = "tx"/"rx" · flag COMPAT</text>
+          <text class="seam-t" x="786" y="52">← Samsung</text>
+          <text class="seam-t" x="786" y="66">chỉ viết</text>
+          <text class="seam-t" x="786" y="80">hộp này</text>
+
+          <line class="ctl" x1="420" y1="96" x2="420" y2="132" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="430" y="118">devm_snd_dmaengine_pcm_register()</text>
+
+          <rect class="box" x="70" y="134" width="860" height="92" rx="9"/>
+          <text class="t-mono t-b" x="90" y="157">sound/soc/soc-generic-dmaengine-pcm.c</text>
+          <text class="lbl" x="90" y="175">struct snd_soc_component_driver dmaengine_pcm_component  ·  probe_order = LATE</text>
+          <text class="t-mono" x="90" y="200" font-size="11">open · close · hw_params · trigger · pointer · pcm_construct · sync_stop</text>
+          <text class="lbl-m" x="90" y="217">+ dmaengine_pcm_new(): xin kênh, snd_pcm_set_managed_buffer()</text>
+
+          <line class="ctl" x1="420" y1="226" x2="420" y2="262" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="430" y="248">mỗi op ủy quyền cho 1 helper lõi</text>
+
+          <rect class="box" x="70" y="264" width="860" height="86" rx="9"/>
+          <text class="t-mono t-b" x="90" y="287">sound/core/pcm_dmaengine.c</text>
+          <text class="lbl" x="90" y="305">helper lõi — dùng chung cho mọi SoC (imx, mxs, rockchip, samsung…)</text>
+          <text class="t-mono" x="90" y="330" font-size="11">dmaengine_prep_dma_cyclic · dmaengine_submit · dma_async_issue_pending</text>
+          <text class="t-mono" x="90" y="345" font-size="11">dmaengine_terminate_async · dmaengine_tx_status · *_set_config_from_dai_data</text>
+
+          <line class="ctl" x1="420" y1="350" x2="420" y2="386" marker-end="url(#mk-arr-1)"/>
+          <text class="lbl-m" x="430" y="372">verbs &lt;linux/dmaengine.h&gt;</text>
+
+          <rect class="box-ext" x="70" y="388" width="860" height="72" rx="9"/>
+          <text class="t-mono t-b" x="90" y="411">DMA driver riêng — pl330 / s3c-pl330  (drivers/dma/)</text>
+          <text class="lbl" x="90" y="430">Thực sự chuyển từng byte. Có IRQ, thanh ghi, hàng đợi mô tả riêng.</text>
+          <text class="lbl-m" x="90" y="447">NẰM NGOÀI ASoC — ASoC chỉ là “khách hàng” của nó qua API dmaengine.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>dmaengine.c</code> của Samsung chỉ tồn tại để (a) chọn tên kênh
+        (<code>"tx"</code>/<code>"rx"</code>) và (b) bật cờ <code>COMPAT</code> cho board
+        không dùng Device Tree. Mọi thứ khác là code chung. Đổi từ pl330 sang bộ DMA
+        khác: <b>không sửa file nào trong <code>sound/</code></b> — chỉ đổi
+        <code>dmas</code>/<code>dma-names</code> trong DT.
+      </figcaption>
+    </figure>
+
+    <h3>Đọc từng dòng <code>dmaengine.c</code></h3>
+    <ul>
+      <li><code>devm_kzalloc(snd_dmaengine_pcm_config)</code> — cấu hình được cấp theo vòng đời <code>dev</code>, tự giải phóng.</li>
+      <li><code>prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config</code> — dùng thẳng bộ chuyển đổi <code>hw_params → dma_slave_config</code> mặc định (xem Fig 2).</li>
+      <li><code>compat_filter_fn = filter</code> — hàm lọc kênh DMA do <b>CPU DAI</b> truyền vào (<code>pri_dai-&gt;filter</code>), chỉ dùng ở đường COMPAT/không-DT.</li>
+      <li><code>dma_dev</code> — thiết bị “chủ” của các kênh DMA. Với DAI <b>primary</b> là <code>NULL</code> (lấy từ chính <code>dev</code>); với <b>secondary</b> là <code>&amp;pdev-&gt;dev</code> của primary, để kênh <code>"tx-sec"</code> phân giải đúng OF node.</li>
+      <li><code>chan_names[PLAYBACK] = tx</code>, <code>[CAPTURE] = rx</code> — tên khớp với <code>dma-names</code> trong DT.</li>
+      <li><code>devm_snd_dmaengine_pcm_register(dev, cfg, SND_DMAENGINE_PCM_FLAG_COMPAT)</code> — đăng ký component; <code>devm_</code> ⇒ tự gỡ khi <code>dev</code> biến mất.</li>
+    </ul>
+  </section>
+
+  <!-- ================= 2 ================= -->
+  <section>
+    <h2><span class="num">2</span>Địa chỉ FIFO đi từ Lớp 2 vào kênh DMA</h2>
+    <p class="claim">
+      Lớp 3 không có thanh ghi nào của riêng nó. Thứ phần-cứng-cụ-thể duy nhất nó cần —
+      <b>địa chỉ vật lý của thanh ghi FIFO</b> — nó nhận từ Lớp 2 qua một struct chung,
+      rồi nhồi vào <code>dma_slave_config</code> của kênh.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — snd_dmaengine_dai_dma_data → dma_slave_config → kênh</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 470" role="img"
+          aria-label="Bên trái vùng CPU DAI i2s.c: trong probe, dma_playback.addr được đặt bằng regs_base cộng I2STXD, ví dụ 0x3830010; chan_name bằng tx; addr_width bằng 4. Trong i2s_hw_params, theo số kênh đặt addr_width 4 cho stereo hoặc 2 cho mono, rồi gọi snd_soc_dai_init_dma_data để công bố struct snd_dmaengine_dai_dma_data. Mũi tên đường nối màu seam sang phải, nhãn snd_soc_dai_get_dma_data đọc lại. Bên phải vùng generic cộng pcm_dmaengine: dmaengine_pcm_hw_params gọi snd_hwparams_to_dma_slave_config để đổi bit width sang buswidth và đặt direction MEM_TO_DEV cho playback, rồi snd_dmaengine_pcm_set_config_from_dai_data đặt dst_addr bằng 0x3830010, dst_addr_width, dst_maxburst. Kết quả là struct dma_slave_config, đẩy xuống kênh bằng dmaengine_slave_config. Hộp dưới cùng kênh DMA pl330 giờ biết ghi vào đâu, rộng bao nhiêu, hướng nào.">
+          <defs>
+            <marker id="mk-arr-2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-seam-2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="lbl-m" x="40" y="20">LỚP 2 — i2s.c</text>
+          <rect class="box" x="40" y="30" width="380" height="176" rx="9"/>
+          <text class="t-mono t-b" x="58" y="52" font-size="11">probe: điền struct</text>
+          <text class="t-mono" x="58" y="72" font-size="10.5">dma_playback.addr = regs_base + I2STXD</text>
+          <text class="seam-t" x="58" y="88">= 0x3830010</text>
+          <text class="t-mono" x="58" y="106" font-size="10.5">.chan_name = "tx"   .addr_width = 4</text>
+          <line class="ctl-d" x1="58" y1="118" x2="402" y2="118"/>
+          <text class="t-mono t-b" x="58" y="138" font-size="11">i2s_hw_params():</text>
+          <text class="t-mono" x="58" y="156" font-size="10.5">2ch → addr_width 4 · 1ch → addr_width 2</text>
+          <text class="t-mono" x="58" y="180" font-size="10.5">snd_soc_dai_init_dma_data(dai,</text>
+          <text class="t-mono" x="58" y="195" font-size="10.5">     &amp;dma_playback, &amp;dma_capture)</text>
+
+          <rect class="box-seam" x="120" y="228" width="220" height="40" rx="7"/>
+          <text class="t-mono t-b" x="230" y="245" text-anchor="middle" font-size="10.5">snd_dmaengine_dai_dma_data</text>
+          <text class="lbl-m" x="230" y="260" text-anchor="middle">addr · addr_width · chan_name · maxburst · fifo_size</text>
+
+          <path class="ctl" d="M230 206 L230 226" marker-end="url(#mk-arr-2)"/>
+          <path class="seam" d="M340 248 L560 248" marker-end="url(#mk-seam-2)"/>
+          <text class="seam-t" x="450" y="240" text-anchor="middle">snd_soc_dai_get_dma_data()</text>
+
+          <text class="lbl-m" x="560" y="20">LỚP 3 — soc-generic + pcm_dmaengine</text>
+          <rect class="box" x="560" y="30" width="400" height="300" rx="9"/>
+          <text class="t-mono t-b" x="578" y="52" font-size="11">dmaengine_pcm_hw_params()</text>
+
+          <rect class="box" x="578" y="66" width="364" height="52" rx="6"/>
+          <text class="t-mono" x="592" y="85" font-size="10">snd_hwparams_to_dma_slave_config()</text>
+          <text class="lbl-m" x="592" y="102">16-bit → BUSWIDTH_2 · PLAYBACK → DMA_MEM_TO_DEV</text>
+
+          <rect class="box" x="578" y="128" width="364" height="52" rx="6"/>
+          <text class="t-mono" x="592" y="147" font-size="10">*_set_config_from_dai_data()</text>
+          <text class="lbl-m" x="592" y="164">dst_addr = 0x3830010 · dst_addr_width = 4 · dst_maxburst</text>
+
+          <path class="ctl" d="M760 118 L760 126" marker-end="url(#mk-arr-2)"/>
+
+          <rect class="box-acc" x="578" y="200" width="364" height="56" rx="6"/>
+          <text class="t-mono t-b" x="592" y="221" font-size="10.5">struct dma_slave_config</text>
+          <text class="lbl-m" x="592" y="238">dst_addr · dst_addr_width · direction · dst_maxburst</text>
+
+          <path class="ctl" d="M760 180 L760 198" marker-end="url(#mk-arr-2)"/>
+
+          <text class="t-mono" x="578" y="286" font-size="10.5">dmaengine_slave_config(chan, &amp;cfg)</text>
+          <path class="ctl" d="M760 256 L760 274" marker-end="url(#mk-arr-2)"/>
+          <path class="flow" d="M760 292 L760 348" marker-end="url(#mk-arr-2)"/>
+
+          <rect class="box" x="560" y="350" width="400" height="56" rx="9"/>
+          <text class="t-mono t-b" x="760" y="373" text-anchor="middle" font-size="11">kênh DMA (pl330)</text>
+          <text class="lbl" x="760" y="392" text-anchor="middle">giờ biết: ghi vào đâu · rộng bao nhiêu · hướng nào</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>addr_width</code> đổi theo số kênh: stereo dùng transfer 4 byte (2×16-bit
+        gói lại), mono dùng 2 byte — <b>Lớp 2 chỉnh, Lớp 3 chỉ chép sang</b>. Cùng struct
+        này được <code>samsung_i2s_dai_probe()</code> công bố lần đầu lúc bind card, và
+        <code>i2s_hw_params()</code> cập nhật lại mỗi lần mở luồng.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ================= 3 ================= -->
+  <section>
+    <h2><span class="num">3</span>Vòng DMA cyclic — một mô tả tự lặp</h2>
+    <p class="claim">
+      Không có chuyện “nạp period, chờ xong, nạp period tiếp”. Lớp 3 dựng <b>một</b> mô
+      tả DMA cyclic chạy vòng vô hạn qua N period. CPU chỉ được đánh thức mỗi biên
+      period để <b>đổ dữ liệu mới vào chỗ vừa phát xong</b>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — trigger(START) → prep_dma_cyclic → chạy vòng</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 430" role="img"
+          aria-label="Bên trái bộ đệm trong RAM tại runtime dma_addr, chia thành bốn period, tổng buffer_bytes bằng N nhân period_bytes. Khi trigger START: dmaengine_prep_dma_cyclic tạo một descriptor duy nhất trỏ vào dma_addr với buffer_bytes và period_bytes hướng MEM_TO_DEV; dmaengine_submit trả cookie; dma_async_issue_pending khởi động. Mũi tên dòng chảy màu accent từ bộ đệm chạy vòng qua các period rồi vào hộp thanh ghi FIFO I2STXD bên phải, nhãn đọc tuần hoàn không nạp lại. Mỗi biên period phát ra IRQ gọi dmaengine_pcm_dma_complete rồi snd_pcm_period_elapsed, mũi tên quay lên ứng dụng ghi tiếp vào period vừa trống. pointer đọc dmaengine_tx_status lấy residue để tính vị trí và in_flight_bytes cho runtime delay. trigger STOP gọi dmaengine_terminate_async.">
+          <defs>
+            <marker id="mk-arr-3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-flow-3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="lbl-m" x="40" y="60">RAM · runtime->dma_addr</text>
+          <rect class="period" x="40" y="70" width="90" height="54" rx="4"/>
+          <rect class="period" x="132" y="70" width="90" height="54" rx="4"/>
+          <rect class="period" x="224" y="70" width="90" height="54" rx="4"/>
+          <rect class="period" x="316" y="70" width="90" height="54" rx="4"/>
+          <text class="lbl-m" x="85" y="101" text-anchor="middle">P0</text>
+          <text class="lbl-m" x="177" y="101" text-anchor="middle">P1</text>
+          <text class="lbl-m" x="269" y="101" text-anchor="middle">P2</text>
+          <text class="lbl-m" x="361" y="101" text-anchor="middle">P3</text>
+          <text class="lbl-m" x="40" y="142">buffer_bytes = N × period_bytes</text>
+
+          <rect class="box" x="40" y="176" width="380" height="120" rx="9"/>
+          <text class="t-mono t-b" x="58" y="198" font-size="11">trigger(SNDRV_PCM_TRIGGER_START)</text>
+          <text class="t-mono" x="58" y="220" font-size="10">dmaengine_prep_dma_cyclic(chan, dma_addr,</text>
+          <text class="t-mono" x="58" y="234" font-size="10">   buffer_bytes, period_bytes, MEM_TO_DEV)</text>
+          <text class="lbl-m" x="58" y="252">→ 1 descriptor duy nhất (desc)</text>
+          <text class="t-mono" x="58" y="272" font-size="10">dmaengine_submit(desc) → cookie</text>
+          <text class="t-mono" x="58" y="286" font-size="10">dma_async_issue_pending(chan)</text>
+
+          <path class="flow" d="M406 97 C470 97 470 150 690 150" marker-end="url(#mk-flow-3)"/>
+          <text class="flow-t" x="470" y="140">đọc tuần hoàn P0→P1→P2→P3→P0…  (không nạp lại)</text>
+
+          <rect class="box-acc" x="690" y="126" width="270" height="52" rx="9"/>
+          <text class="t-mono t-b" x="825" y="147" text-anchor="middle" font-size="11">thanh ghi FIFO I2STXD</text>
+          <text class="lbl-m" x="825" y="164" text-anchor="middle">0x3830010 · trong khối I2S</text>
+
+          <path class="flow" d="M690 210 C470 210 470 250 200 250" marker-end="url(#mk-flow-3)"/>
+          <text class="flow-t" x="250" y="204">mỗi biên period: IRQ</text>
+
+          <rect class="box" x="40" y="326" width="600" height="80" rx="9"/>
+          <text class="t-mono" x="58" y="348" font-size="10.5">IRQ → dmaengine_pcm_dma_complete() → snd_pcm_period_elapsed()</text>
+          <text class="lbl" x="58" y="366">→ đánh thức ứng dụng: ghi mẫu mới vào period vừa phát xong</text>
+          <text class="t-mono" x="58" y="388" font-size="10.5">pointer(): dmaengine_tx_status() → residue → pos; in_flight → runtime->delay</text>
+
+          <rect class="box" x="680" y="326" width="280" height="80" rx="9"/>
+          <text class="t-mono t-b" x="820" y="348" text-anchor="middle" font-size="11">trigger(STOP)</text>
+          <text class="t-mono" x="820" y="368" text-anchor="middle" font-size="10">dmaengine_terminate_async()</text>
+          <text class="lbl-m" x="820" y="386" text-anchor="middle">sync_stop() chờ kênh dừng hẳn</text>
+        </svg>
+      </div>
+      <figcaption>
+        Vì mô tả là <i>cyclic</i>, DMA không cần CPU can thiệp để tiếp tục — kể cả khi
+        hệ thống bận. <code>SND_DMAENGINE_PCM_FLAG_NO_RESIDUE</code> (đặt khi kênh không
+        báo được residue) làm <code>pointer()</code> rơi về đếm period thô, kém chính
+        xác hơn. <code>PAUSE_PUSH/RELEASE</code> → <code>dmaengine_pause/resume</code>
+        nếu kênh hỗ trợ.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ================= 4 ================= -->
+  <section>
+    <h2><span class="num">4</span>Cùng vai trò, hai hiện thực: dmaengine ngoài vs iDMA</h2>
+    <p class="claim">
+      Khối I2S0 của Samsung có <b>DMA nội</b> (iDMA) bơm vào <b>SRAM on-chip</b>, cho
+      phép tắt DRAM/bus khi phát nhạc chờ. <code>idma.c</code> là một Lớp-3 khác: cùng
+      bảng <code>snd_soc_component_driver</code>, khác toàn bộ bên dưới.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 4 — biên giới Lớp 3 là bảng ops; bên dưới thì thay được</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 470" role="img"
+          aria-label="Trên cùng một hộp chung: snd_soc_component_driver với các op open, hw_params, prepare, trigger, pointer — cùng giao diện cho cả hai cột. Cột trái DMA ngoài dmaengine.c: bộ đệm là DRAM cấp qua snd_pcm_set_managed_buffer kiểu DEV_IRAM prealloc 512KB; engine là kênh pl330 ngoài dùng prep_dma_cyclic; IRQ của bộ DMA; số period từ 2 đến vô hạn; dùng khi phát nhạc thường. Cột phải iDMA idma.c: bộ đệm là SRAM on-chip lấy bằng ioremap idma.lp_tx_addr kiểu CONTINUOUS; engine là DMA nội của khối I2S điều khiển qua thanh ghi I2SAHB bit DMAEN, I2SSTR0 địa chỉ bắt đầu, I2SLVL0ADDR ngưỡng ngắt, cờ MOD_TXS_IDMA trong I2SMOD; IRQ riêng iis_irq ping-pong mức 0; số period 1 hoặc 2; dùng khi audio công suất thấp. Kết luận: cùng vai trò lớp 3, khác cơ chế, biên giới là bảng ops.">
+          <defs>
+            <marker id="mk-arr-4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="270" y="20" width="460" height="52" rx="9"/>
+          <text class="t-mono t-b" x="500" y="41" text-anchor="middle" font-size="11">snd_soc_component_driver  (giao diện Lớp 3)</text>
+          <text class="lbl-m" x="500" y="58" text-anchor="middle">open · hw_params · prepare · trigger · pointer · pcm_construct</text>
+
+          <line class="ctl" x1="360" y1="72" x2="250" y2="104" marker-end="url(#mk-arr-4)"/>
+          <line class="ctl" x1="640" y1="72" x2="750" y2="104" marker-end="url(#mk-arr-4)"/>
+
+          <rect class="box" x="40" y="106" width="440" height="330" rx="10"/>
+          <text class="t-mono t-b" x="60" y="130">DMA ngoài — dmaengine.c</text>
+          <rect class="box-ext" x="520" y="106" width="440" height="330" rx="10"/>
+          <text class="t-mono t-b" x="540" y="130">iDMA — idma.c</text>
+
+          <line class="ctl-d" x1="60" y1="150" x2="940" y2="150" opacity=".5"/>
+          <text class="lbl-m" x="60" y="172">bộ đệm</text>
+          <text class="t-mono" x="60" y="190" font-size="10">DRAM · set_managed_buffer(DEV_IRAM)</text>
+          <text class="lbl-m" x="60" y="205">prealloc 512 KB</text>
+          <text class="t-mono" x="540" y="190" font-size="10">SRAM on-chip · ioremap(lp_tx_addr)</text>
+          <text class="lbl-m" x="540" y="205">TYPE_CONTINUOUS · MAX_IDMA_BUFFER</text>
+
+          <line class="ctl-d" x1="60" y1="222" x2="940" y2="222" opacity=".5"/>
+          <text class="lbl-m" x="60" y="244">engine</text>
+          <text class="t-mono" x="60" y="262" font-size="10">kênh pl330 ngoài</text>
+          <text class="t-mono" x="60" y="277" font-size="10">dmaengine_prep_dma_cyclic()</text>
+          <text class="t-mono" x="540" y="262" font-size="10">DMA nội khối I2S:</text>
+          <text class="t-mono" x="540" y="277" font-size="10">I2SAHB(DMAEN) · I2SSTR0 · I2SLVL0ADDR</text>
+          <text class="t-mono" x="540" y="292" font-size="10">MOD_TXS_IDMA trong I2SMOD</text>
+
+          <line class="ctl-d" x1="60" y1="308" x2="940" y2="308" opacity=".5"/>
+          <text class="lbl-m" x="60" y="330">IRQ</text>
+          <text class="t-mono" x="60" y="348" font-size="10">của bộ DMA (pl330)</text>
+          <text class="t-mono" x="540" y="348" font-size="10">iis_irq riêng · ping-pong LVL0</text>
+
+          <line class="ctl-d" x1="60" y1="364" x2="940" y2="364" opacity=".5"/>
+          <text class="lbl-m" x="60" y="386">period</text>
+          <text class="t-mono" x="60" y="404" font-size="10">2 … ∞</text>
+          <text class="t-mono" x="540" y="404" font-size="10">1 … 2</text>
+
+          <line class="ctl-d" x1="60" y1="416" x2="940" y2="416" opacity=".5"/>
+          <text class="lbl-m" x="60" y="432">dùng khi</text>
+          <text class="t-mono" x="130" y="432" font-size="10">phát nhạc thường</text>
+          <text class="t-mono" x="600" y="432" font-size="10">audio công suất thấp (tắt DRAM)</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>idma.c</code> tự làm mọi thứ mà dmaengine framework làm hộ cột trái: cấp
+        buffer (<code>preallocate_idma_buffer</code>), xử lý IRQ (<code>iis_irq</code>),
+        theo dõi vị trí (<code>idma_getpos</code> đọc <code>I2STRNCNT</code>). Nó được
+        kích hoạt bởi quirk <code>QUIRK_SUPPORTS_IDMA</code> +
+        <code>idma_reg_addr_init()</code> trong <code>samsung_i2s_dai_probe()</code>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ================= 5 ================= -->
+  <section class="prose">
+    <h2><span class="num">5</span>Bảng ops → động từ DMA</h2>
+    <p class="claim">
+      Mỗi callback của <code>dmaengine_pcm_component</code> làm gì, gọi xuống đâu, kết
+      quả ròng là gì.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Component op</th><th>Gọi xuống (pcm_dmaengine.c)</th><th>Động từ dmaengine</th><th>Kết quả ròng</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">pcm_construct</td><td class="mono">dmaengine_pcm_new</td><td class="mono">dma_request_slave_channel("tx")</td><td>Xin kênh DMA + <span class="mono">snd_pcm_set_managed_buffer</span> (cấp DRAM, prealloc 512 KB)</td></tr>
+          <tr><td class="mono">open</td><td class="mono">set_runtime_hwparams + snd_dmaengine_pcm_open</td><td class="mono">dma_get_slave_caps</td><td>Suy <span class="mono">snd_pcm_hardware</span> từ khả năng kênh; cấp <span class="mono">prtd</span> (giữ chan + cookie + pos)</td></tr>
+          <tr><td class="mono">hw_params</td><td class="mono">prepare_slave_config</td><td class="mono">dmaengine_slave_config(chan,&amp;cfg)</td><td>Nạp <span class="mono">dst_addr=0x3830010</span>, buswidth, hướng vào kênh (Fig 2)</td></tr>
+          <tr><td class="mono">trigger(START)</td><td class="mono">dmaengine_pcm_prepare_and_submit</td><td class="mono">prep_dma_cyclic → submit → issue_pending</td><td>Dựng 1 descriptor vòng, khởi động luồng RAM→FIFO (Fig 3)</td></tr>
+          <tr><td class="mono">trigger(STOP)</td><td class="mono">snd_dmaengine_pcm_trigger</td><td class="mono">dmaengine_terminate_async</td><td>Dừng kênh (không chờ)</td></tr>
+          <tr><td class="mono">trigger(PAUSE/RESUME)</td><td class="mono">snd_dmaengine_pcm_trigger</td><td class="mono">dmaengine_pause / dmaengine_resume</td><td>Tạm dừng/chạy tiếp nếu kênh hỗ trợ</td></tr>
+          <tr><td class="mono">pointer</td><td class="mono">snd_dmaengine_pcm_pointer</td><td class="mono">dmaengine_tx_status</td><td><span class="mono">pos = buffer − residue</span>; <span class="mono">runtime-&gt;delay = in_flight_bytes</span></td></tr>
+          <tr><td class="mono">sync_stop</td><td class="mono">snd_dmaengine_pcm_sync_stop</td><td class="mono">dmaengine_synchronize</td><td>Chặn tới khi mọi callback DMA chạy xong (chống race khi stop)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 6 ================= -->
+  <section class="prose">
+    <h2><span class="num">6</span><code>snd_pcm_hardware</code> — giới hạn của ALSA đến từ bộ DMA</h2>
+    <p>
+      Nếu <code>config-&gt;pcm_hardware</code> là <code>NULL</code> (đúng với Samsung),
+      <code>dmaengine_pcm_set_runtime_hwparams()</code> <b>dựng bảng năng lực từ chính
+      kênh DMA</b>:
+    </p>
+    <div class="kv">
+      <span class="k">period_bytes_max</span><span><code>dma_get_max_seg_size(dma_dev)</code> — segment lớn nhất bộ DMA kéo được một lần.</span>
+      <span class="k">period_bytes_min</span><span>256 byte cố định.</span>
+      <span class="k">periods_min / max</span><span>2 / <code>UINT_MAX</code>.</span>
+      <span class="k">buffer_bytes_max</span><span><code>SIZE_MAX</code> (thực tế bị buffer prealloc chặn).</span>
+      <span class="k">fifo_size</span><span>lấy từ <code>dma_data-&gt;fifo_size</code> — do CPU DAI khai.</span>
+      <span class="k">formats</span><span><code>snd_dmaengine_pcm_refine_runtime_hwparams()</code> lọc: chỉ giữ định dạng có <code>physical_width</code> nằm trong <code>dst_addr_widths</code> mà <code>dma_get_slave_caps()</code> báo. DMA không kéo được 3 byte ⇒ S24_3LE bị ẩn khỏi userspace.</span>
+      <span class="k">INFO_PAUSE / RESUME</span><span>chỉ bật nếu <code>dma_caps.cmd_pause &amp;&amp; cmd_resume</code>.</span>
+      <span class="k">INFO_BATCH</span><span>bật khi kênh không báo residue theo byte ⇒ con trỏ “giật” theo period.</span>
+    </div>
+    <p>
+      Hệ quả thực tế: cùng file driver, hai bo mạch gắn hai bộ DMA khác nhau sẽ
+      <b>trưng ra dải rate/format/độ trễ khác nhau</b> cho <code>aplay</code>.
+    </p>
+  </section>
+
+  <!-- ================= 7 ================= -->
+  <section class="prose">
+    <h2><span class="num">7</span>Đăng ký trong probe của I2S</h2>
+    <p>
+      Lớp 3 không có <code>platform_driver</code> riêng cho board — chính khối I2S gọi
+      nó lúc <code>samsung_i2s_probe()</code>:
+    </p>
+    <ul>
+      <li><b>Primary:</b> <code>samsung_asoc_dma_platform_register(&amp;pdev-&gt;dev, pri_dai-&gt;filter, "tx", "rx", NULL)</code> — sau khi đã set <code>dma_playback.addr = regs_base + I2STXD</code>, <code>dma_capture.addr = regs_base + I2SRXD</code>.</li>
+      <li><b>Secondary</b> (quirk <code>QUIRK_SEC_DAI</code>): gọi lần nữa trên <code>&amp;priv-&gt;pdev_sec-&gt;dev</code> — một <code>platform_device</code> phụ — với kênh <code>"tx-sec"</code> và <code>dma_dev = &amp;pdev-&gt;dev</code>, để kênh phân giải theo OF node của primary. <code>addr = regs_base + I2STXDS</code>.</li>
+      <li><code>probe_order = SND_SOC_COMP_ORDER_LATE</code> ⇒ component PCM bind <b>sau</b> CPU DAI, đảm bảo <code>dma_data</code> đã sẵn sàng khi <code>hw_params</code> chạy.</li>
+      <li><b>DT vs COMPAT:</b> board có Device Tree ⇒ <code>dma_request_chan(dev, "tx")</code> đọc <code>dmas</code>/<code>dma-names</code>. Board cũ không DT ⇒ cờ <code>COMPAT</code> + <code>compat_filter_fn</code> + <code>dma_request_channel(mask, filter, filter_data)</code>; <code>filter</code> và <code>filter_data</code> do platform_data của I2S cấp.</li>
+      <li>Lịch sử: trước ~2013 Samsung có DMA riêng (<code>sound/soc/samsung/dma.c</code>, API s3c-dma/pl330 cũ). Bản hợp nhất của Mark Brown thay bằng <code>dmaengine.c</code> — đó là lý do file chỉ còn 12 dòng.</li>
+    </ul>
+  </section>
+
+  <!-- ================= 8 ================= -->
+  <section class="prose">
+    <h2><span class="num">8</span>Quan sát &amp; debug qua file system</h2>
+    <div class="kv">
+      <span class="k">/proc/asound/card*/pcm*p/sub*/hw_params</span><span>rate/format/channels/period_bytes/buffer_bytes thực tế đã chốt.</span>
+      <span class="k">…/sub*/status</span><span><code>state</code>, <code>hw_ptr</code>/<code>appl_ptr</code>, <code>delay</code> — <code>delay</code> đến từ <code>pointer()</code> của Lớp 3.</span>
+      <span class="k">…/sub*/prealloc</span><span>kích thước buffer DMA prealloc; ghi được để chỉnh.</span>
+      <span class="k">/sys/kernel/debug/asoc/components</span><span>có dòng <code>snd_dmaengine_pcm</code> — chính là component Lớp 3.</span>
+      <span class="k">/sys/kernel/debug/dmaengine/summary</span><span>liệt kê kênh DMA, kênh nào đang bị PCM giữ, in-flight bao nhiêu.</span>
+      <span class="k">dmesg</span><span><code>"Missing dma channel for stream"</code> (thiếu <code>dmas</code> trong DT), <code>"Failed to get DMA channel capabilities, falling back to period counting"</code> (kênh không báo caps → pointer kém chính xác).</span>
+      <span class="k">ftrace</span><span>lọc <code>dmaengine_pcm_*</code>, <code>snd_dmaengine_pcm_*</code>, hoặc <code>*dma_cyclic*</code> để xem thứ tự open→hw_params→trigger.</span>
+    </div>
+  </section>
+
+  <!-- ================= 9 ================= -->
+  <section class="prose">
+    <h2><span class="num">9</span>Những gì cần để ý</h2>
+    <div class="watch">
+      <h3>Watch list</h3>
+      <ul>
+        <li><b>Địa chỉ FIFO là hợp đồng một chiều.</b> Lớp 3 không bao giờ tự biết <code>0x3830010</code> — nếu <code>dma_playback.addr</code> sai (Lớp 2), DMA ghi lung tung, không có lỗi rõ ràng, chỉ nghe rè.</li>
+        <li><b>Descriptor là cyclic, không phải per-period.</b> Đừng tìm chỗ “nạp period tiếp theo” — không có. Chỉ có <code>period_elapsed()</code> báo cho tầng trên.</li>
+        <li><b><code>snd_pcm_hardware</code> là động.</b> Nó phản chiếu năng lực bộ DMA, không phải khối I2S. Bug “format lạ bị từ chối” thường nằm ở <code>dma_get_slave_caps()</code>, không ở i2s.c.</li>
+        <li><b>NO_RESIDUE ⇒ con trỏ giật.</b> Nếu kênh không báo residue, <code>pointer()</code> đếm period thô; độ trễ và đồng bộ A/V xấu đi. Kiểm tra <code>dmesg</code>.</li>
+        <li><b><code>probe_order = LATE</code> quan trọng.</b> Nếu component PCM bind trước CPU DAI, <code>snd_soc_dai_get_dma_data()</code> trả <code>NULL</code>.</li>
+        <li><b>Secondary cần <code>dma_dev</code>.</b> Bỏ tham số <code>&amp;pdev-&gt;dev</code> ⇒ kênh <code>"tx-sec"</code> tìm trên <code>pdev_sec</code> (không có <code>dmas</code>) ⇒ probe defer mãi.</li>
+        <li><b>iDMA ≠ dmaengine.</b> Buffer là SRAM <code>ioremap</code>, không cache-coherent theo cách thường; <code>MOD_TXS_IDMA</code> phải set trong <code>I2SMOD</code>; chỉ có trên I2S0.</li>
+        <li><b><code>sync_stop</code> chống race.</b> Bỏ qua nó ⇒ callback DMA có thể chạy sau khi buffer đã giải phóng.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Nguồn đọc trực tiếp: <code>sound/soc/samsung/{dmaengine.c,dma.h,idma.c}</code>,
+    <code>sound/soc/soc-generic-dmaengine-pcm.c</code>,
+    <code>sound/core/pcm_dmaengine.c</code>,
+    <code>include/sound/dmaengine_pcm.h</code>, và phần DMA của
+    <code>sound/soc/samsung/i2s.c</code> (probe :1446–1507, <code>i2s_hw_params</code>
+    :719, <code>samsung_i2s_dai_probe</code> :1041). Địa chỉ <code>0x3830010</code> là ví
+    dụ minh hoạ (<code>3830000.i2s</code> + <code>I2STXD</code>). Sơ đồ vẽ tay bằng
+    inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "asoc-l3-dma-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>

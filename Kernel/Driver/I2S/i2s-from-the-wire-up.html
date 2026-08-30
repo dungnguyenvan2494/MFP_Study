@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I2S From the Wire Up</title>
+<meta name="description" content="I2S từ mức tín hiệu vật lý lên tới sound/soc/samsung/i2s.c: bốn dây, timing từng cạnh BCLK, độ trễ 1 bit, I2S vs Left-J vs Right-J, polarity NB/IB, master/slave, chuỗi MCLK→RFS→BFS→PSR, bản đồ khái niệm↔register, và 7 case debug.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  html{color-scheme:light dark}
+  img{max-width:100%;height:auto}
+  [hidden]{display:none!important}
+  :root{
+    --bg:#eeefe9;
+    --surface:#ffffff;
+    --surface-2:#f4f5ef;
+    --ink:#1b1d19;
+    --muted:#5e635a;
+    --line:#d0d2c8;
+    --line-strong:#979d8f;
+    --trace:#0d7b9a;
+    --trace-soft:#d9edf2;
+    --warn:#b3327a;
+    --warn-soft:#f3e0eb;
+    --grid:#e2e4da;
+    --shadow:0 1px 2px rgba(20,25,15,.06),0 10px 26px rgba(20,25,15,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f110d;
+      --surface:#171913;
+      --surface-2:#1d2019;
+      --ink:#e1e3db;
+      --muted:#8f9487;
+      --line:#2b2e26;
+      --line-strong:#454a3f;
+      --trace:#4fc4e0;
+      --trace-soft:#13272e;
+      --warn:#e879b8;
+      --warn-soft:#331d2a;
+      --grid:#22251d;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f110d;
+    --surface:#171913;
+    --surface-2:#1d2019;
+    --ink:#e1e3db;
+    --muted:#8f9487;
+    --line:#2b2e26;
+    --line-strong:#454a3f;
+    --trace:#4fc4e0;
+    --trace-soft:#13272e;
+    --warn:#e879b8;
+    --warn-soft:#331d2a;
+    --grid:#22251d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Work Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 110px}
+  .prose{max-width:72ch}
+  .prose p,.prose li{max-width:72ch}
+
+  code,.mono{font-family:"Space Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.82em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.06em .38em}
+
+  .eyebrow{
+    font-family:"Space Mono",monospace;font-size:12px;font-weight:400;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--trace)}
+
+  h1{
+    font-family:"Space Mono",monospace;font-weight:700;
+    font-size:clamp(27px,4.6vw,42px);line-height:1.1;letter-spacing:-.02em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18.5px);margin:0 0 20px;max-width:70ch}
+
+  h2{
+    font-family:"Space Mono",monospace;font-weight:700;
+    font-size:clamp(18px,2.4vw,23px);letter-spacing:-.01em;
+    margin:66px 0 6px;text-wrap:balance;
+  }
+  h2 .num{color:var(--trace);margin-right:.55em}
+  h3{font-size:15.5px;font-weight:700;margin:26px 0 8px}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 22px;max-width:70ch}
+  p{margin:0 0 16px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--trace);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  .callout{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--warn);
+    border-radius:8px;padding:14px 18px;font-size:14px;margin:0 0 20px;max-width:72ch;
+  }
+  .callout .mono{font-size:12.5px}
+  .neq{font-family:"Space Mono",monospace;color:var(--warn);font-weight:700}
+
+  figure{margin:24px 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:680px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:82ch}
+  .fig-tag{
+    font-family:"Space Mono",monospace;font-size:11px;font-weight:400;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"Work Sans",sans-serif;font-size:12.5px}
+  .diagram .t-mono{font-family:"Space Mono",monospace}
+  .diagram .t-b{font-weight:600}
+  .diagram .lbl{fill:var(--muted);font-size:11px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"Space Mono",monospace;font-size:10px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.25}
+  .diagram .box-tr{fill:var(--trace-soft);stroke:var(--trace);stroke-width:1.5}
+  .diagram .box-wn{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.4}
+  .diagram .grid{stroke:var(--grid);stroke-width:1}
+  .diagram .wave{stroke:var(--trace);stroke-width:2;fill:none;stroke-linejoin:miter}
+  .diagram .edge{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .edge-d{stroke:var(--line-strong);stroke-width:1.2;fill:none;stroke-dasharray:4 3}
+  .diagram .mark{stroke:var(--warn);stroke-width:1.4;fill:none}
+  .diagram .mark-d{stroke:var(--warn);stroke-width:1.4;fill:none;stroke-dasharray:4 3}
+  .diagram .mark-t{fill:var(--warn);font-weight:600;font-family:"Space Mono",monospace;font-size:10px}
+  .diagram .tr-t{fill:var(--trace);font-weight:600;font-family:"Space Mono",monospace;font-size:10px}
+  .diagram .slot{fill:none;stroke:var(--line-strong);stroke-width:1.2}
+  .diagram .data{fill:var(--trace-soft);stroke:var(--trace);stroke-width:1.3}
+  [id^="mk-a"] path{fill:var(--line-strong)}
+  [id^="mk-t"] path{fill:var(--trace)}
+  [id^="mk-w"] path{fill:var(--warn)}
+
+  .tag{
+    font-family:"Space Mono",monospace;font-size:9.5px;font-weight:700;letter-spacing:.05em;
+    padding:1px 5px;border-radius:3px;border:1px solid currentColor;white-space:nowrap;
+  }
+  .t-spec{color:var(--warn)}
+  .t-soc{color:var(--trace)}
+  .t-lnx{color:var(--muted)}
+  .diagram .tg{font-family:"Space Mono",monospace;font-size:9px;font-weight:700}
+  .diagram .tg-spec{fill:var(--warn)}
+  .diagram .tg-soc{fill:var(--trace)}
+  .diagram .tg-lnx{fill:var(--muted)}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);margin:6px 0 0}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:720px}
+  th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"Space Mono",monospace;font-size:10px;font-weight:400;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  td .mono,td.mono{font-family:"Space Mono",monospace;font-size:11px}
+  tbody tr:last-child td{border-bottom:none}
+
+  .cases{display:grid;gap:12px;margin:8px 0 0}
+  @media (min-width:760px){.cases{grid-template-columns:1fr 1fr}}
+  .case{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow)}
+  .case h4{margin:0 0 6px;font-size:13.5px;font-family:"Space Mono",monospace;font-weight:700}
+  .case p{margin:0;font-size:13px;color:var(--ink)}
+  .case .sym{color:var(--warn);font-weight:600}
+
+  .steps{font-family:"Space Mono",monospace;font-size:12px;color:var(--muted);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;margin:8px 0 0;white-space:pre;overflow-x:auto}
+
+  footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:80ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"Space Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--trace);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">I2S · từ dây tín hiệu → sound/soc/samsung/i2s.c</p>
+    <h1>I2S From the Wire Up</h1>
+    <p class="lede">
+      Cách nhanh nhất để đọc được <code>i2s.c</code> không phải là mở <code>i2s.c</code>.
+      Là hiểu <b>4 dây tín hiệu</b>, rồi <b>timing từng cạnh clock</b>, rồi mới đi ngược
+      vào register và callback. Khi thấy <code>i2s_set_fmt()</code> ghi một bit vào
+      <code>I2SMOD</code>, bạn biết chính xác bit đó đổi <i>tín hiệu nào trên dây</i>.
+    </p>
+    <p class="callout">
+      Ba thứ <span class="neq">KHÔNG</span> đồng nhất — đừng trộn:<br>
+      <span class="mono">I2S specification</span> &nbsp;<span class="neq">≠</span>&nbsp;
+      <span class="mono">Samsung I2S register architecture</span> &nbsp;<span class="neq">≠</span>&nbsp;
+      <span class="mono">Linux ASoC API</span><br>
+      <span class="tag t-spec">SPEC</span> giao thức &nbsp;·&nbsp;
+      <span class="tag t-soc">SoC</span> quyết định của phần cứng Samsung &nbsp;·&nbsp;
+      <span class="tag t-lnx">LINUX</span> chi tiết cài đặt của driver.
+    </p>
+    <div class="steps">I2S physical signals
+  → timing / waveform  → I2S frame
+  → I2S vs Left-J vs Right-J  → clock polarity (NB/IB)
+  → master / slave  → MCLK / BCLK / LRCLK
+  → RFS / BFS / PSR  → Samsung I2SMOD/PSR registers
+  → i2s_set_fmt()  → i2s_hw_params()  → config_setup()  → i2s_trigger()
+  → DMA ↔ FIFO  → ASoC runtime</div>
+  </header>
+
+  <!-- ============ 1 · SIGNALS ============ -->
+  <section>
+    <h2><span class="num">1</span>Bốn dây, và một sample đi qua từng cạnh clock</h2>
+    <p class="claim">
+      Ví dụ chuẩn dùng xuyên bài: <b>Fs = 48 kHz · stereo · 16-bit</b> ⇒ LRCLK 48 kHz,
+      BFS 32 ⇒ BCLK 1.536 MHz, RFS 256 ⇒ MCLK 12.288 MHz. CPU I2S là master.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — kênh trái, độ trễ 1 bit, cạnh dịch dữ liệu vs cạnh lấy mẫu</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 920 320" role="img"
+          aria-label="Bốn hàng tín hiệu. MCLK 12.288 MHz bằng 256 lần Fs, bằng 8 lần BCLK, quá nhanh để vẽ đủ. BCLK 1.536 MHz vẽ 12 chu kỳ vuông. LRCLK còn gọi WS chuyển xuống mức thấp ở cạnh xuống của BCLK, đánh dấu bắt đầu frame kênh trái. SDATA giữ mức thấp trong một chu kỳ BCLK sau khi WS xuống — đó là độ trễ 1 bit của I2S — rồi mới xuất bit MSB b15, sau đó b14, b13, b12 bằng 1, cứ thế MSB trước LSB sau, 16 bit. Bên phát đổi SDATA ở cạnh xuống của BCLK, bên thu lấy mẫu ở cạnh lên của BCLK, tức giữa mỗi bit. CPU I2S là master nên tạo cả MCLK, BCLK và LRCLK.">
+          <defs>
+            <marker id="mk-a1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-w1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <!-- gridlines at each BCLK cell -->
+          <g class="grid">
+            <line x1="120" y1="34" x2="120" y2="270"/><line x1="168" y1="34" x2="168" y2="270"/>
+            <line x1="216" y1="34" x2="216" y2="270"/><line x1="264" y1="34" x2="264" y2="270"/>
+            <line x1="312" y1="34" x2="312" y2="270"/><line x1="360" y1="34" x2="360" y2="270"/>
+            <line x1="408" y1="34" x2="408" y2="270"/><line x1="456" y1="34" x2="456" y2="270"/>
+            <line x1="504" y1="34" x2="504" y2="270"/><line x1="552" y1="34" x2="552" y2="270"/>
+            <line x1="600" y1="34" x2="600" y2="270"/><line x1="648" y1="34" x2="648" y2="270"/>
+            <line x1="696" y1="34" x2="696" y2="270"/>
+          </g>
+
+          <text class="t-mono t-b" x="20" y="46" font-size="11">MCLK</text>
+          <text class="lbl-m" x="120" y="46">256×Fs = 12.288 MHz  =  8 × BCLK   (không vẽ đủ chu kỳ)</text>
+          <path class="wave" d="M120 52 L126 40 L132 52 L138 40 L144 52 L150 40 L156 52 L162 40 L168 52" opacity="0.5"/>
+
+          <text class="t-mono t-b" x="20" y="88" font-size="11">BCLK</text>
+          <polyline class="wave" points="120,95 120,69 144,69 144,95 168,95 168,69 192,69 192,95 216,95 216,69 240,69 240,95 264,95 264,69 288,69 288,95 312,95 312,69 336,69 336,95 360,95 360,69 384,69 384,95 408,95 408,69 432,69 432,95 456,95 456,69 480,69 480,95 504,95 504,69 528,69 528,95 552,95 552,69 576,69 576,95 600,95 600,69 624,69 624,95 648,95 648,69 672,69 672,95 696,95"/>
+          <text class="lbl-m" x="700" y="86">1.536 MHz</text>
+
+          <text class="t-mono t-b" x="20" y="145" font-size="11">LRCLK</text>
+          <text class="lbl-m" x="20" y="158" font-size="9">(WS)</text>
+          <polyline class="wave" points="120,124 144,124 144,150 696,150"/>
+          <text class="lbl-m" x="360" y="166">mức thấp = kênh trái  (→ lên mức cao ở bit 16, kênh phải)</text>
+
+          <text class="t-mono t-b" x="20" y="205" font-size="11">SDATA</text>
+          <polyline class="wave" points="120,210 192,210 240,210 288,210 336,210 336,184 384,184 384,210 432,210 480,210 480,184 528,184 528,210 576,210 696,210"/>
+          <text class="lbl-m" x="212" y="182">b15</text>
+          <text class="lbl-m" x="356" y="178">b12=1</text>
+          <text class="lbl-m" x="500" y="178">b9=1</text>
+          <text class="lbl-m" x="612" y="206">···  b0</text>
+          <text class="lbl-m" x="120" y="228" font-size="9">0x1234 = 0001 0010 0011 0100  (MSB trước)</text>
+
+          <!-- WS transition marker -->
+          <line class="mark-d" x1="144" y1="112" x2="144" y2="240"/>
+          <text class="mark-t" x="146" y="252">WS ↓ = frame start</text>
+          <!-- 1-bit delay bracket -->
+          <line class="mark" x1="144" y1="196" x2="192" y2="196"/>
+          <line class="mark" x1="144" y1="192" x2="144" y2="200"/>
+          <line class="mark" x1="192" y1="192" x2="192" y2="200"/>
+          <text class="mark-t" x="150" y="190">độ trễ 1 bit</text>
+
+          <!-- edge annotations -->
+          <line class="edge" x1="216" y1="278" x2="216" y2="266" marker-end="url(#mk-a1)"/>
+          <text class="tr-t" x="222" y="288">↑BCLK: bên thu LẤY MẪU</text>
+          <line class="edge" x1="336" y1="278" x2="336" y2="252" marker-end="url(#mk-a1)"/>
+          <text class="mark-t" x="342" y="300">↓BCLK: bên phát ĐỔI SDATA</text>
+
+          <text class="lbl" x="20" y="24">CPU I2S (master) tạo cả 3 clock →</text>
+        </svg>
+      </div>
+      <figcaption>
+        Mỗi bit chiếm đúng <b>một chu kỳ BCLK</b>. Bên phát đặt bit mới lên dây ở
+        <b>cạnh xuống</b> BCLK; bên thu chốt giá trị ở <b>cạnh lên</b> tiếp theo (giữa
+        bit) — đủ thời gian ổn định. WS đổi mức <i>một BCLK trước</i> MSB: đó là độ trễ
+        1 bit đặc trưng của I2S. Nếu <b>BCLK sai tần số</b> → cao độ/nhiễu; <b>LRCLK sai
+        tần số</b> → sai sample-rate; <b>LRCLK sai pha</b> → đảo L/R; <b>MCLK thiếu</b> →
+        codec không chạy được ADC/DAC → câm hoặc méo; <b>lấy mẫu sai cạnh</b> → lỗi bit,
+        nghe như nhiễu trắng.
+      </figcaption>
+    </figure>
+
+    <h3>Vai trò từng dây</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Dây</th><th>Ai tạo (ví dụ này)</th><th>Ai dùng</th><th>Đổi khi nào</th><th>Sai thì audio bị</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">BCLK</td><td>CPU I2S (master)</td><td>cả 2 bên: nhịp cho từng bit</td><td>mỗi bit (2 cạnh/bit)</td><td>cao độ sai / bit trượt / nhiễu</td></tr>
+          <tr><td class="mono">LRCLK / WS</td><td>CPU I2S (master)</td><td>cả 2 bên: chọn kênh L/R + mốc frame</td><td>1 lần/frame = mỗi 32 BCLK; đổi ở ↓BCLK</td><td>sai Fs (×2, ½…) / đảo L↔R</td></tr>
+          <tr><td class="mono">SDATA</td><td>bên phát (TX): CPU khi playback, codec khi capture</td><td>bên thu (RX)</td><td>mỗi bit, ở ↓BCLK</td><td>lỗi bit / lệch 1 bit → méo, ~6 dB sai, đảo dấu</td></tr>
+          <tr><td class="mono">MCLK</td><td>CPU I2S (hoặc PLL riêng)</td><td><b>chỉ codec</b> (chạy bộ lọc nội suy ADC/DAC)</td><td>liên tục, ≫ BCLK</td><td>DAC sai clock → câm / méo / aliasing</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 2 · TIMING MATH ============ -->
+  <section class="prose">
+    <h2><span class="num">2</span>Vì sao các tần số ràng buộc nhau</h2>
+    <p class="claim">
+      Không phải công thức rời rạc — chúng là <b>một chuỗi chia</b> đi từ sample rate.
+    </p>
+    <ul>
+      <li><b>LRCLK = Fs</b> = 48 000 Hz. Một frame LRCLK mang <i>đúng một cặp</i> mẫu L+R, nên nhịp frame phải bằng nhịp lấy mẫu. <span class="tag t-spec">SPEC</span></li>
+      <li><b>BCLK = BFS × LRCLK</b>. Cần đủ bit để chở dữ liệu: 16-bit × 2 kênh = 32 bit/frame ⇒ tối thiểu BFS 32 ⇒ BCLK = 32 × 48 000 = <b>1.536 MHz</b>. <span class="tag t-spec">SPEC</span> quan hệ · <span class="tag t-soc">SoC</span> chọn BFS trong {16,24,32,48,…}</li>
+      <li><b>số BCLK / frame = 32</b> = 16 bit kênh trái + 16 bit kênh phải (khe kênh = BFS/2 = 16).</li>
+      <li><b>MCLK = RFS × LRCLK</b> = 256 × 48 000 = <b>12.288 MHz</b>. Codec cần MCLK là bội nguyên của Fs (256 hoặc 384×) để chạy sigma-delta; 12.288 MHz vừa là 256×48k vừa dẫn được từ PLL audio chuẩn (24.576 / 49.152 MHz). <span class="tag t-spec">SPEC</span> cần bội nguyên · <span class="tag t-soc">SoC</span> chọn RFS</li>
+      <li><b>MCLK / BCLK = RFS / BFS = 256 / 32 = 8</b>. BCLK luôn là MCLK chia cho một số nguyên.</li>
+    </ul>
+    <h3>Độ trễ 1 bit: vì sao có, và mất nó thì sao</h3>
+    <p>
+      Trong I2S chuẩn, MSB xuất hiện <b>1 BCLK sau</b> cạnh LRCLK. Lý do thiết kế: bên
+      phát và bên thu <i>không cần thống nhất trước độ dài từ</i> — cạnh frame chỉ nói
+      “từ mới bắt đầu”, bên thu đếm bit từ đó. Độ trễ cho biên độ ổn định và cho phép
+      cùng một dây chở từ 16, 24 hay 32 bit. <b>Bỏ độ trễ</b> ⇒ MSB trùng cạnh LRCLK ⇒
+      đó chính là <b>Left-Justified</b>. <b>Căn LSB vào cuối khe</b> ⇒ <b>Right-Justified</b>,
+      và khi đó bên thu <i>bắt buộc</i> phải biết độ dài từ để tìm MSB.
+    </p>
+  </section>
+
+  <!-- ============ 3 · FORMAT ============ -->
+  <section>
+    <h2><span class="num">3</span>I2S vs Left-Justified vs Right-Justified</h2>
+    <p class="claim">
+      Cùng một khe kênh (ví dụ 20 BCLK) và cùng dữ liệu 16-bit <code>0x1234</code>. Ba
+      định dạng khác nhau ở <b>vị trí 16 bit dữ liệu nằm trong khe</b>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — vị trí dữ liệu trong khe kênh · giá trị SDF ghi vào I2SMOD</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 900 330" role="img"
+          aria-label="Ba hàng, mỗi hàng là một khe kênh trái rộng 20 chu kỳ BCLK, bắt đầu ngay sau cạnh LRCLK xuống. Hàng I2S: khối 16-bit dữ liệu dịch phải 1 bit so với đầu khe, có nhãn độ trễ 1 bit, MSB ở bit 1, LSB ở bit 16, hai bit cuối khe trống. Hàng Left-Justified: khối 16-bit căn sát đầu khe, MSB trùng cạnh LRCLK, LSB ở bit 15, phần cuối khe trống. Hàng Right-Justified: đầu khe trống, khối 16-bit căn sát cuối khe, LSB trùng cạnh cuối khe, MSB nằm ở bit 4 — nên bên thu phải biết độ dài từ mới tìm được MSB. Bên phải mỗi hàng ghi giá trị trường SDF trong thanh ghi I2SMOD: I2S bằng MOD_SDF_IIS bằng 0; Left-J bằng MOD_SDF_LSB bằng 2 kèm đảo LRP; Right-J bằng MOD_SDF_MSB bằng 1 kèm đảo LRP.">
+          <defs>
+            <marker id="mk-w2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <!-- LRCLK edge reference -->
+          <line class="mark-d" x1="150" y1="34" x2="150" y2="300"/>
+          <text class="mark-t" x="150" y="26" text-anchor="middle">cạnh LRCLK ↓</text>
+          <line class="edge-d" x1="630" y1="34" x2="630" y2="300"/>
+          <text class="lbl-m" x="630" y="26" text-anchor="middle">cuối khe (bit 20)</text>
+
+          <!-- Row I2S -->
+          <text class="t-mono t-b" x="20" y="70" font-size="11">I2S</text>
+          <rect class="slot" x="150" y="52" width="480" height="30"/>
+          <rect class="data" x="174" y="52" width="384" height="30"/>
+          <text class="lbl-m" x="366" y="71" text-anchor="middle">16-bit data · MSB→LSB</text>
+          <line class="mark" x1="150" y1="90" x2="174" y2="90"/>
+          <text class="mark-t" x="150" y="102">trễ 1 bit</text>
+          <text class="tr-t" x="176" y="46">MSB</text>
+          <text class="tr-t" x="540" y="46">LSB (bit 16)</text>
+          <text class="lbl-m" x="646" y="64">SDF = MOD_SDF_IIS = 0</text>
+          <text class="lbl-m" x="646" y="78">LRP không đảo</text>
+
+          <!-- Row Left-J -->
+          <text class="t-mono t-b" x="20" y="150" font-size="11">Left-J</text>
+          <rect class="slot" x="150" y="132" width="480" height="30"/>
+          <rect class="data" x="150" y="132" width="384" height="30"/>
+          <text class="lbl-m" x="342" y="151" text-anchor="middle">16-bit data</text>
+          <text class="tr-t" x="150" y="126">MSB = cạnh LRCLK</text>
+          <text class="tr-t" x="516" y="126">LSB (bit 15)</text>
+          <text class="lbl-m" x="646" y="144">SDF = MOD_SDF_LSB = 2</text>
+          <text class="lbl-m" x="646" y="158">+ đảo LRP</text>
+
+          <!-- Row Right-J -->
+          <text class="t-mono t-b" x="20" y="230" font-size="11">Right-J</text>
+          <rect class="slot" x="150" y="212" width="480" height="30"/>
+          <rect class="data" x="246" y="212" width="384" height="30"/>
+          <text class="lbl-m" x="438" y="231" text-anchor="middle">16-bit data</text>
+          <text class="tr-t" x="248" y="206">MSB (bit 4)</text>
+          <text class="tr-t" x="600" y="206">LSB = cuối khe</text>
+          <line class="mark" x1="150" y1="250" x2="246" y2="250"/>
+          <text class="mark-t" x="150" y="262">trống — bên thu PHẢI biết word length</text>
+          <text class="lbl-m" x="646" y="224">SDF = MOD_SDF_MSB = 1</text>
+          <text class="lbl-m" x="646" y="238">+ đảo LRP</text>
+
+          <text class="lbl" x="20" y="300">Khi BFS = 2 × word length, Left-J và Right-J trùng nhau; khác biệt chỉ lộ khi khe rộng hơn dữ liệu.</text>
+        </svg>
+      </div>
+      <figcaption>
+        Ở mức register Samsung (<code>i2s_set_fmt()</code>, <code>I2SMOD</code> bit
+        [6:5] = SDF): <code>SND_SOC_DAIFMT_I2S</code> → <code>MOD_SDF_IIS (0)</code>;
+        <code>LEFT_J</code> → <code>MOD_SDF_LSB (2)</code> + set bit LRP;
+        <code>RIGHT_J</code> → <code>MOD_SDF_MSB (1)</code> + set bit LRP. Tên
+        “LSB/MSB” trong register là <i>kiểu căn dữ liệu</i>, không phải thứ tự bit —
+        dữ liệu luôn MSB-first.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 4 · POLARITY ============ -->
+  <section>
+    <h2><span class="num">4</span>NB / IB · NF / IF — polarity của BCLK và frame clock</h2>
+    <p class="claim">
+      <code>NB</code> = Normal Bit clock, <code>IB</code> = Inverted · <code>NF</code> =
+      Normal Frame clock, <code>IF</code> = Inverted. Với Samsung I2S, chỉ
+      <b>frame polarity (NF/IF)</b> có bit điều khiển; <b>BCLK polarity (NB/IB) không
+      có bit</b> ⇒ driver từ chối <code>IB_*</code>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — NF vs IF: nửa frame nào là kênh trái (bit LRP trong I2SMOD)</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 900 250" role="img"
+          aria-label="Hai hàng. Hàng NB_NF: LRCLK mức thấp ở nửa đầu frame là kênh trái, mức cao ở nửa sau là kênh phải; bit LRP bằng MOD_LR_LLOW bằng 0. Hàng NB_IF: đảo lại, mức thấp là kênh phải, mức cao là kênh trái; bit LRP bằng MOD_LR_RLOW bằng 1. Nếu CPU và codec không thống nhất NF hay IF thì hai kênh trái phải bị đảo cho nhau. BCLK giống nhau ở cả hai hàng vì Samsung không có bit đảo BCLK.">
+          <defs></defs>
+
+          <text class="t-mono t-b" x="20" y="60" font-size="11">NB_NF</text>
+          <polyline class="wave" points="90,70 90,44 300,44 300,70 510,70 510,44 720,44"/>
+          <text class="lbl-m" x="195" y="86" text-anchor="middle">WS thấp = TRÁI</text>
+          <text class="lbl-m" x="405" y="40" text-anchor="middle">WS cao = PHẢI</text>
+          <text class="lbl-m" x="740" y="60">LRP = MOD_LR_LLOW = 0</text>
+
+          <text class="t-mono t-b" x="20" y="160" font-size="11">NB_IF</text>
+          <polyline class="wave" points="90,170 90,144 300,144 300,170 510,170 510,144 720,144"/>
+          <text class="lbl-m" x="195" y="186" text-anchor="middle">WS thấp = PHẢI</text>
+          <text class="lbl-m" x="405" y="140" text-anchor="middle">WS cao = TRÁI</text>
+          <text class="lbl-m" x="740" y="160">LRP = MOD_LR_RLOW = 1</text>
+
+          <line class="mark-d" x1="300" y1="34" x2="300" y2="210"/>
+          <text class="mark-t" x="300" y="226" text-anchor="middle">nếu CPU dùng NF mà codec dùng IF → hai kênh L/R hoán đổi</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>i2s_set_fmt()</code>: <code>NB_NF</code> giữ nguyên; <code>NB_IF</code>
+        <b>lật bit LRP</b> so với giá trị mà FORMAT vừa đặt (<code>tmp ^= lrp_rlow</code>).
+        <code>IB_NF</code>/<code>IB_IF</code> rơi vào nhánh <code>default</code> →
+        <code>-EINVAL</code> “Polarity not supported” — vì <code>I2SMOD</code> không có
+        trường đảo cạnh BCLK. Muốn đổi cạnh BCLK phải làm ở phía codec.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 5 · MASTER/SLAVE ============ -->
+  <section>
+    <h2><span class="num">5</span>Master / Slave — ai phát clock</h2>
+    <p class="claim">
+      Bên nào <b>phát</b> BCLK + LRCLK thì bên đó là master. <code>CBS_CFS</code> =
+      <b>C</b>odec <b>B</b>it-clock <b>S</b>lave + <b>C</b>odec <b>F</b>rame <b>S</b>lave
+      ⇒ codec <i>nhận</i> clock ⇒ <b>CPU phát</b>. Samsung chỉ hỗ trợ 2 trường hợp
+      đối xứng.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 4 — hướng clock trong 2 mode Samsung hỗ trợ + 2 mode bị từ chối</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 960 340" role="img"
+          aria-label="Hai khối cạnh nhau cho hai trường hợp. Trường hợp CBS_CFS: hộp CPU I2S bên trái phát BCLK, LRCLK và MCLK, các mũi tên đi sang phải tới hộp Codec; trong I2SMOD bit MSS bằng 0 tức master; codec register phải đặt chế độ slave. Trường hợp CBM_CFM: hộp Codec bên phải phát BCLK và LRCLK, mũi tên đi sang trái tới CPU I2S; bit MSS bằng 1 tức slave; driver bỏ qua prescaler PSR vì clock do codec cấp; MCLK vẫn có thể do CPU hoặc PLL riêng cấp cho codec. Bên dưới ghi chú: hai mode tách BCLK và LRCLK khác chủ, tức CBS_CFM và CBM_CFS, bị i2s_set_fmt từ chối với lỗi EINVAL.">
+          <defs>
+            <marker id="mk-a4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-t4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <!-- CBS_CFS -->
+          <text class="t-mono t-b" x="30" y="40">CBS_CFS  —  CPU master</text>
+          <rect class="box-tr" x="30" y="54" width="180" height="90" rx="8"/>
+          <text class="t-mono t-b" x="120" y="92" text-anchor="middle" font-size="11">CPU I2S</text>
+          <text class="lbl-m" x="120" y="110" text-anchor="middle">MSS = 0</text>
+          <rect class="box" x="380" y="54" width="180" height="90" rx="8"/>
+          <text class="t-mono t-b" x="470" y="92" text-anchor="middle" font-size="11">Codec</text>
+          <text class="lbl-m" x="470" y="110" text-anchor="middle">reg: slave mode</text>
+          <path class="wave" d="M212 78 L378 78" marker-end="url(#mk-t4)"/>
+          <text class="tr-t" x="295" y="72" text-anchor="middle">BCLK</text>
+          <path class="wave" d="M212 99 L378 99" marker-end="url(#mk-t4)"/>
+          <text class="tr-t" x="295" y="94" text-anchor="middle">LRCLK</text>
+          <path class="wave" d="M212 120 L378 120" marker-end="url(#mk-t4)"/>
+          <text class="tr-t" x="295" y="134" text-anchor="middle">MCLK</text>
+          <text class="lbl-m" x="30" y="166">→ config_setup() TÍNH PSR: psr = rclk_srcrate / Fs / RFS</text>
+
+          <!-- CBM_CFM -->
+          <text class="t-mono t-b" x="560" y="40">CBM_CFM  —  Codec master</text>
+          <rect class="box" x="560" y="54" width="180" height="90" rx="8"/>
+          <text class="t-mono t-b" x="650" y="92" text-anchor="middle" font-size="11">CPU I2S</text>
+          <text class="lbl-m" x="650" y="110" text-anchor="middle">MSS = 1 (slave)</text>
+          <rect class="box-tr" x="770" y="54" width="170" height="90" rx="8"/>
+          <text class="t-mono t-b" x="855" y="92" text-anchor="middle" font-size="11">Codec</text>
+          <text class="lbl-m" x="855" y="110" text-anchor="middle">tạo BCLK/LRCLK</text>
+          <path class="wave" d="M768 84 L742 84" marker-end="url(#mk-t4)"/>
+          <text class="tr-t" x="755" y="78" text-anchor="middle">BCLK</text>
+          <path class="wave" d="M768 112 L742 112" marker-end="url(#mk-t4)"/>
+          <text class="tr-t" x="755" y="128" text-anchor="middle">LRCLK</text>
+          <text class="lbl-m" x="560" y="166">→ config_setup() BỎ QUA PSR  (if priv->slave_mode return 0)</text>
+
+          <line class="edge-d" x1="30" y1="196" x2="930" y2="196"/>
+          <rect class="box-wn" x="30" y="212" width="900" height="72" rx="8"/>
+          <text class="mark-t" x="48" y="236">i2s_set_fmt(): switch(MASTER_MASK) chỉ có case CBM_CFM và CBS_CFS.</text>
+          <text class="lbl-m" x="48" y="256">CBS_CFM (CPU master BCLK, slave LRCLK) và CBM_CFS (ngược lại) → nhánh default → -EINVAL</text>
+          <text class="lbl-m" x="48" y="272">“master/slave format not supported”. Samsung I2S không tách chủ BCLK và chủ LRCLK.</text>
+
+          <text class="lbl" x="30" y="308">MCLK: trong cả hai mode có thể do CPU I2S phát ra (OPCLK = CDCLK_OUT) hoặc do PLL/clock riêng cấp thẳng cho codec.</text>
+        </svg>
+      </div>
+      <figcaption>
+        Vì sao <code>CBS_CFS</code> nghĩa là “CPU phát”: chữ viết tắt mô tả <i>codec</i>.
+        Codec là <b>Slave</b> cả bit-clock lẫn frame-clock ⇒ codec chỉ nhận ⇒ đầu kia
+        (CPU I2S) phải phát. Trong <code>i2s_set_fmt()</code>: <code>CBM_CFM</code> set
+        <code>mss</code> bit (CPU thành slave); <code>CBS_CFS</code> để <code>mss</code>=0
+        và tự gọi <code>i2s_set_sysclk(RCLKSRC_0)</code> nếu chưa có nguồn RCLK.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 6 · CLOCK CHAIN ============ -->
+  <section>
+    <h2><span class="num">6</span>MCLK → RFS → BFS → PSR — chuỗi chia của Samsung</h2>
+    <p class="claim">
+      Đi ngược từ sample rate xuống register. Mỗi nút gắn nhãn: đây là giao thức, là
+      quyết định phần cứng Samsung, hay là chi tiết driver Linux?
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 5 — cây chia clock với số thật · SPEC / SoC / LINUX</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 980 400" role="img"
+          aria-label="Cây chia clock đọc từ trên xuống. Nguồn RCLK ví dụ 49.152 MHz, đây là clock của SoC. Chia cho prescaler PSR bằng 4, ra MCLK 12.288 MHz; PSR là thanh ghi I2SPSR, chi tiết Linux tính psr bằng rclk_srcrate chia Fs chia RFS. MCLK chia cho RFS bằng 256 ra LRCLK 48 kHz bằng Fs; RFS là trường trong I2SMOD, quan hệ MCLK trên LRCLK là giao thức, con số 256 là lựa chọn SoC. MCLK cũng chia cho RFS trên BFS bằng 8 ra BCLK 1.536 MHz; hoặc BCLK bằng BFS 32 nhân LRCLK. BFS là trường trong I2SMOD. Nhánh phải: LRCLK và số bit mỗi kênh 16 quyết định BFS tối thiểu bằng 32, đây là giao thức. Cuối cùng các giá trị RFS, BFS, PSR được ghi xuống I2SMOD và I2SPSR trong hàm config_setup và set_rfs set_bfs.">
+          <defs>
+            <marker id="mk-a5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="360" y="24" width="260" height="46" rx="8"/>
+          <text class="t-mono t-b" x="490" y="44" text-anchor="middle" font-size="11">nguồn RCLK (op_clk)</text>
+          <text class="lbl-m" x="490" y="60" text-anchor="middle">49.152 MHz</text>
+          <text class="tg tg-soc" x="628" y="44">SoC</text>
+
+          <line class="edge" x1="490" y1="70" x2="490" y2="104" marker-end="url(#mk-a5)"/>
+          <text class="mark-t" x="500" y="92">÷ PSR = 4</text>
+
+          <rect class="box-tr" x="360" y="106" width="260" height="46" rx="8"/>
+          <text class="t-mono t-b" x="490" y="126" text-anchor="middle" font-size="11">MCLK = 256 × Fs</text>
+          <text class="lbl-m" x="490" y="142" text-anchor="middle">12.288 MHz  → chỉ cấp cho codec</text>
+
+          <line class="edge" x1="420" y1="152" x2="300" y2="196" marker-end="url(#mk-a5)"/>
+          <text class="mark-t" x="300" y="180">÷ RFS = 256</text>
+          <line class="edge" x1="560" y1="152" x2="680" y2="196" marker-end="url(#mk-a5)"/>
+          <text class="mark-t" x="600" y="180">÷ (RFS/BFS) = 8</text>
+
+          <rect class="box" x="150" y="198" width="260" height="52" rx="8"/>
+          <text class="t-mono t-b" x="280" y="218" text-anchor="middle" font-size="11">LRCLK = Fs</text>
+          <text class="lbl-m" x="280" y="234" text-anchor="middle">48 000 Hz · 1 frame = 1 cặp mẫu</text>
+          <text class="tg tg-spec" x="386" y="216">SPEC</text>
+
+          <rect class="box" x="560" y="198" width="270" height="52" rx="8"/>
+          <text class="t-mono t-b" x="695" y="218" text-anchor="middle" font-size="11">BCLK = BFS × LRCLK</text>
+          <text class="lbl-m" x="695" y="234" text-anchor="middle">32 × 48 000 = 1.536 MHz</text>
+          <text class="tg tg-spec" x="805" y="216">SPEC</text>
+
+          <rect class="box-wn" x="560" y="286" width="270" height="46" rx="8"/>
+          <text class="lbl-m" x="695" y="305" text-anchor="middle">word 16-bit × 2 kênh = 32 bit/frame</text>
+          <text class="mark-t" x="695" y="322" text-anchor="middle">⇒ BFS tối thiểu = 32</text>
+          <line class="edge" x1="695" y1="286" x2="695" y2="252" marker-end="url(#mk-a5)"/>
+
+          <line class="edge" x1="280" y1="250" x2="280" y2="304" marker-end="url(#mk-a5)"/>
+          <line class="edge" x1="490" y1="152" x2="490" y2="304" marker-end="url(#mk-a5)"/>
+          <line class="edge" x1="695" y1="332" x2="695" y2="332"/>
+
+          <rect class="box" x="150" y="306" width="680" height="60" rx="8"/>
+          <text class="t-mono t-b" x="170" y="328" font-size="11">config_setup() · set_rfs() · set_bfs()</text>
+          <text class="lbl-m" x="170" y="346">RFS,BFS → trường trong I2SMOD (bit RCLK[4:3], BCLK[2:1])  ·  PSR → I2SPSR = ((psr−1)&lt;&lt;8) | PSR_PSREN</text>
+          <text class="tg tg-lnx" x="792" y="326">LINUX</text>
+
+          <text class="lbl" x="150" y="388">RFS/BFS hợp lệ (256,384,512… / 16,24,32,48…) là bảng cứng của phần cứng Samsung — không chọn tuỳ ý.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <span class="tag t-spec">SPEC</span>: <code>LRCLK=Fs</code>,
+        <code>MCLK=RFS·Fs</code>, <code>BCLK=BFS·Fs</code>, <code>BFS ≥ 2·word</code>.
+        <span class="tag t-soc">SoC</span>: tập giá trị RFS/BFS hợp lệ, có mux+prescaler
+        hay không (<code>QUIRK_NO_MUXPSR</code>), vị trí bit trong <code>I2SMOD</code>
+        theo đời IP. <span class="tag t-lnx">LINUX</span>: chọn RFS mặc định (BFS 16/32 →
+        256, còn lại 384), công thức <code>psr = rclk_srcrate/frmclk/rfs</code>, bỏ PSR
+        khi <code>slave_mode</code>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ 7 · MAPPING TABLE ============ -->
+  <section class="prose">
+    <h2><span class="num">7</span>Bản đồ: khái niệm I2S → <code>sound/soc/samsung/i2s.c</code></h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Khái niệm</th><th>Hàm / struct</th><th>Register · bit</th><th>Tính ở đâu</th><th>Ghi xuống HW ở đâu</th></tr></thead>
+        <tbody>
+          <tr><td>BCLK</td><td class="mono">set_bfs() / get_bfs()</td><td class="mono">I2SMOD BCLK[2:1] (v3)</td><td class="mono">config_setup(): bfs = i2s→bfs | blc*2</td><td class="mono">set_bfs() → writel(I2SMOD)</td></tr>
+          <tr><td>LRCLK</td><td class="mono">— (hệ quả của RFS/PSR)</td><td class="mono">— (không có trường riêng)</td><td>= Fs = <code>params_rate()</code></td><td class="mono">i2s→frmclk trong i2s_hw_params()</td></tr>
+          <tr><td>MCLK / CDCLK</td><td class="mono">i2s_set_sysclk(CDCLK/OPCLK)</td><td class="mono">I2SMOD OPCLK[31:30], cdclkcon</td><td>= RFS × Fs</td><td class="mono">i2s_set_sysclk() → writel(I2SMOD)</td></tr>
+          <tr><td>sample rate</td><td class="mono">i2s_hw_params()</td><td class="mono">—</td><td class="mono">params_rate(params)</td><td class="mono">i2s→frmclk (dùng ở config_setup)</td></tr>
+          <tr><td>word length</td><td class="mono">get_blc()</td><td class="mono">I2SMOD BLCP[25:24] / BLCS / BLC[14:13]</td><td class="mono">params_width(params)</td><td class="mono">i2s_hw_params() → writel(I2SMOD)</td></tr>
+          <tr><td>I2S format</td><td class="mono">i2s_set_fmt()</td><td class="mono">I2SMOD SDF[6:5] + LRP[7]</td><td class="mono">decode fmt &amp; FORMAT_MASK</td><td class="mono">i2s_set_fmt() → writel(I2SMOD)</td></tr>
+          <tr><td>master / slave</td><td class="mono">i2s_set_fmt()</td><td class="mono">I2SMOD MSS (mss_off)</td><td class="mono">decode fmt &amp; MASTER_MASK</td><td class="mono">writel(I2SMOD); priv→slave_mode</td></tr>
+          <tr><td>RFS</td><td class="mono">set_rfs() / get_rfs()</td><td class="mono">I2SMOD RCLK[4:3] (v3)</td><td class="mono">config_setup(): 256 hay 384</td><td class="mono">set_rfs() → writel(I2SMOD)</td></tr>
+          <tr><td>BFS</td><td class="mono">set_bfs()</td><td class="mono">I2SMOD BCLK[2:1]</td><td class="mono">config_setup(): blc*2 hay ràng buộc</td><td class="mono">set_bfs() → writel(I2SMOD)</td></tr>
+          <tr><td>PSR (prescaler)</td><td class="mono">config_setup()</td><td class="mono">I2SPSR: [13:8]=psr−1, PSR_PSREN[15]</td><td class="mono">rclk_srcrate / frmclk / rfs</td><td class="mono">writel(I2SPSR)</td></tr>
+          <tr><td>TX FIFO</td><td class="mono">i2s_txctrl() / i2s_fifo()</td><td class="mono">I2SCON: CON_TXDMA_ACTIVE, CON_ACTIVE; I2SFIC: FIC_TXFLUSH</td><td class="mono">—</td><td class="mono">i2s_trigger() → i2s_txctrl(1)</td></tr>
+          <tr><td>RX FIFO</td><td class="mono">i2s_rxctrl() / i2s_fifo()</td><td class="mono">I2SCON: CON_RXDMA_ACTIVE; I2SFIC: FIC_RXFLUSH</td><td class="mono">—</td><td class="mono">i2s_trigger() → i2s_rxctrl(1)</td></tr>
+          <tr><td>địa chỉ FIFO cho DMA</td><td class="mono">snd_soc_dai_init_dma_data()</td><td class="mono">I2STXD=0x10 / I2SRXD=0x14</td><td class="mono">regs_base + I2STXD (probe)</td><td class="mono">→ trao cho Lớp 3 (dmaengine)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 8 · i2s_set_fmt reverse ============ -->
+  <section>
+    <h2><span class="num">8</span>Mổ xẻ <code>i2s_set_fmt()</code> — từ <code>dai_fmt</code> tới waveform</h2>
+    <p class="claim">
+      Machine driver đặt <code>.dai_fmt</code> trong <code>snd_soc_dai_link</code>; ASoC
+      core gọi <code>i2s_set_fmt(dai, fmt)</code> lúc bind/hw_params. Function decode
+      <code>fmt</code> qua 3 mặt nạ, mỗi lựa chọn đổi 1 trường của <code>I2SMOD</code>.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>fmt &amp; mask</th><th>Nhánh trong i2s_set_fmt()</th><th>I2SMOD trường/bit</th><th>Tác động lên dây</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">FORMAT: I2S</td><td class="mono">tmp |= MOD_SDF_IIS&lt;&lt;sdf</td><td class="mono">SDF[6:5] = 0</td><td>MSB trễ 1 BCLK sau cạnh WS</td></tr>
+          <tr><td class="mono">FORMAT: LEFT_J</td><td class="mono">tmp |= MOD_SDF_LSB&lt;&lt;sdf ; tmp |= lrp_rlow</td><td class="mono">SDF = 2 ; LRP[7] = 1</td><td>MSB trùng cạnh WS, không trễ</td></tr>
+          <tr><td class="mono">FORMAT: RIGHT_J</td><td class="mono">tmp |= MOD_SDF_MSB&lt;&lt;sdf ; tmp |= lrp_rlow</td><td class="mono">SDF = 1 ; LRP[7] = 1</td><td>LSB căn cuối khe; MSB tuỳ word length</td></tr>
+          <tr><td class="mono">INV: NB_NF</td><td class="mono">(không làm gì)</td><td class="mono">LRP giữ nguyên</td><td>WS thấp = kênh trái</td></tr>
+          <tr><td class="mono">INV: NB_IF</td><td class="mono">tmp ^= lrp_rlow</td><td class="mono">LRP[7] đảo</td><td>WS thấp = kênh phải (đảo L/R)</td></tr>
+          <tr><td class="mono">INV: IB_NF / IB_IF</td><td class="mono">default → return -EINVAL</td><td>—</td><td>Samsung không đảo được cạnh BCLK</td></tr>
+          <tr><td class="mono">MASTER: CBS_CFS</td><td class="mono">mss=0 ; (auto RCLKSRC_0 nếu chưa có nguồn)</td><td class="mono">MSS = 0</td><td>CPU I2S phát BCLK + LRCLK</td></tr>
+          <tr><td class="mono">MASTER: CBM_CFM</td><td class="mono">tmp |= mod_slave</td><td class="mono">MSS = 1</td><td>CPU nhận BCLK + LRCLK từ codec; bỏ PSR</td></tr>
+          <tr><td class="mono">MASTER: CBS_CFM / CBM_CFS</td><td class="mono">default → return -EINVAL</td><td>—</td><td>không tách chủ BCLK/LRCLK</td></tr>
+          <tr><td class="mono">guard</td><td class="mono">any_active &amp;&amp; (mod ≠ tmp) → -EAGAIN</td><td class="mono">—</td><td>“Other DAI busy” — không đổi format khi đang chạy</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="steps">Machine driver .dai_fmt
+   ↓                     snd_soc_dai_link.dai_fmt
+ASoC core → i2s_set_fmt(dai, fmt)
+   ↓                     3 switch: FORMAT / INV / MASTER
+tmp (SDF | LRP | MSS)  → writel(I2SMOD)
+   ↓
+I2S hardware serializer
+   ↓
+BCLK / LRCLK / SDATA trên chân chip</div>
+  </section>
+
+  <!-- ============ 9 · DEBUG CASES ============ -->
+  <section>
+    <h2><span class="num">9</span>Bảy case debug “đóng đinh”</h2>
+    <div class="cases">
+      <div class="case"><h4>1 · BCLK 1.536 MHz nhưng LRCLK 96 kHz (≠ 48)</h4><p><span class="sym">→</span> Chỉ 16 BCLK/frame thay vì 32 ⇒ <b>BFS = 16</b>. Do machine ép <code>SAMSUNG_I2S_DIV_BCLK = 16</code>, hoặc word length bị nhận nhầm 8-bit (<code>blc*2 = 16</code>), hoặc bộ đếm LRCLK của codec đếm 16.</p></div>
+      <div class="case"><h4>2 · BCLK/LRCLK đúng, audio nhiễu / đảo bit</h4><p><span class="sym">→</span> Kiểm tra: format lệch (I2S vs Left-J → trượt 1 bit), word length lệch (CPU 16 / codec 24), <code>dma addr_width</code> sai (2 vs 4 byte), endianness, hoặc cạnh lấy mẫu BCLK ở codec.</p></div>
+      <div class="case"><h4>3 · Kênh trái và phải bị đảo</h4><p><span class="sym">→</span> Bit <b>LRP</b> lệch giữa CPU và codec: một bên <code>NB_NF</code>, bên kia <code>NB_IF</code>; hoặc codec cấu hình frame-clock polarity ngược.</p></div>
+      <div class="case"><h4>4 · Codec có clock nhưng câm</h4><p><span class="sym">→</span> Lần theo: <code>CON_TXDMA_ACTIVE</code> có bật? FIFO có underrun? codec <code>hw_params</code> (I2C) đã chạy? DAPM path <code>Playback→DAC→amp</code> đã power-up? amp có bị mute / thiếu GPIO enable? route trong DT (<code>samsung,audio-routing</code>)?</p></div>
+      <div class="case"><h4>5 · Một bên rising edge, bên kia falling edge (BCLK)</h4><p><span class="sym">→</span> Bên thu chốt SDATA lệch nửa chu kỳ bit ⇒ đọc nhằm vùng chuyển tiếp ⇒ nhiễu/metastable. Samsung không đảo được BCLK ⇒ lỗi nằm ở cấu hình codec.</p></div>
+      <div class="case"><h4>6 · Fs = 48 kHz, BCLK = 3.072 MHz</h4><p><span class="sym">→</span> BFS = 64 ⇒ frame 64 BCLK ⇒ khe kênh 32 bit (dữ liệu 24-bit + 8 padding, hoặc 32-bit). Frame chở 2 khe 32-bit.</p></div>
+      <div class="case"><h4>7 · Vì sao MCLK 12.288 MHz phổ biến với 48 kHz</h4><p><span class="sym">→</span> 12 288 000 = 256 × 48 000: bội nguyên codec cần cho sigma-delta, và là số “đẹp” dẫn được từ PLL audio chuẩn (24.576 / 49.152 MHz). Họ 44.1k dùng 11.2896 MHz tương ứng.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ MASTER DIAGRAM ============ -->
+  <section>
+    <h2><span class="num">★</span>Sơ đồ tổng — control · data · clock trên một hình</h2>
+    <p class="claim">
+      ALSA app → ASoC core → Machine → CPU DAI (<code>i2s.c</code>) → I2S HW →
+      BCLK/LRCLK/SDATA → Codec → DAC → loa. Ba đường tô khác nhau; mỗi mũi tên ghi ai
+      tạo / ai tiêu thụ / ai cấu hình ai.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 6 — I2S end-to-end với hàm Linux, dai_fmt, RFS/BFS/PSR</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1040 620" role="img"
+          aria-label="Sơ đồ tổng. Ứng dụng ALSA gọi PCM xuống ASoC core, rồi Machine driver odroid.c. Machine đặt dai_fmt bằng I2S NB_NF CBS_CFS và tính clock rồi gọi i2s_set_fmt và i2s_set_sysclk xuống CPU DAI i2s.c, đồng thời cấu hình codec qua bus I2C tách biệt tới Codec driver. Đường điều khiển màu foreground nét đứt cho I2C. Đường dữ liệu màu foreground đậm: RAM qua DMA dmaengine.c vào FIFO I2STXD trong khối I2S rồi nối tiếp hoá ra dây SDATA tới Codec rồi DAC rồi loa. Đường clock màu accent: nguồn RCLK qua prescaler PSR trong config_setup ra MCLK, MCLK chia RFS ra LRCLK, chia BFS ra BCLK, cả ba dây MCLK BCLK LRCLK đi từ khối I2S sang Codec vì CBS_CFS nên CPU là master. i2s_hw_params ghi word length và số kênh vào I2SMOD. i2s_trigger bật CON_TXDMA_ACTIVE cho FIFO. Các nhãn Fs 48k, BCLK 1.536M, MCLK 12.288M, RFS 256, BFS 32, PSR 4 gắn trên đường clock.">
+          <defs>
+            <marker id="mk-a6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-t6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-w6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <g font-family="Space Mono, monospace" font-size="10">
+            <line class="edge" x1="812" y1="20" x2="836" y2="20" marker-end="url(#mk-a6)"/><text class="lbl" x="842" y="24">control (I2C)</text>
+            <line class="mark" x1="812" y1="38" x2="836" y2="38" marker-end="url(#mk-w6)"/><text class="lbl" x="842" y="42">data audio</text>
+            <line class="wave" x1="812" y1="56" x2="836" y2="56" marker-end="url(#mk-t6)"/><text class="lbl" x="842" y="60">clock</text>
+          </g>
+
+          <rect class="box" x="400" y="24" width="240" height="36" rx="7"/>
+          <text class="t-mono t-b" x="520" y="47" text-anchor="middle">ALSA app · aplay</text>
+
+          <rect class="box" x="360" y="86" width="320" height="36" rx="7"/>
+          <text class="t-mono t-b" x="520" y="109" text-anchor="middle">ASoC core (soc-pcm/dapm)</text>
+
+          <rect class="box" x="330" y="148" width="380" height="52" rx="7"/>
+          <text class="t-mono t-b" x="520" y="169" text-anchor="middle">MACHINE — odroid.c</text>
+          <text class="lbl-m" x="520" y="186" text-anchor="middle">dai_fmt = I2S | NB_NF | CBS_CFS · tính RFS/PSR</text>
+
+          <rect class="box-tr" x="60" y="256" width="300" height="64" rx="8"/>
+          <text class="t-mono t-b" x="210" y="282" text-anchor="middle">CPU DAI — i2s.c</text>
+          <text class="lbl-m" x="210" y="300" text-anchor="middle">set_fmt · sysclk · hw_params · config_setup · trigger</text>
+
+          <rect class="box" x="420" y="256" width="220" height="64" rx="8"/>
+          <text class="t-mono t-b" x="530" y="282" text-anchor="middle">Platform/DMA</text>
+          <text class="lbl-m" x="530" y="300" text-anchor="middle">dmaengine.c</text>
+
+          <rect class="box" x="720" y="256" width="260" height="64" rx="8"/>
+          <text class="t-mono t-b" x="850" y="282" text-anchor="middle">Codec driver</text>
+          <text class="lbl-m" x="850" y="300" text-anchor="middle">DAI + DAPM · qua I2C</text>
+
+          <rect class="box" x="60" y="392" width="300" height="60" rx="8"/>
+          <text class="t-mono t-b" x="210" y="416" text-anchor="middle">Khối I2S (SFR + FIFO)</text>
+          <text class="lbl-m" x="210" y="434" text-anchor="middle">I2SMOD · I2SPSR · I2STXD</text>
+
+          <rect class="box" x="720" y="392" width="260" height="60" rx="8"/>
+          <text class="t-mono t-b" x="850" y="416" text-anchor="middle">Codec chip → DAC</text>
+
+          <rect class="box" x="420" y="392" width="220" height="60" rx="8"/>
+          <text class="t-mono t-b" x="530" y="416" text-anchor="middle">RAM (ring buffer)</text>
+
+          <rect class="box" x="760" y="512" width="180" height="40" rx="8"/>
+          <text class="t-mono t-b" x="850" y="536" text-anchor="middle">loa / tai nghe</text>
+
+          <!-- control -->
+          <line class="edge" x1="520" y1="60" x2="520" y2="84" marker-end="url(#mk-a6)"/>
+          <line class="edge" x1="520" y1="122" x2="520" y2="146" marker-end="url(#mk-a6)"/>
+          <path class="edge" d="M420 200 C300 224 240 236 210 254" marker-end="url(#mk-a6)"/>
+          <text class="lbl-m" x="250" y="230" text-anchor="end">i2s_set_fmt() · i2s_set_sysclk()</text>
+          <path class="edge" d="M470 200 C500 224 520 236 530 254" marker-end="url(#mk-a6)"/>
+          <path class="mark-d" d="M650 190 C780 220 830 236 850 254" marker-end="url(#mk-w6)"/>
+          <text class="lbl-m" x="720" y="224">cấu hình codec qua I2C</text>
+          <line class="edge" x1="210" y1="320" x2="210" y2="390" marker-end="url(#mk-a6)"/>
+          <text class="lbl-m" x="216" y="356">writel(I2SMOD/PSR)</text>
+
+          <!-- data -->
+          <path class="mark" d="M530 392 L530 322" marker-end="url(#mk-w6)"/>
+          <text class="mark-t" x="536" y="360">RAM→DMA</text>
+          <path class="mark" d="M470 320 C400 350 320 372 300 390" marker-end="url(#mk-w6)"/>
+          <text class="mark-t" x="360" y="352" text-anchor="middle">DMA → FIFO I2STXD</text>
+          <path class="mark" d="M360 428 L718 428" marker-end="url(#mk-w6)"/>
+          <text class="mark-t" x="540" y="422" text-anchor="middle">SDATA (nối tiếp hoá từ FIFO)</text>
+          <path class="mark" d="M850 452 L850 510" marker-end="url(#mk-w6)"/>
+          <text class="mark-t" x="856" y="484">analog</text>
+
+          <!-- clock -->
+          <path class="wave" d="M210 452 C210 490 240 500 300 500 C360 500 380 470 400 452" marker-end="url(#mk-t6)"/>
+          <text class="tr-t" x="250" y="512">config_setup(): nguồn ÷PSR(4) → MCLK; ÷RFS(256) → LRCLK; BFS(32) → BCLK</text>
+          <path class="wave" d="M360 410 L718 410" marker-end="url(#mk-t6)"/>
+          <text class="tr-t" x="540" y="404" text-anchor="middle">MCLK 12.288M · BCLK 1.536M · LRCLK 48k   (CPU master ← CBS_CFS)</text>
+
+          <text class="lbl-m" x="60" y="470">Fs 48k · RFS 256 · BFS 32 · PSR 4</text>
+        </svg>
+      </div>
+      <figcaption>
+        Một hình gói cả 8 phần: <b>control</b> (Machine → <code>i2s_set_fmt/sysclk</code>
+        → <code>I2SMOD</code>; Machine → codec qua I2C), <b>data</b> (RAM →
+        <code>dmaengine.c</code> → <code>I2STXD</code> → SDATA → DAC → loa), <b>clock</b>
+        (nguồn → PSR → MCLK → RFS → LRCLK; BFS → BCLK; cả 3 dây đi <i>từ</i> CPU I2S
+        <i>sang</i> codec vì <code>CBS_CFS</code>). <code>i2s_hw_params()</code> ghi word
+        length; <code>i2s_trigger()</code> bật <code>CON_TXDMA_ACTIVE</code>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="prose">
+    <h2><span class="num">10</span>Đọc <code>i2s.c</code> theo thứ tự nào</h2>
+    <ol>
+      <li><code>i2s-regs.h</code> — nhìn mặt bằng: <code>I2SCON / I2SMOD / I2SPSR / I2SFIC</code> và các trường SDF, LRP, RCLK, BCLK, BLC.</li>
+      <li><code>i2s_set_fmt()</code> — giờ mỗi bit bạn ghi vào <code>I2SMOD</code> đã có nghĩa waveform (Fig 2, 3, T1).</li>
+      <li><code>i2s_hw_params()</code> — word length → BLC, số kênh → DCn, giao <code>dma_data</code>.</li>
+      <li><code>config_setup()</code> — chuỗi Fig 5: chốt BFS/RFS, tính PSR (bỏ nếu slave).</li>
+      <li><code>i2s_trigger()</code> → <code>i2s_txctrl()</code> — <code>CON_ACTIVE | CON_TXDMA_ACTIVE</code>, dây bắt đầu có tín hiệu.</li>
+      <li>DMA ↔ FIFO (Lớp 3), rồi clock provider, rồi PM.</li>
+    </ol>
+    <p>
+      Đi từ waveform ngược vào register rồi mới lên callback: khi thấy
+      <code>i2s_set_fmt()</code> ghi <code>MOD_SDF_IIS</code>, bạn không đọc “driver đang
+      set format” — bạn thấy <i>MSB vừa bị đẩy trễ 1 BCLK trên dây SDATA</i>.
+    </p>
+  </section>
+
+  <footer>
+    Nguồn đọc trực tiếp: <code>sound/soc/samsung/{i2s.c, i2s-regs.h}</code> —
+    <code>i2s_set_fmt</code> :623, <code>i2s_hw_params</code> :719,
+    <code>config_setup</code> :868, <code>i2s_trigger</code> :929,
+    <code>set_rfs/set_bfs</code> :264–374, <code>i2s_set_sysclk</code> :497. Bit-offset
+    trích từ layout v3 (<code>MOD_SDF_SHIFT=5</code>, <code>MOD_LRP_SHIFT=7</code>,
+    <code>MOD_RCLK_SHIFT=3</code>, <code>MOD_BCLK_SHIFT=1</code>); đời IP mới dời offset
+    qua <code>variant_regs</code>. Số ví dụ (49.152 MHz, PSR 4, <code>0x38300…</code>) là
+    minh hoạ. Sơ đồ vẽ tay bằng inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "i2s-wire-up-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>

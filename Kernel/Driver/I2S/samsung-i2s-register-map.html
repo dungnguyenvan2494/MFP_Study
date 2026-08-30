@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Samsung I2S Register Map</title>
+<meta name="description" content="Bản đồ thanh ghi phần cứng Samsung I2S từ i2s-regs.h, nối với i2s.c: I2SCON (enable/status/DMA), I2SMOD (format/clock — quan trọng nhất), I2SPSR (prescaler), FIFO & I2STXD/RXD, iDMA; kèm register write timeline một phiên playback và chuỗi register-level bare-metal.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@400;600;700&family=Overpass:wght@400;500;600;700&display=swap">
+
+<style>
+  html{color-scheme:light dark}
+  img{max-width:100%;height:auto}
+  [hidden]{display:none!important}
+  :root{
+    --bg:#edeef0;
+    --surface:#ffffff;
+    --surface-2:#f3f4f6;
+    --ink:#191d23;
+    --muted:#5b626d;
+    --line:#cfd2d9;
+    --line-strong:#959ba7;
+    --rw:#4356c7;
+    --rw-soft:#e1e4f7;
+    --ro:#a9651a;
+    --ro-soft:#f2e6d3;
+    --grid:#e3e4e9;
+    --shadow:0 1px 2px rgba(20,25,35,.06),0 10px 26px rgba(20,25,35,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1013;
+      --surface:#16181c;
+      --surface-2:#1c1f24;
+      --ink:#e0e2e6;
+      --muted:#8b929d;
+      --line:#292c33;
+      --line-strong:#454a54;
+      --rw:#8b9bf0;
+      --rw-soft:#1c2137;
+      --ro:#d99a4e;
+      --ro-soft:#312717;
+      --grid:#212329;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1013;
+    --surface:#16181c;
+    --surface-2:#1c1f24;
+    --ink:#e0e2e6;
+    --muted:#8b929d;
+    --line:#292c33;
+    --line-strong:#454a54;
+    --rw:#8b9bf0;
+    --rw-soft:#1c2137;
+    --ro:#d99a4e;
+    --ro-soft:#312717;
+    --grid:#212329;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Overpass",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1160px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 110px}
+  .prose{max-width:74ch}
+  .prose p,.prose li{max-width:74ch}
+
+  code,.mono{font-family:"Overpass Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.85em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.05em .36em}
+
+  .eyebrow{
+    font-family:"Overpass Mono",monospace;font-size:12px;font-weight:600;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--rw)}
+
+  h1{
+    font-family:"Overpass Mono",monospace;font-weight:700;
+    font-size:clamp(26px,4.4vw,40px);line-height:1.12;letter-spacing:-.015em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18px);margin:0 0 20px;max-width:70ch}
+
+  h2{
+    font-family:"Overpass Mono",monospace;font-weight:700;
+    font-size:clamp(18px,2.4vw,23px);letter-spacing:-.01em;
+    margin:64px 0 6px;text-wrap:balance;
+  }
+  h2 .num{color:var(--rw);margin-right:.55em}
+  h3{font-size:15.5px;font-weight:700;margin:26px 0 8px}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 22px;max-width:72ch}
+  p{margin:0 0 16px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--rw);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  .callout{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--rw);
+    border-radius:8px;padding:14px 18px;font-size:14px;margin:0 0 20px;max-width:74ch;
+  }
+
+  figure{margin:24px 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:700px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:84ch}
+  .fig-tag{
+    font-family:"Overpass Mono",monospace;font-size:11px;font-weight:600;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"Overpass",sans-serif;font-size:12px}
+  .diagram .t-mono{font-family:"Overpass Mono",monospace}
+  .diagram .t-b{font-weight:700}
+  .diagram .lbl{fill:var(--muted);font-size:10.5px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"Overpass Mono",monospace;font-size:9.5px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.2}
+  .diagram .box-rw{fill:var(--rw-soft);stroke:var(--rw);stroke-width:1.5}
+  .diagram .box-ro{fill:var(--ro-soft);stroke:var(--ro);stroke-width:1.4}
+  .diagram .cell-rw{fill:var(--rw-soft);stroke:var(--rw);stroke-width:1}
+  .diagram .cell-ro{fill:var(--ro-soft);stroke:var(--ro);stroke-width:1}
+  .diagram .cell-rsv{fill:var(--surface-2);stroke:var(--line);stroke-width:1}
+  .diagram .rule{stroke:var(--grid);stroke-width:1}
+  .diagram .edge{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .edge-d{stroke:var(--line-strong);stroke-width:1.25;fill:none;stroke-dasharray:4 3}
+  .diagram .data{stroke:var(--rw);stroke-width:2.4;fill:none}
+  .diagram .data-t{fill:var(--rw);font-weight:700;font-family:"Overpass Mono",monospace;font-size:9.5px}
+  .diagram .clk{stroke:var(--ro);stroke-width:2.2;fill:none}
+  .diagram .clk-t{fill:var(--ro);font-weight:700;font-family:"Overpass Mono",monospace;font-size:9.5px}
+  .diagram .back{stroke:var(--ro);stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+  .diagram .rwtext{fill:var(--rw);font-weight:700}
+  .diagram .rotext{fill:var(--ro);font-weight:700}
+  [id^="mk-a"] path{fill:var(--line-strong)}
+  [id^="mk-d"] path{fill:var(--rw)}
+  [id^="mk-c"] path{fill:var(--ro)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:11.5px;color:var(--muted);margin:10px 2px 0;font-family:"Overpass Mono",monospace}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .sw{width:14px;height:14px;border-radius:3px;border:1px solid}
+  .sw-rw{background:var(--rw-soft);border-color:var(--rw)}
+  .sw-ro{background:var(--ro-soft);border-color:var(--ro)}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);margin:6px 0 0}
+  table{border-collapse:collapse;width:100%;font-size:12px;min-width:760px}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"Overpass Mono",monospace;font-size:9.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  td.mono,td .mono{font-family:"Overpass Mono",monospace;font-size:11px}
+  tbody tr:last-child td{border-bottom:none}
+  .grp td{background:var(--surface-2);font-family:"Overpass Mono",monospace;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .pill{display:inline-block;font-family:"Overpass Mono",monospace;font-size:9.5px;font-weight:700;padding:0 5px;border-radius:3px;border:1px solid currentColor}
+  .p-rw{color:var(--rw)}
+  .p-ro{color:var(--ro)}
+
+  .seq{font-family:"Overpass Mono",monospace;font-size:12px;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;margin:8px 0 0;white-space:pre;overflow-x:auto;line-height:1.7}
+
+  footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:82ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"Overpass Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--rw);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">i2s-regs.h ↔ i2s.c · Samsung I2S · layout v3</p>
+    <h1>Samsung I2S Register Map</h1>
+    <p class="lede">
+      Biến <code>i2s-regs.h</code> từ một danh sách <code>#define</code> thành bản đồ
+      chức năng: mỗi bit làm gì <i>trong silicon</i> khi = 0 và khi = 1, hàm nào trong
+      <code>i2s.c</code> ghi nó, và ghi ở bước nào của một phiên playback.
+    </p>
+    <p class="callout">
+      <b>Xương sống:</b> <code>I2SMOD</code> (format + clock, R/W hoàn toàn) →
+      <code>I2SPSR</code> (một bộ chia) → <code>I2SCON</code> (enable + status + DMA,
+      <i>nửa đọc nửa ghi</i>) → FIFO / <code>I2STXD</code>/<code>I2SRXD</code> → iDMA
+      (<code>I2SAHB</code>). Hiểu 3 cái đầu là hiểu ~80% <code>i2s.c</code>.
+    </p>
+  </header>
+
+  <!-- ========== 1 · MAP ========== -->
+  <section class="prose">
+    <h2><span class="num">1</span>Toàn bộ bản đồ — theo offset</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Off</th><th>Register</th><th>Chức năng</th><th>R/W</th><th>Bit quan trọng</th><th>Ai dùng (i2s.c)</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="6">Control / Status</td></tr>
+          <tr><td class="mono">0x00</td><td class="mono">I2SCON</td><td>Bật khối, bật/pause DMA-request, cờ FIFO đầy/rỗng/underrun, reset</td><td><span class="pill p-rw">R/W</span> <span class="pill p-ro">RO</span></td><td class="mono">ACTIVE[0], TXDMA_ACTIVE[2], TX/RXFIFO_*[7:15], RSTCLR[31]</td><td class="mono">i2s_txctrl/rxctrl · trigger · dai_probe · runtime PM</td></tr>
+          <tr class="grp"><td colspan="6">Mode / Format / Clock</td></tr>
+          <tr><td class="mono">0x04</td><td class="mono">I2SMOD</td><td><b>Register quan trọng nhất.</b> Định dạng khung, master/slave, độ rộng mẫu, RFS/BFS, nguồn RCLK, gate CDCLK, hướng TX/RX, đa kênh</td><td><span class="pill p-rw">R/W</span></td><td class="mono">SDF[6:5], LRP[7], MSS[11], RCLK[4:3], BCLK[2:1], BLCP[25:24], TXR[9:8], OPCLK[31:30]</td><td class="mono">i2s_set_fmt · i2s_set_sysclk · i2s_hw_params · config_setup</td></tr>
+          <tr class="grp"><td colspan="6">Prescaler</td></tr>
+          <tr><td class="mono">0x0c</td><td class="mono">I2SPSR</td><td>Chia clock nguồn → RCLK. Một bộ chia số nguyên + bit enable</td><td><span class="pill p-rw">R/W</span></td><td class="mono">PSR_PSREN[15], psr-1 [13:8]</td><td class="mono">config_setup (bỏ nếu slave_mode)</td></tr>
+          <tr class="grp"><td colspan="6">FIFO control</td></tr>
+          <tr><td class="mono">0x08</td><td class="mono">I2SFIC</td><td>Flush FIFO primary + đọc mức FIFO (số entry đang chờ)</td><td><span class="pill p-rw">R/W</span> <span class="pill p-ro">RO</span></td><td class="mono">FIC_TXFLUSH[15], FIC_RXFLUSH[7], TXCOUNT[11:8], RXCOUNT[3:0]</td><td class="mono">i2s_fifo · i2s_delay · dai_probe</td></tr>
+          <tr><td class="mono">0x18</td><td class="mono">I2SFICS</td><td>Flush + mức FIFO của DAI thứ hai (FIFO sâu hơn, đếm 7 bit)</td><td><span class="pill p-rw">R/W</span> <span class="pill p-ro">RO</span></td><td class="mono">TXFLUSH[15], FICS_TXCOUNT[14:8]</td><td class="mono">i2s_fifo(sec) · i2s_delay(sec)</td></tr>
+          <tr class="grp"><td colspan="6">TX / RX Data (cửa sổ FIFO)</td></tr>
+          <tr><td class="mono">0x10</td><td class="mono">I2STXD</td><td>Ghi 1 word → đẩy vào TX FIFO. <b>Thanh ghi MMIO cố định, không phải RAM.</b></td><td><span class="pill p-rw">W</span></td><td class="mono">— (32-bit data)</td><td class="mono">DMA (dma_playback.addr = regs_base + 0x10)</td></tr>
+          <tr><td class="mono">0x14</td><td class="mono">I2SRXD</td><td>Đọc 1 word ← pop khỏi RX FIFO</td><td><span class="pill p-ro">R</span></td><td class="mono">— (32-bit data)</td><td class="mono">DMA (dma_capture.addr = regs_base + 0x14)</td></tr>
+          <tr><td class="mono">0x1c</td><td class="mono">I2STXDS</td><td>Cửa sổ TX FIFO của DAI thứ hai</td><td><span class="pill p-rw">W</span></td><td class="mono">—</td><td class="mono">DMA "tx-sec"</td></tr>
+          <tr class="grp"><td colspan="6">Internal DMA (iDMA — chỉ I2S0)</td></tr>
+          <tr><td class="mono">0x20</td><td class="mono">I2SAHB</td><td>Bật DMA nội, reload, mask/clear ngắt mức</td><td><span class="pill p-rw">R/W</span></td><td class="mono">AHB_DMAEN[0], AHB_INTMASK[3], AHB_DMARLD[5], INTENLVL0[24], LVL0INT[20], CLRLVL0INT[16]</td><td class="mono">idma.c (idma_control, idma_enqueue, iis_irq)</td></tr>
+          <tr><td class="mono">0x24</td><td class="mono">I2SSTR0</td><td>Địa chỉ bắt đầu buffer SRAM cho iDMA</td><td><span class="pill p-rw">R/W</span></td><td class="mono">— (address)</td><td class="mono">idma_enqueue</td></tr>
+          <tr><td class="mono">0x28</td><td class="mono">I2SSIZE</td><td>Kích thước khối truyền iDMA (đơn vị word)</td><td><span class="pill p-rw">R/W</span></td><td class="mono">TRNMSK[31:16]</td><td class="mono">idma_enqueue</td></tr>
+          <tr><td class="mono">0x2c</td><td class="mono">I2STRNCNT</td><td>Số word iDMA đã truyền (để tính con trỏ)</td><td><span class="pill p-ro">R</span></td><td class="mono">count[23:0]</td><td class="mono">idma_getpos</td></tr>
+          <tr><td class="mono">0x30..0x3c</td><td class="mono">I2SLVL0..3ADDR</td><td>Địa chỉ kích ngắt "mức" — iDMA báo khi con trỏ chạm ngưỡng</td><td><span class="pill p-rw">R/W</span></td><td class="mono">— (address)</td><td class="mono">idma_enqueue · iis_irq</td></tr>
+          <tr class="grp"><td colspan="6">Khác</td></tr>
+          <tr><td class="mono">0x44</td><td class="mono">I2SVER</td><td>ID phiên bản IP (đọc để phân biệt đời)</td><td><span class="pill p-ro">R</span></td><td class="mono">—</td><td>— (không dùng trực tiếp trong bản này)</td></tr>
+          <tr><td class="mono">0x4c</td><td class="mono">I2STDM</td><td>Cấu hình TDM: số slot, slot nào là TX/RX (khi BFS &gt; 48)</td><td><span class="pill p-rw">R/W</span></td><td class="mono">— (slot map)</td><td class="mono">— (QUIRK_SUPPORTS_TDM; set_bfs cho phép BFS &gt; 48)</td></tr>
+          <tr><td class="mono">0x50</td><td class="mono">I2SFSTA</td><td>Trạng thái FIFO chi tiết (mở rộng)</td><td><span class="pill p-ro">R</span></td><td class="mono">—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========== 2 · I2SCON ========== -->
+  <section>
+    <h2><span class="num">2</span>I2SCON — nửa để đọc, nửa để ghi</h2>
+    <p class="claim">
+      Đây là register lai: <span class="rwtext">bit R/W</span> = phần mềm <i>ra lệnh</i>
+      (bật khối, bật/pause request DMA); <span class="rotext">bit RO</span> = phần cứng
+      <i>báo cáo</i> (FIFO đầy/rỗng, underrun, kênh đang phát). Ghi vào bit RO không có
+      tác dụng.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — I2SCON 32 bit: control vs status</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 960 300" role="img"
+          aria-label="Thước 32 bit của I2SCON, bit 31 bên trái, bit 0 bên phải. Các bit R/W tô màu accent: RSTCLR bit 31, các interrupt-enable rải rác bit 25 23 16, TXSDMA_PAUSE bit 20 và TXSDMA_ACTIVE bit 18, nhóm PAUSE bit 6 đến 3, TXDMA_ACTIVE bit 2 và RXDMA_ACTIVE bit 1, ACTIVE bit 0. Các bit read-only tô màu amber: các status bit rải rác bit 26 24 17, và cả dải bit 15 đến 7 là trạng thái FIFO gồm TXFIFO EMPTY FULL, RXFIFO EMPTY FULL, LRINDEX. Bên dưới là pipeline khi playback START: hàm i2s_txctrl(1) đọc I2SCON, đặt ACTIVE bằng 1 và TXDMA_ACTIVE bằng 1, xoá các bit PAUSE, ghi lại; hệ quả phần cứng: ACTIVE bằng 1 làm miền clock và bộ serializer chạy, TXDMA_ACTIVE bằng 1 làm chân yêu-cầu-DMA bật lên, DMA đổ dữ liệu vào TX FIFO, serializer rút FIFO ra chân SDATA.">
+          <defs>
+            <marker id="mk-a1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="lbl-m" x="40" y="40">bit 31</text>
+          <text class="lbl-m" x="880" y="40" text-anchor="end">bit 0</text>
+
+          <!-- backdrop -->
+          <rect class="cell-rsv" x="40" y="48" width="864" height="34"/>
+          <!-- R/W spans -->
+          <rect class="cell-rw" x="40"  y="48" width="27" height="34"/>
+          <rect class="cell-rw" x="202" y="48" width="27" height="34"/>
+          <rect class="cell-rw" x="256" y="48" width="27" height="34"/>
+          <rect class="cell-rw" x="337" y="48" width="27" height="34"/>
+          <rect class="cell-rw" x="391" y="48" width="27" height="34"/>
+          <rect class="cell-rw" x="445" y="48" width="27" height="34"/>
+          <rect class="cell-rw" x="715" y="48" width="162" height="34"/>
+          <rect class="cell-rw" x="877" y="48" width="27" height="34"/>
+          <!-- RO spans -->
+          <rect class="cell-ro" x="175" y="48" width="27" height="34"/>
+          <rect class="cell-ro" x="229" y="48" width="27" height="34"/>
+          <rect class="cell-ro" x="418" y="48" width="27" height="34"/>
+          <rect class="cell-ro" x="472" y="48" width="243" height="34"/>
+
+          <!-- labels -->
+          <text class="lbl-m" x="53"  y="98" text-anchor="middle">RSTCLR</text>
+          <text class="lbl-m" x="53"  y="110" text-anchor="middle">[31]</text>
+          <text class="lbl-m" x="242" y="98" text-anchor="middle">int-en / status</text>
+          <text class="lbl-m" x="242" y="110" text-anchor="middle">[26:23]</text>
+          <text class="lbl-m" x="404" y="98" text-anchor="middle">TXSDMA + underrun</text>
+          <text class="lbl-m" x="404" y="110" text-anchor="middle">[20:16]</text>
+          <text class="rotext t-mono" x="593" y="98" text-anchor="middle" font-size="9.5">FIFO STATUS — read only</text>
+          <text class="lbl-m" x="593" y="110" text-anchor="middle">[15:7] TX/RX EMPTY·FULL, LRINDEX</text>
+          <text class="rwtext t-mono" x="796" y="98" text-anchor="middle" font-size="9.5">PAUSE bits</text>
+          <text class="lbl-m" x="796" y="110" text-anchor="middle">[6:3]</text>
+          <text class="rwtext t-mono" x="850" y="126" text-anchor="middle" font-size="9.5">TX/RX DMA_ACTIVE [2:1]</text>
+          <text class="rwtext t-mono" x="890" y="98" text-anchor="middle" font-size="9.5">ACTIVE</text>
+          <text class="lbl-m" x="890" y="110" text-anchor="middle">[0]</text>
+
+          <!-- START pipeline -->
+          <text class="t-mono t-b" x="40" y="162" font-size="11">playback START:</text>
+          <rect class="box" x="40" y="172" width="150" height="44" rx="6"/>
+          <text class="t-mono" x="115" y="192" text-anchor="middle" font-size="10">i2s_txctrl(1)</text>
+          <text class="lbl-m" x="115" y="206" text-anchor="middle">read-modify-write</text>
+
+          <rect class="box-rw" x="230" y="172" width="210" height="44" rx="6"/>
+          <text class="t-mono t-b" x="335" y="190" text-anchor="middle" font-size="10">I2SCON |= ACTIVE | TXDMA_ACTIVE</text>
+          <text class="lbl-m" x="335" y="206" text-anchor="middle">&amp;= ~TXDMA_PAUSE &amp; ~TXCH_PAUSE</text>
+
+          <rect class="box" x="480" y="172" width="200" height="44" rx="6"/>
+          <text class="lbl-m" x="580" y="189" text-anchor="middle">ACTIVE=1 → clock+serializer chạy</text>
+          <text class="lbl-m" x="580" y="205" text-anchor="middle">TXDMA_ACTIVE=1 → chân req-DMA bật</text>
+
+          <rect class="box" x="720" y="172" width="200" height="44" rx="6"/>
+          <text class="lbl-m" x="820" y="189" text-anchor="middle">DMA → TX FIFO → serializer</text>
+          <text class="data-t" x="820" y="205" text-anchor="middle">→ SDATA</text>
+
+          <line class="edge" x1="190" y1="194" x2="228" y2="194" marker-end="url(#mk-a1)"/>
+          <line class="edge" x1="440" y1="194" x2="478" y2="194" marker-end="url(#mk-a1)"/>
+          <line class="edge" x1="680" y1="194" x2="718" y2="194" marker-end="url(#mk-a1)"/>
+
+          <text class="lbl" x="40" y="252">STOP: i2s_txctrl(0) → set *_PAUSE, clear TXDMA_ACTIVE; nếu không còn ai chạy → clear ACTIVE; rồi i2s_fifo(FIC_TXFLUSH).</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="sw sw-rw"></i> R/W — phần mềm ra lệnh</span>
+        <span><i class="sw sw-ro"></i> RO — phần cứng báo cáo</span>
+      </div>
+      <figcaption>
+        <code>CON_ACTIVE[0]</code>: 0 = khối I2S tắt hẳn (không clock, không FIFO); 1 =
+        miền clock nối tiếp chạy, serializer sẵn sàng. <code>CON_TXDMA_ACTIVE[2]</code>:
+        0 = khối không phát tín hiệu “xin dữ liệu” cho bộ DMA; 1 = mỗi khi FIFO còn chỗ,
+        khối kéo <code>DMA request</code> lên → dmaengine ghi word tiếp theo vào
+        <code>I2STXD</code>. <code>CON_TXFIFO_FULL[8]</code> (RO): 1 = FIFO đầy, request
+        tạm ngừng. <code>CON_FTXURSTATUS[17]</code> (RO): 1 = FIFO cạn khi
+        <code>ACTIVE=1</code> — <b>underrun</b>, serializer phát lại mẫu cũ / im.
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Macro</th><th>Bit</th><th>Kiểu</th><th>=0</th><th>=1</th><th>i2s.c</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">CON_ACTIVE</td><td class="mono">0</td><td><span class="pill p-rw">R/W</span></td><td>khối tắt, clock nối tiếp dừng</td><td>khối chạy: BCLK/LRCLK ra, serializer hoạt động</td><td class="mono">i2s_txctrl/rxctrl (set khi bật, clear khi không còn hướng nào)</td></tr>
+          <tr><td class="mono">CON_RXDMA_ACTIVE</td><td class="mono">1</td><td><span class="pill p-rw">R/W</span></td><td>không sinh RX DMA request</td><td>FIFO RX có data → kéo request → DMA đọc I2SRXD</td><td class="mono">i2s_rxctrl(1/0)</td></tr>
+          <tr><td class="mono">CON_TXDMA_ACTIVE</td><td class="mono">2</td><td><span class="pill p-rw">R/W</span></td><td>không sinh TX DMA request → FIFO cạn dần</td><td>FIFO TX còn chỗ → kéo request → DMA ghi I2STXD</td><td class="mono">i2s_txctrl(1/0)</td></tr>
+          <tr><td class="mono">CON_RXCH_PAUSE / CON_TXCH_PAUSE</td><td class="mono">3 / 4</td><td><span class="pill p-rw">R/W</span></td><td>kênh chạy bình thường</td><td>đóng băng kênh nhưng giữ clock (dùng khi DAI kia còn chạy)</td><td class="mono">i2s_txctrl/rxctrl(0)</td></tr>
+          <tr><td class="mono">CON_RXDMA_PAUSE / CON_TXDMA_PAUSE</td><td class="mono">5 / 6</td><td><span class="pill p-rw">R/W</span></td><td>request DMA hoạt động</td><td>tạm ngừng sinh request (giữ nội dung FIFO)</td><td class="mono">i2s_txctrl/rxctrl(0)</td></tr>
+          <tr><td class="mono">CON_RXFIFO_FULL</td><td class="mono">7</td><td><span class="pill p-ro">RO</span></td><td>còn chỗ</td><td>RX FIFO đầy — nếu DMA không kịp đọc → overflow</td><td class="mono">— (đọc gián tiếp)</td></tr>
+          <tr><td class="mono">CON_TXFIFO_FULL</td><td class="mono">8</td><td><span class="pill p-ro">RO</span></td><td>còn chỗ, nhận thêm word</td><td>TX FIFO đầy → khối tự hạ DMA request</td><td class="mono">—</td></tr>
+          <tr><td class="mono">CON_RXFIFO_EMPTY</td><td class="mono">9</td><td><span class="pill p-ro">RO</span></td><td>còn data để đọc</td><td>RX FIFO rỗng</td><td class="mono">—</td></tr>
+          <tr><td class="mono">CON_TXFIFO_EMPTY</td><td class="mono">10</td><td><span class="pill p-ro">RO</span></td><td>còn data để phát</td><td>TX FIFO rỗng → sắp underrun</td><td class="mono">—</td></tr>
+          <tr><td class="mono">CON_LRINDEX</td><td class="mono">11</td><td><span class="pill p-ro">RO</span></td><td>serializer đang ở kênh trái</td><td>đang ở kênh phải (soi realtime LRCLK)</td><td class="mono">—</td></tr>
+          <tr><td class="mono">CON_TXFIFO1_FULL … TXFIFO2_EMPTY</td><td class="mono">12..15</td><td><span class="pill p-ro">RO</span></td><td>—</td><td>trạng thái 2 sub-FIFO (multi-channel)</td><td class="mono">—</td></tr>
+          <tr><td class="mono">CON_FTXURSTATUS</td><td class="mono">17</td><td><span class="pill p-ro">RO</span></td><td>không underrun</td><td><b>đã xảy ra underrun</b> primary TX FIFO</td><td class="mono">— (ngắt nếu FTXURINTEN)</td></tr>
+          <tr><td class="mono">CON_TXSDMA_ACTIVE</td><td class="mono">18</td><td><span class="pill p-rw">R/W</span></td><td>secondary TX DMA tắt</td><td>bật request DMA cho FIFO thứ hai (trộn luồng)</td><td class="mono">i2s_txctrl khi is_secondary()</td></tr>
+          <tr><td class="mono">CON_FTXSURSTAT</td><td class="mono">24</td><td><span class="pill p-ro">RO</span></td><td>—</td><td>underrun secondary TX FIFO</td><td class="mono">—</td></tr>
+          <tr><td class="mono">CON_RSTCLR</td><td class="mono">31</td><td><span class="pill p-rw">R/W</span></td><td>khối giữ ở reset</td><td>nhả reset — bắt buộc ghi 1 lúc khởi động (QUIRK_NEED_RSTCLR)</td><td class="mono">samsung_i2s_dai_probe · dai_remove ghi 0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========== 3 · I2SMOD ========== -->
+  <section>
+    <h2><span class="num">3</span>I2SMOD — một register, năm hàm cùng ghi</h2>
+    <p class="claim">
+      Toàn bộ R/W. Bốn nhóm bit độc lập: <b>định dạng</b> (set_fmt), <b>clock nguồn/OPCLK</b>
+      (set_sysclk), <b>mẫu &amp; kênh</b> (hw_params), <b>tỉ lệ RFS/BFS</b> (config_setup),
+      cộng <b>hướng TX/RX</b> (txctrl). Mỗi hàm đọc-sửa-ghi <i>đúng nhóm của mình</i>
+      dưới <code>priv-&gt;lock</code>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — I2SMOD 32 bit (v3): trường nào, ai ghi</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 980 260" role="img"
+          aria-label="Thước 32 bit của I2SMOD layout v3, bit 31 trái, bit 0 phải. Các trường: OPCLK bit 31 đến 30 do i2s_set_sysclk ghi, chọn ý nghĩa chân OPCLK là CDCLK ra, CDCLK vào, BCLK ra, hay PCLK. TXS_IDMA bit 28 do idma ghi. BLCS bit 27 26 và BLCP bit 25 24 là độ rộng mẫu secondary và primary do i2s_hw_params ghi. C2DD C1DD bit 21 đến 18 và DC2_EN DC1_EN bit 17 16 là đa kênh do hw_params ghi. BLC bit 14 13 là độ rộng mẫu của DAI manager. CDCLKCON bit 12 gate clock cấp cho codec do set_sysclk ghi. MSS bit 11 master hay slave do i2s_set_fmt ghi. RCLKSRC bit 10 chọn nguồn opclk0 hay opclk1 do set_sysclk ghi. TXR bit 9 8 hướng TX-only RX-only hay TX+RX do i2s_txctrl và i2s_rxctrl ghi. LRP bit 7 polarity frame và SDF bit 6 5 kiểu căn dữ liệu I2S Left-J Right-J do i2s_set_fmt ghi. RFS bit 4 3 và BFS bit 2 1 là tỉ lệ MCLK trên LRCLK và BCLK trên LRCLK do config_setup qua set_rfs set_bfs ghi.">
+          <defs></defs>
+          <text class="lbl-m" x="40" y="34">bit 31</text>
+          <text class="lbl-m" x="904" y="34" text-anchor="end">bit 0</text>
+
+          <rect class="cell-rsv" x="40" y="42" width="864" height="32"/>
+          <rect class="cell-rw" x="40"  y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="121" y="42" width="27" height="32"/>
+          <rect class="cell-rw" x="148" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="202" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="310" y="42" width="108" height="32"/>
+          <rect class="cell-rw" x="418" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="499" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="553" y="42" width="27" height="32"/>
+          <rect class="cell-rw" x="580" y="42" width="27" height="32"/>
+          <rect class="cell-rw" x="607" y="42" width="27" height="32"/>
+          <rect class="cell-rw" x="634" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="688" y="42" width="27" height="32"/>
+          <rect class="cell-rw" x="715" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="769" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="823" y="42" width="54" height="32"/>
+          <rect class="cell-rw" x="877" y="42" width="27" height="32"/>
+
+          <g class="lbl-m" text-anchor="middle">
+            <text x="67"  y="90">OPCLK</text><text x="67"  y="101">[31:30]</text><text x="67"  y="114" class="rotext" font-size="9">sysclk</text>
+            <text x="134" y="90">IDMA</text><text x="134" y="101">[28]</text>
+            <text x="175" y="126">BLCS</text><text x="175" y="137">[27:26]</text>
+            <text x="229" y="90">BLCP</text><text x="229" y="101">[25:24]</text><text x="229" y="114" class="rwtext" font-size="9">hw_params</text>
+            <text x="364" y="126">C2DD·C1DD</text><text x="364" y="137">[21:18]</text>
+            <text x="445" y="90">DCn_EN</text><text x="445" y="101">[17:16]</text><text x="445" y="114" class="rwtext" font-size="9">hw_params</text>
+            <text x="526" y="126">BLC</text><text x="526" y="137">[14:13]</text>
+            <text x="566" y="90">CDCLK</text><text x="566" y="101">[12]</text><text x="566" y="114" class="rotext" font-size="9">sysclk</text>
+            <text x="593" y="126">MSS</text><text x="593" y="137">[11]</text>
+            <text x="620" y="90">SRC</text><text x="620" y="101">[10]</text>
+            <text x="661" y="126">TXR</text><text x="661" y="137">[9:8]</text>
+            <text x="701" y="90">LRP</text><text x="701" y="101">[7]</text>
+            <text x="742" y="126">SDF</text><text x="742" y="137">[6:5]</text><text x="742" y="150" class="rwtext" font-size="9">set_fmt</text>
+            <text x="796" y="90">RFS</text><text x="796" y="101">[4:3]</text>
+            <text x="850" y="126">BFS</text><text x="850" y="137">[2:1]</text><text x="850" y="150" class="rwtext" font-size="9">config_setup</text>
+          </g>
+
+          <text class="rwtext t-mono" x="593" y="150" text-anchor="middle" font-size="9">set_fmt</text>
+          <text class="rwtext t-mono" x="661" y="150" text-anchor="middle" font-size="9">txctrl</text>
+          <text class="rotext t-mono" x="620" y="114" text-anchor="middle" font-size="9">sysclk</text>
+          <text class="rwtext t-mono" x="701" y="114" text-anchor="middle" font-size="9">set_fmt</text>
+          <text class="rwtext t-mono" x="796" y="150" text-anchor="middle" font-size="9">config_setup</text>
+
+          <text class="lbl" x="40" y="188">ASoC .dai_fmt / hw_params  →  i2s_set_fmt() · i2s_hw_params() · config_setup()  →  slice của I2SMOD  →  BCLK / LRCLK / SDATA</text>
+          <text class="lbl" x="40" y="212">Guard chung: nếu any_active() &amp; giá trị mới ≠ đang chạy  →  -EAGAIN “Other DAI busy” (2 DAI chung 1 register).</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>SDF[6:5]</code>: 0=<code>IIS</code> (trễ 1 bit), 1=<code>MSB</code>
+        (Right-J), 2=<code>LSB</code> (Left-J). <code>LRP[7]</code>: 0=kênh trái khi
+        LRCLK thấp, 1=đảo. <code>MSS[11]</code>: 0=master (khối phát BCLK/LRCLK),
+        1=slave. <code>RCLK[4:3]</code>: 0=256FS, 1=512FS, 2=384FS, 3=768FS →
+        <b>MCLK/LRCLK</b>. <code>BCLK[2:1]</code>: 0=32FS, 1=48FS, 2=16FS, 3=24FS →
+        <b>BCLK/LRCLK</b>. <code>CDCLKCON[12]</code>: 0=khối phát MCLK ra codec,
+        1=gate (codec tự có clock) — <code>dai_probe</code> đặt =1 mặc định.
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Trường (v3)</th><th>Bit</th><th>Giá trị</th><th>Nguồn ASoC</th><th>Hàm ghi</th><th>Hardware / tác động lên dây</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="6">Master / Slave</td></tr>
+          <tr><td class="mono">MSS</td><td class="mono">11</td><td class="mono">0=master · 1=slave</td><td class="mono">SND_SOC_DAIFMT_CBS_CFS / CBM_CFM</td><td class="mono">i2s_set_fmt</td><td>0: khối tự sinh BCLK+LRCLK. 1: nhận từ codec, config_setup bỏ PSR</td></tr>
+          <tr class="grp"><td colspan="6">Audio format</td></tr>
+          <tr><td class="mono">SDF</td><td class="mono">6:5</td><td class="mono">0=IIS · 1=MSB · 2=LSB</td><td class="mono">DAIFMT_I2S / RIGHT_J / LEFT_J</td><td class="mono">i2s_set_fmt</td><td>0: MSB trễ 1 BCLK sau WS. 1: LSB căn cuối khe. 2: MSB trùng cạnh WS</td></tr>
+          <tr><td class="mono">LRP</td><td class="mono">7</td><td class="mono">0=LLOW · 1=RLOW</td><td class="mono">NB_NF / NB_IF (lật tương đối)</td><td class="mono">i2s_set_fmt</td><td>quyết định nửa frame nào là kênh trái. Lệch giữa CPU/codec → đảo L/R</td></tr>
+          <tr class="grp"><td colspan="6">Word length</td></tr>
+          <tr><td class="mono">BLCP / BLCS / BLC</td><td class="mono">25:24 / 27:26 / 14:13</td><td class="mono">0=16 · 1=8 · 2=24 bit</td><td class="mono">params_width(params)</td><td class="mono">i2s_hw_params</td><td>số bit dữ liệu hợp lệ trong mỗi khe. Lệch với codec → méo/nhiễu</td></tr>
+          <tr class="grp"><td colspan="6">Channel</td></tr>
+          <tr><td class="mono">DC1_EN / DC2_EN</td><td class="mono">16 / 17</td><td class="mono">bật cặp kênh phụ</td><td class="mono">params_channels: 4ch→DC1, 6ch→DC1+DC2</td><td class="mono">i2s_hw_params</td><td>khung mang &gt; 2 kênh (multi-channel qua nhiều LRCLK slot)</td></tr>
+          <tr><td class="mono">C1DD / C2DD</td><td class="mono">18:19 / 20:21</td><td class="mono">discard nửa cao/thấp</td><td class="mono">—</td><td class="mono">i2s_hw_params</td><td>bỏ nửa word khi ghép kênh</td></tr>
+          <tr class="grp"><td colspan="6">Clock source</td></tr>
+          <tr><td class="mono">RCLKSRC</td><td class="mono">10</td><td class="mono">0=i2s_opclk0 · 1=opclk1</td><td class="mono">SAMSUNG_I2S_RCLKSRC_0/1</td><td class="mono">i2s_set_sysclk</td><td>chọn mux nguồn sinh RCLK trước prescaler</td></tr>
+          <tr><td class="mono">CDCLKCON</td><td class="mono">12</td><td class="mono">0=out(phát) · 1=gate</td><td class="mono">SAMSUNG_I2S_CDCLK · CLOCK_OUT/IN</td><td class="mono">i2s_set_sysclk · dai_probe(=1)</td><td>0: MCLK ra chân codec. 1: không rò MCLK khi chưa dùng</td></tr>
+          <tr><td class="mono">OPCLK</td><td class="mono">31:30</td><td class="mono">0=CDCLK_OUT·1=IN·2=BCLK_OUT·3=PCLK</td><td class="mono">SAMSUNG_I2S_OPCLK · dir</td><td class="mono">i2s_set_sysclk</td><td>chọn tín hiệu nào lái ra chân OPCLK</td></tr>
+          <tr class="grp"><td colspan="6">Clock ratio</td></tr>
+          <tr><td class="mono">RCLK (RFS)</td><td class="mono">4:3</td><td class="mono">256/512/384/768 FS</td><td class="mono">rfs từ machine hoặc mặc định</td><td class="mono">set_rfs ← config_setup</td><td>MCLK = RFS × LRCLK</td></tr>
+          <tr><td class="mono">BCLK (BFS)</td><td class="mono">2:1</td><td class="mono">32/48/16/24 FS (v3)</td><td class="mono">bfs từ machine hoặc blc×2</td><td class="mono">set_bfs ← config_setup</td><td>BCLK = BFS × LRCLK; số bit/frame</td></tr>
+          <tr class="grp"><td colspan="6">TX / RX mode</td></tr>
+          <tr><td class="mono">TXR</td><td class="mono">9:8</td><td class="mono">0=TXONLY·1=RXONLY·2=TXRX</td><td class="mono">— (suy từ hướng đang chạy)</td><td class="mono">i2s_txctrl / i2s_rxctrl</td><td>khối serialize hướng nào; đổi động khi DAI kia bật/tắt</td></tr>
+          <tr class="grp"><td colspan="6">Other</td></tr>
+          <tr><td class="mono">TXS_IDMA</td><td class="mono">28</td><td class="mono">1 = FIFO2 dùng iDMA</td><td class="mono">—</td><td class="mono">idma_hw_params</td><td>secondary TX FIFO lấy dữ liệu từ DMA nội (SRAM) thay vì dmaengine</td></tr>
+          <tr><td class="mono">MOD_8BIT</td><td class="mono">0</td><td class="mono">1 = chế độ 8-bit</td><td class="mono">—</td><td class="mono">— (hiếm)</td><td>đóng gói mẫu 8-bit</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========== 4 · PSR ========== -->
+  <section class="prose">
+    <h2><span class="num">4</span>I2SPSR — một bộ chia, hai bit đáng nhớ</h2>
+    <p class="claim">
+      <code>I2SPSR</code> chỉ làm một việc: chia clock nguồn xuống <code>RCLK</code>
+      (chính là MCLK nội). Chỉ ghi ở <code>config_setup()</code>, và chỉ khi
+      <b>không</b> slave.
+    </p>
+    <div class="seq">source (op_clk)  ──►  I2SPSR (÷ psr)  ──►  MCLK/RCLK  ──►  ÷ RFS  ──►  LRCLK = Fs
+                                          └──────────►  BCLK  (= BFS × LRCLK, từ I2SMOD BFS)
+
+Ví dụ  Fs = 48 kHz · RFS = 256 · BFS = 32 · source = 49.152 MHz
+   LRCLK = 48 000 Hz
+   BCLK  = 32 × 48 000 = 1.536 MHz
+   MCLK  = 256 × 48 000 = 12.288 MHz
+   psr   = source / Fs / RFS = 49 152 000 / 48 000 / 256 = 4
+   ghi   = ((psr − 1) &lt;&lt; 8) | PSR_PSREN = (3 &lt;&lt; 8) | (1 &lt;&lt; 15) = 0x8300</div>
+    <ul>
+      <li><b>Protocol quyết định:</b> <code>LRCLK = Fs</code>, <code>MCLK = RFS·Fs</code>, <code>BCLK = BFS·Fs</code>.</li>
+      <li><b>Machine driver quyết định:</b> chọn <code>RFS</code> (256), có khi ép <code>BFS</code>; đặt <code>rclk_srcrate</code> qua <code>clk_set_rate</code>.</li>
+      <li><b>Samsung hardware quyết định:</b> tập RFS/BFS hợp lệ, có mux+prescaler hay không (<code>QUIRK_NO_MUXPSR</code> — v3 <i>không</i> có, nên bỏ qua nhánh ghi PSR).</li>
+      <li><b>Ghi vào I2SPSR:</b> chỉ giá trị <code>psr − 1</code> ở [13:8] và <code>PSR_PSREN</code> ở [15]. Phần còn lại là hệ quả.</li>
+    </ul>
+  </section>
+
+  <!-- ========== 5 · FIFO ========== -->
+  <section>
+    <h2><span class="num">5</span>FIFO &amp; I2STXD — memory hay register?</h2>
+    <p class="claim">
+      <b>Register.</b> <code>I2STXD</code> là một ô nhớ MMIO tại địa chỉ vật lý cố định
+      <code>regs_base + 0x10</code>. Ghi vào đó = <i>đẩy một word vào hàng đợi FIFO
+      trên chip</i>. Đó là lý do DMA nhận <code>dma_playback.addr = regs_base +
+      I2STXD</code> và ghi <b>không tăng địa chỉ</b>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — luồng playback: RAM → I2STXD → FIFO → serializer → SDATA</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1020 300" role="img"
+          aria-label="Luồng ngang. Bộ đệm vòng ALSA trong RAM. DMA channel đọc RAM, tăng địa chỉ nguồn, nhưng ghi vào một địa chỉ đích CỐ ĐỊNH. Địa chỉ đích là I2STXD, một thanh ghi MMIO tại regs_base cộng 0x10, không phải RAM, tô nổi bật. Mỗi lần ghi I2STXD đẩy một word vào TX FIFO, hàng đợi trên chip khoảng 16 đến 64 entry. Serializer là thanh ghi dịch, rút từng bit theo nhịp BCLK, MSB trước, ra chân SDATA rồi tới Codec. Có hai đường phản hồi nét đứt màu amber: khi FIFO gần đầy, bit CON_TXFIFO_FULL bằng 1, khối tự hạ chân yêu-cầu-DMA nên DMA ngừng bơm; khi FIFO rỗng lúc ACTIVE bằng 1, bit CON_FTXURSTATUS bằng 1, đó là underrun, serializer lặp mẫu cũ hoặc im. Ghi chú: dma_playback.addr bằng regs_base cộng I2STXD được điền trong probe của i2s.c.">
+          <defs>
+            <marker id="mk-a3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-d3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-c3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="20" y="80" width="150" height="56" rx="7"/>
+          <text class="t-mono t-b" x="95" y="103" text-anchor="middle" font-size="10">RAM</text>
+          <text class="lbl-m" x="95" y="120" text-anchor="middle">ALSA ring buffer</text>
+
+          <rect class="box" x="220" y="80" width="150" height="56" rx="7"/>
+          <text class="t-mono t-b" x="295" y="103" text-anchor="middle" font-size="10">DMA channel</text>
+          <text class="lbl-m" x="295" y="120" text-anchor="middle">src++ , dst CỐ ĐỊNH</text>
+
+          <rect class="box-rw" x="420" y="76" width="160" height="64" rx="7"/>
+          <text class="t-mono t-b" x="500" y="98" text-anchor="middle" font-size="10">I2STXD</text>
+          <text class="lbl-m" x="500" y="114" text-anchor="middle">MMIO @ regs_base+0x10</text>
+          <text class="data-t" x="500" y="130" text-anchor="middle">KHÔNG phải RAM</text>
+
+          <rect class="box" x="630" y="80" width="150" height="56" rx="7"/>
+          <text class="t-mono t-b" x="705" y="103" text-anchor="middle" font-size="10">TX FIFO</text>
+          <text class="lbl-m" x="705" y="120" text-anchor="middle">hàng đợi trên chip</text>
+
+          <rect class="box" x="830" y="80" width="160" height="56" rx="7"/>
+          <text class="t-mono t-b" x="910" y="103" text-anchor="middle" font-size="10">Serializer</text>
+          <text class="lbl-m" x="910" y="120" text-anchor="middle">shift reg · nhịp BCLK</text>
+
+          <line class="data" x1="170" y1="108" x2="218" y2="108" marker-end="url(#mk-d3)"/>
+          <line class="data" x1="370" y1="108" x2="418" y2="108" marker-end="url(#mk-d3)"/>
+          <text class="data-t" x="394" y="98" text-anchor="middle">writel</text>
+          <line class="data" x1="580" y1="108" x2="628" y2="108" marker-end="url(#mk-d3)"/>
+          <text class="data-t" x="604" y="98" text-anchor="middle">push</text>
+          <line class="data" x1="780" y1="108" x2="828" y2="108" marker-end="url(#mk-d3)"/>
+          <line class="data" x1="990" y1="108" x2="1014" y2="108" marker-end="url(#mk-d3)"/>
+          <text class="data-t" x="1002" y="98" text-anchor="middle">SDATA</text>
+
+          <!-- backpressure -->
+          <path class="back" d="M705 80 C705 44 420 44 320 78" marker-end="url(#mk-c3)"/>
+          <text class="clk-t" x="510" y="40" text-anchor="middle">gần đầy → CON_TXFIFO_FULL=1 → khối hạ chân req-DMA → DMA dừng bơm</text>
+
+          <path class="back" d="M905 136 C905 180 620 180 500 180" marker-end="url(#mk-c3)"/>
+          <text class="clk-t" x="700" y="196" text-anchor="middle">FIFO rỗng khi ACTIVE=1 → CON_FTXURSTATUS=1 = UNDERRUN → lặp mẫu / im</text>
+
+          <line class="edge-d" x1="500" y1="230" x2="500" y2="142" marker-end="url(#mk-a3)"/>
+          <text class="lbl-m" x="500" y="246" text-anchor="middle">i2s.c probe:  dma_playback.addr = regs_base + I2STXD  →  trao cho dmaengine</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>DMA ghi vào đâu:</b> vào ô <code>I2STXD</code> (một địa chỉ). <b>FIFO ở đâu:</b>
+        trong khối I2S, ngay sau <code>I2STXD</code> — phần mềm không đánh địa chỉ được
+        từng entry, chỉ thấy qua cờ đếm <code>FIC_TXCOUNT</code>. <b>Underrun ở đâu:</b>
+        tại serializer — khi <code>ACTIVE=1</code> mà FIFO đã cạn vì DMA/RAM không kịp.
+        <code>i2s_fifo(FIC_TXFLUSH)</code> ở STOP để lần phát sau không phát rác cũ.
+        <code>I2SFIC</code> đọc được <code>TXCOUNT[11:8]</code> — <code>i2s_delay()</code>
+        dùng nó báo độ trễ cho ALSA.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 6 · CROSS-REF ========== -->
+  <section class="prose">
+    <h2><span class="num">6</span>i2s.c ↔ i2s-regs.h — theo vòng đời</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Lifecycle</th><th>Hàm</th><th>Đọc</th><th>Ghi</th><th>Bit / field</th><th>Hardware effect</th></tr></thead>
+        <tbody>
+          <tr><td>probe</td><td class="mono">samsung_i2s_probe</td><td class="mono">res→start</td><td class="mono">—</td><td class="mono">dma_playback.addr = base+I2STXD</td><td>trao địa chỉ FIFO cho Lớp 3</td></tr>
+          <tr><td>dai probe</td><td class="mono">samsung_i2s_dai_probe</td><td class="mono">I2SMOD</td><td class="mono">I2SCON, I2SMOD, I2SFIC</td><td class="mono">CON_RSTCLR=1; TXR clr; FIC_TX/RXFLUSH; CDCLKCON=1</td><td>nhả reset, dọn FIFO, gate MCLK mặc định</td></tr>
+          <tr><td>set_fmt</td><td class="mono">i2s_set_fmt</td><td class="mono">I2SMOD</td><td class="mono">I2SMOD</td><td class="mono">SDF[6:5], LRP[7], MSS[11]</td><td>kiểu khung + master/slave → hình dạng BCLK/LRCLK/SDATA</td></tr>
+          <tr><td>set_sysclk</td><td class="mono">i2s_set_sysclk</td><td class="mono">I2SMOD</td><td class="mono">I2SMOD</td><td class="mono">OPCLK[31:30], CDCLKCON[12], RCLKSRC[10]</td><td>chọn nguồn RCLK, bật/gate MCLK ra codec</td></tr>
+          <tr><td>hw_params</td><td class="mono">i2s_hw_params</td><td class="mono">I2SMOD</td><td class="mono">I2SMOD</td><td class="mono">BLCP/BLCS/BLC, DC1/DC2_EN; frmclk=rate</td><td>độ rộng mẫu + số kênh trong khung</td></tr>
+          <tr><td>prepare / trigger START</td><td class="mono">config_setup</td><td class="mono">I2SMOD (get_rfs/bfs/blc)</td><td class="mono">I2SMOD, I2SPSR</td><td class="mono">RCLK[4:3], BCLK[2:1]; PSR_PSREN + psr-1</td><td>chốt tỉ lệ clock, bật prescaler</td></tr>
+          <tr><td>trigger START</td><td class="mono">i2s_trigger → i2s_txctrl(1)</td><td class="mono">I2SCON, I2SMOD</td><td class="mono">I2SCON, I2SMOD</td><td class="mono">CON_ACTIVE, CON_TXDMA_ACTIVE, ~PAUSE; TXR</td><td>khối chạy, request DMA bật, dây có tín hiệu</td></tr>
+          <tr><td>running (poll)</td><td class="mono">i2s_delay</td><td class="mono">I2SFIC / I2SFICS</td><td class="mono">—</td><td class="mono">FIC_TXCOUNT / RXCOUNT</td><td>báo số frame còn trong FIFO cho ALSA</td></tr>
+          <tr><td>trigger STOP</td><td class="mono">i2s_trigger → i2s_txctrl(0)</td><td class="mono">I2SCON, I2SMOD</td><td class="mono">I2SCON, I2SMOD, I2SFIC</td><td class="mono">CON_TXDMA_PAUSE, ~CON_TXDMA_ACTIVE, ~CON_ACTIVE; FIC_TXFLUSH</td><td>ngừng request, tắt khối nếu rảnh, dọn FIFO</td></tr>
+          <tr><td>shutdown</td><td class="mono">i2s_shutdown</td><td class="mono">—</td><td class="mono">— (chỉ cờ mode)</td><td class="mono">rfs=bfs=0</td><td>bỏ ràng buộc clock cho lần mở sau</td></tr>
+          <tr><td>runtime suspend</td><td class="mono">i2s_runtime_suspend</td><td class="mono">I2SMOD, I2SCON, I2SPSR</td><td class="mono">— (cache)</td><td class="mono">suspend_i2s{mod,con,psr}</td><td>lưu 3 register, rồi tắt clock</td></tr>
+          <tr><td>runtime resume</td><td class="mono">i2s_runtime_resume</td><td class="mono">—</td><td class="mono">I2SCON, I2SMOD, I2SPSR</td><td class="mono">ghi trả nguyên xi, thứ tự CON→MOD→PSR</td><td>khôi phục toàn bộ cấu hình sau khi bật clock</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========== 7 · TIMELINE ========== -->
+  <section>
+    <h2><span class="num">7</span>Register write timeline — một phiên playback</h2>
+    <p class="claim">
+      Đọc <code>i2s.c</code> như state machine của phần cứng: mỗi pha ghi vào lane nào,
+      đổi bit gì. <span class="rwtext">●</span> ghi · <span class="rotext">○</span> đọc.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 4 — 4 register lane × các pha từ probe đến STOP</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1100 360" role="img"
+          aria-label="Bảng thời gian. Trục ngang 10 pha: probe, dai_probe, set_fmt, set_sysclk, hw_params, prepare tức config_setup, trigger START, running, trigger STOP, runtime_resume. Trục dọc 4 lane thanh ghi: I2SMOD, I2SPSR, I2SCON, I2SFIC. Lane I2SMOD có dấu ghi ở dai_probe với trường TXR, ở set_fmt với SDF LRP MSS, ở set_sysclk với OPCLK CDCLKCON RCLKSRC, ở hw_params với BLC và DCn, ở config_setup với RFS và BFS, ở START với TXR, ở STOP với TXR, ở runtime_resume phục hồi. Lane I2SPSR có dấu ghi ở config_setup với PSR_PSREN và psr trừ 1, và ở runtime_resume; dấu đọc ở runtime_suspend. Lane I2SCON có dấu ghi ở dai_probe với RSTCLR, ở START với ACTIVE và TXDMA_ACTIVE, ở STOP với các bit PAUSE và xoá ACTIVE, ở runtime_resume; dấu đọc ở runtime_suspend. Lane I2SFIC có dấu ghi ở dai_probe với FLUSH, ở STOP với TXFLUSH; dấu đọc ở running khi i2s_delay đọc số đếm FIFO.">
+          <defs>
+            <marker id="mk-a4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <!-- phase columns -->
+          <g class="lbl-m" text-anchor="middle">
+            <text x="120" y="34">probe</text>
+            <text x="220" y="34">dai_probe</text>
+            <text x="320" y="34">set_fmt</text>
+            <text x="425" y="34">set_sysclk</text>
+            <text x="530" y="34">hw_params</text>
+            <text x="640" y="34">prepare</text>
+            <text x="750" y="34">START</text>
+            <text x="850" y="34">running</text>
+            <text x="950" y="34">STOP</text>
+            <text x="1050" y="34">rt_resume</text>
+          </g>
+          <g class="rule">
+            <line x1="120" y1="42" x2="120" y2="300"/><line x1="220" y1="42" x2="220" y2="300"/>
+            <line x1="320" y1="42" x2="320" y2="300"/><line x1="425" y1="42" x2="425" y2="300"/>
+            <line x1="530" y1="42" x2="530" y2="300"/><line x1="640" y1="42" x2="640" y2="300"/>
+            <line x1="750" y1="42" x2="750" y2="300"/><line x1="850" y1="42" x2="850" y2="300"/>
+            <line x1="950" y1="42" x2="950" y2="300"/><line x1="1050" y1="42" x2="1050" y2="300"/>
+          </g>
+
+          <!-- lane baselines -->
+          <g>
+            <line class="edge" x1="80" y1="90" x2="1080" y2="90"/>
+            <line class="edge" x1="80" y1="150" x2="1080" y2="150"/>
+            <line class="edge" x1="80" y1="210" x2="1080" y2="210"/>
+            <line class="edge" x1="80" y1="270" x2="1080" y2="270"/>
+          </g>
+          <g class="t-mono t-b" font-size="10">
+            <text x="20" y="94">I2SMOD</text>
+            <text x="20" y="154">I2SPSR</text>
+            <text x="20" y="214">I2SCON</text>
+            <text x="20" y="274">I2SFIC</text>
+          </g>
+
+          <!-- I2SMOD marks -->
+          <g>
+            <circle class="rwtext" cx="220" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="220" y="78" text-anchor="middle">TXR</text>
+            <circle cx="320" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="320" y="78" text-anchor="middle">SDF·LRP·MSS</text>
+            <circle cx="425" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="425" y="78" text-anchor="middle">OPCLK·CDCLK·SRC</text>
+            <circle cx="530" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="530" y="78" text-anchor="middle">BLC·DCn</text>
+            <circle cx="640" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="640" y="78" text-anchor="middle">RFS·BFS</text>
+            <circle cx="750" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="750" y="106" text-anchor="middle">TXR</text>
+            <circle cx="950" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="950" y="106" text-anchor="middle">TXR</text>
+            <circle cx="1050" cy="90" r="4" fill="var(--rw)"/><text class="lbl-m" x="1050" y="78" text-anchor="middle">restore</text>
+          </g>
+          <!-- I2SPSR marks -->
+          <g>
+            <circle cx="640" cy="150" r="4" fill="var(--rw)"/><text class="lbl-m" x="640" y="138" text-anchor="middle">PSREN·psr-1</text>
+            <circle cx="1050" cy="150" r="4" fill="var(--rw)"/><text class="lbl-m" x="1050" y="138" text-anchor="middle">restore</text>
+          </g>
+          <!-- I2SCON marks -->
+          <g>
+            <circle cx="220" cy="210" r="4" fill="var(--rw)"/><text class="lbl-m" x="220" y="198" text-anchor="middle">RSTCLR</text>
+            <circle cx="750" cy="210" r="4" fill="var(--rw)"/><text class="lbl-m" x="750" y="198" text-anchor="middle">ACTIVE·TXDMA_ACT</text>
+            <circle cx="950" cy="210" r="4" fill="var(--rw)"/><text class="lbl-m" x="950" y="226" text-anchor="middle">PAUSE·~ACTIVE</text>
+            <circle cx="1050" cy="210" r="4" fill="var(--rw)"/><text class="lbl-m" x="1050" y="198" text-anchor="middle">restore</text>
+          </g>
+          <!-- I2SFIC marks -->
+          <g>
+            <circle cx="220" cy="270" r="4" fill="var(--rw)"/><text class="lbl-m" x="220" y="258" text-anchor="middle">FLUSH ×3</text>
+            <circle cx="850" cy="270" r="4.5" fill="none" stroke="var(--ro)" stroke-width="1.6"/><text class="lbl-m" x="850" y="258" text-anchor="middle">read TXCOUNT</text>
+            <circle cx="950" cy="270" r="4" fill="var(--rw)"/><text class="lbl-m" x="950" y="286" text-anchor="middle">TXFLUSH</text>
+          </g>
+
+          <text class="lbl" x="80" y="330">runtime_suspend (không vẽ cột): ĐỌC cả I2SMOD·I2SCON·I2SPSR vào cache rồi tắt clock — rt_resume ghi trả theo thứ tự CON → MOD → PSR.</text>
+        </svg>
+      </div>
+      <figcaption>
+        Nhìn ngang một lane thấy “tiểu sử” một register. <code>I2SMOD</code> bị chạm ở
+        gần như mọi pha — vì 5 nhóm bit độc lập. <code>I2SPSR</code> chỉ 1 lần thật sự
+        (config_setup). <code>I2SCON</code> là công tắc chạy/dừng. <code>I2SFIC</code>
+        chỉ dọn dẹp + cấp số liệu độ trễ. Sau <code>START</code>, phần cứng tự chạy: DMA
+        ↔ FIFO ↔ serializer không cần CPU cho tới <code>STOP</code>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 8 · MASTER DIAGRAM ========== -->
+  <section>
+    <h2><span class="num">★</span>Samsung I2S Hardware Architecture</h2>
+    <p class="claim">
+      Ba đường tách biệt trên một hình: <span class="rotext">clock</span> (nguồn → PSR →
+      MCLK → RFS/BFS → BCLK/LRCLK), <span class="rwtext">data</span> (RAM → DMA → I2STXD
+      → FIFO → serializer → SDATA), <b>control</b> (CPU <code>writel()</code> → 3
+      register). Trên mỗi khối: register + hàm Linux.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 5 — clock path · data path · control path</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1040 520" role="img"
+          aria-label="Sơ đồ kiến trúc phần cứng. Đường clock màu amber: op_clk từ i2s_opclk0 hoặc opclk1, qua I2SPSR chia psr với PSR_PSREN, do config_setup ghi, ra MCLK 12.288 MHz; MCLK chia theo trường RFS trong I2SMOD ra LRCLK 48 kHz; trường BFS trong I2SMOD ra BCLK 1.536 MHz; MCLK cũng ra chân OPCLK cấp cho Codec, do i2s_set_sysclk và CDCLKCON điều khiển. Đường data màu accent: RAM ring buffer, DMA channel với địa chỉ đích regs_base cộng I2STXD, ghi vào thanh ghi I2STXD, đẩy vào TX FIFO, serializer rút theo BCLK ra chân SDATA, tới Codec rồi DAC rồi loa. Đường control màu foreground: CPU writel, i2s_set_fmt và i2s_hw_params và config_setup ghi I2SMOD; config_setup ghi I2SPSR; i2s_txctrl và i2s_trigger ghi I2SCON các bit ACTIVE và TXDMA_ACTIVE, chính bit ACTIVE cho phép serializer chạy và bit TXDMA_ACTIVE bật chân yêu-cầu-DMA.">
+          <defs>
+            <marker id="mk-a5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-d5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-c5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <g font-family="Overpass Mono, monospace" font-size="10">
+            <line class="clk"  x1="820" y1="22" x2="846" y2="22" marker-end="url(#mk-c5)"/><text class="lbl" x="852" y="26">clock path</text>
+            <line class="data" x1="820" y1="40" x2="846" y2="40" marker-end="url(#mk-d5)"/><text class="lbl" x="852" y="44">data path</text>
+            <line class="edge" x1="820" y1="58" x2="846" y2="58" marker-end="url(#mk-a5)"/><text class="lbl" x="852" y="62">control (writel)</text>
+          </g>
+
+          <!-- CLOCK column -->
+          <rect class="box" x="40" y="40" width="200" height="46" rx="7"/>
+          <text class="t-mono t-b" x="140" y="60" text-anchor="middle" font-size="10">op_clk (opclk0/1)</text>
+          <text class="lbl-m" x="140" y="75" text-anchor="middle">nguồn RCLK · SoC</text>
+
+          <rect class="box-ro" x="40" y="120" width="200" height="52" rx="7"/>
+          <text class="t-mono t-b" x="140" y="140" text-anchor="middle" font-size="10">I2SPSR ÷ psr</text>
+          <text class="lbl-m" x="140" y="156" text-anchor="middle">PSR_PSREN · psr-1</text>
+          <text class="clk-t" x="140" y="168" text-anchor="middle">config_setup()</text>
+
+          <rect class="box-ro" x="40" y="206" width="200" height="46" rx="7"/>
+          <text class="t-mono t-b" x="140" y="226" text-anchor="middle" font-size="10">MCLK 12.288 MHz</text>
+          <text class="lbl-m" x="140" y="241" text-anchor="middle">= RFS × Fs</text>
+
+          <rect class="box" x="20" y="300" width="120" height="52" rx="7"/>
+          <text class="t-mono t-b" x="80" y="320" text-anchor="middle" font-size="10">LRCLK 48k</text>
+          <text class="lbl-m" x="80" y="335" text-anchor="middle">I2SMOD RFS[4:3]</text>
+
+          <rect class="box" x="150" y="300" width="120" height="52" rx="7"/>
+          <text class="t-mono t-b" x="210" y="320" text-anchor="middle" font-size="10">BCLK 1.536M</text>
+          <text class="lbl-m" x="210" y="335" text-anchor="middle">I2SMOD BFS[2:1]</text>
+
+          <line class="clk" x1="140" y1="86" x2="140" y2="118" marker-end="url(#mk-c5)"/>
+          <line class="clk" x1="140" y1="172" x2="140" y2="204" marker-end="url(#mk-c5)"/>
+          <line class="clk" x1="120" y1="252" x2="90" y2="298" marker-end="url(#mk-c5)"/>
+          <line class="clk" x1="160" y1="252" x2="200" y2="298" marker-end="url(#mk-c5)"/>
+          <line class="clk" x1="240" y1="228" x2="700" y2="228" marker-end="url(#mk-c5)"/>
+          <text class="clk-t" x="460" y="220" text-anchor="middle">OPCLK pin → Codec  (CDCLKCON · i2s_set_sysclk)</text>
+
+          <!-- DATA row -->
+          <rect class="box" x="300" y="300" width="120" height="52" rx="7"/>
+          <text class="t-mono t-b" x="360" y="320" text-anchor="middle" font-size="10">RAM</text>
+          <text class="lbl-m" x="360" y="335" text-anchor="middle">ALSA buffer</text>
+
+          <rect class="box" x="440" y="300" width="130" height="52" rx="7"/>
+          <text class="t-mono t-b" x="505" y="320" text-anchor="middle" font-size="10">DMA channel</text>
+          <text class="lbl-m" x="505" y="335" text-anchor="middle">dst = base+I2STXD</text>
+
+          <rect class="box-rw" x="590" y="300" width="110" height="52" rx="7"/>
+          <text class="t-mono t-b" x="645" y="320" text-anchor="middle" font-size="10">I2STXD</text>
+          <text class="lbl-m" x="645" y="335" text-anchor="middle">MMIO reg</text>
+
+          <rect class="box" x="720" y="300" width="110" height="52" rx="7"/>
+          <text class="t-mono t-b" x="775" y="320" text-anchor="middle" font-size="10">TX FIFO</text>
+
+          <rect class="box" x="850" y="300" width="120" height="52" rx="7"/>
+          <text class="t-mono t-b" x="910" y="320" text-anchor="middle" font-size="10">Serializer</text>
+          <text class="lbl-m" x="910" y="335" text-anchor="middle">↑BCLK</text>
+
+          <rect class="box" x="850" y="410" width="120" height="46" rx="7"/>
+          <text class="t-mono t-b" x="910" y="430" text-anchor="middle" font-size="10">Codec → DAC</text>
+          <text class="lbl-m" x="910" y="445" text-anchor="middle">→ loa</text>
+
+          <line class="data" x1="420" y1="326" x2="438" y2="326" marker-end="url(#mk-d5)"/>
+          <line class="data" x1="570" y1="326" x2="588" y2="326" marker-end="url(#mk-d5)"/>
+          <text class="data-t" x="579" y="316" text-anchor="middle">writel</text>
+          <line class="data" x1="700" y1="326" x2="718" y2="326" marker-end="url(#mk-d5)"/>
+          <line class="data" x1="830" y1="326" x2="848" y2="326" marker-end="url(#mk-d5)"/>
+          <line class="data" x1="910" y1="352" x2="910" y2="408" marker-end="url(#mk-d5)"/>
+          <text class="data-t" x="918" y="384">SDATA</text>
+
+          <!-- BCLK to serializer -->
+          <line class="clk" x1="210" y1="352" x2="210" y2="380 " marker-end="url(#mk-c5)"/>
+          <path class="clk" d="M210 380 C210 400 860 392 900 352" marker-end="url(#mk-c5)"/>
+          <text class="clk-t" x="520" y="404" text-anchor="middle">BCLK nhịp serializer</text>
+
+          <!-- CONTROL -->
+          <rect class="box" x="380" y="40" width="150" height="44" rx="7"/>
+          <text class="t-mono t-b" x="455" y="60" text-anchor="middle" font-size="10">CPU · writel()</text>
+          <text class="lbl-m" x="455" y="75" text-anchor="middle">i2s_set_fmt / hw_params</text>
+
+          <rect class="box" x="580" y="40" width="150" height="44" rx="7"/>
+          <text class="t-mono t-b" x="655" y="60" text-anchor="middle" font-size="10">I2SMOD / I2SPSR</text>
+          <text class="lbl-m" x="655" y="75" text-anchor="middle">format · clock ratio</text>
+
+          <rect class="box-rw" x="580" y="110" width="200" height="52" rx="7"/>
+          <text class="t-mono t-b" x="680" y="130" text-anchor="middle" font-size="10">I2SCON</text>
+          <text class="lbl-m" x="680" y="146" text-anchor="middle">ACTIVE=1 → serializer chạy</text>
+          <text class="lbl-m" x="680" y="158" text-anchor="middle">TXDMA_ACTIVE=1 → req-DMA bật</text>
+
+          <line class="edge" x1="530" y1="62" x2="578" y2="62" marker-end="url(#mk-a5)"/>
+          <line class="edge" x1="655" y1="84" x2="655" y2="108" marker-end="url(#mk-a5)"/>
+          <text class="lbl-m" x="663" y="100">i2s_trigger → i2s_txctrl(1)</text>
+          <line class="edge" x1="655" y1="84" x2="150" y2="128" marker-end="url(#mk-a5)"/>
+          <text class="lbl-m" x="360" y="96" text-anchor="middle">config_setup → I2SPSR</text>
+          <line class="edge-d" x1="680" y1="162" x2="880" y2="300" marker-end="url(#mk-a5)"/>
+          <text class="lbl-m" x="800" y="238">ACTIVE gates serializer</text>
+          <line class="edge-d" x1="600" y1="162" x2="505" y2="298" marker-end="url(#mk-a5)"/>
+          <text class="lbl-m" x="520" y="250" text-anchor="middle">TXDMA_ACTIVE → DMA req</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>CPU/software</b> chỉ chạm 3 register (đường mảnh). <b>DMA</b> chuyển word
+        RAM→<code>I2STXD</code> (đường đậm). <b>Serializer</b> biến FIFO thành
+        <code>SDATA</code> theo nhịp <b>BCLK</b>. <b>Clock</b> (amber) do
+        <code>I2SPSR</code> + trường RFS/BFS của <code>I2SMOD</code> quyết định. Sau khi
+        <code>CON_ACTIVE</code> và <code>CON_TXDMA_ACTIVE</code> = 1, ba khối
+        DMA/FIFO/serializer tự chạy vòng.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 9 · BARE METAL ========== -->
+  <section class="prose">
+    <h2><span class="num">9</span>Boss level — phát 1 sample, chỉ bằng register</h2>
+    <p class="claim">
+      Không dùng khái niệm ASoC. Chỉ CPU, DMA, RAM và các thanh ghi. Đây là điều
+      <code>i2s.c</code> thực sự làm bên dưới lớp callback.
+    </p>
+    <div class="seq">SETUP (một lần)
+ 1. ioremap vùng SFR  →  base
+ 2. bật clock lõi "iis"  +  nguồn op_clk
+ 3. I2SCON |= CON_RSTCLR                    ; nhả reset khối
+ 4. I2SFIC |= FIC_TXFLUSH ; chờ ~1µs ; &= ~FIC_TXFLUSH   ; FIFO sạch
+ 5. I2SMOD :  SDF=IIS  LRP=0  MSS=0         ; khung I2S, CPU là master
+             BLCP=16bit                     ; mẫu 16-bit
+             RFS=256FS  BFS=32FS            ; MCLK=256·Fs, BCLK=32·Fs
+             CDCLKCON=0                      ; phát MCLK ra chân codec
+ 6. psr = op_clk_rate / (48000 · 256)
+    I2SPSR = ((psr-1) &lt;&lt; 8) | PSR_PSREN    ; chốt MCLK = 12.288 MHz
+
+CHẠY
+ 7. DMA: src = &buffer_RAM (tăng)           ; dst = base + I2STXD (cố định)
+         width = 4 byte ; chế độ cyclic
+ 8. dmaengine issue  →  DMA bắt đầu chép RAM → I2STXD
+ 9. I2SMOD TXR = TXONLY
+10. I2SCON |=  CON_ACTIVE | CON_TXDMA_ACTIVE
+    I2SCON &amp;= ~CON_TXDMA_PAUSE &amp; ~CON_TXCH_PAUSE
+        →  serializer bắt đầu tạo BCLK/LRCLK
+        →  khối kéo "DMA request" mỗi khi FIFO còn chỗ
+        →  DMA ghi word vào I2STXD  →  TX FIFO
+        →  serializer dịch từng bit ra SDATA theo ↓BCLK
+        →  receiver (codec) chốt bit ở ↑BCLK
+   (lặp: FIFO đầy → CON_TXFIFO_FULL=1 → request nghỉ; FIFO vơi → request lại)
+
+DỪNG
+11. I2SCON |= CON_TXDMA_PAUSE ; &= ~CON_TXDMA_ACTIVE
+12. nếu không còn hướng nào chạy: I2SCON &= ~CON_ACTIVE
+13. I2SFIC |= FIC_TXFLUSH (rồi clear)       ; bỏ mẫu thừa
+14. dmaengine terminate</div>
+    <h3>Map ngược vào ASoC</h3>
+    <ul>
+      <li>1–2 → <code>samsung_i2s_probe()</code></li>
+      <li>3–4, gate CDCLK → <code>samsung_i2s_dai_probe()</code></li>
+      <li>5 (SDF/LRP/MSS) → <code>i2s_set_fmt()</code>; (BLCP) → <code>i2s_hw_params()</code>; (RFS/BFS) → <code>config_setup()</code></li>
+      <li>5 (CDCLKCON=0) → <code>i2s_set_sysclk(SAMSUNG_I2S_CDCLK, …, CLOCK_OUT)</code></li>
+      <li>6 → <code>config_setup()</code> (nhánh <code>!slave_mode &amp;&amp; !QUIRK_NO_MUXPSR</code>)</li>
+      <li>7 → <code>snd_soc_dai_init_dma_data()</code> + Lớp 3 <code>dmaengine.c</code></li>
+      <li>8 → <code>snd_dmaengine_pcm_trigger(START)</code></li>
+      <li>9–10 → <code>i2s_trigger(START)</code> → <code>config_setup()</code> → <code>i2s_txctrl(1)</code></li>
+      <li>11–13 → <code>i2s_trigger(STOP)</code> → <code>i2s_txctrl(0)</code> + <code>i2s_fifo()</code></li>
+    </ul>
+  </section>
+
+  <footer>
+    Nguồn: <code>sound/soc/samsung/i2s-regs.h</code> (toàn bộ) và
+    <code>sound/soc/samsung/i2s.c</code> — <code>i2s_txctrl</code> :391,
+    <code>i2s_fifo</code> :473, <code>i2s_set_sysclk</code> :497,
+    <code>i2s_set_fmt</code> :623, <code>i2s_hw_params</code> :719,
+    <code>config_setup</code> :868, <code>i2s_trigger</code> :929,
+    <code>i2s_delay</code> :1006, <code>i2s_runtime_suspend/resume</code> :1207,
+    <code>i2sv3_regs</code> :1562. Bit-offset theo <code>i2sv3_regs</code> (SDF=5, LRP=7,
+    RCLK=3, BCLK=1, MSS=11, RCLKSRC=10, CDCLKCON=12, TXR=8); đời v6/v7 dời offset qua
+    <code>variant_regs</code>. Số ví dụ (49.152 MHz, PSR 4) là minh hoạ. Sơ đồ vẽ tay
+    bằng inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "samsung-i2s-regmap-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>

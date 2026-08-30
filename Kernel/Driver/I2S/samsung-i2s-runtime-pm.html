@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Samsung I2S Runtime PM</title>
+<meta name="description" content="Power management của sound/soc/samsung/i2s.c: i2s_runtime_suspend/resume lưu-khôi phục I2SMOD/I2SCON/I2SPSR và tắt-bật clock; system sleep tái dùng chính hai callback đó; pm_runtime_get_sync/put bao quanh mọi truy cập thanh ghi theo 3 kiểu bracket.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  html{color-scheme:light dark}
+  img{max-width:100%;height:auto}
+  [hidden]{display:none!important}
+
+  :root{
+    --bg:#edecea;
+    --surface:#ffffff;
+    --surface-2:#f4f3f0;
+    --ink:#1e1c19;
+    --muted:#5f5b53;
+    --line:#d3d0c8;
+    --line-strong:#9a958a;
+    --wake:#b0710d;
+    --wake-soft:#f2e6d1;
+    --sleep-soft:#e8e5de;
+    --grid:#e3e1db;
+    --shadow:0 1px 2px rgba(25,20,10,.06),0 10px 26px rgba(25,20,10,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#100f0d;
+      --surface:#181713;
+      --surface-2:#1e1c18;
+      --ink:#e2e0d9;
+      --muted:#918c80;
+      --line:#2b2924;
+      --line-strong:#48443a;
+      --wake:#e0a44a;
+      --wake-soft:#322613;
+      --sleep-soft:#211f1a;
+      --grid:#242119;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#100f0d;
+    --surface:#181713;
+    --surface-2:#1e1c18;
+    --ink:#e2e0d9;
+    --muted:#918c80;
+    --line:#2b2924;
+    --line-strong:#48443a;
+    --wake:#e0a44a;
+    --wake-soft:#322613;
+    --sleep-soft:#211f1a;
+    --grid:#242119;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"DM Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 110px}
+  .prose{max-width:73ch}
+  .prose p,.prose li{max-width:73ch}
+
+  code,.mono{font-family:"DM Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.85em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.06em .38em}
+
+  .eyebrow{
+    font-family:"DM Mono",monospace;font-size:12px;font-weight:500;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--wake)}
+
+  h1{
+    font-family:"DM Sans",sans-serif;font-weight:700;
+    font-size:clamp(27px,4.6vw,42px);line-height:1.1;letter-spacing:-.02em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18.5px);margin:0 0 20px;max-width:70ch}
+
+  h2{
+    font-family:"DM Sans",sans-serif;font-weight:700;
+    font-size:clamp(18px,2.5vw,23px);letter-spacing:-.01em;
+    margin:62px 0 6px;text-wrap:balance;
+  }
+  h2 .num{font-family:"DM Mono",monospace;color:var(--wake);margin-right:.5em;font-weight:500;font-size:.82em}
+  h3{font-size:15px;font-weight:700;margin:24px 0 8px}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 22px;max-width:71ch}
+  p{margin:0 0 16px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--wake);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  .callout{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--wake);
+    border-radius:8px;padding:14px 18px;font-size:14px;margin:0 0 20px;max-width:72ch;
+  }
+
+  figure{margin:22px 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:660px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:82ch}
+  .fig-tag{
+    font-family:"DM Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"DM Sans",sans-serif;font-size:12px}
+  .diagram .t-mono{font-family:"DM Mono",monospace}
+  .diagram .t-b{font-weight:600}
+  .diagram .lbl{fill:var(--muted);font-size:10.5px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"DM Mono",monospace;font-size:9.5px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.2}
+  .diagram .box-wake{fill:var(--wake-soft);stroke:var(--wake);stroke-width:1.5}
+  .diagram .box-store{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.3;stroke-dasharray:none}
+  .diagram .edge{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .edge-d{stroke:var(--line-strong);stroke-width:1.25;fill:none;stroke-dasharray:4 3}
+  .diagram .wk{stroke:var(--wake);stroke-width:2.2;fill:none}
+  .diagram .wk-t{fill:var(--wake);font-weight:600;font-family:"DM Mono",monospace;font-size:9.5px}
+  .diagram .bar-wake{fill:var(--wake-soft);stroke:var(--wake);stroke-width:1.2}
+  .diagram .bar-sleep{fill:var(--sleep-soft);stroke:var(--line-strong);stroke-width:1;stroke-dasharray:4 3}
+  .diagram .grid{stroke:var(--grid);stroke-width:1}
+  [id^="mk-a"] path{fill:var(--line-strong)}
+  [id^="mk-w"] path{fill:var(--wake)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:11.5px;color:var(--muted);margin:10px 2px 0;font-family:"DM Mono",monospace}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .sw{width:16px;height:12px;border-radius:2px;border:1px solid}
+  .sw-wake{background:var(--wake-soft);border-color:var(--wake)}
+  .sw-sleep{background:var(--sleep-soft);border-color:var(--line-strong);border-style:dashed}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);margin:6px 0 0}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:640px}
+  th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"DM Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  td.mono,td .mono{font-family:"DM Mono",monospace;font-size:11px}
+  tbody tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;font-family:"DM Mono",monospace;font-size:9.5px;font-weight:500;padding:0 6px;border-radius:3px;border:1px solid var(--wake);color:var(--wake)}
+
+  .seq{font-family:"DM Mono",monospace;font-size:12px;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;margin:8px 0 0;white-space:pre;overflow-x:auto;line-height:1.7}
+
+  .watch{background:var(--wake-soft);border:1px solid var(--wake);border-radius:12px;padding:20px 22px 8px;margin:8px 0 0}
+  .watch h3{font-family:"DM Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--wake);margin:0 0 12px;font-weight:500}
+  .watch ul{padding-left:20px}
+  .watch li{margin-bottom:9px}
+
+  footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:82ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--wake);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">sound/soc/samsung/i2s.c · power management</p>
+    <h1>Samsung I2S Runtime PM</h1>
+    <p class="lede">
+      PM ở đây làm đúng một việc: <b>tắt clock của khối I2S giữa hai lần dùng</b> để đỡ
+      tốn điện. Vì tắt clock thì thanh ghi mất nội dung, driver <b>lưu 3 thanh ghi</b>
+      trước khi tắt và <b>ghi trả</b> sau khi bật. System sleep không viết thêm dòng
+      nào — nó gọi lại chính cặp callback runtime.
+    </p>
+    <p class="callout">
+      Toàn bộ cấu hình khối I2S nằm gọn trong <code>I2SMOD</code> (format + clock +
+      master/slave), <code>I2SCON</code> (enable + DMA + <code>RSTCLR</code>) và
+      <code>I2SPSR</code> (prescaler). Lưu 3 cái đó = lưu tất cả. FIFO không cần lưu vì
+      <code>trigger(STOP)</code> đã flush và luồng đã dừng.
+    </p>
+  </header>
+
+  <!-- ========== 1 ========== -->
+  <section>
+    <h2><span class="num">1</span>Hai lối vào, một hiện thực</h2>
+    <p class="claim">
+      <b>Runtime PM</b> (khi rảnh) và <b>system sleep</b> (khi máy ngủ) hội tụ vào cùng
+      <code>i2s_runtime_suspend()</code> / <code>i2s_runtime_resume()</code>. System
+      sleep chỉ là <code>pm_runtime_force_suspend/resume</code> — hàm này <i>gọi
+      callback runtime nếu thiết bị đang active, còn không thì không làm gì</i>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — SET_SYSTEM_SLEEP_PM_OPS &amp; autosuspend → cùng SET_RUNTIME_PM_OPS</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 960 300" role="img"
+          aria-label="Hai hộp ở trên. Bên trái System sleep: component có i2s_suspend và i2s_resume trỏ vào pm_runtime_force_suspend và force_resume, và dev_pm_ops có SET_SYSTEM_SLEEP_PM_OPS cũng dùng chính force_suspend force_resume. Bên phải Runtime idle: khi usage count về 0 thì PM core tự autosuspend. Cả hai mũi tên đi xuống hội tụ vào một hộp giữa: i2s_runtime_suspend và i2s_runtime_resume, khai qua SET_RUNTIME_PM_OPS. Hộp dưới cùng ghi nội dung callback: bước một đọc I2SMOD I2SCON I2SPSR lưu vào priv suspend_ ; bước hai clk_disable_unprepare op_clk rồi clk. Nhãn trên mũi tên bên trái: force_suspend chỉ gọi callback runtime nếu dev đang active, nếu đã suspended thì bỏ qua.">
+          <defs>
+            <marker id="mk-a1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="50" y="24" width="380" height="76" rx="8"/>
+          <text class="t-mono t-b" x="66" y="45" font-size="11">System sleep</text>
+          <text class="lbl-m" x="66" y="63">component .suspend/.resume = i2s_suspend/i2s_resume</text>
+          <text class="lbl-m" x="66" y="78">dev_pm_ops: SET_SYSTEM_SLEEP_PM_OPS(</text>
+          <text class="lbl-m" x="66" y="91">   pm_runtime_force_suspend, ..._force_resume)</text>
+
+          <rect class="box" x="530" y="24" width="380" height="76" rx="8"/>
+          <text class="t-mono t-b" x="546" y="45" font-size="11">Runtime idle</text>
+          <text class="lbl-m" x="546" y="63">usage count → 0</text>
+          <text class="lbl-m" x="546" y="80">PM core tự động autosuspend</text>
+
+          <path class="edge" d="M240 100 C240 128 360 140 470 160" marker-end="url(#mk-a1)"/>
+          <text class="lbl-m" x="150" y="132">pm_runtime_force_suspend(dev):</text>
+          <text class="lbl-m" x="150" y="146">gọi runtime cb NẾU dev active;</text>
+          <text class="lbl-m" x="150" y="160">đã suspended → không làm gì</text>
+
+          <path class="edge" d="M720 100 C720 128 600 140 490 160" marker-end="url(#mk-a1)"/>
+          <text class="lbl-m" x="640" y="140">khi count = 0</text>
+
+          <rect class="box-wake" x="230" y="164" width="500" height="52" rx="9"/>
+          <text class="t-mono t-b" x="480" y="185" text-anchor="middle" font-size="11">i2s_runtime_suspend(dev)  /  i2s_runtime_resume(dev)</text>
+          <text class="lbl-m" x="480" y="202" text-anchor="middle">SET_RUNTIME_PM_OPS(i2s_runtime_suspend, i2s_runtime_resume, NULL)</text>
+
+          <path class="edge" d="M480 216 L480 240" marker-end="url(#mk-a1)"/>
+
+          <rect class="box" x="120" y="242" width="720" height="46" rx="9"/>
+          <text class="lbl-m" x="140" y="261">SUSPEND:  ① readl(I2SMOD/I2SCON/I2SPSR) → priv->suspend_*   ② clk_disable_unprepare(op_clk); clk_disable_unprepare(clk)</text>
+          <text class="lbl-m" x="140" y="278">RESUME :  ① clk_prepare_enable(clk); clk_prepare_enable(op_clk)   ② writel  I2SCON → I2SMOD → I2SPSR</text>
+        </svg>
+      </div>
+      <figcaption>
+        Có <b>hai</b> hook system-sleep trỏ về cùng chỗ: <code>samsung_i2s_component
+        .suspend/.resume</code> (ASoC gọi khi sound card ngủ) và
+        <code>samsung_i2s_driver.driver.pm</code> (PM core gọi khi đi qua device tree).
+        Cả hai = <code>pm_runtime_force_suspend/resume</code>. Kết quả: <b>zero</b> logic
+        lưu/khôi phục riêng cho system sleep — nó tái dùng runtime PM. Nếu
+        <code>CONFIG_PM</code> tắt, <code>i2s_suspend/i2s_resume</code> là
+        <code>NULL</code> và không có runtime cb.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 2 ========== -->
+  <section>
+    <h2><span class="num">2</span>Callback làm gì — lưu 3, tắt clock / bật clock, ghi trả 3</h2>
+    <p class="claim">
+      Thứ tự có chủ đích: <b>lưu xong mới tắt clock</b>; <b>bật clock xong mới ghi
+      trả</b>; ghi trả theo <code>CON → MOD → PSR</code>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — i2s_runtime_suspend / resume qua bản lưu u32 × 3</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 340" role="img"
+          aria-label="Ở giữa trên là bản lưu ba biến u32: priv suspend_i2smod, suspend_i2scon, suspend_i2spsr. Cột trái i2s_runtime_suspend: đọc readl I2SMOD, readl I2SCON, readl I2SPSR, ba mũi tên vào bản lưu; sau đó gạch ngang rồi clk_disable_unprepare op_clk và clk_disable_unprepare clk, nhãn clock tắt sau khi đã lưu. Cột phải i2s_runtime_resume: trước tiên clk_prepare_enable clk và clk_prepare_enable op_clk, nhãn clock bật trước khi ghi trả; sau đó ba mũi tên từ bản lưu ra: writel số 1 I2SCON, writel số 2 I2SMOD, writel số 3 I2SPSR. Ghi chú dưới: FIFO và I2STXD không lưu vì trigger STOP đã flush và luồng đã dừng; iDMA, TDM, AHB được set lại ở lần mở stream sau. Ghi chú cạnh thứ tự: CON đi trước vì mang bit RSTCLR nhả reset khối để các writel sau có hiệu lực.">
+          <defs>
+            <marker id="mk-a2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box-store" x="380" y="26" width="240" height="70" rx="8"/>
+          <text class="lbl-m" x="500" y="20" text-anchor="middle">bản lưu (u32 × 3)</text>
+          <text class="t-mono" x="500" y="46" text-anchor="middle" font-size="10">priv->suspend_i2smod</text>
+          <text class="t-mono" x="500" y="63" text-anchor="middle" font-size="10">priv->suspend_i2scon</text>
+          <text class="t-mono" x="500" y="80" text-anchor="middle" font-size="10">priv->suspend_i2spsr</text>
+
+          <!-- SUSPEND left -->
+          <text class="t-mono t-b" x="40" y="44" font-size="11">i2s_runtime_suspend()</text>
+          <g class="t-mono" font-size="10">
+            <text x="40" y="86">readl(I2SMOD)</text>
+            <text x="40" y="112">readl(I2SCON)</text>
+            <text x="40" y="138">readl(I2SPSR)</text>
+          </g>
+          <path class="edge" d="M170 82 C280 78 320 58 378 54" marker-end="url(#mk-a2)"/>
+          <path class="edge" d="M170 108 C300 100 330 66 378 62" marker-end="url(#mk-a2)"/>
+          <path class="edge" d="M170 134 C300 128 330 78 378 72" marker-end="url(#mk-a2)"/>
+
+          <line class="edge-d" x1="40" y1="158" x2="330" y2="158"/>
+          <g class="t-mono" font-size="10">
+            <text x="40" y="182">clk_disable_unprepare(op_clk)</text>
+            <text x="40" y="204">clk_disable_unprepare(clk)</text>
+          </g>
+          <text class="lbl-m" x="40" y="228">clock TẮT — sau khi đã lưu</text>
+
+          <!-- RESUME right -->
+          <text class="t-mono t-b" x="960" y="44" text-anchor="end" font-size="11">i2s_runtime_resume()</text>
+          <g class="t-mono" font-size="10" text-anchor="end">
+            <text x="960" y="86">clk_prepare_enable(clk)</text>
+            <text x="960" y="108">clk_prepare_enable(op_clk)</text>
+          </g>
+          <text class="lbl-m" x="960" y="130" text-anchor="end">clock BẬT — trước khi ghi trả</text>
+          <line class="edge-d" x1="670" y1="146" x2="960" y2="146"/>
+
+          <g class="t-mono" font-size="10" text-anchor="end">
+            <text x="960" y="176"><tspan class="wk-t">①</tspan> writel(I2SCON)</text>
+            <text x="960" y="202"><tspan class="wk-t">②</tspan> writel(I2SMOD)</text>
+            <text x="960" y="228"><tspan class="wk-t">③</tspan> writel(I2SPSR)</text>
+          </g>
+          <path class="edge" d="M622 58 C700 62 760 150 830 170" marker-end="url(#mk-a2)"/>
+          <path class="edge" d="M622 66 C710 80 780 176 830 196" marker-end="url(#mk-a2)"/>
+          <path class="edge" d="M622 74 C720 100 800 200 830 222" marker-end="url(#mk-a2)"/>
+
+          <text class="wk-t" x="500" y="118" text-anchor="middle">CON trước: bit RSTCLR[31] nhả reset khối</text>
+          <text class="lbl" x="500" y="300" text-anchor="middle">FIFO / I2STXD KHÔNG lưu — trigger STOP đã flush, luồng dừng hẳn.  ·  iDMA / TDM / I2SAHB set lại ở lần mở stream sau.</text>
+        </svg>
+      </div>
+      <figcaption>
+        Chỉ 3 thanh ghi vì chúng giữ toàn bộ trạng thái “tĩnh” của khối. <b>Không lưu
+        <code>I2SCON</code> thì mất <code>CON_RSTCLR[31]</code></b> — khối quay lại reset
+        và mọi <code>writel</code> sau đó vô hiệu; đó là lý do <code>I2SCON</code> nằm
+        trong tập lưu dù lúc suspend luồng đã dừng. <code>op_clk</code> chỉ tắt/bật nếu
+        driver có giữ nó (chế độ có mux/prescaler); <code>clk</code> (“iis”, pclk của
+        khối) luôn tắt/bật.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ========== 3 ========== -->
+  <section>
+    <h2><span class="num">3</span>Ai giữ khối “thức” — 3 kiểu bracket</h2>
+    <p class="claim">
+      <code>i2s_runtime_suspend</code> chỉ chạy khi <b>usage count về 0</b>. Ba loại
+      cặp <code>get_sync … put</code> nâng/hạ count đó, lồng nhau.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — usage count &amp; trạng thái clock qua một phiên</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1140 380" role="img"
+          aria-label="Dòng thời gian một phiên. Trên cùng các mốc: probe gọi pm_runtime_enable; dai_probe get_sync rồi put; set_fmt get_sync rồi put; startup get_sync; hw_params không gọi get chỉ WARN_ON active; prepare; trigger START get_sync; RUNNING; trigger STOP put; shutdown put; sau đó rảnh thì autosuspend. Lane giữa vẽ usage count dạng bậc thang: bằng 0 lúc đầu, lên 1 rồi về 0 ở dai_probe, lên 1 rồi về 0 ở set_fmt, lên 1 ở startup và giữ nguyên, lên 2 ở trigger START và giữ, về 1 ở STOP, về 0 ở shutdown. Lane dưới là trạng thái khối: tô amber liền khi count lớn hơn 0 nghĩa là clock bật và khối thức, tô xám nét đứt khi count bằng 0 nghĩa là clock tắt, ba thanh ghi đã lưu, khối ngủ. Có hai ngoặc: OPEN bracket từ startup tới shutdown, và RUNNING bracket lồng bên trong từ START tới STOP; hai mốc dai_probe và set_fmt là one-shot đánh thức chớp nhoáng.">
+          <defs>
+            <marker id="mk-a3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <!-- event ticks -->
+          <g class="grid">
+            <line x1="90" y1="66" x2="90" y2="300"/>
+            <line x1="215" y1="66" x2="215" y2="300"/>
+            <line x1="340" y1="66" x2="340" y2="300"/>
+            <line x1="470" y1="66" x2="470" y2="300"/>
+            <line x1="580" y1="66" x2="580" y2="300"/>
+            <line x1="670" y1="66" x2="670" y2="300"/>
+            <line x1="775" y1="66" x2="775" y2="300"/>
+            <line x1="905" y1="66" x2="905" y2="300"/>
+            <line x1="1000" y1="66" x2="1000" y2="300"/>
+            <line x1="1070" y1="66" x2="1070" y2="300"/>
+          </g>
+          <g class="lbl-m" text-anchor="middle">
+            <text x="90" y="34">probe</text><text x="90" y="46">pm_runtime_enable</text>
+            <text x="215" y="34">dai_probe</text><text x="215" y="46">get→put</text>
+            <text x="340" y="34">set_fmt</text><text x="340" y="46">get→put</text>
+            <text x="470" y="40">startup · get_sync</text>
+            <text x="580" y="34">hw_params</text><text x="580" y="46">WARN(active)</text>
+            <text x="670" y="40">prepare</text>
+            <text x="775" y="34">trigger START</text><text x="775" y="46">get_sync</text>
+            <text x="905" y="40">RUNNING</text>
+            <text x="1000" y="34">STOP</text><text x="1000" y="46">put</text>
+            <text x="1070" y="34">shutdown</text><text x="1070" y="46">put</text>
+          </g>
+
+          <!-- brackets -->
+          <path class="wk" d="M470 92 L470 100 L1070 100 L1070 92" fill="none"/>
+          <text class="wk-t" x="770" y="90" text-anchor="middle">OPEN bracket  (startup → shutdown)</text>
+          <path class="wk" d="M775 118 L775 124 L1000 124 L1000 118" fill="none"/>
+          <text class="wk-t" x="887" y="116" text-anchor="middle">RUNNING bracket  (START → STOP)</text>
+          <text class="lbl-m" x="215" y="150" text-anchor="middle">one-shot</text>
+          <text class="lbl-m" x="340" y="150" text-anchor="middle">one-shot</text>
+
+          <!-- usage count step line -->
+          <text class="lbl-m" x="20" y="204">count</text>
+          <line class="edge-d" x1="60" y1="200" x2="1120" y2="200"/>
+          <text class="lbl-m" x="46" y="204">0</text>
+          <text class="lbl-m" x="46" y="178">1</text>
+          <text class="lbl-m" x="46" y="154">2</text>
+          <polyline class="wk" points="60,200 215,200 215,176 250,176 250,200 340,200 340,176 378,176 378,200 470,200 470,176 775,176 775,152 1000,152 1000,176 1070,176 1070,200 1130,200"/>
+
+          <!-- block state bar -->
+          <text class="lbl-m" x="20" y="252">khối</text>
+          <rect class="bar-sleep" x="60" y="238" width="155" height="26"/>
+          <rect class="bar-wake"  x="215" y="238" width="35" height="26"/>
+          <rect class="bar-sleep" x="250" y="238" width="90" height="26"/>
+          <rect class="bar-wake"  x="340" y="238" width="38" height="26"/>
+          <rect class="bar-sleep" x="378" y="238" width="92" height="26"/>
+          <rect class="bar-wake"  x="470" y="238" width="600" height="26"/>
+          <rect class="bar-sleep" x="1070" y="238" width="60" height="26"/>
+          <text class="wk-t" x="770" y="255" text-anchor="middle">clock ON · khối thức</text>
+          <text class="lbl-m" x="135" y="255" text-anchor="middle">clock OFF · đã lưu · ngủ</text>
+
+          <text class="lbl" x="60" y="300">hw_params &amp; i2s_delay KHÔNG tự get_sync — chúng WARN_ON(!pm_runtime_active) và tin rằng đang trong OPEN / RUNNING bracket.</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="sw sw-wake"></i> clock on · khối thức (count &gt; 0)</span>
+        <span><i class="sw sw-sleep"></i> clock off · 3 thanh ghi đã lưu · ngủ (count = 0)</span>
+      </div>
+      <figcaption>
+        <b>OPEN bracket</b> (<code>i2s_startup</code> get_sync … <code>i2s_shutdown</code>
+        put) giữ khối thức suốt thời gian thiết bị PCM mở — kể cả lúc pause.
+        <b>RUNNING bracket</b> (<code>trigger START</code> … <code>STOP</code>) là ref
+        <i>phụ</i>, chỉ khi thật sự đang stream — nên khi đang phát, autosuspend không
+        thể fire. <b>one-shot</b> (<code>set_fmt</code>, <code>set_sysclk</code>,
+        <code>set_clkdiv</code>, <code>dai_probe</code>) đánh thức khối chớp nhoáng để
+        ghi 1 thanh ghi rồi cho ngủ lại — vì các hàm này gọi được cả lúc ngoài stream.
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Hàm</th><th>get / put</th><th>Loại</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">i2s_startup / i2s_shutdown</td><td class="mono">get_sync / put</td><td><span class="pill">open</span></td><td>giữ suốt thời gian PCM mở (kể cả pause/prepared)</td></tr>
+          <tr><td class="mono">i2s_trigger START / STOP</td><td class="mono">get_sync / put</td><td><span class="pill">running</span></td><td>ref phụ, chặn autosuspend khi đang stream</td></tr>
+          <tr><td class="mono">i2s_set_fmt</td><td class="mono">get_sync / put</td><td><span class="pill">one-shot</span></td><td>gọi được lúc bind card, ngoài stream</td></tr>
+          <tr><td class="mono">i2s_set_sysclk</td><td class="mono">get_sync / put</td><td><span class="pill">one-shot</span></td><td>put ở cả nhánh done: và err:</td></tr>
+          <tr><td class="mono">i2s_set_clkdiv</td><td class="mono">get_sync / put</td><td><span class="pill">one-shot</span></td><td>machine ép BFS</td></tr>
+          <tr><td class="mono">samsung_i2s_dai_probe / _remove</td><td class="mono">get_sync / put</td><td><span class="pill">one-shot</span></td><td>lúc gắn/gỡ DAI vào card</td></tr>
+          <tr><td class="mono">i2s_hw_params</td><td class="mono">— (WARN_ON active)</td><td>—</td><td>dựa vào OPEN bracket đang giữ</td></tr>
+          <tr><td class="mono">i2s_delay</td><td class="mono">— (WARN_ON active)</td><td>—</td><td>dựa vào RUNNING bracket đang giữ</td></tr>
+          <tr><td class="mono">samsung_i2s_probe</td><td class="mono">pm_runtime_enable</td><td>—</td><td>bật runtime PM; chưa get → sau probe khối ngủ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========== 4 ========== -->
+  <section class="prose">
+    <h2><span class="num">4</span>Vì sao mọi <code>readl/writel</code> phải nằm trong bracket</h2>
+    <p>
+      <code>i2s_runtime_suspend</code> gọi <code>clk_disable_unprepare(clk)</code> —
+      <code>clk</code> là <b>pclk “iis”</b>, clock cấp cho chính mạch thanh ghi của khối.
+      Khi nó tắt:
+    </p>
+    <ul>
+      <li>một <code>readl(priv-&gt;addr + I2SMOD)</code> có thể <b>treo bus</b>, trả rác, hoặc gây abort — tuỳ SoC.</li>
+      <li><code>pm_runtime_get_sync(dev)</code> <b>đồng bộ</b> resume thiết bị (chạy <code>i2s_runtime_resume</code>: bật clock + ghi trả 3 thanh ghi) <i>trước khi</i> hàm chạm thanh ghi. <code>pm_runtime_put(dev)</code> hạ count để khối được ngủ lại sau đó.</li>
+      <li><code>i2s_hw_params()</code> và <code>i2s_delay()</code> cố tình <b>không</b> tự <code>get_sync</code>; chúng chỉ <code>WARN_ON(!pm_runtime_active(dev))</code> vì đường gọi bảo đảm đã có OPEN/RUNNING bracket. Nếu WARN này nổ → có bug ở thứ tự callback.</li>
+    </ul>
+    <div class="seq">get_sync(dev)                       put(dev)
+   │  (nếu đang ngủ)                    │
+   ▼                                    ▼
+i2s_runtime_resume()              count-- ; nếu = 0 → (autosuspend delay)
+   clk_prepare_enable(clk, op_clk)                       │
+   writel  CON → MOD → PSR                               ▼
+   │                                        i2s_runtime_suspend()
+   ▼                                            readl 3 reg → priv->suspend_*
+[ readl / writel an toàn ]                       clk_disable_unprepare(op_clk, clk)</div>
+  </section>
+
+  <!-- ========== 5 ========== -->
+  <section class="prose">
+    <h2><span class="num">5</span>Khi <code>CONFIG_PM</code> tắt</h2>
+    <p>
+      <code>#ifdef CONFIG_PM</code> bọc cả <code>i2s_runtime_suspend/resume</code> lẫn
+      <code>i2s_suspend/i2s_resume</code>. Nếu tắt:
+    </p>
+    <ul>
+      <li><code>i2s_suspend</code> / <code>i2s_resume</code> = <code>NULL</code>; <code>SET_RUNTIME_PM_OPS</code> biên dịch thành rỗng.</li>
+      <li><code>pm_runtime_get_sync</code> vẫn gọi được nhưng không có callback → thiết bị coi như “luôn active”.</li>
+      <li>Clock được <code>clk_prepare_enable(priv-&gt;clk)</code> một lần trong <code>samsung_i2s_probe()</code> và <b>không bao giờ tắt</b>. Khối I2S ăn điện liên tục, nhưng không có chuyện mất nội dung thanh ghi.</li>
+    </ul>
+    <p>
+      Nói cách khác: PM ở đây là <i>tối ưu điện năng, không phải chức năng</i>. Bỏ nó đi
+      thì audio vẫn chạy đúng.
+    </p>
+  </section>
+
+  <!-- ========== 6 ========== -->
+  <section class="prose">
+    <h2><span class="num">6</span>Những gì cần để ý</h2>
+    <div class="watch">
+      <h3>Watch list</h3>
+      <ul>
+        <li><b>Thêm hàm chạm thanh ghi ⇒ phải bọc bracket.</b> Quên <code>get_sync/put</code> ⇒ đọc/ghi khi clock tắt ⇒ treo hoặc rác, khó lần.</li>
+        <li><b>Đừng thêm register vào đường suspend một cách tuỳ tiện.</b> Nếu bit trạng thái nào bạn cần bền qua suspend mà không nằm trong <code>I2SMOD/CON/PSR</code>, phải thêm biến lưu — nếu không nó mất khi clock tắt.</li>
+        <li><b><code>I2SCON</code> nằm trong tập lưu vì <code>RSTCLR</code>.</b> Đừng “tối ưu” bỏ nó — khối sẽ quay lại reset sau resume.</li>
+        <li><b>System sleep = runtime PM.</b> Đừng viết logic lưu/khôi phục thứ hai trong <code>i2s_suspend</code>; <code>pm_runtime_force_suspend</code> đã làm hết.</li>
+        <li><b>RUNNING bracket chặn autosuspend khi đang phát.</b> Nếu bỏ <code>get_sync</code> ở <code>trigger(START)</code>, khối có thể ngủ giữa bài khi hệ thống idle-poll.</li>
+        <li><b><code>WARN_ON(!pm_runtime_active)</code> trong hw_params/delay</b> là hợp đồng: đường gọi phải giữ OPEN/RUNNING bracket. WARN nổ = thứ tự callback sai, không phải lỗi PM.</li>
+        <li><b>Thứ tự resume <code>CON → MOD → PSR</code></b> — giữ nguyên. CON nhả reset trước để MOD/PSR ghi được.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Nguồn: <code>sound/soc/samsung/i2s.c</code> — <code>i2s_suspend/i2s_resume</code>
+    :1027–1035, <code>i2s_runtime_suspend/resume</code> :1207–1244,
+    <code>samsung_i2s_component</code> (.suspend/.resume) :1135–1146,
+    <code>samsung_i2s_pm</code> (SET_RUNTIME_PM_OPS + SET_SYSTEM_SLEEP_PM_OPS) :1684–1689,
+    <code>pm_runtime_enable</code> trong probe :1524; các <code>get_sync/put</code> tại
+    :510, :693, :824/:865 (startup/shutdown), :942/:971 (trigger), :986, :1048/:1081
+    (dai_probe/remove); <code>WARN_ON(pm_runtime_active)</code> :728 (hw_params), :1014
+    (delay). Sơ đồ vẽ tay bằng inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "samsung-i2s-pm-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>

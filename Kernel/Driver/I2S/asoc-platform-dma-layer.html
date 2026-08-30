@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Where the Bytes Move</title>
 <meta name="description" content="Giải thích chi tiết Lớp 3 của Samsung ASoC — thành phần Platform/DMA (PCM): dmaengine.c chỉ là lớp keo 12 dòng gọi xuống soc-generic-dmaengine-pcm.c và pcm_dmaengine.c; cách địa chỉ FIFO truyền từ CPU DAI vào cấu hình kênh DMA; vòng DMA cyclic; và biến thể iDMA dùng SRAM on-chip.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -5,6 +10,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@400;500;700&family=Red+Hat+Text:wght@400;500;600;700&display=swap">
 
 <style>
+  html{color-scheme:light dark}
+  img{max-width:100%;height:auto}
+  [hidden]{display:none!important}
   :root{
     --bg:#ecebef;
     --surface:#ffffff;
@@ -168,6 +176,8 @@
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
   @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
 </style>
+</head>
+<body>
 
 <button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
 
@@ -189,6 +199,109 @@
       không sinh clock. Nó chỉ là <b>người vận chuyển</b>.
     </p>
   </header>
+
+  <!-- ================= 0 ================= -->
+  <section>
+    <h2><span class="num">0</span>Toàn cảnh — input ở đâu, output đi đâu</h2>
+    <p class="claim">
+      Lớp 3 là một <b>máy bơm một chiều</b>: đầu vào là bộ đệm RAM <i>do chính nó cấp</i>,
+      đầu ra là một thanh ghi FIFO <i>do Lớp 2 chỉ định</i>. Ở giữa: đúng một mô tả DMA
+      cyclic — đọc RAM (địa chỉ tăng dần), ghi vào một địa chỉ cố định.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 0 — input · xử lý · output (ví dụ 48 kHz / S16_LE / stereo)</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 300" role="img"
+          aria-label="Ba tầng trái sang phải. INPUT là bộ đệm RAM dạng vòng: runtime dma_addr bằng 0xAF120000, tổng 16384 byte bằng 4 lần 4096, do Lớp 3 tự cấp bằng snd_pcm_set_managed_buffer; ứng dụng aplay ghi mẫu PCM vào đây qua write hoặc mmap. XỬ LÝ là một descriptor DMA cyclic: prep_dma_cyclic với nguồn 0xAF120000, độ dài 16384, period 4096, hướng DMA_MEM_TO_DEV; địa chỉ nguồn tăng dần, địa chỉ đích cố định; mỗi 4096 byte phát IRQ gọi snd_pcm_period_elapsed. OUTPUT: bộ DMA ghi mỗi burst vào cùng thanh ghi I2STXD tại 0x03830010, đó là cửa sổ TX FIFO trên chip chứ không phải RAM; từ FIFO, serializer của Lớp 2 dịch ra dây SDATA tới codec. Có nhánh hồi tiếp: pointer đọc tx_status lấy residue, tính pos bằng 16384 trừ residue thành hw_ptr, in_flight_bytes thành runtime delay; ALSA core dùng số đó trả về snd_pcm_avail cho ứng dụng biết đã phát tới đâu. Lớp 3 không thấy gì sau địa chỉ 0x03830010.">
+          <defs>
+            <marker id="mk-arr-0" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-flow-0" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="40" y="16" width="220" height="32" rx="7"/>
+          <text class="t-mono t-b" x="150" y="36" text-anchor="middle" font-size="10">app: aplay — write() / mmap</text>
+
+          <rect class="box" x="40" y="74" width="270" height="98" rx="9"/>
+          <text class="t-mono t-b" x="58" y="96" font-size="11">INPUT — bộ đệm RAM (ring)</text>
+          <text class="flow-t" x="58" y="116">runtime-&gt;dma_addr = 0xAF120000</text>
+          <text class="lbl-m" x="58" y="133">16384 B = 4 × 4096</text>
+          <text class="lbl-m" x="58" y="152">Lớp 3 tự cấp: set_managed_buffer()</text>
+
+          <rect class="box" x="365" y="74" width="300" height="98" rx="9"/>
+          <text class="t-mono t-b" x="383" y="96" font-size="11">XỬ LÝ — 1 descriptor cyclic</text>
+          <text class="t-mono" x="383" y="114" font-size="9.5">prep_dma_cyclic(src, 16384, 4096,</text>
+          <text class="t-mono" x="383" y="127" font-size="9.5">   DMA_MEM_TO_DEV) → 1 desc → submit</text>
+          <text class="lbl-m" x="383" y="146">src ++     ·     dst CỐ ĐỊNH</text>
+          <text class="lbl-m" x="383" y="163">IRQ mỗi 4096 B → period_elapsed()</text>
+
+          <rect class="box-acc" x="720" y="60" width="250" height="128" rx="9"/>
+          <text class="t-mono t-b" x="738" y="82" font-size="11">OUTPUT</text>
+          <text class="flow-t" x="738" y="102">I2STXD @ 0x03830010</text>
+          <text class="lbl-m" x="738" y="118">cửa sổ TX FIFO · MMIO, không phải RAM</text>
+          <text class="lbl-m" x="738" y="140">↓ TX FIFO (trên chip)</text>
+          <text class="lbl-m" x="738" y="156">↓ serializer — Lớp 2</text>
+          <text class="lbl-m" x="738" y="172">↓ SDATA → codec</text>
+
+          <rect class="box" x="365" y="216" width="300" height="48" rx="9"/>
+          <text class="t-mono" x="383" y="236" font-size="9.5">pointer(): tx_status → residue</text>
+          <text class="lbl-m" x="383" y="253">pos = 16384 − residue → hw_ptr · in_flight → delay</text>
+
+          <rect class="box" x="40" y="216" width="270" height="48" rx="9"/>
+          <text class="t-mono" x="58" y="236" font-size="9.5">ALSA core → snd_pcm_avail()</text>
+          <text class="lbl-m" x="58" y="253">app biết đã phát tới đâu</text>
+
+          <line class="edge" x1="150" y1="48" x2="175" y2="72" marker-end="url(#mk-arr-0)"/>
+          <text class="lbl-m" x="188" y="64">ghi mẫu</text>
+
+          <path class="flow" d="M310 122 L363 122" marker-end="url(#mk-flow-0)"/>
+          <text class="flow-t" x="337" y="112" text-anchor="middle">đọc — nguồn ++</text>
+
+          <path class="flow" d="M665 122 L718 122" marker-end="url(#mk-flow-0)"/>
+          <text class="flow-t" x="692" y="112" text-anchor="middle">→ dst cố định</text>
+
+          <line class="ctl" x1="515" y1="172" x2="515" y2="214" marker-end="url(#mk-arr-0)"/>
+          <text class="lbl-m" x="523" y="196">residue</text>
+
+          <line class="ctl" x1="363" y1="240" x2="312" y2="240" marker-end="url(#mk-arr-0)"/>
+          <path class="ctl-d" d="M60 216 C24 168 24 92 100 50" marker-end="url(#mk-arr-0)"/>
+          <text class="lbl-m" x="16" y="140">hồi tiếp</text>
+
+          <text class="lbl" x="40" y="290">Lớp 3 KHÔNG thấy gì sau 0x03830010 — TX FIFO, serializer, SDATA là phần cứng của Lớp 2.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Input</b> = RAM do Lớp 3 tự cấp phát (<code>snd_pcm_set_managed_buffer</code>),
+        app đổ mẫu vào. <b>Output</b> = một địa chỉ thanh ghi cố định do Lớp 2 đưa
+        (<code>dma_playback.addr = regs_base + I2STXD</code>); byte ghi vào đó rơi thẳng
+        vào TX FIFO của khối I2S. <b>Nhánh hồi tiếp</b> (<code>pointer()</code>) là
+        “output thứ hai”: vị trí phát → ALSA core → <code>snd_pcm_avail()</code> để app
+        biết khi nào ghi tiếp.
+      </figcaption>
+    </figure>
+
+    <h3>Ví dụ cụ thể — theo địa chỉ</h3>
+    <ol>
+      <li><b>Cấp bộ đệm</b> (khi dựng PCM): <code>dmaengine_pcm_new()</code> → <code>snd_pcm_set_managed_buffer(SNDRV_DMA_TYPE_DEV_IRAM, dma_dev, 512 KB)</code> → RAM DMA-coherent. <code>runtime-&gt;dma_area</code> = địa chỉ ảo kernel (app mmap / copy vào), <code>runtime-&gt;dma_addr</code> = địa chỉ bus mà bộ DMA dùng — ví dụ <code>0xAF120000</code>.</li>
+      <li><b>App ghi</b>: <code>aplay</code> gọi <code>write()</code> → mẫu PCM đổ vào <code>dma_area</code>. Chọn period 1024 frame = 4096 B, 4 period ⇒ buffer 16384 B, vùng <code>0xAF120000 … 0xAF123FFF</code>.</li>
+      <li><b>hw_params → cấu hình kênh</b>: <code>snd_hwparams_to_dma_slave_config()</code>: 16-bit ⇒ <code>dst_addr_width = BUSWIDTH_2</code>; playback ⇒ <code>direction = DMA_MEM_TO_DEV</code>. <code>*_set_config_from_dai_data()</code>: <code>dst_addr = regs_base + I2STXD = 0x03830010</code> (lấy từ Lớp 2), cộng <code>dst_maxburst</code>. <code>dmaengine_slave_config(chan, &amp;cfg)</code>.</li>
+      <li><b>trigger(START) → 1 descriptor</b>: <code>dmaengine_prep_dma_cyclic(chan, 0xAF120000, len 16384, period 4096, DMA_MEM_TO_DEV)</code> → <code>desc</code>; <code>dmaengine_submit(desc)</code> → <code>cookie</code>; <code>dma_async_issue_pending(chan)</code>.</li>
+      <li><b>Chạy</b>: bộ DMA đọc burst từ <code>0xAF120000</code>, <code>0xAF120010</code>, … (nguồn <b>tăng</b>); mỗi burst ghi vào <b>cùng</b> <code>0x03830010</code> (đích <b>cố định</b> — cửa sổ FIFO, không phải RAM). Hết 4096 B ⇒ sang period kế + phát IRQ ⇒ <code>dmaengine_pcm_dma_complete()</code> ⇒ <code>snd_pcm_period_elapsed()</code> ⇒ đánh thức app ghi lại period vừa trống. Hết <code>0xAF124000</code> ⇒ vòng lại <code>0xAF120000</code>.</li>
+      <li><b>Báo vị trí</b>: <code>pointer()</code> → <code>dmaengine_tx_status()</code> → <code>residue</code> (byte chưa truyền). <code>pos = 16384 − residue</code>; residue = 10000 ⇒ <code>pos = 6384</code> ⇒ <code>hw_ptr</code>. <code>state.in_flight_bytes</code> ⇒ <code>runtime-&gt;delay</code>. ALSA core dùng để trả <code>snd_pcm_avail()</code> cho app.</li>
+      <li><b>Output tiêu thụ</b>: byte trong FIFO ⇒ serializer của <b>Lớp 2</b> ⇒ dây <code>SDATA</code> ⇒ codec. Lớp 3 dừng lại ở <code>0x03830010</code>.</li>
+    </ol>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Thứ</th><th>Dạng / địa chỉ</th><th>Ai tạo</th><th>Ai tiêu thụ</th></tr></thead>
+        <tbody>
+          <tr><td>bộ đệm RAM</td><td class="mono">runtime->dma_addr = 0xAF120000 (bus) · dma_area (VA kernel)</td><td><b>Lớp 3</b> · set_managed_buffer</td><td>app ghi vào · DMA đọc ra</td></tr>
+          <tr><td>đích FIFO</td><td class="mono">regs_base + I2STXD = 0x03830010 (MMIO cố định)</td><td><b>Lớp 2</b> · dma_playback.addr</td><td>DMA ghi vào</td></tr>
+          <tr><td>descriptor + cookie</td><td class="mono">handle nội bộ dmaengine</td><td>prep_dma_cyclic + submit</td><td>tx_status() lấy residue</td></tr>
+          <tr><td>hw_ptr / delay</td><td class="mono">số frame</td><td>pointer() từ residue</td><td>ALSA core → snd_pcm_avail() của app</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
   <!-- ================= 1 ================= -->
   <section>
@@ -609,3 +722,6 @@
     });
   })();
 </script>
+
+</body>
+</html>

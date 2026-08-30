@@ -43,6 +43,55 @@ init_LCDBackLight()→ bật đèn nền
                      → bật LED lỗi, treo máy vĩnh viễn (nuôi watchdog)
 ```
 
+![[Pasted image 20260823033859.png]]
+
+![[Pasted image 20260823033910.png]]
+
+![[Pasted image 20260823033921.png]]
+
+![[Pasted image 20260823033945.png]]
+
+
+| Giai đoạn          | Nội dung                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1                  | Việc nhận diện panel diễn ra trước tiên và tách biệt hẳn với màn hình. `init_Panel_Uart()` chạy bên trong `init_km()` tại `board_r.c:450`, rất lâu trước khi có bất kỳ thao tác nào liên quan đến LCD. Nhiệm vụ duy nhất của nó là quá trình bắt tay trong `init_PanelMicrocomputer()`: xác định panel vật lý (`gPanelType`, `gPanelSize`, `gPanelMaker`, `gPanelOption`, `gPanelKey`) và xác định có panel nào phản hồi hay không (`panel_exist`). Mọi thứ phía sau đều đọc các biến toàn cục này. (Không vẽ trong sơ đồ: nếu panel hoàn toàn không phản hồi, `init_km()` sẽ dừng máy âm thầm ngay tại đây mà không cập nhật LED nào — vì không có panel để sáng đèn — nhánh đó không bao giờ chạm lại `mfp_panel.c` nữa.) |
+| 2                  | `misc_init_r()` (`machine_setup.c:696`) là nơi panel thực sự trở thành một màn hình. `init_Panel()` tái sử dụng `gPanelSize` đã đọc ở Giai đoạn 1 để thiết lập độ phân giải/định dạng LVDS, sau đó `init_LCD()` cấp phát VRAM, đọc các DIP-switch Own/Generic, rồi vẽ splash đầu tiên. Tiếp theo là hai cổng chẩn đoán — không thiết bị lưu trữ nào khởi động được, hoặc hash firmware không khớp — cả hai đều dẫn tới cùng một khuôn mẫu `set_Panel_BootDiagErr()` + `set_Panel_BootDiagResult()` hiển thị ở làn phải.                                                                                                                                                                                                     |
+| 3                  | Ngay khi `board_init_r()` return, `main_loop()` (`main.c`) có thể rẽ sang một trong hai chế độ bảo trì ở bên trái, trước cả khi nó dựng `bootcmd` — cả hai đều gọi `DrawPanel()` một lần rồi lặp vô hạn theo đúng chủ đích thiết kế. Ở luồng bình thường, `make_bootargs()` đọc `getPanelConnect()` thêm một lần nữa để quyết định tham số `nopanel` cho kernel, và lệnh liên quan đến panel cuối cùng trong toàn bộ quá trình boot là `set_Panel_BootDiagStatus(ST5)` — được gọi vài dòng trước khi `boot_selected_os()` nhảy hẳn vào Linux.                                                                                                                                                                               |
+| Hạ tầng dùng chung | Mọi lệnh LED/UART trong sơ đồ này — `set_Panel_BootDiagStatus()`, `set_Panel_BootDiagResult()`, `init_LCDBackLight()`, và cả quá trình bắt tay — đều được đóng khung bởi `make_CheckSum()` và truyền đi qua `SendData()`/`RecvData()`, hai hàm này lại gọi `BspPanel_serial_putc()`/`getc()`. Chỉ riêng quá trình bắt tay mới phân tích phản hồi bằng `check_Command()`. `BspPanel_serial_rts()` tồn tại để đối xứng API nhưng không được gọi ở bất kỳ đâu trong cây mã nguồn — panel này không cần điều khiển luồng phần cứng (hardware flow control).                                                                                                                                                                     |
+
+### Toàn bộ hàm, theo điểm gọi
+| Hàm                          | Định nghĩa tại         | Được gọi từ                                                                                                                                          |
+| ---------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| init_Panel_Uart              | mfp_panel.c:186        | init_km() · board_r.c:450                                                                                                                            |
+| init_PanelMicrocomputer      | mfp_panel.c:698        | init_Panel_Uart() · mfp_panel.c:206                                                                                                                  |
+| check_Command                | mfp_panel.c:989        | chỉ dùng trong init_PanelMicrocomputer()                                                                                                             |
+| make_CheckSum                | mfp_panel.c:975        | mọi hàm xây dựng lệnh LED/bắt tay                                                                                                                    |
+| SendData / RecvData          | mfp_panel.c:997 / 1012 | cùng tập điểm gọi với make_CheckSum                                                                                                                  |
+| BspPanel_serial_putc / getc  | mfp_panel.c:139 / 145  | SendData() / RecvData()                                                                                                                              |
+| BspPanel_serial_rts          | mfp_panel.c:134        | — không bao giờ được gọi (dead code)                                                                                                                 |
+| set_Panel_BootDiagStatus     | mfp_panel.c:210        | init_km() board_r.c:474 (ST1) · do_bootm_states() bootm.c:680 (ST5)                                                                                  |
+| init_Panel                   | mfp_panel.c:166        | misc_init_r() · machine_setup.c:696,702                                                                                                              |
+| init_Picture                 | mfp_panel.c:151        | init_LCD() · mfp_panel.c:180                                                                                                                         |
+| init_LCD                     | mfp_panel.c:418        | init_Panel() · mfp_panel.c:181                                                                                                                       |
+| init_STdrawManager           | mfp_panel.c:458        | init_LCD() · mfp_panel.c:420                                                                                                                         |
+| is_OwnMode                   | mfp_panel.c:273        | init_LCD() · mfp_panel.c:432                                                                                                                         |
+| init_VRAMtoLCD               | mfp_panel.c:662        | init_LCD() · mfp_panel.c:439                                                                                                                         |
+| fill_VramWithFixVal          | mfp_panel.c:350        | DrawPanel_lzo() mfp_panel.c:573 · lcd_clear() lcd.c:501                                                                                              |
+| TransVRAMtoLCD               | mfp_panel.c:674        | init_LCD() mfp_panel.c:449 · không làm gì (no-op)                                                                                                    |
+| setup_LcdDisplay             | mfp_panel.c:682        | init_LCD() mfp_panel.c:451 · không làm gì (no-op)                                                                                                    |
+| setup_PanelRTS               | mfp_panel.c:690        | init_LCD() mfp_panel.c:452 · không làm gì (no-op)                                                                                                    |
+| DrawPanel_lzo                | mfp_panel.c:551        | init_LCD() mfp_panel.c:442,446 · misc_init_r() machine_setup.c:704,773,776                                                                           |
+| TransStoredAreatoVRAM(_part) | mfp_panel.c:625 / 646  | DrawPanel() · DrawPanel_lzo()                                                                                                                        |
+| IsTransStoredAreatoVRAMDone  | mfp_panel.c:654        | vòng lặp poll trong DrawPanel() · DrawPanel_lzo()                                                                                                    |
+| init_LCDBackLight            | mfp_panel.c:1091       | init_Panel() · mfp_panel.c:183                                                                                                                       |
+| DrawPanel                    | mfp_panel.c:493        | do_drawpanel() · initialize_card_main() main.c:2102 · bderase_card_main() main.c:2119                                                                |
+| do_drawpanel                 | mfp_panel.c:1047       | lệnh console U-Boot "draw" (U_BOOT_CMD)                                                                                                              |
+| getPanelConnect              | mfp_panel.c:1075       | init_Panel, DrawPanel, DrawPanel_lzo (cổng chặn nội bộ) · make_bootargs() main.c:1606                                                                |
+| hwcSetBootDeviceNormal       | mfp_panel.c:1123       | mmc_init() mmc.c:1578,1580,1584 · do_nvme() cmd_nvme.c:82                                                                                            |
+| hwcDispBootDeviceDiag        | mfp_panel.c:1140       | misc_init_r() · machine_setup.c:711                                                                                                                  |
+| set_Panel_BootDiagErr        | mfp_panel.c:1161       | init_km() board_r.c:497,514,528,544,561 · boot_diag()/misc_init_r() machine_setup.c:652,720,736,752 · hwcDispBootDeviceDiag/hwcDispLoadDiag (nội bộ) |
+| set_Panel_BootDiagResult     | mfp_panel.c:1177       | luôn đi cùng set_Panel_BootDiagErr, cùng các điểm gọi                                                                                                |
+| hwcDispLoadDiag              | mfp_panel.c:1230       | do_bootm_states() · bootm.c:623,639,669,698,703                                                                                                      |
 ### File liên quan
 
 | File                                                     | Vai trò                                                                                                                                                           |
@@ -54,6 +103,7 @@ init_LCDBackLight()→ bật đèn nền
 | `machine_setup.h`, `own_generic.h`, `mtd_flash_access.h` | Cấu hình theo dòng máy cụ thể, và các hàm đọc "soft DIP switch" từ SPI-Flash (`THRG_getSoftDipSw`) dùng để phân biệt bản OWN/Generic.                             |
 | `lcd.h`, `ns16550.h`, `serial.h`                         | API driver LCD vật lý (`drv_lcd_init`, `lcd_image_blit*`, `lcd_set_resolution`…) và UART chuẩn của U-Boot.                                                        |
 | `asm/arch-mvebu/gpio.h`, `mvqz_gpio.h`                   | Điều khiển chân GPIO (bật nguồn panel, đọc phím Utility).                                                                                                         |
+|                                                          |                                                                                                                                                                   |
 
 ## 2. Hiểu từng phần
 

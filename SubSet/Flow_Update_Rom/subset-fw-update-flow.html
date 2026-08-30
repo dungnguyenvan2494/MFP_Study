@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subset Firmware Update</title>
+<meta name="description" content="Luồng update firmware theo từng file ở Subset S-S800 (fwupdate.cpp): đọc gói .TAR + file INDEX, gauntlet điều kiện tiên quyết (engine match, checksum, diff version, power, SSD rootfs, chống giả mạo), rồi trình tự copy/ghi từng file theo region + sub-controller + Boot ROM, có backup/rollback, kết thúc bằng reboot.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  html{color-scheme:light dark}
+  img{max-width:100%;height:auto}
+  [hidden]{display:none!important}
+
+  :root{
+    --bg:#eef0ec;
+    --surface:#ffffff;
+    --surface-2:#f3f5f0;
+    --ink:#1b1e1a;
+    --muted:#5d635a;
+    --line:#d0d4cc;
+    --line-strong:#969c92;
+    --flow:#2f6f4c;
+    --flow-soft:#dbe9e0;
+    --gate:#a5641a;
+    --gate-soft:#f1e6d3;
+    --grid:#e3e5df;
+    --shadow:0 1px 2px rgba(20,25,15,.06),0 10px 26px rgba(20,25,15,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f110e;
+      --surface:#171913;
+      --surface-2:#1d201a;
+      --ink:#e1e3db;
+      --muted:#8f9585;
+      --line:#2a2d25;
+      --line-strong:#464a3e;
+      --flow:#5fc08a;
+      --flow-soft:#16281e;
+      --gate:#d99b50;
+      --gate-soft:#322618;
+      --grid:#23261e;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f110e;
+    --surface:#171913;
+    --surface-2:#1d201a;
+    --ink:#e1e3db;
+    --muted:#8f9585;
+    --line:#2a2d25;
+    --line-strong:#464a3e;
+    --flow:#5fc08a;
+    --flow-soft:#16281e;
+    --gate:#d99b50;
+    --gate-soft:#322618;
+    --grid:#23261e;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Atkinson Hyperlegible",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 110px}
+  .prose{max-width:74ch}
+  .prose p,.prose li{max-width:74ch}
+
+  code,.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.83em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.06em .38em}
+
+  .eyebrow{
+    font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:500;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 14px;display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--flow)}
+
+  h1{
+    font-family:"Atkinson Hyperlegible",sans-serif;font-weight:700;
+    font-size:clamp(27px,4.6vw,42px);line-height:1.12;letter-spacing:-.01em;
+    margin:0 0 16px;text-wrap:balance;
+  }
+  .lede{font-size:clamp(16px,2.1vw,18.5px);margin:0 0 20px;max-width:71ch}
+
+  h2{
+    font-family:"Atkinson Hyperlegible",sans-serif;font-weight:700;
+    font-size:clamp(18px,2.5vw,23px);letter-spacing:-.005em;
+    margin:62px 0 6px;text-wrap:balance;
+  }
+  h2 .num{font-family:"JetBrains Mono",monospace;color:var(--flow);margin-right:.5em;font-weight:500;font-size:.82em}
+  h3{font-size:15.5px;font-weight:700;margin:24px 0 8px}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 22px;max-width:72ch}
+  p{margin:0 0 16px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--flow);text-underline-offset:2px}
+  b,strong{font-weight:700}
+
+  .callout{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--flow);
+    border-radius:8px;padding:14px 18px;font-size:14px;margin:0 0 20px;max-width:73ch;
+  }
+
+  figure{margin:22px 0 12px}
+  .frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 20px 16px;overflow-x:auto;
+  }
+  .frame > svg{display:block;min-width:700px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:14px;max-width:84ch}
+  .fig-tag{
+    font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:500;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;
+  }
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"Atkinson Hyperlegible",sans-serif;font-size:12px}
+  .diagram .t-mono{font-family:"JetBrains Mono",monospace}
+  .diagram .t-b{font-weight:700}
+  .diagram .lbl{fill:var(--muted);font-size:10.5px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"JetBrains Mono",monospace;font-size:9.5px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.2}
+  .diagram .box-c{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.6}
+  .diagram .box-f{fill:var(--flow-soft);stroke:var(--flow);stroke-width:1.4}
+  .diagram .box-g{fill:var(--gate-soft);stroke:var(--gate);stroke-width:1.4}
+  .diagram .read{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .flow{stroke:var(--flow);stroke-width:2.1;fill:none}
+  .diagram .flow-t{fill:var(--flow);font-weight:700;font-family:"JetBrains Mono",monospace;font-size:9.5px}
+  .diagram .gate-l{stroke:var(--gate);stroke-width:1.4;fill:none;stroke-dasharray:4 3}
+  .diagram .gate-t{fill:var(--gate);font-weight:700;font-family:"JetBrains Mono",monospace;font-size:9.5px}
+  .diagram .grid{stroke:var(--grid);stroke-width:1}
+  [id^="mk-a"] path{fill:var(--line-strong)}
+  [id^="mk-f"] path{fill:var(--flow)}
+  [id^="mk-g"] path{fill:var(--gate)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:11.5px;color:var(--muted);margin:10px 2px 0;font-family:"JetBrains Mono",monospace}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .legend i{width:24px;border-top:2.2px solid;display:inline-block}
+  .lg-read{border-color:var(--line-strong)!important}
+  .lg-flow{border-color:var(--flow)!important;border-top-width:2.4px!important}
+  .lg-gate{border-color:var(--gate)!important;border-top-style:dashed!important}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);margin:6px 0 0}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:660px}
+  th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  td.mono,td .mono{font-family:"JetBrains Mono",monospace;font-size:11px}
+  tbody tr:last-child td{border-bottom:none}
+
+  .watch{background:var(--gate-soft);border:1px solid var(--gate);border-radius:12px;padding:20px 22px 8px;margin:8px 0 0}
+  .watch h3{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gate);margin:0 0 12px;font-weight:700}
+  .watch ul{padding-left:20px}
+  .watch li{margin-bottom:9px}
+
+  footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:84ch}
+
+  .toggle{
+    position:fixed;top:14px;right:14px;z-index:10;
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:7px 13px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--flow);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">Subset S-S800 · system/thr/thr/fwupdate.cpp · ~19K dòng</p>
+    <h1>Subset Firmware Update</h1>
+    <p class="lede">
+      Gói firmware là một file <b>.TAR</b> trên thư mục download. Bên trong có một file
+      <b>INDEX</b> mô tả từng file nhị phân (loại, sector, checksum, version, tên) và
+      các file đó. Updater đọc INDEX → qua một loạt <b>cổng điều kiện</b> → <b>copy/ghi
+      từng file</b> theo region, rồi tới sub-controller và Boot ROM, có <b>backup để
+      rollback</b>, kết thúc bằng <b>reboot</b>.
+    </p>
+    <p class="callout">
+      Nguyên tắc xuyên suốt mỗi file: <code>tìm entry trong INDEX</code> →
+      <code>so version đã cài (differential)</code> → <code>copy / ghi</code> →
+      <code>verify checksum</code> → <code>ghi nhận đã flash</code>. File nào version
+      trùng thì <b>bỏ qua</b>; riêng file INDEX &amp; <code>node.img</code> luôn ghi.
+    </p>
+  </header>
+
+  <!-- ===== 1 ===== -->
+  <section>
+    <h2><span class="num">1</span>Đọc gì · ghi ra đâu</h2>
+    <p class="claim">
+      Đầu vào: gói TAR, file INDEX, thông tin FW đang cài, serial + SSD-ID. Đầu ra:
+      file lên các partition SSD, firmware vào sub-controller qua downloader, Boot ROM,
+      và các bản backup + bản ghi “đã flash”.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — input / output của fwupdate.cpp</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1080 420" role="img"
+          aria-label="Ở giữa là fwupdate.cpp chạy trong thr thread. Bên trái các đầu vào, mũi tên thường đi vào: gói FW dạng .TAR trên thư mục download USB network hoặc SSD; file INDEX có các dòng @TYP @VER @KIND cho tới @END; thông tin FW đang cài đọc bởi ReadCurrentlyFWInfomation vào st_CurrentlyF; serial máy ở /tmp/serial_tmp và SSD vendor id device id từ ssdvendor.ini. Bên phải các đầu ra, mũi tên màu xanh đi ra: copy file lên các partition SSD gồm /mnt subset, /boot, /plugin, /res, /ext1, kernel vào RAM2, RFS, IWS; ghi firmware vào sub-controller PS-CPU SSD-ctrl SCB PowerSub LPPP Panel qua downloader; ghi Boot ROM kèm boot hash và file card-version; tạo bản backup rollback và bản ghi DownloadedFWInformation. Phía dưới: thông báo UI qua notificationEvent trạng thái Busy Success Failed và bảng tiến độ phần trăm.">
+          <defs>
+            <marker id="mk-a1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-f1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box-c" x="410" y="130" width="260" height="120" rx="10"/>
+          <text class="t-mono t-b" x="540" y="180" text-anchor="middle" font-size="11">fwupdate.cpp</text>
+          <text class="lbl-m" x="540" y="198" text-anchor="middle">thr thread</text>
+          <text class="lbl-m" x="540" y="214" text-anchor="middle">startMscUpdateTask()</text>
+
+          <!-- inputs -->
+          <g class="lbl-m" text-anchor="start">
+            <rect class="box" x="30" y="26" width="330" height="44" rx="7"/>
+            <text class="t-mono t-b" x="44" y="44" font-size="10">gói FW  —  *.TAR</text>
+            <text x="44" y="60">thư mục download (USB / network / SSD)</text>
+
+            <rect class="box" x="30" y="86" width="330" height="44" rx="7"/>
+            <text class="t-mono t-b" x="44" y="104" font-size="10">file INDEX</text>
+            <text x="44" y="120">@TYP  @VER  @&lt;KIND&gt; …  @END</text>
+
+            <rect class="box" x="30" y="146" width="330" height="44" rx="7"/>
+            <text class="t-mono t-b" x="44" y="164" font-size="10">FW đang cài</text>
+            <text x="44" y="180">ReadCurrentlyFWInfomation → st_CurrentlyF…</text>
+
+            <rect class="box" x="30" y="206" width="330" height="44" rx="7"/>
+            <text class="t-mono t-b" x="44" y="224" font-size="10">serial + SSD ID</text>
+            <text x="44" y="240">/tmp/serial_tmp · ssdvendor.ini (VID:DID)</text>
+          </g>
+          <line class="read" x1="360" y1="48"  x2="408" y2="150" marker-end="url(#mk-a1)"/>
+          <line class="read" x1="360" y1="108" x2="408" y2="168" marker-end="url(#mk-a1)"/>
+          <line class="read" x1="360" y1="168" x2="408" y2="186" marker-end="url(#mk-a1)"/>
+          <line class="read" x1="360" y1="228" x2="408" y2="210" marker-end="url(#mk-a1)"/>
+
+          <!-- outputs -->
+          <g class="lbl-m" text-anchor="start">
+            <rect class="box-f" x="720" y="20" width="340" height="46" rx="7"/>
+            <text class="t-mono t-b" x="734" y="38" font-size="10">SSD partitions — copy file</text>
+            <text x="734" y="55">/mnt(subset) /boot /plugin /res /ext1 · kernel→RAM2 · RFS · IWS</text>
+
+            <rect class="box-f" x="720" y="82" width="340" height="46" rx="7"/>
+            <text class="t-mono t-b" x="734" y="100" font-size="10">sub-controller — qua downloader</text>
+            <text x="734" y="117">PS-CPU · SSD-ctrl · SCB · PowerSub · LPPP · Panel</text>
+
+            <rect class="box-f" x="720" y="144" width="340" height="46" rx="7"/>
+            <text class="t-mono t-b" x="734" y="162" font-size="10">Boot ROM</text>
+            <text x="734" y="179">updateBootRom + calcBootHash/writeBootHash + card-version</text>
+
+            <rect class="box-f" x="720" y="206" width="340" height="46" rx="7"/>
+            <text class="t-mono t-b" x="734" y="224" font-size="10">backup / bản ghi</text>
+            <text x="734" y="241">Cur ↔ Rollback file · DownloadedFWInformation</text>
+          </g>
+          <line class="flow" x1="672" y1="150" x2="716" y2="44"  marker-end="url(#mk-f1)"/>
+          <line class="flow" x1="672" y1="168" x2="716" y2="105" marker-end="url(#mk-f1)"/>
+          <line class="flow" x1="672" y1="186" x2="716" y2="167" marker-end="url(#mk-f1)"/>
+          <line class="flow" x1="672" y1="220" x2="716" y2="229" marker-end="url(#mk-f1)"/>
+
+          <rect class="box" x="410" y="300" width="260" height="46" rx="8"/>
+          <text class="lbl-m" x="540" y="320" text-anchor="middle">notificationEvent(Busy/Success/Failed)</text>
+          <text class="lbl-m" x="540" y="336" text-anchor="middle">ProgressManagementTable(%)</text>
+          <line class="read" x1="540" y1="250" x2="540" y2="298" marker-end="url(#mk-a1)"/>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="lg-read"></i> đọc / input</span>
+        <span><i class="lg-flow"></i> ghi / output</span>
+      </div>
+      <figcaption>
+        Updater không ghi trực tiếp lên flash bằng con trỏ — nó <b>copy file vào các
+        partition đã mount trên SSD</b> (subset/boot/plugin/res/ext, kernel/RFS/IWS),
+        <b>hoặc</b> đẩy binary vào sub-controller qua một downloader có callback kết
+        quả, <b>hoặc</b> ghi Boot ROM. Song song, nó ghi bản backup để rollback và cập
+        nhật bản ghi “FW đã cài” dùng cho lần diff sau.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 2 ===== -->
+  <section>
+    <h2><span class="num">2</span>File INDEX — một dòng, tám trường</h2>
+    <p class="claim">
+      <code>readIndexFile()</code> đọc toàn bộ INDEX (theo sector), tách từng dòng
+      <code>@&lt;KIND&gt;</code> thành một phần tử <code>st_WriteMscDataList[]</code>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — dòng INDEX → st_WriteMscDataList[i]</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 300" role="img"
+          aria-label="Trên cùng một dòng INDEX ví dụ: @MP1 rồi 000123 rồi 000456 rồi a1b2c rồi 20250115120000 rồi mfp001_hwQt.map. Dưới mỗi token là nhãn: @MP1 là KIND ba ký tự; 000123 là sector bắt đầu; 000456 là số sector tức kích thước; a1b2c là checksum md5 hex năm ký tự, riêng @ALL là số thập phân; chuỗi số dài là timestamp định dạng năm tháng ngày giờ phút giây; cuối là tên file. Mũi tên đi xuống một hộp struct st_WriteMscDataList phần tử i gồm sc_Kind, ul_SectorNum, ul_SectorCnt, ul_CheckSum, t_TimeStamp, sc_FileName, bl_DiffCheckTarget, bl_ExecutedDownload. Ghi chú bên: dòng bắt đầu bằng @ là INDEX thường, bắt đầu bằng ngoặc vuông hoặc có @SEC @DB2 là chống giả mạo đặt cờ si32_PreventingFalsification; @TYP bằng loại card máy, @VER bằng card version, @END là dấu kết thúc thiếu thì báo lỗi format và hủy; @IDX và @NDJ đặt bl_DiffCheckTarget false nên luôn được ghi bỏ qua so version.">
+          <defs>
+            <marker id="mk-a2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box-c" x="30" y="24" width="700" height="34" rx="6"/>
+          <text class="t-mono" x="46" y="45" font-size="11">@MP1&#160;&#160;000123&#160;&#160;000456&#160;&#160;a1b2c&#160;&#160;20250115120000&#160;&#160;mfp001_hwQt.map</text>
+
+          <g class="lbl-m">
+            <line class="read" x1="60"  y1="62" x2="60"  y2="80"/><text x="60"  y="94" text-anchor="middle">KIND</text><text x="60" y="106" text-anchor="middle">3 ký tự</text>
+            <line class="read" x1="150" y1="62" x2="150" y2="80"/><text x="150" y="94" text-anchor="middle">sector bắt đầu</text>
+            <line class="read" x1="240" y1="62" x2="240" y2="80"/><text x="240" y="94" text-anchor="middle">số sector (size)</text>
+            <line class="read" x1="330" y1="62" x2="330" y2="80"/><text x="330" y="94" text-anchor="middle">checksum</text><text x="330" y="106" text-anchor="middle">md5 hex · @ALL=dec</text>
+            <line class="read" x1="470" y1="62" x2="470" y2="80"/><text x="470" y="94" text-anchor="middle">timestamp</text><text x="470" y="106" text-anchor="middle">%Y%m%d%H%M%S</text>
+            <line class="read" x1="640" y1="62" x2="640" y2="80"/><text x="640" y="94" text-anchor="middle">tên file</text>
+          </g>
+
+          <line class="read" x1="380" y1="120" x2="380" y2="150" marker-end="url(#mk-a2)"/>
+
+          <rect class="box" x="30" y="152" width="700" height="86" rx="9"/>
+          <text class="t-mono t-b" x="46" y="172" font-size="10.5">st_WriteMscDataList[i] =</text>
+          <text class="t-mono" x="46" y="190" font-size="10">{ sc_Kind, ul_SectorNum, ul_SectorCnt, ul_CheckSum, t_TimeStamp,</text>
+          <text class="t-mono" x="46" y="206" font-size="10">  sc_FileName,</text>
+          <text class="t-mono" x="140" y="206" font-size="10" fill="var(--flow)">bl_DiffCheckTarget</text>
+          <text class="t-mono" x="290" y="206" font-size="10">,</text>
+          <text class="t-mono" x="300" y="206" font-size="10" fill="var(--flow)">bl_ExecutedDownload</text>
+          <text class="t-mono" x="450" y="206" font-size="10">}</text>
+          <text class="lbl-m" x="46" y="226">bl_DiffCheckTarget=False ⇒ luôn ghi (bỏ qua so version)</text>
+
+          <g class="lbl-m" text-anchor="start">
+            <text class="t-mono t-b" x="760" y="40" font-size="10">dòng đầu:</text>
+            <text x="760" y="56">@  = INDEX thường</text>
+            <text x="760" y="72">[  hoặc @SEC/@DB2 = chống giả mạo</text>
+            <text x="760" y="88" fill="var(--gate)">→ si32_PreventingFalsification = 1</text>
+            <text class="t-mono t-b" x="760" y="120" font-size="10">khoá đặc biệt:</text>
+            <text x="760" y="136">@TYP = loại card máy</text>
+            <text x="760" y="152">@VER = card version</text>
+            <text x="760" y="168">@END = kết thúc (thiếu ⇒ huỷ)</text>
+            <text x="760" y="192" fill="var(--flow)">@IDX · @NDJ ⇒ DiffTarget=False</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        Không có <code>@END</code> ở cuối ⇒ <code>readIndexFile()</code> trả
+        <code>False</code> (“Format error”), huỷ toàn bộ. <code>us_BinaryCnt = 0</code>
+        (không có dòng <code>@&lt;KIND&gt;</code> nào) cũng huỷ. <code>@EXP</code> bật cờ
+        <b>Express Download</b> (ghi thẳng, không so INDEX checksum có sẵn).
+        <code>@DBG</code> bật log chi tiết.
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Dòng</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">@TYP=xxx</td><td>Loại card / model máy — phải khớp máy đang chạy (bước điều kiện 3)</td></tr>
+          <tr><td class="mono">@VER=xxx</td><td>Card version (được set làm default vào cardVersionList)</td></tr>
+          <tr><td class="mono">@&lt;KIND&gt;</td><td>Một file nhị phân: kind + <b>mã region</b> (cột “sectorNum” = <code>COPY_TO_*</code> 0–15, <i>không phải địa chỉ</i> — Fig 6) + size-hint + checksum + timestamp + tên</td></tr>
+          <tr><td class="mono">@ALL</td><td>Checksum MSC toàn vùng — đọc dạng <b>thập phân</b> (khác: các kind khác là md5 hex)</td></tr>
+          <tr><td class="mono">@IDX / @NDJ / @OSI…</td><td>File INDEX & <code>node.img</code> — <code>bl_DiffCheckTarget=False</code> ⇒ <b>luôn</b> ghi</td></tr>
+          <tr><td class="mono">@EXP</td><td>Express Download — <code>bl_isExpressDownloadFlg=True</code>, có thể format lại partition</td></tr>
+          <tr><td class="mono">@DBG</td><td>Bật <code>us_DbgFlg</code> — log/verify chi tiết hơn</td></tr>
+          <tr><td class="mono">@END</td><td>Bắt buộc — dấu kết thúc. Thiếu ⇒ huỷ update</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== 3  readIndexFile ===== -->
+  <section>
+    <h2><span class="num">3</span>readIndexFile() — parser &amp; cổng format đầu tiên</h2>
+    <p class="claim">
+      Chạy <b>sớm</b> — trong <code>setMFPBinaryList()</code> ←
+      <code>existFarmwareDataAtTAR()</code>, tức lúc soi gói, <b>trước</b> gauntlet và
+      trước mọi lần ghi. Việc của nó: dịch text INDEX → <code>st_WriteMscDataList[]</code>
+      + đặt cờ toàn cục, và <b>từ chối sớm</b> nếu INDEX sai định dạng.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 5 — readIndexFile(): check → action → 3 lối ra</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 980 430" role="img"
+          aria-label="Luồng dọc của readIndexFile. Vào: file INDEX dạng text đọc theo sector. Bước 1 SYSF_fopen chế độ rb; mở lỗi thì return False. Bước 2 pass 1 quét từng dòng bằng ReadOneLine: nếu dòng đầu là ngoặc vuông hoặc kiểu @SEC @DB2 thì đây là INDEX chống giả mạo, đặt ký tự period thành ngoặc vuông và si32_PreventingFalsification bằng 1; ngược lại period là @. Bước 3 fread toàn bộ vào buffer; nếu ferror thì return False Index Data is Invalid. Bước 4 chỉ khi bl_ForFW True: tìm @TYP thiếu thì return False, lần đầu set sc_RootCardType; tìm @VER thiếu thì return False, lần đầu cardVersionListInit và setDefultCardVersion. Bước 5 pass 2 lặp qua từng @KIND: gặp @END nếu us_BinaryCnt lớn hơn 0 thì return True còn bằng 0 thì return False Error1; gặp @EXP đặt bl_isExpressDownloadFlg rồi continue; gặp @DBG đặt us_DbgFlg; nếu us_BinaryCnt vượt DEF_BINARY_MAX_COUNT thì return False Error2; parse sectorNum 6 ký tự, sectorCount 6, checksum 5 ký tự @ALL đọc thập phân còn lại hex nếu strtoul lỗi thì return False, timestamp 14 ký tự chỉ khi bl_ForFW, rồi filename; nếu KIND là MP1 và tên là mfp001_hwQZ.map thì đổi thành mfp001_hwQt.map, tên lạ thì return False; điền st_WriteMscDataList phần tử us_BinaryCnt rồi tăng, đặt bl_DiffCheckTarget false cho IDX NDJ OSI CHI NDI NPI NPS. Nếu hết loop không thấy @END thì return False Error4. Hai lối ra bên phải: return False khiến caller huỷ update không ghi gì; return True cho ra st_WriteMscDataList và các cờ để sang gauntlet Fig 3.">
+          <defs>
+            <marker id="mk-a5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-f5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-g5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box" x="40" y="18" width="230" height="30" rx="6"/>
+          <text class="lbl-m" x="56" y="37">INDEX file (text · theo sector)</text>
+
+          <rect class="box" x="40" y="66" width="230" height="30" rx="6"/>
+          <text class="t-mono" x="56" y="85" font-size="9.5">SYSF_fopen(path,"rb")</text>
+
+          <rect class="box" x="40" y="114" width="320" height="44" rx="7"/>
+          <text class="t-mono t-b" x="56" y="132" font-size="9.5">1 · Pass 1 — quét dòng (ReadOneLine)</text>
+          <text class="lbl-m" x="56" y="148">dòng đầu = [ / @SEC / @DB2 ? ⇒ period='[', PreventingFalsification=1</text>
+
+          <rect class="box" x="40" y="176" width="230" height="30" rx="6"/>
+          <text class="t-mono" x="56" y="195" font-size="9.5">fread → buffer</text>
+
+          <rect class="box-g" x="40" y="224" width="320" height="46" rx="7"/>
+          <text class="t-mono t-b" x="56" y="242" font-size="9.5">2 · Header  (chỉ khi bl_ForFW = True)</text>
+          <text class="lbl-m" x="56" y="258">tìm @TYP → sc_RootCardType (lần đầu)</text>
+          <text class="lbl-m" x="200" y="258">· tìm @VER → setDefultCardVersion</text>
+
+          <rect class="box-f" x="40" y="288" width="360" height="118" rx="8"/>
+          <text class="t-mono t-b" x="56" y="306" font-size="9.5">3 · Pass 2 — loop mỗi @&lt;KIND&gt;</text>
+          <text class="lbl-m" x="56" y="322">@END : cnt&gt;0 ⇒ return True · cnt=0 ⇒ False (Error1)</text>
+          <text class="lbl-m" x="56" y="337">@EXP ⇒ isExpressDownloadFlg · @DBG ⇒ us_DbgFlg</text>
+          <text class="lbl-m" x="56" y="352">cnt ≥ DEF_BINARY_MAX_COUNT ⇒ False (Error2)</text>
+          <text class="lbl-m" x="56" y="367">parse: sector·count·checksum·timestamp·filename</text>
+          <text class="lbl-m" x="56" y="382">populate st_WriteMscDataList[cnt++] + bl_DiffCheckTarget</text>
+          <text class="lbl-m" x="56" y="397">loop hết không thấy @END ⇒ False (Error4)</text>
+
+          <line class="read" x1="155" y1="48"  x2="155" y2="66"  marker-end="url(#mk-a5)"/>
+          <line class="read" x1="155" y1="96"  x2="155" y2="114" marker-end="url(#mk-a5)"/>
+          <line class="read" x1="155" y1="158" x2="155" y2="176" marker-end="url(#mk-a5)"/>
+          <line class="read" x1="155" y1="206" x2="155" y2="224" marker-end="url(#mk-a5)"/>
+          <line class="read" x1="155" y1="270" x2="155" y2="288" marker-end="url(#mk-a5)"/>
+
+          <rect class="box-g" x="620" y="120" width="330" height="60" rx="9"/>
+          <text class="t-mono t-b" x="785" y="144" text-anchor="middle" font-size="10">return False</text>
+          <text class="lbl-m" x="785" y="162" text-anchor="middle">caller HUỶ update — không ghi gì</text>
+
+          <rect class="box-f" x="620" y="320" width="330" height="60" rx="9"/>
+          <text class="t-mono t-b" x="785" y="344" text-anchor="middle" font-size="10">return True</text>
+          <text class="lbl-m" x="785" y="362" text-anchor="middle">st_WriteMscDataList[] + cờ → gauntlet (Fig 3)</text>
+
+          <path class="gate-l" d="M270 81  C440 90  480 130 618 140" marker-end="url(#mk-g5)"/>
+          <path class="gate-l" d="M270 191 C440 190 480 150 618 150" marker-end="url(#mk-g5)"/>
+          <path class="gate-l" d="M360 247 C480 240 500 158 618 160" marker-end="url(#mk-g5)"/>
+          <path class="gate-l" d="M400 340 C500 300 540 190 618 172" marker-end="url(#mk-g5)"/>
+          <path class="flow"   d="M400 320 C520 300 540 340 618 348" marker-end="url(#mk-f5)"/>
+        </svg>
+      </div>
+      <figcaption>
+        Ba lối ra: <b>return True</b> (thấy <code>@END</code> và có ≥1 binary) ·
+        <b>return False</b> (mở lỗi, fread lỗi, thiếu <code>@TYP</code>/<code>@VER</code>,
+        checksum sai format, tên MP1 lạ, quá <code>DEF_BINARY_MAX_COUNT</code>, không có
+        <code>@END</code>) · <b>continue</b> (dòng <code>@EXP</code>). Mọi
+        <code>False</code> ⇒ caller (<code>setMFPBinaryList</code> →
+        <code>existFarmwareDataAtTAR</code>) coi như gói lỗi, không vào update.
+      </figcaption>
+    </figure>
+
+    <h3>Check gì · điều kiện · khi nào</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Check</th><th>Điều kiện PASS</th><th>Khi nào / vì sao</th><th>Fail ⇒</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">mở file</td><td><code>SYSF_fopen("rb") != NULL</code></td><td>đầu hàm — không có INDEX thì không biết gói chứa gì</td><td class="mono">return False ("is None")</td></tr>
+          <tr><td class="mono">biến thể chống giả mạo</td><td>dòng đầu <code>[</code> / type <code>@SEC</code>/<code>@DB2</code> ⇒ nhận diện</td><td>Pass 1, trước khi parse — chọn ký tự phân cách <code>@</code> vs <code>[</code></td><td class="mono">(không fail — chỉ set cờ)</td></tr>
+          <tr><td class="mono">đọc buffer</td><td><code>fread</code> không <code>ferror</code></td><td>ngay sau Pass 1 — nạp toàn bộ INDEX vào RAM</td><td class="mono">return False ("Invalid")</td></tr>
+          <tr><td class="mono">@TYP có mặt</td><td><code>moveAddrTypeForIndex(..,"TYP") != NULL</code></td><td>chỉ khi <code>bl_ForFW=True</code> — cần loại máy để cổng "khớp máy" (Fig 3-4)</td><td class="mono">return False ("no @TYP")</td></tr>
+          <tr><td class="mono">@VER có mặt</td><td>tìm thấy <code>@VER</code> &amp; độ dài &gt; 0</td><td>chỉ <code>bl_ForFW=True</code> — cần card version làm default</td><td class="mono">return False ("no @VER")</td></tr>
+          <tr><td class="mono">checksum đúng format</td><td><code>@ALL</code>: <code>atol</code> (dec) · khác: <code>strtoul</code> base 16 &amp; end-ptr đúng 5 ký tự</td><td>mỗi dòng <code>@&lt;KIND&gt;</code> — số này dùng verify file sau (checkCheckSum)</td><td class="mono">return False ("strtoul error")</td></tr>
+          <tr><td class="mono">số lượng binary</td><td><code>us_BinaryCnt &lt; DEF_BINARY_MAX_COUNT</code></td><td>trong loop — mảng <code>st_WriteMscDataList[]</code> có hạn</td><td class="mono">break → return False (Error2)</td></tr>
+          <tr><td class="mono">tên file MP1</td><td><code>== mfp001_hwQZ.map</code> (đổi) hoặc <code>== mfp001_hwQt.map</code></td><td>loop, khi <code>KIND==MP1</code> — chuẩn hoá tên subset map</td><td class="mono">return False ("MP1 FN is not…")</td></tr>
+          <tr><td class="mono">có @END</td><td>gặp <code>@END</code> &amp; <code>us_BinaryCnt &gt; 0</code></td><td>cuối loop — INDEX phải trọn vẹn mới cho update</td><td class="mono">return False (Error1 / Error4)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Check xong thì gọi action nào</h3>
+    <ul>
+      <li>Set cờ toàn cục: <code>si32_PreventingFalsification</code>, <code>bl_isExpressDownloadFlg</code>, <code>us_DbgFlg</code>, <code>us_BinaryCount</code>, <code>sc_RootCardType</code>.</li>
+      <li><code>cardVersionListInit()</code> + <code>setDefultCardVersion()</code> (lần đầu).</li>
+      <li><code>strptime()</code> + <code>mktime()</code> — timestamp mỗi entry.</li>
+      <li>Gán từng trường vào <code>st_WriteMscDataList[us_BinaryCnt]</code> + set <code>bl_DiffCheckTarget</code> + <code>bl_ExecutedDownload=False</code>.</li>
+      <li><code>strncpy</code> đổi tên file (chỉ case MP1 <code>hwQZ→hwQt</code>).</li>
+      <li><code>setSubsetLog()</code> ghi log từng bước; <code>SYSF_fclose()</code>.</li>
+      <li><code>return True</code> (list sẵn sàng) / <code>return False</code> (huỷ).</li>
+    </ul>
+
+    <p class="callout">
+      <b>Đáng để ý:</b> readIndexFile chỉ validate <b>format text của INDEX</b> — nó
+      <i>không</i> đọc hay verify file binary thật (việc đó là <code>checkCheckSum()</code>
+      ở Fig 3 cổng 5, chạy sau khi copy). · <code>bl_ForFW</code> chia đôi hành vi: FW
+      INDEX (có <code>@TYP</code>/<code>@VER</code> + timestamp) vs OSS INDEX (không có).
+      · <code>si32_PreventingFalsification</code> là <b>side-effect toàn cục</b> đặt ở
+      đây, cổng chống giả mạo (Fig 3-3) dùng lại. · Parse bằng <b>offset cố định</b>
+      (6/6/5/14 ký tự, <code>ui_LoopCnt += 73</code>…) ⇒ rất nhạy với thay đổi layout
+      INDEX. · <code>sc_RootCardType</code> &amp; card version chỉ set <b>lần gọi đầu</b>
+      (guard flag) — idempotent qua nhiều lần gọi.
+    </p>
+  </section>
+
+  <!-- ===== 4 ===== -->
+  <section>
+    <h2><span class="num">4</span>Điều kiện tiên quyết — gauntlet trước khi ghi</h2>
+    <p class="claim">
+      Không file nào được ghi cho tới khi qua hết các cổng. Cổng nào fail ⇒
+      <code>notificationEvent(UpdateFailed)</code>, dừng, không ghi. Cổng “diff” cho kết
+      quả thứ ba: <b>skip file</b> (đã mới nhất).
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — 7 cổng kiểm tra</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 940 560" role="img"
+          aria-label="Bảy cổng xếp dọc, đường xanh đi xuống qua tất cả nghĩa là pass. Cổng 1 existFarmwareDataAtTAR: có dữ liệu FW trong file TAR không. Cổng 2 readIndexFile: INDEX hợp lệ, kết thúc @END, có ít nhất một binary. Cổng 3 chống giả mạo: nếu dòng đầu là ngoặc vuông hoặc @SEC thì chạy openssl dgst sha256 trên /tmp/serial_tmp và so khớp. Cổng 4 khớp máy: @TYP bằng loại máy này, và ChkEngFW cùng cmpENGVersion xác nhận đúng engine và version ROM. Cổng 5 checkCheckSum: với mỗi file, md5 của file đã copy lên SSD phải bằng checksum ghi trong INDEX. Cổng 6 DifferentialDownloadDetermination: nếu version đã cài bằng version trong INDEX thì bỏ qua file đó, trừ khi bl_DiffCheckTarget bằng false thì vẫn ghi; đây là nhánh skip màu xám chứ không phải fail. Cổng 7 THRF_CheckPowerStatus và check_ssd_rfs: nguồn điện ổn và hệ thống file gốc trên SSD còn tốt. Qua hết thì bắt đầu ghi. Bất kỳ cổng 1 tới 5 hoặc 7 fail thì nhảy sang làn phải notificationEvent UpdateFailed và không ghi gì.">
+          <defs>
+            <marker id="mk-f3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-g3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <rect class="box-g" x="600" y="230" width="300" height="52" rx="9"/>
+          <text class="t-mono t-b" x="750" y="252" text-anchor="middle" font-size="10">notificationEvent(UpdateFailed)</text>
+          <text class="lbl-m" x="750" y="268" text-anchor="middle">dừng — KHÔNG ghi gì</text>
+
+          <rect class="box-g" x="600" y="410" width="300" height="44" rx="9"/>
+          <text class="lbl-m" x="750" y="430" text-anchor="middle">SKIP file này (đã mới nhất)</text>
+          <text class="lbl-m" x="750" y="444" text-anchor="middle">→ DownloadedFWInformationUpdate</text>
+
+          <g>
+            <rect class="box-g" x="40" y="24"  width="440" height="40" rx="8"/>
+            <text class="t-mono t-b" x="56" y="42" font-size="10">1 · existFarmwareDataAtTAR()</text>
+            <text class="lbl-m" x="56" y="57">có dữ liệu FW trong *.TAR?</text>
+
+            <rect class="box-g" x="40" y="90"  width="440" height="40" rx="8"/>
+            <text class="t-mono t-b" x="56" y="108" font-size="10">2 · readIndexFile()</text>
+            <text class="lbl-m" x="56" y="123">INDEX hợp lệ · kết thúc @END · ≥ 1 binary?</text>
+
+            <rect class="box-g" x="40" y="156" width="440" height="40" rx="8"/>
+            <text class="t-mono t-b" x="56" y="174" font-size="10">3 · chống giả mạo</text>
+            <text class="lbl-m" x="56" y="189">[ / @SEC ⇒ openssl sha256 /tmp/serial_tmp khớp?</text>
+
+            <rect class="box-g" x="40" y="222" width="440" height="40" rx="8"/>
+            <text class="t-mono t-b" x="56" y="240" font-size="10">4 · khớp máy — @TYP · ChkEngFW · cmpENGVersion</text>
+            <text class="lbl-m" x="56" y="255">đúng model &amp; engine &amp; version ROM?</text>
+
+            <rect class="box-g" x="40" y="288" width="440" height="40" rx="8"/>
+            <text class="t-mono t-b" x="56" y="306" font-size="10">5 · checkCheckSum()  (mỗi file)</text>
+            <text class="lbl-m" x="56" y="321">md5(file trên SSD) == checksum trong INDEX?</text>
+
+            <rect class="box-g" x="40" y="380" width="440" height="44" rx="8"/>
+            <text class="t-mono t-b" x="56" y="398" font-size="10">6 · DifferentialDownloadDetermination()</text>
+            <text class="lbl-m" x="56" y="413">version đã cài == INDEX ⇒ skip (trừ DiffTarget=False)</text>
+
+            <rect class="box-g" x="40" y="452" width="440" height="44" rx="8"/>
+            <text class="t-mono t-b" x="56" y="470" font-size="10">7 · THRF_CheckPowerStatus() · check_ssd_rfs()</text>
+            <text class="lbl-m" x="56" y="485">nguồn ổn · SSD rootfs còn tốt?</text>
+          </g>
+
+          <line class="flow" x1="260" y1="64"  x2="260" y2="90"  marker-end="url(#mk-f3)"/>
+          <line class="flow" x1="260" y1="130" x2="260" y2="156" marker-end="url(#mk-f3)"/>
+          <line class="flow" x1="260" y1="196" x2="260" y2="222" marker-end="url(#mk-f3)"/>
+          <line class="flow" x1="260" y1="262" x2="260" y2="288" marker-end="url(#mk-f3)"/>
+          <line class="flow" x1="260" y1="328" x2="260" y2="380" marker-end="url(#mk-f3)"/>
+          <line class="flow" x1="260" y1="424" x2="260" y2="452" marker-end="url(#mk-f3)"/>
+          <line class="flow" x1="260" y1="496" x2="260" y2="524" marker-end="url(#mk-f3)"/>
+          <text class="flow-t" x="270" y="518">→ bắt đầu ghi (Fig 4)</text>
+
+          <path class="gate-l" d="M480 44  C560 60  560 210 598 240" marker-end="url(#mk-g3)"/>
+          <path class="gate-l" d="M480 110 C560 130 560 220 598 248" marker-end="url(#mk-g3)"/>
+          <path class="gate-l" d="M480 176 C560 200 560 235 598 254" marker-end="url(#mk-g3)"/>
+          <path class="gate-l" d="M480 242 C540 250 560 252 598 258" marker-end="url(#mk-g3)"/>
+          <path class="gate-l" d="M480 308 C560 300 560 270 598 266" marker-end="url(#mk-g3)"/>
+          <path class="gate-l" d="M480 474 C560 470 560 300 598 276" marker-end="url(#mk-g3)"/>
+          <path class="gate-l" d="M480 402 C560 410 560 420 598 428" marker-end="url(#mk-g3)"/>
+          <text class="gate-t" x="500" y="398">= ⇒</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="lg-flow"></i> pass → tiếp</span>
+        <span><i class="lg-gate"></i> fail / skip</span>
+      </div>
+      <figcaption>
+        Cổng <b>4</b> là chống “nạp nhầm firmware máy khác” — <code>@TYP</code> so với
+        <code>sc_RootCardType</code>; <code>ChkEngFW()</code> gọi
+        <code>getDownloadMachineInfo()</code> + <code>cmpENGVersion()</code> đối chiếu
+        engine ROM. Cổng <b>5</b> so md5 file thực trên SSD với con số trong INDEX; lệch
+        thì log cả 3 giá trị (INDEX / SSD / USB) rồi fail. Cổng <b>6</b> khác các cổng
+        kia: nó <i>không huỷ update</i>, chỉ đánh dấu file đó “không cần ghi”.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 5 ===== -->
+  <section>
+    <h2><span class="num">5</span>Trình tự update</h2>
+    <p class="claim">
+      <code>startMscUpdateTask()</code> chạy tuần tự; lõi là
+      <code>FwupFileCopyToSSD()</code> lặp <b>theo region, rồi theo từng file</b>. Sau
+      đó tới backup, sub-controller, Boot ROM, và reboot.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 4 — spine tuần tự + vòng lặp per-file</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1120 640" role="img"
+          aria-label="Cột dọc các bước. 1 startMscUpdateTask thông báo Busy và tiến độ 10 phần trăm. 2 changePermission chmod các file tải về. 3 init_SSD và mount các partition, THRG_UnmountDevice trước. 4 PreJudgmentOfDifferenceUpdate xác định cần update vùng nào trong Subset, Firmware, RFS. 5 FwupFileCopyToSSD là một hộp lồng: với mỗi region trong danh sách Subset, Kernel, MFP, Boot, Plugin, Resource, Extension, RFS, IWS, và với mỗi file trong region đó, làm bốn việc: THRC_SearchWriteMscData tìm entry theo KIND, DifferentialDownloadDetermination để quyết skip hay ghi, copy file từ thư mục download sang mount point hoặc writeImageFile ghi theo sector, checkCheckSum verify sau khi copy, DownloadedFWInformationUpdate ghi nhận đã flash. 6 saveSelectLanguage, setIndexMscCheckSum, setDisableGrityinteFlg. 7 startBackupProc tạo bản rollback bằng cách hoán đổi Cur và Rollback. 8 THRF_DoSync flush cache rồi THRL_ReCopyBootFile copy lại thư mục boot. 9 thông báo Success và tiến độ 100 phần trăm. 10 các task sub-controller: với mỗi bộ trong PS-CPU, SSD, SCB, PowerSub, LPPP, Panel, đọc version từ file và từ phần cứng, so sánh, nếu khác thì THRL_write của bộ đó qua downloader kèm callback; tiền đề là THRF_CheckPowerStatus. 11 updateBootRom kèm calcBootHash writeBootHash và makeCardVersionFile. 12 SubsetReboot khởi động lại.">
+          <defs>
+            <marker id="mk-f4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <g>
+            <rect class="box" x="40" y="20" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="41"><tspan class="t-mono t-b" font-size="10">1</tspan>  startMscUpdateTask() · notify Busy · 10%</text>
+            <rect class="box" x="40" y="70" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="91"><tspan class="t-mono t-b" font-size="10">2</tspan>  changePermission() — chmod file tải về</text>
+            <rect class="box" x="40" y="120" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="141"><tspan class="t-mono t-b" font-size="10">3</tspan>  init_SSD() + mount partition (unmount /mnt trước)</text>
+            <rect class="box" x="40" y="170" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="191"><tspan class="t-mono t-b" font-size="10">4</tspan>  PreJudgmentOfDifferenceUpdate() — vùng nào cần: Subset / FW / RFS</text>
+
+            <rect class="box-f" x="40" y="220" width="470" height="156" rx="9"/>
+            <text class="t-mono t-b" x="56" y="240" font-size="10">5 · FwupFileCopyToSSD() — vòng lặp</text>
+            <text class="lbl-m" x="56" y="258">for region ∈ {Subset, Kernel, MFP, Boot, Plugin,</text>
+            <text class="lbl-m" x="56" y="272">              Resource, Extension, RFS, IWS}:</text>
+            <text class="lbl-m" x="70" y="292">for file ∈ region:</text>
+            <text class="lbl-m" x="86" y="308">① THRC_SearchWriteMscData(KIND)</text>
+            <text class="lbl-m" x="86" y="322">② DifferentialDownloadDetermination → skip | ghi</text>
+            <text class="lbl-m" x="86" y="338">③ copy DownloadDir/name → mount/name  (hoặc writeImageFile: sector)</text>
+            <text class="lbl-m" x="86" y="354">④ checkCheckSum(COPY_TO_X) → DownloadedFWInformationUpdate</text>
+
+            <rect class="box" x="40" y="392" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="413"><tspan class="t-mono t-b" font-size="10">6</tspan>  saveSelectLanguage · setIndexMscCheckSum · setDisableGrityinteFlg</text>
+            <rect class="box-f" x="40" y="442" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="463"><tspan class="t-mono t-b" font-size="10">7</tspan>  startBackupProc() — tạo bản rollback (Cur ↔ Rollback)</text>
+            <rect class="box" x="40" y="492" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="513"><tspan class="t-mono t-b" font-size="10">8</tspan>  THRF_DoSync() · THRL_ReCopyBootFile()</text>
+            <rect class="box" x="40" y="542" width="470" height="34" rx="7"/><text class="lbl-m" x="56" y="563"><tspan class="t-mono t-b" font-size="10">9</tspan>  notificationEvent(Success) · 100%</text>
+          </g>
+
+          <line class="flow" x1="275" y1="54"  x2="275" y2="70"  marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="104" x2="275" y2="120" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="154" x2="275" y2="170" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="204" x2="275" y2="220" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="376" x2="275" y2="392" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="426" x2="275" y2="442" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="476" x2="275" y2="492" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="275" y1="526" x2="275" y2="542" marker-end="url(#mk-f4)"/>
+
+          <!-- right column: sub-controllers + boot rom + reboot -->
+          <rect class="box-f" x="580" y="220" width="500" height="150" rx="9"/>
+          <text class="t-mono t-b" x="596" y="240" font-size="10">10 · sub-controller tasks</text>
+          <text class="lbl-m" x="596" y="258">for X ∈ {PS-CPU, SSD, SCB, PowerSub, LPPP, Panel}:</text>
+          <text class="lbl-m" x="612" y="276">① THRL_get&lt;X&gt;FileFwInfo(file)  — version + checksum trong gói</text>
+          <text class="lbl-m" x="612" y="292">② THRL_get&lt;X&gt;HwFwInfo()      — version đang chạy trên HW</text>
+          <text class="lbl-m" x="612" y="308">③ khác nhau ⇒ THRL_write&lt;X&gt;Fw(file) qua downloader + callback</text>
+          <text class="lbl-m" x="596" y="332" fill="var(--gate)">tiền đề mỗi lần ghi: THRF_CheckPowerStatus()</text>
+          <text class="lbl-m" x="596" y="352">(Panel/PS-CPU/SSD: task riêng, có timeout &amp; retry)</text>
+
+          <rect class="box-f" x="580" y="392" width="500" height="52" rx="9"/>
+          <text class="t-mono t-b" x="596" y="412" font-size="10">11 · updateBootRom()</text>
+          <text class="lbl-m" x="596" y="430">+ calcBootHash / writeBootHash + makeCardVersionFile()</text>
+
+          <rect class="box-c" x="580" y="466" width="500" height="44" rx="9"/>
+          <text class="t-mono t-b" x="830" y="488" text-anchor="middle" font-size="11">12 · SubsetReboot()</text>
+          <text class="lbl-m" x="830" y="502" text-anchor="middle">taskSetUpReboot — khởi động lại vào FW mới</text>
+
+          <line class="flow" x1="510" y1="559" x2="820" y2="559 " marker-end="url(#mk-f4)"/>
+          <path class="flow" d="M830 559 C830 500 830 420 830 446" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="830" y1="370" x2="830" y2="390" marker-end="url(#mk-f4)"/>
+          <line class="flow" x1="830" y1="444" x2="830" y2="464" marker-end="url(#mk-f4)"/>
+          <text class="flow-t" x="640" y="552">sau khi MSC xong →</text>
+        </svg>
+      </div>
+      <figcaption>
+        Bước <b>5</b> là toàn bộ trọng tâm: mỗi region gọi một task con
+        (<code>startTask_copy*</code>), trong đó lặp qua từng entry của
+        <code>st_WriteMscDataList[]</code> thuộc region. File dạng cây thư mục thì
+        <b>copy</b> vào mount point; file dạng ảnh partition thì <code>writeImageFile()</code>
+        <b>ghi theo <code>ul_SectorNum</code>/<code>ul_SectorCnt</code></b>. Nếu bất kỳ
+        bước nào fail sau khi <code>startBackupProc()</code> đã chạy, bản Rollback cho
+        phép quay lại FW cũ ở lần boot sau.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 6 ===== -->
+  <section>
+    <h2><span class="num">6</span>Ghi vào địa chỉ nào — và địa chỉ đó lấy ở đâu</h2>
+    <p class="claim">
+      Gói <code>.tar</code> <b>không chứa địa chỉ vật lý</b>. Mỗi dòng INDEX chỉ mang
+      một <b>mã region</b> (<code>COPY_TO_*</code>, 0–15) ở cột “sector number”. Ánh xạ
+      region → <code>/dev/kmsda&lt;N&gt;</code> → mount point là <b>bảng cứng biên dịch
+      sẵn trong updater</b> (<code>fwupdate.cpp</code> :321–334, <code>fwupdate.h</code>).
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 6 — phân giải địa chỉ 3 tầng</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 400" role="img"
+          aria-label="Ba tầng dọc. Tầng 1 trong .tar: một dòng INDEX ví dụ @KRN rồi 10 rồi 000200 rồi 3f9c1 rồi timestamp rồi vmlinuz-6.1.img. Nhãn: @KRN là KIND; số 10 ở cột sector-number KHÔNG phải địa chỉ mà là mã region COPY_TO_KERNEL trong khoảng 0 tới 15; 000200 ở cột count chỉ là gợi ý kích thước, thực tế dd tính lại count từ kích thước file; còn lại là checksum md5 hex, timestamp, tên file. readIndexFile gán ul_SectorNum bằng 10. Tầng 2 bảng partition biên dịch sẵn trong updater tại fwupdate.cpp dòng 321 tới 334: Subset là kmsda2; Boot và Kernel dùng chung THRD_PartInfo_Kernel là kmsda5 mount ở /boot; RFS là kmsda7 mount ở /; RES là kmsda8 ở /res; MSC tức MFP firmware là kmsda9 ở /km; WorkFw là kmsda13 cho SD hoặc kmsda14 cho SSD ở /km/work_fw; nếu partition mã hoá thì đường dẫn là /dev/mapper/crypt_ cộng số; Boot ROM là /dev/mtdblock1, SCB là /dev/mtdblock0, LPPP là /dev/mtd0. Mã region 10 tra ra THRD_PartInfo_Kernel rồi THRG_mountDevice partition đó vào /tmp/mnt_Boot. Tầng 3 ghi: cây thư mục thì cp file từ thư mục download sang mount cộng tên; ảnh partition thì chạy dd bs 4096 count bằng trần của filesize chia 4096 conv sync if là file download of là devPath, sau đó chạy lại dd đường ống md5sum và so với checksum trong INDEX.">
+          <defs>
+            <marker id="mk-a6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-f6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="lbl-m" x="40" y="16" fill="var(--gate)">TẦNG 1 — trong .tar / INDEX</text>
+          <rect class="box-g" x="40" y="22" width="920" height="30" rx="6"/>
+          <text class="t-mono" x="54" y="41" font-size="10">@KRN&#160;&#160;10&#160;&#160;000200&#160;&#160;3f9c1&#160;&#160;20250115120000&#160;&#160;vmlinuz-6.1.img</text>
+          <g class="lbl-m">
+            <line class="gate-l" x1="66"  y1="52" x2="66"  y2="66"/><text x="66"  y="80" text-anchor="middle">KIND</text>
+            <line class="gate-l" x1="110" y1="52" x2="110" y2="66"/><text x="150" y="80" text-anchor="middle" fill="var(--gate)">= COPY_TO_KERNEL (mã region 0–15, KHÔNG phải địa chỉ)</text>
+            <line class="gate-l" x1="176" y1="52" x2="176" y2="66"/><text x="330" y="94" text-anchor="middle">count = gợi ý size (dd tính lại từ filesize)</text>
+            <line class="gate-l" x1="360" y1="52" x2="360" y2="66"/><text x="470" y="80" text-anchor="middle">checksum · timestamp · filename</text>
+          </g>
+          <line class="read" x1="150" y1="100" x2="150" y2="128" marker-end="url(#mk-a6)"/>
+          <text class="lbl-m" x="160" y="120">readIndexFile(): st_WriteMscDataList[i].ul_SectorNum = 10</text>
+
+          <text class="lbl-m" x="40" y="146" fill="var(--flow)">TẦNG 2 — bảng partition biên dịch sẵn (fwupdate.cpp :321–334)</text>
+          <rect class="box-f" x="40" y="152" width="920" height="118" rx="8"/>
+          <g class="t-mono" font-size="9.5">
+            <text x="56" y="172">Subset      → /dev/kmsda2</text>
+            <text x="360" y="172">Boot + Kernel → /dev/kmsda5   → /boot</text>
+            <text x="700" y="172">RFS → /dev/kmsda7   → /</text>
+            <text x="56" y="192">RES → /dev/kmsda8   → /res</text>
+            <text x="360" y="192">MSC / MFP fw → /dev/kmsda9   → /km</text>
+            <text x="700" y="192">WorkFw → kmsda13(SD)/14(SSD) → /km/work_fw</text>
+            <text x="56" y="212">mã hoá ⇒ /dev/mapper/crypt_&lt;N&gt;</text>
+            <text x="360" y="212">Boot ROM → /dev/mtdblock1</text>
+            <text x="700" y="212">SCB → /dev/mtdblock0 · LPPP → /dev/mtd0</text>
+          </g>
+          <text class="lbl-m" x="56" y="240">mã region 10  →  THRD_PartInfo_Kernel  →  THRG_mountDevice(part, "/tmp/mnt_Boot")</text>
+          <text class="lbl-m" x="56" y="256" fill="var(--flow)">→ ánh xạ này KHÔNG có trong .tar — nó nằm trong FW đang chạy</text>
+          <line class="read" x1="150" y1="270" x2="150" y2="298" marker-end="url(#mk-a6)"/>
+
+          <text class="lbl-m" x="40" y="316" fill="var(--flow)">TẦNG 3 — ghi</text>
+          <rect class="box" x="40" y="322" width="450" height="66" rx="8"/>
+          <text class="t-mono t-b" x="56" y="340" font-size="9.5">cây thư mục</text>
+          <text class="t-mono" x="56" y="356" font-size="9">cp  &lt;download&gt;/name  →  &lt;mount&gt;/name</text>
+          <text class="lbl-m" x="56" y="372">Boot · Plugin · Resource · Extension · RFS-tree · MS1/MP1</text>
+
+          <rect class="box-f" x="510" y="322" width="450" height="66" rx="8"/>
+          <text class="t-mono t-b" x="526" y="340" font-size="9.5">ảnh partition</text>
+          <text class="t-mono" x="526" y="356" font-size="9">dd bs=4096 count=⌈size/4096⌉ conv=sync if=&lt;download&gt;/name of=&lt;devPath&gt;</text>
+          <text class="lbl-m" x="526" y="372">→ dd | md5sum  vs  checksum INDEX     ·  MF1–4 · SUB · RF1–3 · Kernel · NDJ · IWS</text>
+
+          <line class="flow" x1="150" y1="322" x2="150" y2="322"/>
+        </svg>
+      </div>
+      <figcaption>
+        “Địa chỉ” mà file được ghi vào có 3 nguồn: <b>(1)</b> gói <code>.tar</code> chỉ
+        cấp <i>mã region</i> (cột sector = <code>COPY_TO_*</code>) + tên file; <b>(2)</b>
+        updater tra mã đó ra <code>THRD_PartInfo_*</code> → <code>/dev/kmsda&lt;N&gt;</code>
+        → mount point — bảng này <b>biên dịch sẵn</b>, đi kèm firmware; <b>(3)</b> runtime
+        chọn biến thể: mã hoá (<code>/dev/mapper/crypt_*</code>) vs thường, SD
+        (<code>kmsda13</code>) vs SSD (<code>kmsda14</code>) cho work_fw, partition IWS
+        theo dung lượng SSD.
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Region</th><th>INDEX KIND</th><th>Mã region</th><th>Partition · node</th><th>Mount → runtime path</th><th>Cách ghi</th></tr></thead>
+        <tbody>
+          <tr><td>Subset (image)</td><td class="mono">SUB</td><td class="mono">COPY_TO_SUBSET (8)</td><td class="mono">THRD_PartInfo_Subset · kmsda2</td><td class="mono">/ram2 (+ cramfs)</td><td class="mono">dd / copyImageFile</td></tr>
+          <tr><td>Subset file · map</td><td class="mono">MS1 · MP1</td><td class="mono">COPY_TO_SUBSET (8)</td><td class="mono">THRD_PartInfo_Subset · kmsda2</td><td class="mono">/ram2</td><td class="mono">cp</td></tr>
+          <tr><td>Kernel</td><td class="mono">(image)</td><td class="mono">COPY_TO_KERNEL (10)</td><td class="mono">THRD_PartInfo_Kernel · kmsda5</td><td class="mono">/tmp/mnt_Boot</td><td class="mono">cp / dd</td></tr>
+          <tr><td>MFP firmware</td><td class="mono">MF1 · MF2 · MF3 · MF4</td><td class="mono">COPY_TO_MFP (0)</td><td class="mono">THRD_PartInfo_Firmware · kmsda9</td><td class="mono">/km (qua /tmp/mnt_MFP2, /ram4)</td><td class="mono"><b>dd</b> writeImageFile</td></tr>
+          <tr><td>Boot</td><td class="mono">(tree)</td><td class="mono">COPY_TO_BOOT (3)</td><td class="mono">THRD_PartInfo_Kernel · kmsda5</td><td class="mono">/boot (qua /tmp/mnt_Boot)</td><td class="mono">cp</td></tr>
+          <tr><td>Plugin</td><td class="mono">(tree) · NPJ</td><td class="mono">COPY_TO_SDIR (1)</td><td class="mono">THRD_PartInfo_Plugin</td><td class="mono">/sdir (qua /tmp/mnt_Plugin)</td><td class="mono">cp</td></tr>
+          <tr><td>Resource</td><td class="mono">(tree)</td><td class="mono">COPY_TO_RES (2)</td><td class="mono">THRD_PartInfo_Resource · kmsda8</td><td class="mono">/res (qua /tmp/mnt_Resource)</td><td class="mono">cp</td></tr>
+          <tr><td>Extension (work_fw)</td><td class="mono">(tree / exec)</td><td class="mono">COPY_TO_WORK_FW (5)</td><td class="mono">kmsda13 (SD) / kmsda14 (SSD)</td><td class="mono">/km/work_fw (qua /tmp/mnt_Extension2)</td><td class="mono">cp</td></tr>
+          <tr><td>RFS (rootfs)</td><td class="mono">RF1 · RF2 · RF3</td><td class="mono">COPY_TO_RFS (4)</td><td class="mono">THRD_PartInfo_Rfs · kmsda7</td><td class="mono">/ (qua /mnt) + check_ssd_rfs()</td><td class="mono">dd / cp</td></tr>
+          <tr><td>node.img</td><td class="mono">NDJ</td><td class="mono">— (luôn ghi)</td><td class="mono">THRD_PartInfo (node)</td><td class="mono">—</td><td class="mono">dd</td></tr>
+          <tr><td>IWS image</td><td class="mono">—</td><td class="mono">COPY_TO_IWSGEN (15)</td><td class="mono">THRD_PartInfo_IWS_* (theo dung lượng SSD)</td><td class="mono">msc image path</td><td class="mono">cp / dd</td></tr>
+          <tr><td>Sub-controller</td><td class="mono">—</td><td class="mono">—</td><td class="mono">serial · /dev/mtd0 (LPPP) · mtdblock0 (SCB)</td><td class="mono">—</td><td class="mono">downloader + callback</td></tr>
+          <tr><td>Boot ROM</td><td class="mono">—</td><td class="mono">—</td><td class="mono">SPI-Flash · /dev/mtdblock1</td><td class="mono">—</td><td class="mono">updateBootRom + writeBootHash</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="callout">
+      <b>Cột “sector number” trong INDEX bị tái dụng làm mã region.</b> Vì vậy
+      <code>checkCheckSum()</code> lọc file bằng
+      <code>if (ul_SectorNum == COPY_TO_KERNEL)</code>… chứ không phải theo địa chỉ đĩa.
+      <code>ul_SectorCnt</code> gần như chỉ là metadata (in log, so diff); lệnh
+      <code>dd</code> tính <code>count</code> lại từ <code>stat().st_size</code>. Muốn
+      biết một file đi vào <code>/dev/</code> nào, phải đọc bảng partition trong
+      <code>fwupdate.cpp</code>/<code>fwupdate.h</code> — không có trong gói tải về.
+    </p>
+  </section>
+
+  <!-- ===== 7 ===== -->
+  <section class="prose">
+    <h2><span class="num">7</span>Vòng lặp per-file &amp; rollback</h2>
+    <ol>
+      <li><b>Tìm entry</b>: <code>THRC_SearchWriteMscData(KIND, &amp;idx)</code> → chỉ số trong <code>st_WriteMscDataList[]</code>.</li>
+      <li><b>Diff</b>: <code>DifferentialDownloadDetermination(idx)</code> — so <code>t_TimeStamp</code>/version với bản ghi FW đang cài (<code>st_CurrentlyFMscDataList</code>). Trùng &amp; <code>bl_DiffCheckTarget=True</code> ⇒ <b>skip</b>, chỉ gọi <code>DownloadedFWInformationUpdate(idx)</code> (coi như đã cập nhật).</li>
+      <li><b>Ghi</b>: file cây thư mục ⇒ <code>cp sc_DownLoadDir/sc_FileName</code> → <code>&lt;mount&gt;/sc_FileName</code>; file ảnh ⇒ <code>writeImageFile()</code>: <code>dd bs=4096 count=⌈filesize/4096⌉ conv=sync if=&lt;download&gt;/name of=&lt;devPath&gt;</code> rồi <code>dd | md5sum</code> so với <code>ul_CheckSum</code>. (<code>ul_SectorNum</code> = mã region <code>COPY_TO_*</code>, không phải địa chỉ; <code>devPath</code> tra từ bảng partition — Fig 6.)</li>
+      <li><b>Verify</b>: <code>checkCheckSum(COPY_TO_X, mount)</code> → <code>THRF_CalcSum(path)</code> so với <code>ul_CheckSum</code>. Lệch ⇒ log <code>INDEX sum / SSD sum / USB sum</code> rồi <code>return False</code>.</li>
+      <li><b>Ghi nhận</b>: đặt <code>bl_ExecutedDownload=True</code>; <code>DownloadedFWInformationUpdate(idx)</code> cập nhật bản ghi “đã cài” cho lần diff sau; <code>AddCheckSum()</code> gom checksum để tính tổng.</li>
+    </ol>
+    <p>
+      <b>Rollback</b>: <code>startBackupProc()</code> chạy <i>trước</i> khi ghi những
+      thứ khó phục hồi — nó quản lý cặp file <code>CurBackup</code> ↔
+      <code>Rollback</code> (<code>changeCurBackupToRollback</code> /
+      <code>changeRollbackToCurBackup</code>). Nếu update hỏng giữa chừng,
+      <code>backupRollBackFile()</code> + logic boot cho phép quay lại FW trước đó.
+      <code>BackupDownloadedFWInformation()</code> lưu cả bản ghi FW-info để bản cũ
+      khớp lại.
+    </p>
+  </section>
+
+  <!-- ===== 8 ===== -->
+  <section class="prose">
+    <h2><span class="num">8</span>Lưu ý</h2>
+    <div class="watch">
+      <h3>Watch list</h3>
+      <ul>
+        <li><b>INDEX là “bản kê khai”, không phải dữ liệu.</b> Sai một trường (sector, checksum, tên) ⇒ hoặc fail checkCheckSum, hoặc ghi nhầm vùng. <code>@END</code> thiếu ⇒ huỷ toàn bộ trước khi ghi.</li>
+        <li><b>Cổng 4 (khớp máy) là chống brick.</b> <code>@TYP</code> + <code>ChkEngFW</code> đảm bảo không nạp FW của model/engine khác.</li>
+        <li><b>Cổng 6 ≠ fail.</b> “version trùng ⇒ skip” là hành vi bình thường của differential download; đừng nhầm là lỗi. File INDEX &amp; <code>node.img</code> cố tình bỏ qua diff (luôn ghi).</li>
+        <li><b>Checksum verify chạy SAU copy</b>, đọc lại từ SSD — nên phát hiện được cả lỗi ghi đĩa, không chỉ lỗi tải.</li>
+        <li><b><code>startBackupProc()</code> phải chạy trước bước ghi rủi ro.</b> Đổi thứ tự ⇒ mất khả năng rollback.</li>
+        <li><b>Sub-controller ghi qua downloader + callback</b> (bất đồng bộ, có timeout/retry) — khác hẳn copy file. Tiền đề mỗi lần: <code>THRF_CheckPowerStatus()</code> (mất điện giữa chừng ⇒ brick sub-controller).</li>
+        <li><b>Express Download</b> (<code>@EXP</code>) có thể <code>THRG_formatFileSystem()</code> partition trước khi ghi — mất dữ liệu vùng đó là chủ ý.</li>
+        <li><b>Boot ROM + boot hash ghi cuối cùng</b>, ngay trước reboot — điểm không thể rollback bằng phần mềm.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Nguồn: <code>Subset/S-S800/Src/application/mfp/system/thr/thr/fwupdate.cpp</code> —
+    <code>readIndexFile</code> :5182, <code>startMscUpdateTask</code> :4673,
+    <code>FwupFileCopyToSSD</code> :8963, <code>checkCheckSum</code> :~13000,
+    <code>DifferentialDownloadDetermination</code>, <code>startBackupProc</code>,
+    <code>existFarmwareDataAtTAR</code> :1798, <code>ChkEngFW</code> :7621,
+    <code>THRF_CheckPowerStatus</code> :14855, <code>SubsetReboot</code> :6354;
+    <code>fwupdate_DEF.h</code> (PreventingFalsification, <code>/tmp/serial_tmp</code>,
+    openssl sha256). Tên partition/mount và số ví dụ trong sơ đồ là minh hoạ. Sơ đồ vẽ
+    tay bằng inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "subset-fwupdate-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try {
+      var s = localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") root.setAttribute("data-theme", s);
+    } catch (e) {}
+    function cur() {
+      var a = root.getAttribute("data-theme");
+      if (a) return a;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var n = cur() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", n);
+      try { localStorage.setItem(KEY, n); } catch (e) {}
+    });
+  })();
+</script>
+
+</body>
+</html>

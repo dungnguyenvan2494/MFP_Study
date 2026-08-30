@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subset NVRAM Deep Analysis</title>
+<meta name="description" content="Reverse-engineer system/nvd/ của Subset S-S800: 4 tầng lưu trữ (SPI-Flash flags, NVRAM struct, journal/backup, .db database), lớp phần mềm API/NVDC/storage-color/DB, transaction ghi NVDC_FstColor::WriteData, memory map vật lý, data model FWUpdateSetting (đã chuyển sang .db), state machine các cờ SPI-Flash, và tác động khi FW update / mất điện. Mọi node/arrow kèm source file:line; chỗ chưa chứng minh được đánh dấu NEED SOURCE VERIFICATION.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  html{color-scheme:light dark}
+  img{max-width:100%;height:auto}
+  [hidden]{display:none!important}
+
+  :root{
+    --bg:#edeef0;
+    --surface:#ffffff;
+    --surface-2:#f3f4f6;
+    --ink:#1a1d21;
+    --muted:#5b626b;
+    --line:#ced2d9;
+    --line-strong:#949aa4;
+    --ok:#2f7050;
+    --ok-soft:#dcebe2;
+    --gap:#a4432b;
+    --gap-soft:#f2e1db;
+    --ram:#3f5bb0;
+    --ram-soft:#e0e5f5;
+    --grid:#e2e4e8;
+    --shadow:0 1px 2px rgba(20,25,35,.06),0 10px 26px rgba(20,25,35,.05);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1114;--surface:#171a1e;--surface-2:#1d2126;--ink:#e0e2e6;--muted:#8b929c;
+      --line:#2a2e34;--line-strong:#454b55;--ok:#5cbf8a;--ok-soft:#16281f;--gap:#e0836a;
+      --gap-soft:#331e18;--ram:#8aa0e8;--ram-soft:#1b2138;--grid:#22252b;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1114;--surface:#171a1e;--surface-2:#1d2126;--ink:#e0e2e6;--muted:#8b929c;
+    --line:#2a2e34;--line-strong:#454b55;--ok:#5cbf8a;--ok-soft:#16281f;--gap:#e0836a;
+    --gap-soft:#331e18;--ram:#8aa0e8;--ram-soft:#1b2138;--grid:#22252b;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.35);color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1160px;margin:0 auto;padding:clamp(28px,5vw,72px) clamp(18px,4vw,44px) 110px}
+  .prose{max-width:76ch}
+  .prose p,.prose li{max-width:76ch}
+
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{font-size:.83em;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:.05em .36em}
+  .src{font-family:"IBM Plex Mono",monospace;font-size:.78em;color:var(--muted)}
+
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 14px;display:flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--ok)}
+
+  h1{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:clamp(26px,4.4vw,40px);
+    line-height:1.14;letter-spacing:-.01em;margin:0 0 16px;text-wrap:balance}
+  .lede{font-size:clamp(16px,2.1vw,18px);margin:0 0 20px;max-width:72ch}
+
+  h2{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:clamp(18px,2.4vw,23px);
+    letter-spacing:-.005em;margin:60px 0 6px;text-wrap:balance}
+  h2 .num{color:var(--ok);margin-right:.5em;font-weight:500}
+  h3{font-size:15px;font-weight:700;margin:24px 0 8px}
+  .claim{color:var(--muted);font-size:15px;margin:0 0 22px;max-width:74ch}
+  p{margin:0 0 16px}
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--ok);text-underline-offset:2px}
+  b,strong{font-weight:600}
+
+  .exec{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:8px;padding:16px 20px;margin:0 0 22px;max-width:78ch}
+  .exec dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0;font-size:13.5px}
+  .exec dt{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ok);font-weight:600}
+  .exec dd{margin:0}
+
+  .gapbox{background:var(--gap-soft);border:1px solid var(--gap);border-radius:10px;padding:16px 20px 6px;margin:8px 0 0}
+  .gapbox h3{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--gap);margin:0 0 10px;font-weight:600}
+  .gapbox li{margin-bottom:8px}
+
+  figure{margin:22px 0 12px}
+  .frame{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+    padding:22px 20px 16px;overflow-x:auto}
+  .frame > svg{display:block;min-width:700px;max-width:100%;height:auto;margin:0 auto}
+  figcaption{font-size:13px;color:var(--muted);margin-top:14px;max-width:86ch}
+  .fig-tag{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+
+  .diagram{color:var(--ink)}
+  .diagram text{fill:currentColor;font-family:"IBM Plex Sans",sans-serif;font-size:12px}
+  .diagram .t-mono{font-family:"IBM Plex Mono",monospace}
+  .diagram .t-b{font-weight:600}
+  .diagram .lbl{fill:var(--muted);font-size:10.5px}
+  .diagram .lbl-m{fill:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:9px}
+  .diagram .box{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.2}
+  .diagram .box-ram{fill:var(--ram-soft);stroke:var(--ram);stroke-width:1.3}
+  .diagram .box-nv{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.6}
+  .diagram .box-spi{fill:var(--ok-soft);stroke:var(--ok);stroke-width:1.4}
+  .diagram .box-db{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1.3;stroke-dasharray:5 3}
+  .diagram .box-gap{fill:var(--gap-soft);stroke:var(--gap);stroke-width:1.4;stroke-dasharray:4 3}
+  .diagram .ctl{stroke:var(--line-strong);stroke-width:1.35;fill:none}
+  .diagram .ctl-d{stroke:var(--line-strong);stroke-width:1.2;fill:none;stroke-dasharray:4 3}
+  .diagram .data{stroke:var(--ram);stroke-width:2.2;fill:none}
+  .diagram .data-t{fill:var(--ram);font-weight:600;font-family:"IBM Plex Mono",monospace;font-size:9px}
+  .diagram .gap-l{stroke:var(--gap);stroke-width:1.4;fill:none;stroke-dasharray:4 3}
+  .diagram .gap-t{fill:var(--gap);font-weight:600;font-family:"IBM Plex Mono",monospace;font-size:9px}
+  .diagram .grid{stroke:var(--grid);stroke-width:1}
+  [id^="mk-a"] path{fill:var(--line-strong)}
+  [id^="mk-d"] path{fill:var(--ram)}
+  [id^="mk-g"] path{fill:var(--gap)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:11px;color:var(--muted);margin:10px 2px 0;font-family:"IBM Plex Mono",monospace}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:16px;height:12px;border-radius:2px;border:1px solid}
+  .sw-ram{background:var(--ram-soft);border-color:var(--ram)}
+  .sw-nv{background:var(--surface-2);border-color:var(--line-strong);border-width:1.6px}
+  .sw-spi{background:var(--ok-soft);border-color:var(--ok)}
+  .sw-db{background:var(--surface-2);border-color:var(--line-strong);border-style:dashed}
+  .legend .ln{width:20px;height:0;border-top-width:2px;border-top-style:solid;border-radius:0}
+  .ln-ctl{border-color:var(--line-strong)}
+  .ln-data{border-color:var(--ram)!important;border-top-width:2.4px!important}
+  .ln-gap{border-color:var(--gap)!important;border-top-style:dashed!important}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);margin:6px 0 0}
+  table{border-collapse:collapse;width:100%;font-size:12px;min-width:720px}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  td.mono,td .mono{font-family:"IBM Plex Mono",monospace;font-size:10.5px}
+  tbody tr:last-child td{border-bottom:none}
+  .v-ok{color:var(--ok);font-weight:600}
+  .v-gap{color:var(--gap);font-weight:600}
+
+  footer{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);max-width:88ch}
+
+  .toggle{position:fixed;top:14px;right:14px;z-index:10;font-family:"IBM Plex Mono",monospace;font-size:11px;
+    letter-spacing:.05em;text-transform:uppercase;background:var(--surface);color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:7px 13px;cursor:pointer;box-shadow:var(--shadow)}
+  .toggle:hover{color:var(--ink);border-color:var(--line-strong)}
+  :focus-visible{outline:2px solid var(--ok);outline-offset:2px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.toggle{transition:color .15s,border-color .15s}}
+</style>
+</head>
+<body>
+
+<button class="toggle" id="themeToggle" type="button" aria-label="Đổi giao diện sáng/tối">Theme</button>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">Subset S-S800 · application/mfp/system/nvd · reverse-engineering từ source</p>
+    <h1>Subset NVRAM Deep Analysis</h1>
+    <p class="lede">
+      Mọi kết luận dưới đây kèm <b>source file:line</b>. Chỗ chưa chứng minh được từ
+      code trong cây Subset → đánh dấu <b class="v-gap">NEED SOURCE VERIFICATION</b>.
+      Sơ đồ tách <b>Control Flow</b> / <b class="v-ok" style="color:var(--ram)">Data Flow</b> /
+      <b>Storage</b> và phân biệt 4 kho: <b>RAM shadow</b>, <b>NVRAM struct</b>,
+      <b>SPI-Flash flags</b>, <b>.db database</b>.
+    </p>
+    <div class="exec">
+      <dl>
+        <dt>WHERE</dt><dd>4 kho: (a) NVRAM chip trên CS1 (<code>DEVICE_CS1_BASE+0x100</code>, ~2 MB) — <span class="src">NVDG_FuncDonau3.h:55</span>; (b) SPI-Flash SoftDipSw region (các cờ 1 byte); (c) file <code>*.db</code> trên SSD; (d) RAM shadow heap (<code>FILF_Malloc</code> cache).</dd>
+        <dt>WHO owns</dt><dd>Mỗi setting = 1 class <code>NVDC_*</code> kế thừa <code>NVDC_Struct</code> — <span class="src">NVDC_Class.cpp:31</span>. Base dispatch: <code>ml_DBType==NoDB ? pStorage(NVRAM) : pDBStorage(.db)</code> — <span class="src">NVDC_Class.cpp:176</span>.</dd>
+        <dt>WHO reads/writes</dt><dd>App → <code>APIC_*</code> (vỏ) → <code>NVDC_*</code> → <code>NVDC_FstColor</code>/<code>NVDC_DBColor</code> → <code>NVDF_memcpyNvRam</code> / file. Cờ SPI: <code>NVDC_SPIFlashDataManage</code> → <code>THRG_get/setSoftDipSw</code> — <span class="src">NVDC_Setting.cpp:23900</span>.</dd>
+        <dt>WHEN</dt><dd>Đọc: lúc <code>newInstance()</code> lần đầu (singleton) + init boot (<code>NVDG_FuncDonau3.cpp:1301+</code>). Ghi: mỗi <code>set*()</code>. Cờ EnhancedNVClear bị clear trong FW-update — <span class="src">fwupdate.cpp:3285, 3473</span>.</dd>
+        <dt>WHY</dt><dd>Struct cố định + checksum tập trung + backup toàn NVRAM ⇒ chịu mất điện. Chuyển sang <code>.db</code> (2014, "No.43") để bỏ giới hạn dung lượng NVRAM.</dd>
+        <dt>HOW (write)</dt><dd>lock → tính địa chỉ vật lý → pre-checksum (recover nếu FATAL) → <b>zero checksum</b> → validate <code>Index+Length ≤ size</code> → RAM shadow → NVRAM → recompute checksum vào bảng tập trung → post-checksum → unlock. <span class="src">NVDC_FstColorC.cpp:71–120</span>.</dd>
+        <dt>WHAT IF</dt><dd>Mất điện giữa write ⇒ checksum = 0 (đã zero trước) ⇒ boot phát hiện FATAL ⇒ <code>NVDC_CheckAllNvramOfBackUp()</code> phục hồi từ flash backup nếu magic hợp lệ. Chi tiết §8.</dd>
+      </dl>
+    </div>
+  </header>
+
+  <!-- ===== 1 ARCHITECTURE ===== -->
+  <section>
+    <h2><span class="num">A</span>Kiến trúc — 4 kho, các lớp phần mềm</h2>
+    <p class="claim">
+      Một setting class không tự chọn kho — nó kế thừa <code>NVDC_Struct</code> và base
+      lớp này rẽ giữa <b>NVRAM</b> (<code>pStorage</code>) và <b>.db</b>
+      (<code>pDBStorage</code>). RAM shadow luôn có.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 1 — storage tiers ↔ software layers</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1080 430" role="img"
+          aria-label="Từ trên xuống: tầng App gồm fwupdate.cpp và panel FWU. Tầng API: APIC_FWUpdateSetting và APIC_SPIFlashDataManage chỉ là vỏ gọi newInstance của lớp NVDC. Tầng NVDC: NVDC_FWUpdateSetting kế thừa NVDC_Struct. NVDC_Struct giữ RAM shadow cấp bằng FILF_Malloc và một mutex, rồi dispatch: nếu ml_DBType là NoDB thì gọi pStorage tức NVDC_Color hoặc NVDC_FstColor ghi vào NVRAM; nếu có pDBStorage thì gọi NVDC_DBColor ghi vào file .db trên SSD. Tầng storage color: NVDC_FstColor gọi NVDF_memcpyNvRam vào vùng NVRAM struct; NVDC_DBColor ghi file .db; NVDC_NVBackup quản lý bản sao toàn NVRAM trong flash. Song song, NVDC_SPIFlashDataManage gọi THRG_get và setSoftDipSw đọc ghi struct NVDS_SPIFlashFlag trong SPI-Flash. Bốn kho vật lý ở dưới cùng: RAM shadow, NVRAM chip trên CS1, SPI-Flash SoftDipSw, và các file .db trên SSD.">
+          <defs>
+            <marker id="mk-a1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-d1" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="lbl-m" x="24" y="26">APP</text>
+          <rect class="box" x="24" y="32" width="300" height="34" rx="6"/>
+          <text class="t-mono" x="38" y="53" font-size="10">fwupdate.cpp · QtPanel/fwu · THRC_HddTrans.cpp</text>
+
+          <text class="lbl-m" x="24" y="90">API (vỏ)</text>
+          <rect class="box" x="24" y="96" width="300" height="40" rx="6"/>
+          <text class="t-mono" x="38" y="114" font-size="10">APIC_FWUpdateSetting  ·  APIC_SPIFlashDataManage</text>
+          <text class="lbl-m" x="38" y="128">newInstance() → NVDC_* &nbsp;·&nbsp; <tspan class="src">APIC_FWUpdateSetting.cpp:60</tspan></text>
+
+          <text class="lbl-m" x="24" y="160">NVDC</text>
+          <rect class="box" x="24" y="166" width="470" height="120" rx="7"/>
+          <text class="t-mono t-b" x="38" y="186" font-size="10">NVDC_FWUpdateSetting : public NVDC_Struct</text>
+          <text class="lbl-m" x="38" y="202"><tspan class="src">NVDC_FWUpdateSetting.cpp:101</tspan></text>
+          <rect class="box-ram" x="38" y="212" width="200" height="30" rx="5"/>
+          <text class="lbl-m" x="46" y="231">RAM shadow: NVDS_Vars.datap</text>
+          <text class="lbl-m" x="38" y="258">dispatch (WriteData): ml_DBType==NoDB → pStorage(NVRAM)</text>
+          <text class="lbl-m" x="38" y="272">else pDBStorage(.db) &nbsp; <tspan class="src">NVDC_Class.cpp:176</tspan></text>
+
+          <text class="lbl-m" x="540" y="160">STORAGE COLOR</text>
+          <rect class="box-nv" x="540" y="166" width="240" height="40" rx="6"/>
+          <text class="t-mono" x="552" y="184" font-size="10">NVDC_FstColor::WriteData</text>
+          <text class="lbl-m" x="552" y="198"><tspan class="src">NVDC_FstColorC.cpp:71</tspan></text>
+          <rect class="box-db" x="540" y="216" width="240" height="34" rx="6"/>
+          <text class="t-mono" x="552" y="236" font-size="10">NVDC_DBColor::WriteData  (.db)</text>
+          <rect class="box" x="540" y="260" width="240" height="30" rx="6"/>
+          <text class="lbl-m" x="552" y="279">NVDC_NVBackup — bản sao toàn NVRAM</text>
+
+          <text class="lbl-m" x="830" y="160">SPI FLAG PATH</text>
+          <rect class="box-spi" x="830" y="166" width="230" height="80" rx="7"/>
+          <text class="t-mono" x="842" y="184" font-size="9.5">NVDC_SPIFlashDataManage</text>
+          <text class="lbl-m" x="842" y="200"><tspan class="src">NVDC_Setting.cpp:23871</tspan></text>
+          <text class="t-mono" x="842" y="220" font-size="9.5">THRG_get/setSoftDipSw()</text>
+          <text class="lbl-m" x="842" y="236">struct NVDS_SPIFlashFlag</text>
+
+          <text class="lbl-m" x="24" y="322">KHO VẬT LÝ</text>
+          <rect class="box-ram" x="24" y="328" width="230" height="56" rx="7"/>
+          <text class="t-mono t-b" x="139" y="350" text-anchor="middle" font-size="9.5">RAM shadow</text>
+          <text class="lbl-m" x="139" y="366" text-anchor="middle">FILF_Malloc cache · heap</text>
+
+          <rect class="box-nv" x="270" y="328" width="250" height="56" rx="7"/>
+          <text class="t-mono t-b" x="395" y="350" text-anchor="middle" font-size="9.5">NVRAM chip (CS1)</text>
+          <text class="lbl-m" x="395" y="366" text-anchor="middle">DEVICE_CS1_BASE+0x100 · ~2 MB</text>
+
+          <rect class="box-spi" x="536" y="328" width="240" height="56" rx="7"/>
+          <text class="t-mono t-b" x="656" y="350" text-anchor="middle" font-size="9.5">SPI-Flash · SoftDipSw</text>
+          <text class="lbl-m" x="656" y="366" text-anchor="middle">NVDS_SPIFlashFlag (16 B)</text>
+
+          <rect class="box-db" x="792" y="328" width="264" height="56" rx="7"/>
+          <text class="t-mono t-b" x="924" y="350" text-anchor="middle" font-size="9.5">SSD · *.db files</text>
+          <text class="lbl-m" x="924" y="366" text-anchor="middle">NVDT_DatabasePathName[]</text>
+
+          <line class="ctl" x1="120" y1="66" x2="120" y2="94" marker-end="url(#mk-a1)"/>
+          <line class="ctl" x1="120" y1="136" x2="120" y2="164" marker-end="url(#mk-a1)"/>
+          <line class="ctl" x1="494" y1="200" x2="538" y2="186" marker-end="url(#mk-a1)"/>
+          <line class="ctl-d" x1="494" y1="235" x2="538" y2="233" marker-end="url(#mk-a1)"/>
+          <line class="ctl" x1="240" y1="66" x2="300" y2="96" marker-end="url(#mk-a1)"/>
+
+          <line class="data" x1="139" y1="242" x2="139" y2="326" marker-end="url(#mk-d1)"/>
+          <text class="data-t" x="146" y="300">shadow memcpy</text>
+          <line class="data" x1="600" y1="206" x2="410" y2="326" marker-end="url(#mk-d1)"/>
+          <text class="data-t" x="470" y="300" text-anchor="middle">NVDF_memcpyNvRam</text>
+          <line class="data" x1="660" y1="250" x2="660" y2="326" marker-end="url(#mk-d1)"/>
+          <line class="data" x1="700" y1="250" x2="900" y2="326" marker-end="url(#mk-d1)"/>
+          <text class="data-t" x="820" y="300" text-anchor="middle">write .db</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="sw-ram"></i> RAM shadow</span>
+        <span><i class="sw-nv"></i> NVRAM struct</span>
+        <span><i class="sw-spi"></i> SPI-Flash flags</span>
+        <span><i class="sw-db"></i> .db database</span>
+        <span><i class="ln ln-ctl"></i> control</span>
+        <span><i class="ln ln-data"></i> data</span>
+      </div>
+      <figcaption>
+        <code>NVDC_Struct</code> ctor cấp RAM shadow + mutex, đặt
+        <code>pStorage=&amp;NVDC_Color</code>, <code>pDBStorage=NULL</code>,
+        <code>ml_DBType=NoDB</code> — <span class="src">NVDC_Class.cpp:31–56</span>.
+        <code>WriteData/ReadData/WriteByte</code> đều rẽ nhánh theo
+        <code>ml_DBType</code> — <span class="src">NVDC_Class.cpp:176, 300</span>.
+        Subclass gọi <code>InitializeDatabase(NVDD_DB_ID_*)</code> để bật đường
+        <code>pDBStorage</code> — <span class="src">NVDG_FuncDonau3.cpp:1301</span>.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 2 MEMORY MAP ===== -->
+  <section>
+    <h2><span class="num">B</span>Physical NVRAM memory map</h2>
+    <p class="claim">
+      Offset trích thẳng từ <code>NVDG_FuncDonau3.h</code>. File có nhiều nhánh
+      <code>#if</code> theo cấu hình — bảng dưới là nhánh Donau/Emu (2 MB). <b>Điều kiện
+      chọn nhánh</b>: <span class="v-gap">NEED SOURCE VERIFICATION</span> (macro build).
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 2 — vùng NVRAM theo thứ tự địa chỉ (base = DEVICE_CS1_BASE+0x100)</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 900 470" role="img"
+          aria-label="Bản đồ NVRAM theo địa chỉ tăng dần từ base. Offset 0: FirstMark chuỗi NVD10 dài 5 byte. Offset 0x15: FixedData tức dip switches. Offset 0x415: 1stBase, bank các struct setting, kích thước SettingDataSize khoảng 44779 byte. Offset base cộng 0xB300: Buckup tức journal backup, size 15360 byte. Offset base cộng 0xEF00: Uboot env, 256 byte. Offset base cộng 0xF000: Kernel params, 1024 byte. Offset base cộng 0xF400: Counter base, dữ liệu đếm bản in, 229632 byte. Offset 0x47500: CounterCheckSum, bảng checksum tập trung cho mọi struct. Offset base cộng 0x47700: DataBase base, vùng DB trong NVRAM. Rồi các vùng riêng: TPMSetting 0xEE10B, TPMKeyData 0xEE938, ComDevice 0xF8350, SysInfo2 0xF8380, SysInfo 0xF8480, MIOsetting 0xF8600, RDSsetting 0xFEB00, InternetISW 0xFF700, và Last ở base cộng 0xFFEF0.">
+          <defs></defs>
+          <g class="lbl-m" text-anchor="end">
+            <text x="150" y="40">0x000000</text>
+            <text x="150" y="70">0x000015</text>
+            <text x="150" y="100">0x000415</text>
+            <text x="150" y="150">+0x00B300</text>
+            <text x="150" y="180">+0x00EF00</text>
+            <text x="150" y="205">+0x00F000</text>
+            <text x="150" y="235">+0x00F400</text>
+            <text x="150" y="285">0x047500</text>
+            <text x="150" y="315">+0x047700</text>
+            <text x="150" y="365">0x0EE10B…</text>
+            <text x="150" y="410">0x0F8350…</text>
+            <text x="150" y="445">+0x0FFEF0</text>
+          </g>
+          <g>
+            <rect class="box" x="170" y="28" width="560" height="26" rx="3"/><text class="lbl-m" x="182" y="45">FirstMark "NVD10" (5B) · CounterMagicNo 0xdeadbeaf</text>
+            <rect class="box" x="170" y="58" width="560" height="26" rx="3"/><text class="lbl-m" x="182" y="75">FixedData — dip switches / TroubleReset</text>
+            <rect class="box-nv" x="170" y="88" width="560" height="44" rx="3"/><text class="t-mono" x="182" y="105" font-size="9.5">1stBase — bank struct setting</text><text class="lbl-m" x="182" y="120">SettingDataSize ≈ 44779 B · mỗi class có off_t ul_Offset riêng</text>
+            <rect class="box-gap" x="170" y="136" width="560" height="34" rx="3"/><text class="t-mono" x="182" y="154" font-size="9.5">Buckup / Journal</text><text class="lbl-m" x="182" y="167">BuckupOffset = Base+0xB300 · BuckupSize 15360 B</text>
+            <rect class="box" x="170" y="174" width="270" height="24" rx="3"/><text class="lbl-m" x="182" y="190">Uboot env (256 B)</text>
+            <rect class="box" x="450" y="174" width="280" height="24" rx="3"/><text class="lbl-m" x="462" y="190">Kernel params (1024 B)</text>
+            <rect class="box" x="170" y="202" width="560" height="34" rx="3"/><text class="t-mono" x="182" y="220" font-size="9.5">Counter base</text><text class="lbl-m" x="182" y="232">Base+0xF400 · Counter_DataSize 229632 B (billing counters)</text>
+            <rect class="box-nv" x="170" y="240" width="560" height="34" rx="3"/><text class="t-mono t-b" x="182" y="258" font-size="9.5">CounterCheckSum = 0x47500</text><text class="lbl-m" x="182" y="270">bảng checksum TẬP TRUNG: entry = MagicNo + ChkInheritClass·2</text>
+            <rect class="box-db" x="170" y="278" width="560" height="30" rx="3"/><text class="lbl-m" x="182" y="297">DataBase base = Base+0x47700 — vùng DB trong NVRAM</text>
+            <rect class="box" x="170" y="312" width="270" height="30" rx="3"/><text class="lbl-m" x="182" y="331">TPMSetting 0xEE10B · TPMKeyData 0xEE938</text>
+            <rect class="box" x="450" y="312" width="280" height="30" rx="3"/><text class="lbl-m" x="462" y="331">ComDevice · SysInfo2 · SysInfo</text>
+            <rect class="box" x="170" y="346" width="560" height="26" rx="3"/><text class="lbl-m" x="182" y="363">MIOsetting 0xF8600 · RDSsetting 0xFEB00 · InternetISW 0xFF700</text>
+            <rect class="box" x="170" y="376" width="560" height="24" rx="3"/><text class="lbl-m" x="182" y="392">Last = Base+0xFFEF0 · SystemSize 0xFFFF0</text>
+          </g>
+          <text class="lbl-m" x="170" y="430">Mỗi hàng: <tspan class="src">NVDG_FuncDonau3.h:19–46</tspan> (nhánh #if hiện hành) — offset là hằng #define, không suy đoán.</text>
+        </svg>
+      </div>
+      <figcaption>
+        Điểm mấu chốt: <b>checksum của mọi struct nằm chung một bảng</b> tại
+        <code>NVDD_NVRam_CounterCheckSum</code> (0x47500), index bằng
+        <code>pNvdsVar-&gt;ChkInheritClass * 2</code> —
+        <span class="src">NVDC_FstColorC.cpp:37, 54</span>. Không phải checksum kề bên
+        từng struct. (Đường <code>NVDC_ColorC</code> — không phải <code>FstColor</code> —
+        có ghi checksum kép kề struct + journal riêng tại
+        <code>BKUPOFFSET</code>; <b>class nào dùng đường nào</b>:
+        <span class="v-gap">NEED SOURCE VERIFICATION</span>.)
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 3 WRITE FLOW ===== -->
+  <section>
+    <h2><span class="num">C</span>Write transaction — NVDC_FstColor::WriteData()</h2>
+    <p class="claim">
+      Đây là đường NVRAM (khi <code>ml_DBType==NoDB</code>). Trình tự có chủ đích: zero
+      checksum <i>trước</i>, ghi field, tính lại checksum <i>sau</i> — để mất điện giữa
+      chừng luôn để lại trạng thái phát hiện được.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 3 — sequence NVDC_Struct::WriteData → NVDC_FstColor::WriteData</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 520" role="img"
+          aria-label="Chuỗi từ trên xuống. Caller set-star gọi NVDC_Struct::WriteData Index Length Ticks. NVDC_Struct rẽ: ml_DBType bằng NoDB nên gọi pStorage->WriteData tức NVDC_FstColor::WriteData. Trong NVDC_FstColor::WriteData: bước 1 lấy hai semaphore, global long-access lock và mutex NVRAM. Bước 2 tính địa chỉ vật lý: nếu FileOffset lớn hơn ul_CounterEnd thì FUNCOFFSET cộng FileOffset, ngược lại FSTNVOFFSET cộng FileOffset. Bước 3 gọi CheckCheckSum trước; nếu trả SERR_OS_PHILE và đang init và backup magic hợp lệ thì gọi NVDC_CheckAllNvramOfBackUp phục hồi toàn NVRAM. Bước 4 ghi giá trị 0 vào entry checksum trong bảng tập trung, tạo cửa sổ vô hiệu. Bước 5 kiểm tra Index cộng Length nhỏ hơn hoặc bằng datasize, nếu không trả SERR_OS_NOINDEX. Bước 6 memcpy vào RAM shadow tại datap Index. Bước 7 NVDF_memcpyNvRam ghi field vào NVRAM tại FileOffset cộng sizeof MagicNo cộng Index. Bước 8 MakeCheckSum trên toàn struct rồi NVDF_memcpyNvRam ghi vào entry checksum. Bước 9 CheckCheckSum sau; lại phục hồi từ backup nếu FATAL. Bước 10 trả hai semaphore.">
+          <defs>
+            <marker id="mk-a3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-g3" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <rect class="box" x="40" y="20" width="360" height="30" rx="6"/>
+          <text class="t-mono" x="54" y="40" font-size="10">caller: set*() → NVDC_Struct::WriteData(Index,Len,Ticks)</text>
+          <rect class="box" x="40" y="66" width="360" height="34" rx="6"/>
+          <text class="lbl-m" x="54" y="84">ml_DBType==NoDB → pStorage->WriteData</text>
+          <text class="lbl-m" x="54" y="96"><tspan class="src">NVDC_Class.cpp:176</tspan></text>
+
+          <rect class="box-nv" x="40" y="118" width="700" height="366" rx="9"/>
+          <text class="t-mono t-b" x="56" y="138" font-size="10">NVDC_FstColor::WriteData()  ·  <tspan class="src">NVDC_FstColorC.cpp:71</tspan></text>
+          <g class="lbl-m">
+            <text x="66" y="162"><tspan class="t-mono">1</tspan>  semTake ×2: LongAccessLock + SemaphoreID mutex &nbsp;<tspan class="src">:4–11</tspan></text>
+            <text x="66" y="184"><tspan class="t-mono">2</tspan>  addr = (FileOffset&gt;ul_CounterEnd) ? FUNCOFFSET+FileOffset : FSTNVOFFSET+FileOffset &nbsp;<tspan class="src">:30–35</tspan></text>
+            <text x="66" y="206"><tspan class="t-mono">3</tspan>  CheckCheckSum() PRE → nếu SERR_OS_PHILE &amp; init &amp; backupMagic → NVDC_CheckAllNvramOfBackUp() &nbsp;<tspan class="src">:41–50</tspan></text>
+            <text x="66" y="228" class="gap-t"><tspan class="t-mono" style="fill:var(--gap)">4</tspan>  ZERO checksum entry (bảng tập trung) → cửa sổ vô hiệu &nbsp;<tspan class="src">:51–66</tspan></text>
+            <text x="66" y="250"><tspan class="t-mono">5</tspan>  if (datasize &lt; Index+Length) return SERR_OS_NOINDEX &nbsp;<tspan class="src">:69–70</tspan></text>
+            <text x="66" y="272"><tspan class="t-mono">6</tspan>  memcpy(&amp;datap[Index], pData, Length)  — RAM shadow &nbsp;<tspan class="src">:74–77</tspan></text>
+            <text x="66" y="294" class="data-t"><tspan class="t-mono" style="fill:var(--ram)">7</tspan>  NVDF_memcpyNvRam(addr + sizeof(MagicNo) + Index, pData, Length)  — NVRAM &nbsp;<tspan class="src">:80–87</tspan></text>
+            <text x="66" y="316"><tspan class="t-mono">8</tspan>  ss_Sum = MakeCheckSum(addr+sizeof(MagicNo), datasize) → NVDF_memcpyNvRam(entry, ss_Sum) &nbsp;<tspan class="src">:89–102</tspan></text>
+            <text x="66" y="338"><tspan class="t-mono">9</tspan>  CheckCheckSum() POST → NVDC_CheckAllNvramOfBackUp() nếu FATAL &nbsp;<tspan class="src">:104–113</tspan></text>
+            <text x="66" y="360"><tspan class="t-mono">10</tspan> semGive ×2 &nbsp;<tspan class="src">:114–118</tspan></text>
+          </g>
+          <text class="lbl-m" x="66" y="392">MagicNo header (2 B) ở đầu mỗi struct; checksum entry = CounterCheckSum + sizeof(MagicNo) + ChkInheritClass·2</text>
+          <text class="lbl-m" x="66" y="410">RAM shadow ghi TRƯỚC NVRAM (bước 6 → 7). Không có journal per-write ở đường FstColor — recovery = backup toàn NVRAM.</text>
+
+          <rect class="box-ram" x="770" y="250" width="200" height="34" rx="6"/>
+          <text class="lbl-m" x="782" y="270">RAM shadow (datap)</text>
+          <rect class="box-nv" x="770" y="298" width="200" height="34" rx="6"/>
+          <text class="lbl-m" x="782" y="318">NVRAM struct</text>
+          <rect class="box-nv" x="770" y="346" width="200" height="34" rx="6"/>
+          <text class="lbl-m" x="782" y="360">CounterCheckSum</text>
+          <text class="lbl-m" x="782" y="373">bảng tập trung</text>
+
+          <line class="data" x1="640" y1="272" x2="768" y2="267" marker-end="url(#mk-a3)"/>
+          <line class="data" x1="640" y1="294" x2="768" y2="315" marker-end="url(#mk-a3)"/>
+          <line class="gap-l" x1="640" y1="228" x2="768" y2="352" marker-end="url(#mk-g3)"/>
+          <line class="data" x1="640" y1="316" x2="768" y2="364" marker-end="url(#mk-a3)"/>
+
+          <line class="ctl" x1="220" y1="50" x2="220" y2="64" marker-end="url(#mk-a3)"/>
+          <line class="ctl" x1="220" y1="100" x2="220" y2="116" marker-end="url(#mk-a3)"/>
+        </svg>
+      </div>
+      <figcaption>
+        <code>NVDF_memcpyNvRam</code> = ghi trực tiếp vào vùng NVRAM ánh xạ bộ nhớ (không
+        phải file). Kết luận về "checksum kép" và "journal <code>BKUPOFFSET</code>" ở
+        câu trả lời trước là của đường <code>NVDC_ColorC</code> /
+        <code>NVDC_FWUpdateSetting::WriteData</code> — nhưng
+        <code>NVDC_FWUpdateSetting::WriteData</code> nằm trong <code>#ifdef DEF_COLOR</code>
+        <b>không được biên dịch</b> (§D). Đường thực thi chính cho struct NVRAM là
+        <code>NVDC_FstColor</code> ở trên.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 4 FWUpdateSetting DATA MODEL ===== -->
+  <section>
+    <h2><span class="num">D</span>FWUpdateSetting — data model (đã chuyển sang .db)</h2>
+    <p class="claim">
+      Phát hiện quan trọng: các hàm <code>WriteData/ReadData/MakeCheckSum</code> +
+      ctor NVRAM của <code>NVDC_FWUpdateSetting</code> nằm trong <code>#if 0</code> /
+      <code>#ifdef DEF_COLOR</code> — <b>code chết</b> (thay đổi "No.43", 2014). Setting
+      giờ ở <b>file .db trên SSD</b>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 4 — App → APIC → NVDC → RAM shadow / .db / _Enc.db</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 380" role="img"
+          aria-label="Application gọi APIC_FWUpdateSetting::newInstance, chỉ là vỏ trả về NVDC_FWUpdateSetting::newInstance singleton. NVDC_FWUpdateSetting kế thừa NVDC_Struct. set-star ví dụ setServerDownloadForHTTPURL: chuyển sang UTF8 bằng LIBF_ConvertToUTF8 rồi gọi WriteData offsetof của field trong struct NVDS_FWUpdateSetting; base dispatch tới pDBStorage ghi file NVDC_FWUpdateSetting.db trên SSD, đồng thời cập nhật RAM shadow. get-star đọc RAM shadow rồi ConvertFromUTF8. Mật khẩu KHÔNG ghi vào struct này: setPassword gọi NVDC_FWUpdateSetting_Enc::setPassword type idx, lưu file mã hoá NVDC_FWUpdateSetting_Enc.db; getPassword kiểm tra isEnc rồi lấy từ đó. FactorySetup của class gọi luôn NVDC_FWUpdateSetting_Enc FactorySetup. Các file .db liên quan cùng tồn tại: base 127, _2 128, MAv3 137, MAv6 141, TM7 143, _Enc 151, History 136.">
+          <defs>
+            <marker id="mk-a4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-d4" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <rect class="box" x="40" y="24" width="200" height="30" rx="6"/><text class="t-mono" x="54" y="44" font-size="10">Application</text>
+          <rect class="box" x="40" y="76" width="240" height="40" rx="6"/><text class="t-mono" x="54" y="94" font-size="10">APIC_FWUpdateSetting (vỏ)</text><text class="lbl-m" x="54" y="108">newInstance → NVDC · <tspan class="src">APIC_FWUpdateSetting.cpp:60</tspan></text>
+          <rect class="box" x="40" y="138" width="360" height="128" rx="7"/>
+          <text class="t-mono t-b" x="54" y="158" font-size="10">NVDC_FWUpdateSetting : NVDC_Struct</text>
+          <text class="lbl-m" x="54" y="174">set*(): LIBF_ConvertToUTF8 → WriteData(offsetof(field))</text>
+          <text class="lbl-m" x="54" y="188">get*(): đọc RAM shadow → LIBF_ConvertFromUTF8</text>
+          <text class="lbl-m" x="54" y="204"><tspan class="src">NVDC_FWUpdateSetting.cpp:650, 726</tspan></text>
+          <rect class="box-gap" x="54" y="214" width="330" height="40" rx="5"/>
+          <text class="gap-t" x="64" y="231">DEAD: WriteData/ReadData/MakeCheckSum trong #ifdef DEF_COLOR</text>
+          <text class="lbl-m" x="64" y="245"><tspan class="src">NVDC_FWUpdateSetting.cpp:45–92, ctor #if 0 :110</tspan></text>
+
+          <rect class="box-ram" x="470" y="80" width="180" height="34" rx="6"/><text class="lbl-m" x="482" y="100">RAM shadow (datap)</text>
+          <rect class="box-db" x="470" y="132" width="220" height="34" rx="6"/><text class="t-mono" x="482" y="152" font-size="9.5">NVDC_FWUpdateSetting.db (127)</text>
+          <rect class="box-db" x="470" y="184" width="220" height="46" rx="6"/><text class="t-mono" x="482" y="202" font-size="9.5">NVDC_FWUpdateSetting_Enc.db (151)</text><text class="lbl-m" x="482" y="216">mật khẩu mã hoá · key = (type, idx)</text>
+
+          <rect class="box" x="470" y="252" width="480" height="86" rx="7"/>
+          <text class="lbl-m" x="484" y="270">Password: set*Password → NVDC_FWUpdateSetting_Enc::setPassword(type,idx)</text>
+          <text class="lbl-m" x="484" y="286">get*Password → if isEnc(type,idx) → _Enc::getPassword &nbsp;<tspan class="src">NVDC_FWUpdateSetting.cpp:6351, 6397</tspan></text>
+          <text class="lbl-m" x="484" y="304">FactorySetup() gọi luôn _Enc::FactorySetup &nbsp;<tspan class="src">:619</tspan></text>
+          <text class="lbl-m" x="484" y="322">field kinds: cấu hình thường (URL/host/timeout) · connection on/off · mật khẩu (→ _Enc) · timeout/interval (uint32)</text>
+
+          <line class="ctl" x1="120" y1="54" x2="120" y2="74" marker-end="url(#mk-a4)"/>
+          <line class="ctl" x1="120" y1="116" x2="120" y2="136" marker-end="url(#mk-a4)"/>
+          <line class="data" x1="400" y1="180" x2="468" y2="149" marker-end="url(#mk-d4)"/>
+          <text class="data-t" x="410" y="168">WriteData → .db</text>
+          <line class="data" x1="400" y1="165" x2="468" y2="100" marker-end="url(#mk-d4)"/>
+          <line class="gap-l" x1="400" y1="234" x2="468" y2="205" marker-end="url(#mk-a4)"/>
+        </svg>
+      </div>
+      <figcaption>
+        <code>DEF_COLOR</code> không thấy define trong cây → khối
+        <code>#ifdef DEF_COLOR</code> compile ra rỗng
+        (<span class="src">NVDC_FWUpdateSetting.cpp:45, 50, 71</span>); ctor cũng bọc
+        <code>#if 0</code> (<span class="src">:110–116</span>). Ràng buộc đường
+        <code>pDBStorage</code> đến file nào: <code>InitializeDatabase(NVDD_DB_ID_*)</code>
+        tại boot (<span class="src">NVDG_FuncDonau3.cpp:1301, 1349</span>).
+      </figcaption>
+    </figure>
+
+    <h3>Họ file .db của FWUpdateSetting</h3>
+    <p class="claim">
+      Đây <b>không phải "các version struct để migrate"</b> — mà là các nhóm tính năng
+      độc lập, cùng tồn tại, thêm dần theo năm. <span class="src">NVDC_DBColorC.cpp:186–225</span>.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Class · .db</th><th>Nội dung</th><th>API tiêu biểu</th><th>Chứng cứ</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">127</td><td class="mono">NVDC_FWUpdateSetting</td><td>Distribution/Admin server, Access HTTP/SMB, Log-forward, Client</td><td class="mono">setServerDownloadForHTTPURL / setClientFWUpdateSetting</td><td class="src">NVDC_FWUpdateSetting.h:141; .cpp:630+</td></tr>
+          <tr><td class="mono">128</td><td class="mono">NVDC_FWUpdateSetting2</td><td>mở rộng bổ sung</td><td class="mono">— <span class="v-gap">NEED VERIFICATION</span></td><td class="src">NVDC_DBColorC.cpp:187</td></tr>
+          <tr><td class="mono">136</td><td class="mono">NVDC_FWUpdateHistory</td><td>lịch sử update</td><td class="mono">—</td><td class="src">NVDC_DBColorC.cpp:199</td></tr>
+          <tr><td class="mono">137</td><td class="mono">NVDC_FWUpdateSettingMAv3</td><td>Management Agent v3 — cờ download theo kết nối</td><td class="mono">set/getDownloadFlagOption(connectKind)</td><td class="src">NVDC_FWUpdateSetting.cpp:6000, 6025</td></tr>
+          <tr><td class="mono">141</td><td class="mono">NVDC_FWUpdateSettingMAv6</td><td>MA v6 — cờ update OSS</td><td class="mono">set/getDownloadFlagOSS</td><td class="src">NVDC_FWUpdateSetting.cpp:6042, 6053</td></tr>
+          <tr><td class="mono">143</td><td class="mono">NVDC_FWUpdateSettingTM7</td><td>TM-7 (2020) — cờ update thân card-reader</td><td class="mono">set/getDownloadFlagCardReader</td><td class="src">NVDC_FWUpdateSetting.cpp:6078, 6109</td></tr>
+          <tr><td class="mono">144</td><td class="mono">NVDC_FWUpdateUsbPwdInfo_1GenAgo</td><td>mật khẩu USB thế hệ trước</td><td class="mono">—</td><td class="src">NVDC_DBColorC.cpp:214</td></tr>
+          <tr><td class="mono">151</td><td class="mono">NVDC_FWUpdateSetting_Enc</td><td>mật khẩu <b>mã hoá</b> (RED 2025), key=(type,idx)</td><td class="mono">setPassword / getPassword / isEnc / clrPassword</td><td class="src">NVDC_FWUpdateSetting.cpp:6351, 6397; DBColorC.cpp:225</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== 5 SPI FLAGS ===== -->
+  <section>
+    <h2><span class="num">E</span>SPI-Flash flags — struct, manager, state</h2>
+    <p class="claim">
+      Kho thứ 3, tách hẳn NVRAM struct và .db. 4 cờ 1 byte trong SoftDipSw region của
+      SPI-Flash. <span class="src">NVDC_Setting.h:27627</span>.
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 5 — NVDS_SPIFlashFlag ↔ NVDC_SPIFlashDataManage ↔ THRG_SoftDipSw</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 980 340" role="img"
+          aria-label="Bên trái struct NVDS_SPIFlashFlag 16 byte: byte 0 uc_NVClearFlag, byte 1 uc_NWDLExecFlag, byte 2 uc_StaticElectricCalibrationExecFlag, byte 3 uc_EnhancedNVClearFlag, byte 4 tới 10 Reserve. Giữa là NVDC_SPIFlashDataManage singleton: setFlag kind val gọi getFlagOffset trả offsetof của field rồi THRG_setSoftDipSw offset val 1 byte, chỉ khi định nghĩa DEF_Helios_PF. getFlag tương tự với THRG_getSoftDipSw. setEnhancedNvramClearFlag true ghi magic 0xab, false ghi 0. getEnhancedNvramClearFlag trả true nếu đọc ra 0xab. Phải là aliases: TYPE_FlagKind_NVClear_ONreboot đổi thành TYPE_FlagKind_NVClear. Bên phải kho vật lý SPI-Flash SoftDipSw region. Người đọc lúc boot để thực sự xoá NVRAM: chưa có trong cây Subset, đánh dấu NEED SOURCE VERIFICATION, có thể ở BootDiag hoặc BootROM.">
+          <defs>
+            <marker id="mk-a5" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <text class="lbl-m" x="30" y="26">struct NVDS_SPIFlashFlag &nbsp;<tspan class="src">NVDC_Setting.h:27627</tspan></text>
+          <rect class="box-spi" x="30" y="34" width="250" height="150" rx="7"/>
+          <g class="t-mono" font-size="9.5">
+            <text x="44" y="56">[0] uc_NVClearFlag</text>
+            <text x="44" y="78">[1] uc_NWDLExecFlag</text>
+            <text x="44" y="100">[2] uc_StaticElectricCalibExecFlag</text>
+            <text x="44" y="122">[3] uc_EnhancedNVClearFlag</text>
+            <text x="44" y="144">[4..10] uc_Reserve[7]</text>
+          </g>
+          <text class="lbl-m" x="44" y="170">MSK_NVClearFlag = 0x01 · "set" = 0xab</text>
+
+          <rect class="box" x="340" y="34" width="330" height="200" rx="8"/>
+          <text class="t-mono t-b" x="354" y="54" font-size="10">NVDC_SPIFlashDataManage (singleton)</text>
+          <text class="lbl-m" x="354" y="68"><tspan class="src">NVDC_Setting.cpp:23871</tspan></text>
+          <g class="lbl-m">
+            <text x="354" y="92">setFlag(kind,v): off=getFlagOffset(kind);</text>
+            <text x="354" y="106">  THRG_setSoftDipSw(off,&amp;v,1) &nbsp;<tspan class="src">:23900</tspan></text>
+            <text x="354" y="124">getFlag(kind): THRG_getSoftDipSw(off,&amp;v,1) &nbsp;<tspan class="src">:23925</tspan></text>
+            <text x="354" y="142">getFlagOffset = offsetof(NVDS_SPIFlashFlag,…) &nbsp;<tspan class="src">:23958–23977</tspan></text>
+            <text x="354" y="164">setEnhancedNvramClearFlag(true) → 0xab &nbsp;<tspan class="src">:23995</tspan></text>
+            <text x="354" y="182">getEnhancedNvramClearFlag(): ==0xab &nbsp;<tspan class="src">:24015</tspan></text>
+            <text x="354" y="204">NVClear_ONreboot → alias NVClear &nbsp;<tspan class="src">:23907</tspan></text>
+            <text x="354" y="222">guard: #ifdef DEF_Helios_PF</text>
+          </g>
+
+          <rect class="box-spi" x="730" y="60" width="220" height="46" rx="7"/>
+          <text class="t-mono t-b" x="840" y="82" text-anchor="middle" font-size="9.5">SPI-Flash · SoftDipSw</text>
+          <text class="lbl-m" x="840" y="98" text-anchor="middle">THRG layer</text>
+
+          <rect class="box-gap" x="730" y="150" width="220" height="70" rx="7"/>
+          <text class="gap-t" x="840" y="172" text-anchor="middle">Boot reader (xoá NVRAM)</text>
+          <text class="lbl-m" x="840" y="190" text-anchor="middle">KHÔNG có trong cây Subset</text>
+          <text class="lbl-m" x="840" y="204" text-anchor="middle">NEED SOURCE VERIFICATION</text>
+
+          <line class="ctl" x1="280" y1="110" x2="338" y2="110" marker-end="url(#mk-a5)"/>
+          <line class="ctl" x1="670" y1="100" x2="728" y2="84" marker-end="url(#mk-a5)"/>
+          <line class="gap-l" x1="840" y1="106" x2="840" y2="148" marker-end="url(#mk-a5)"/>
+          <text class="lbl-m" x="30" y="270">Consumer đã xác minh: fwupdate.cpp (clear khi update) · THRC_HddTrans.cpp:3081 (đọc để quyết định HDD transfer).</text>
+        </svg>
+      </div>
+      <figcaption>
+        <code>THRG_get/setSoftDipSw()</code> là wrapper tầng thr; địa chỉ vật lý của
+        SoftDipSw region trong SPI-Flash <span class="v-gap">NEED SOURCE
+        VERIFICATION</span> (không trong <code>system/nvd</code>). Cả manager bọc
+        <code>#ifdef DEF_Helios_PF</code> — build không có macro này thì
+        <code>set/getFlag</code> là no-op.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== 6 FW UPDATE + FLAG STATE ===== -->
+  <section>
+    <h2><span class="num">F</span>FW-update ↔ NVRAM · flag state machine</h2>
+    <figure>
+      <div class="fig-tag">Fig 6 — vòng đời cờ EnhancedNVClear qua FW-update + reboot</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 300" role="img"
+          aria-label="Trạng thái. FW update MSC đang chạy: trong startUpdateFromTAR tại dòng 3285, nếu không có lỗi thì gọi Clear_EnhancedNvramClear tại dòng 3473, hàm này gọi APIC_SPIFlashDataManage setEnhancedNvramClearFlag false ghi 0 vào byte 3 của NVDS_SPIFlashFlag trong SPI-Flash, rồi verify getEnhancedNvramClearFlag phải bằng false. Ý nghĩa: FW update cố tình TẮT cờ để lần reboot sau KHÔNG xoá NVRAM, giữ cài đặt. Sau khi update xong: SubsetReboot. Lúc boot: một reader chưa xác định đọc cờ; nếu cờ bằng 0xab thì xoá NVRAM sâu, nếu 0 thì giữ nguyên. Reader đó không có trong cây Subset nên đánh dấu NEED SOURCE VERIFICATION. Panel FwuNvramClearGamen trong build này chỉ là stub 7 giây, không tự xoá.">
+          <defs>
+            <marker id="mk-a6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-g6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <rect class="box" x="30" y="40" width="220" height="54" rx="8"/>
+          <text class="t-mono t-b" x="140" y="62" text-anchor="middle" font-size="10">FW update (MSC)</text>
+          <text class="lbl-m" x="140" y="80" text-anchor="middle">startUpdateFromTAR · <tspan class="src">fwupdate.cpp:3285</tspan></text>
+
+          <rect class="box" x="330" y="30" width="300" height="74" rx="8"/>
+          <text class="t-mono" x="344" y="50" font-size="9.5">Clear_EnhancedNvramClear()</text>
+          <text class="lbl-m" x="344" y="66">setEnhancedNvramClearFlag(False) → SPI byte[3]=0</text>
+          <text class="lbl-m" x="344" y="80">verify getEnhancedNvramClearFlag()==False</text>
+          <text class="lbl-m" x="344" y="96"><tspan class="src">fwupdate.cpp:3473–3489</tspan></text>
+
+          <rect class="box" x="710" y="40" width="250" height="54" rx="8"/>
+          <text class="t-mono t-b" x="835" y="62" text-anchor="middle" font-size="10">SubsetReboot()</text>
+          <text class="lbl-m" x="835" y="80" text-anchor="middle"><tspan class="src">fwupdate.cpp:6354</tspan></text>
+
+          <rect class="box-gap" x="330" y="160" width="360" height="90" rx="8"/>
+          <text class="gap-t" x="510" y="182" text-anchor="middle">BOOT: reader đọc cờ (chưa xác định)</text>
+          <text class="lbl-m" x="510" y="202" text-anchor="middle">0xab → wipe NVRAM sâu &nbsp;·&nbsp; 0 → giữ nguyên</text>
+          <text class="lbl-m" x="510" y="218" text-anchor="middle">không có trong cây Subset</text>
+          <text class="lbl-m" x="510" y="234" text-anchor="middle">NEED SOURCE VERIFICATION (BootDiag / BootROM)</text>
+
+          <line class="ctl" x1="250" y1="67" x2="328" y2="67" marker-end="url(#mk-a6)"/>
+          <line class="ctl" x1="630" y1="67" x2="708" y2="67" marker-end="url(#mk-a6)"/>
+          <line class="gap-l" x1="500" y1="104" x2="500" y2="158" marker-end="url(#mk-g6)"/>
+          <text class="lbl-m" x="30" y="280">Panel FwuNvramClearGamen: stub 7s, chỉ đổi label — <tspan class="src">QtPanel/fwu/FwuNvramClearGamen.cpp:124–160</tspan>. Không tự wipe.</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Đã chứng minh</b>: FW-update <i>clear</i> cờ (không set). <b>Chưa chứng
+        minh</b>: đường set cờ (ai bật 0xab để yêu cầu wipe) và reader lúc boot — không
+        nằm trong <code>system/nvd</code>/<code>system/thr</code> của Subset. Grep toàn
+        cây: chỉ <code>fwupdate.cpp</code> + <code>THRC_HddTrans.cpp:3081</code> +
+        <code>NVDC_Setting.cpp</code> chạm tới các cờ này.
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Flag</th><th>Struct byte</th><th>Setter</th><th>Getter</th><th>Đã thấy ai dùng</th><th>Boot action</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">uc_NVClearFlag</td><td class="mono">[0]</td><td class="mono">setFlag(TYPE_FlagKind_NVClear)</td><td class="mono">getFlag(…)</td><td>NVDC_Setting.cpp</td><td class="v-gap">NEED VERIFICATION</td></tr>
+          <tr><td class="mono">uc_NWDLExecFlag</td><td class="mono">[1]</td><td class="mono">setFlag(…NWDL…)</td><td class="mono">getFlag(…)</td><td class="v-gap">chưa thấy caller trong Subset</td><td class="v-gap">NEED VERIFICATION</td></tr>
+          <tr><td class="mono">uc_StaticElectricCalibrationExecFlag</td><td class="mono">[2]</td><td class="mono">setFlag(…)</td><td class="mono">getFlag(…)</td><td class="v-gap">chưa thấy caller</td><td class="v-gap">NEED VERIFICATION</td></tr>
+          <tr><td class="mono">uc_EnhancedNVClearFlag</td><td class="mono">[3]</td><td class="mono">setEnhancedNvramClearFlag(bool) → 0xab/0</td><td class="mono">getEnhancedNvramClearFlag() → ==0xab</td><td>fwupdate.cpp (clear) · THRC_HddTrans.cpp:3081 (read)</td><td class="v-gap">NEED VERIFICATION (wipe sâu)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== 6.5 SPI DOWNLOAD MARKERS ===== -->
+  <section>
+    <h2><span class="num">G</span>SPI-Flash — cờ "downloading in progress" &amp; dual-area</h2>
+    <p class="claim">
+      Kho SPI-Flash còn một mảng cờ <b>khác</b> mảng <code>NVDS_SPIFlashFlag</code> (§E):
+      mỗi component FW một byte tại <code>THRD_FlashOffset_SubsetSector = 0x7B000</code>.
+      Đây chính là <b>bộ dò crash</b> của FW-update: set = 1 trước khi ghi, = 0 sau khi
+      xong; boot đọc lại. <span class="src">THRC_BSPif.h:304–314; THRC_BSPif.cpp:2681, 3127</span>
+    </p>
+    <figure>
+      <div class="fig-tag">Fig 7 — SubsetSector marker array @ 0x7B000 · set→write→clear→reboot→read</div>
+      <div class="frame">
+        <svg class="diagram" viewBox="0 0 1000 360" role="img"
+          aria-label="Bên trái vùng SPI-Flash tại offset 0x7B000 tên SubsetSector: 7 ô một byte, offset cộng 0 là MSC, cộng 1 ENG, cộng 2 IRC, cộng 3 EDH, cộng 4 FAX dùng bitmask theo từng unit, cộng 5 MS1 tức MSCSubset, cộng 6 MCPF. Sau vùng SubsetArea là phần non-subset gồm các cờ NVClear và dipsw, phần này được giữ lại khi erase. Chu trình bên phải: bước 1 trước khi ghi component X gọi THRG_Set X Downloading một, tức setFlashDownloadingStatus rồi THRF_writeFlash 0x7B000 cộng idx giá trị 1 rồi verify. Bước 2 ghi component vào partition SSD. Bước 3 xong thì THRG_Set X Downloading không, hoặc clearDownloadingFlag xoá tất cả. Bước 4 SubsetReboot. Bước 5 lúc boot THRG_InitDownloadVariable đọc THRF_readFlash 0x7B000 cả vùng SubsetArea vào các biến toàn cục bl X Downloading; THRG_InitDownloadStatus còn erase cả sector rồi ghi lại phần non-subset, tức các marker được tiêu thụ một lần. Bước 6 nếu bl_MSCDownloading bằng 1 thì lần update MSC trước bị đứt, logic quyết định tiếp theo chưa xác định nhưng cơ chế phát hiện đã rõ. Ghi chú: vùng SPI quan trọng có 2 bản area1 area2, đọc area1 hỏng thì dùng area2 vẫn trả OK kèm mã AREA1_ERR.">
+          <defs>
+            <marker id="mk-a7" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+            <marker id="mk-g7" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <text class="lbl-m" x="30" y="24">SPI-Flash @ 0x7B000 — SubsetSector</text>
+          <rect class="box-spi" x="30" y="30" width="380" height="70" rx="6"/>
+          <g class="lbl-m" text-anchor="middle" font-size="8.5">
+            <rect class="box" x="38" y="40" width="46" height="30" rx="3"/><text x="61" y="59">+0 MSC</text>
+            <rect class="box" x="86" y="40" width="46" height="30" rx="3"/><text x="109" y="59">+1 ENG</text>
+            <rect class="box" x="134" y="40" width="46" height="30" rx="3"/><text x="157" y="59">+2 IRC</text>
+            <rect class="box" x="182" y="40" width="46" height="30" rx="3"/><text x="205" y="59">+3 EDH</text>
+            <rect class="box" x="230" y="40" width="46" height="30" rx="3"/><text x="253" y="59">+4 FAX*</text>
+            <rect class="box" x="278" y="40" width="46" height="30" rx="3"/><text x="301" y="59">+5 MS1</text>
+            <rect class="box" x="326" y="40" width="46" height="30" rx="3"/><text x="349" y="59">+6 MCPF</text>
+          </g>
+          <text class="lbl-m" x="38" y="88">* FAX = bitmask per-unit &nbsp;·&nbsp; sau SubsetArea: non-subset (NVClear flags, dipsw) — giữ khi erase</text>
+
+          <text class="lbl-m" x="30" y="128">CHU TRÌNH (mỗi component X)</text>
+          <rect class="box" x="30" y="134" width="440" height="30" rx="6"/><text class="lbl-m" x="42" y="153"><tspan class="t-mono">1</tspan> THRG_Set&lt;X&gt;Downloading(1) → THRF_writeFlash(0x7B000+idx,1)+verify &nbsp;<tspan class="src">:2681</tspan></text>
+          <rect class="box" x="30" y="170" width="440" height="26" rx="6"/><text class="lbl-m" x="42" y="187"><tspan class="t-mono">2</tspan> ghi component X vào partition SSD</text>
+          <rect class="box" x="30" y="202" width="440" height="30" rx="6"/><text class="lbl-m" x="42" y="221"><tspan class="t-mono">3</tspan> THRG_Set&lt;X&gt;Downloading(0) / clearDownloadingFlag() &nbsp;<tspan class="src">:988; fwupdate.cpp:2315, 4102</tspan></text>
+          <rect class="box-nv" x="30" y="238" width="440" height="26" rx="6"/><text class="t-mono t-b" x="42" y="255" font-size="10"><tspan class="t-mono">4</tspan> SubsetReboot()</text>
+          <rect class="box" x="30" y="270" width="440" height="44" rx="6"/><text class="lbl-m" x="42" y="288"><tspan class="t-mono">5</tspan> boot: THRG_InitDownloadVariable() → THRF_readFlash(0x7B000, SubsetArea) → bl_&lt;X&gt;Downloading</text><text class="lbl-m" x="42" y="303">THRG_InitDownloadStatus(): read → snapshot → eraseFlash sector → rewrite non-subset &nbsp;<tspan class="src">:3127, 3164</tspan></text>
+
+          <rect class="box-gap" x="520" y="200" width="440" height="80" rx="8"/>
+          <text class="gap-t" x="740" y="222" text-anchor="middle">6 · if bl_MSCDownloading == 1</text>
+          <text class="lbl-m" x="740" y="242" text-anchor="middle">⇒ lần update MSC trước bị đứt (phát hiện được)</text>
+          <text class="lbl-m" x="740" y="258" text-anchor="middle">quyết định tiếp (resume/rollback/reject partition):</text>
+          <text class="lbl-m" x="740" y="274" text-anchor="middle">NEED SOURCE VERIFICATION (consumer của bl_*Downloading)</text>
+
+          <rect class="box-spi" x="520" y="40" width="440" height="60" rx="8"/>
+          <text class="t-mono t-b" x="740" y="60" text-anchor="middle" font-size="10">SPI-Flash dual-area redundancy (BSP)</text>
+          <text class="lbl-m" x="740" y="78" text-anchor="middle">2 bản (area1/area2) · đọc area1 hỏng → dùng area2</text>
+          <text class="lbl-m" x="740" y="92" text-anchor="middle">THRD_GET_SPI_OK_AREA1_ERR / AREA2_ERR &nbsp;<tspan class="src">THRC_BSPif.cpp:1663</tspan></text>
+
+          <line class="ctl" x1="250" y1="164" x2="250" y2="170" marker-end="url(#mk-a7)"/>
+          <line class="ctl" x1="250" y1="196" x2="250" y2="202" marker-end="url(#mk-a7)"/>
+          <line class="ctl" x1="250" y1="232" x2="250" y2="238" marker-end="url(#mk-a7)"/>
+          <line class="ctl" x1="250" y1="264" x2="250" y2="270" marker-end="url(#mk-a7)"/>
+          <line class="ctl" x1="220" y1="100" x2="140" y2="132" marker-end="url(#mk-a7)"/>
+          <line class="gap-l" x1="470" y1="292" x2="518" y2="250" marker-end="url(#mk-g7)"/>
+        </svg>
+      </div>
+      <figcaption>
+        Cơ chế crash-recovery của FW-update <b>không phải</b> ở NVRAM checksum — nó ở
+        <b>marker byte trong SPI-Flash</b>. <code>fwupdate.cpp:2315</code>
+        <code>clearDownloadingFlag()</code> đầu <code>startUpdateFromTAR</code>; sau mỗi
+        component thành công lại clear byte của nó (<span class="src">fwupdate.cpp:4091–4145, 4520+</span>).
+        Boot đọc 1 lần rồi <code>THRF_eraseFlash</code> cả sector — marker là "one-shot".
+        <b>Decision khi marker=1 lúc boot</b>: <span class="v-gap">NEED SOURCE
+        VERIFICATION</span> (consumer của <code>bl_MSCDownloading</code>…).
+      </figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Component</th><th>Offset</th><th>Setter</th><th>Getter</th><th>Clear tại</th></tr></thead>
+        <tbody>
+          <tr><td>MSC (system ctrl)</td><td class="mono">0x7B000 + 0</td><td class="mono">THRG_SetMSCDownloading</td><td class="mono">THRG_GetMSCDownloading</td><td class="src">fwupdate.cpp:2315, 4102, 4531</td></tr>
+          <tr><td>ENG (engine)</td><td class="mono">0x7B000 + 1</td><td class="mono">THRG_SetENGDownloading</td><td class="mono">THRG_GetENGDownloading</td><td class="src">fwupdate.cpp:4111</td></tr>
+          <tr><td>IRC</td><td class="mono">0x7B000 + 2</td><td class="mono">THRG_SetIRCDownloading</td><td class="mono">THRG_GetIRCDownloading</td><td class="src">fwupdate.cpp:4107, 4536</td></tr>
+          <tr><td>EDH</td><td class="mono">0x7B000 + 3</td><td class="mono">THRG_SetEDHDownloading</td><td class="mono">THRG_GetEDHDownloading</td><td class="src">fwupdate.cpp:4091, 4145, 4520</td></tr>
+          <tr><td>FAX (bitmask per-unit)</td><td class="mono">0x7B000 + 4</td><td class="mono">THRG_SetFAXDownloading</td><td class="mono">THRG_GetFAXDownloading</td><td class="src">fwupdate.cpp:4122–4140</td></tr>
+          <tr><td>MS1 / MSCSubset</td><td class="mono">0x7B000 + 5</td><td class="mono">THRG_SetMSCSubsetDownloading</td><td class="mono">THRG_GetMSCSubsetDownloading</td><td class="src">fwupdate.cpp:4103, 4532</td></tr>
+          <tr><td>MCPF</td><td class="mono">0x7B000 + 6</td><td class="mono">THRG_SetMCPFDownloading</td><td class="mono">THRG_GetMCPFDownloading</td><td class="src">fwupdate.cpp:4115</td></tr>
+          <tr><td>NWDLExec (startup type)</td><td class="mono">SoftDipSW +0x6</td><td class="mono">THRG_SetNWDLExec</td><td class="mono">THRG_GetNWDLExec</td><td class="src">THRC_BSPif.cpp:3051; clearDownloadingFlag() để lại NWDLExec</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px">
+      Tất cả đi qua <code>THRF_readFlash / THRF_writeFlash / THRF_eraseFlash</code> +
+      <code>verifyFlashSubsetData()</code> — primitive flash ở BSP
+      (<code>bsp_donau/Donau/FlashROM/bspFlashDriverNorFlash.c</code>,
+      <span class="v-gap">NEED SOURCE VERIFICATION</span> impl chi tiết).
+      <code>NVRAM_SIZE</code>: <code>#if defined(DEF_SupportSSD)</code> → 512 KB, else
+      2 MB — <span class="src">NVDG_FuncDonau3.h:28–32</span>. Log NV trên SSD:
+      <code>Virtual_NV = /ata01/NVD_LOG.db</code> — <span class="src">NVDG_FuncDonau3.h:25</span>.
+    </p>
+  </section>
+
+  <!-- ===== 7 RECOVERY ===== -->
+  <section>
+    <h2><span class="num">H</span>Recovery / What-if — failure matrix</h2>
+    <p class="claim">
+      Chỉ cho đường <code>NVDC_FstColor::WriteData</code> (Fig 3). Bước đánh số theo Fig 3.
+      Cột "phục hồi" dựa trên <span class="src">NVDC_FstColorC.cpp:41–50, 104–113</span> +
+      <code>NVDC_NVBackup</code> (<span class="src">APIC_NVBackup.cpp:99, 109</span>).
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Mất điện tại</th><th>Trạng thái NVRAM</th><th>Boot phát hiện</th><th>Nguồn phục hồi</th><th>Mất dữ liệu?</th></tr></thead>
+        <tbody>
+          <tr><td>trước bước 4 (chưa zero checksum)</td><td>field cũ + checksum cũ — nhất quán</td><td>CheckCheckSum PASS</td><td>không cần</td><td class="v-ok">Không</td></tr>
+          <tr><td>bước 4–7 (đã zero checksum, chưa/đang ghi field)</td><td>field nửa cũ nửa mới · checksum = 0</td><td>CheckCheckSum FAIL (SERR_OS_PHILE)</td><td>NVDC_CheckAllNvramOfBackUp() nếu backupMagic hợp lệ</td><td class="v-gap">field đang ghi → về giá trị backup gần nhất</td></tr>
+          <tr><td>sau bước 7, trước bước 8 (field mới, checksum vẫn 0)</td><td>field mới · checksum = 0</td><td>CheckCheckSum FAIL</td><td>backup toàn NVRAM (khôi phục cả struct)</td><td class="v-gap">value vừa set bị mất (về backup)</td></tr>
+          <tr><td>trong bước 8 (đang ghi 2 byte checksum)</td><td>field mới · checksum sai/nửa</td><td>CheckCheckSum FAIL</td><td>backup toàn NVRAM</td><td class="v-gap">value vừa set bị mất</td></tr>
+          <tr><td>sau bước 8 (field + checksum mới)</td><td>nhất quán</td><td>CheckCheckSum PASS</td><td>không cần</td><td class="v-ok">Không</td></tr>
+          <tr><td>backup magic KHÔNG hợp lệ + checksum FAIL</td><td>struct hỏng, không có nguồn khôi phục</td><td>FATAL log</td><td class="v-gap">FactorySetup() (giá trị mặc định)</td><td class="v-gap">Toàn bộ struct → default</td></tr>
+          <tr><td>.db path (FWUpdateSetting): ghi file đứt</td><td class="v-gap">cơ chế atomic của NVDC_DBColor</td><td class="v-gap">CheckOfFile(NVDE_Off) lúc init</td><td class="v-gap">NEED SOURCE VERIFICATION (NVDC_DBColorC.cpp)</td><td class="v-gap">?</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px">
+      Ghi chú: <b>zero-checksum-trước</b> (bước 4) là thiết kế cố ý để mọi write dở dang
+      → checksum = 0 → chắc chắn bị phát hiện. "Zero" và "recompute" đều ghi vào <b>bảng
+      checksum tập trung</b> ở <code>0x47500</code>, không phải kề struct.
+    </p>
+  </section>
+
+  <!-- ===== 8 GAPS ===== -->
+  <section class="prose">
+    <h2><span class="num">I</span>NEED SOURCE VERIFICATION — danh sách gap</h2>
+    <div class="gapbox">
+      <h3>Đã đóng ở lần cập nhật này</h3>
+      <ul>
+        <li><b>Boot reader các marker "downloading"</b> → <code>THRG_InitDownloadVariable()</code> / <code>THRG_InitDownloadStatus()</code> — <span class="src">THRC_BSPif.cpp:3127, 3164</span> (§G).</li>
+        <li><b>Địa chỉ marker</b> = <code>THRD_FlashOffset_SubsetSector = 0x7B000</code> + component index — <span class="src">THRC_BSPif.h:304–314</span>.</li>
+        <li><b>NVRAM size guard</b> = <code>#if defined(DEF_SupportSSD)</code> → 512 KB — <span class="src">NVDG_FuncDonau3.h:28</span>.</li>
+        <li><b>SPI-Flash primitive</b> = <code>THRF_read/write/eraseFlash</code> + dual-area (AREA1/AREA2_ERR).</li>
+      </ul>
+      <h3>Vẫn chưa chứng minh được từ cây Subset</h3>
+      <ul>
+        <li><b>Boot reader các cờ <code>NVDS_SPIFlashFlag</code></b> (ai thực sự wipe NVRAM khi <code>uc_NVClearFlag</code>/<code>uc_EnhancedNVClearFlag</code> = 0xab). <code>THRG_InitDownloadVariable</code> chỉ đọc marker "downloading", không đọc struct cờ này. Nghi ở BootDiag / BootROM (ngoài cây).</li>
+        <li><b>Ai <i>set</i> <code>uc_EnhancedNVClearFlag = 0xab</code></b> — trong Subset chỉ thấy <i>clear</i> (<code>fwupdate.cpp:3485</code>). Set thật là ở firmware chế độ thường (operator yêu cầu NVRAM clear) — <span class="v-gap">ngoài cây Subset</span>.</li>
+        <li><b>Consumer của <code>bl_MSCDownloading…</code></b> — quyết định gì khi marker=1 lúc boot (resume / rollback / từ chối partition).</li>
+        <li><b>Địa chỉ vật lý SoftDipSw region</b> (nơi <code>NVDS_SPIFlashFlag</code> ngồi) + impl <code>THRG_get/setSoftDipSw</code> — ở BSP, không ở <code>system/nvd</code>.</li>
+        <li><b>Callers <code>uc_NWDLExecFlag</code> (từ <code>NVDS_SPIFlashFlag</code>), <code>uc_StaticElectricCalibrationExecFlag</code></b> — lưu ý <code>THRD_FlashOffset_NWDLExec</code> (0x6, SoftDipSw) và byte <code>uc_NWDLExecFlag</code> của struct <code>NVDS_SPIFlashFlag</code> là <span class="v-gap">hai chỗ khác nhau hay trùng — chưa xác minh</span>.</li>
+        <li><b>Transaction nội bộ <code>NVDC_DBColor::WriteData</code></b> (atomic .db, checksum, recovery) — chưa đọc <code>NVDC_DBColorC.cpp</code> phần write.</li>
+        <li><b>Journal per-write <code>BKUPOFFSET</code></b> (<code>NVDC_ColorC.cpp:940–1010</code>) — class nào dùng đường <code>ColorC</code> (không phải <code>FstColor</code>).</li>
+        <li><b>Runtime chọn <code>NVDS_FWUpdateSettingMAv3/MAv6/TM7</code></b> — cả 3 đều init; chưa thấy logic phân nhánh consumer theo <code>SystemType</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== EVIDENCE INDEX ===== -->
+  <section class="prose">
+    <h2><span class="num">J</span>Evidence index</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Kết luận</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>NVDC_Struct dispatch NVRAM vs .db</td><td class="src">nvdg/NVDC_Class.cpp:31 (ctor), :176 (WriteData), :300 (ReadData)</td></tr>
+          <tr><td>NVRAM write transaction đầy đủ</td><td class="src">nvdc/NVDC_FstColorC.cpp:71–120 (WriteData), :275 (CheckOfFile), :406 (CheckCheckSum), :543 (WriteMagicNumber)</td></tr>
+          <tr><td>FstStruct base = delegate tới NVDC_FstColor</td><td class="src">nvdg/NVDC_FstStruct.cpp:21–29, 72–97</td></tr>
+          <tr><td>Central checksum table + magic header</td><td class="src">nvdc/NVDC_FstColorC.cpp:37, 54, 80, 93</td></tr>
+          <tr><td>Memory-map offsets</td><td class="src">nvdDonau3/NVDG_FuncDonau3.h:19–46, 55–114; NVRAM_SIZE :29–31</td></tr>
+          <tr><td>Per-class ul_Offset assignment</td><td class="src">nvdDonau3/NVDG_FuncDonau3.cpp:447, 542, 545, 804–852</td></tr>
+          <tr><td>FWUpdateSetting NVRAM code = dead (#ifdef DEF_COLOR / #if 0)</td><td class="src">nvdg/NVDC_FWUpdateSetting.cpp:45, 50, 71, 92, 110–117</td></tr>
+          <tr><td>FWUpdateSetting → .db files (127/128/136/137/141/143/144/151)</td><td class="src">nvdc/NVDC_DBColorC.cpp:186–225</td></tr>
+          <tr><td>DB init at boot</td><td class="src">nvdDonau3/NVDG_FuncDonau3.cpp:1301–1324 (InitializeDatabase), :1349–1373 (CheckOfFile)</td></tr>
+          <tr><td>Password → _Enc.db, key=(type,idx)</td><td class="src">nvdg/NVDC_FWUpdateSetting.cpp:6351, 6367, 6397–6398; FactorySetup :619</td></tr>
+          <tr><td>MAv3/MAv6/TM7 = feature groups</td><td class="src">nvdg/NVDC_FWUpdateSetting.cpp:6000, 6042, 6078, 6109</td></tr>
+          <tr><td>APIC = thin wrapper</td><td class="src">nvd/APIC_FWUpdateSetting.cpp:60; APIC_FWUpDwConvPassword.cpp:36</td></tr>
+          <tr><td>SPI-Flash flag struct</td><td class="src">nvdg/NVDC_Setting.h:27627–27641</td></tr>
+          <tr><td>SPIFlashDataManage set/get/offset</td><td class="src">nvdg/NVDC_Setting.cpp:23871, 23900, 23925, 23958, 23995, 24015</td></tr>
+          <tr><td>FW-update clears EnhancedNVClear</td><td class="src">thr/thr/fwupdate.cpp:3285, 3473–3489</td></tr>
+          <tr><td>HddTrans reads EnhancedNVClear</td><td class="src">thr/SATA2/THRC_HddTrans.cpp:3081</td></tr>
+          <tr><td>NVBackup recovery</td><td class="src">nvd/APIC_NVBackup.cpp:24, 99, 109, 123; nvdc/NVDC_FstColorC.cpp:39, 48</td></tr>
+          <tr><td>NvramClear panel = stub</td><td class="src">QtPanel/fwu/FwuNvramClearGamen.cpp:124–160</td></tr>
+          <tr><td>SPI-Flash download markers @ 0x7B000 + component idx</td><td class="src">thr/thrcom/THRC_BSPif.h:304–314</td></tr>
+          <tr><td>Set/Get&lt;X&gt;Downloading → setFlashDownloadingStatus / THRF_readFlash</td><td class="src">thr/thrcom/THRC_BSPif.cpp:2681, 2711, 2734+</td></tr>
+          <tr><td>Boot reader marker: THRG_InitDownloadVariable / THRG_InitDownloadStatus (erase sector)</td><td class="src">thr/thrcom/THRC_BSPif.cpp:3127, 3164, 3220</td></tr>
+          <tr><td>clearDownloadingFlag() — all markers; per-component clear after success</td><td class="src">thr/thrcom/THRC_BSPif.cpp:988; thr/thr/fwupdate.cpp:2315, 4091–4145, 4520+</td></tr>
+          <tr><td>SPI-Flash dual-area redundancy (AREA1/AREA2_ERR)</td><td class="src">thr/thrcom/THRC_BSPif.cpp:1663–1664, 1853–1854</td></tr>
+          <tr><td>NVRAM_SIZE guard = DEF_SupportSSD → 512K else 2M</td><td class="src">nvdDonau3/NVDG_FuncDonau3.h:28–32</td></tr>
+          <tr><td>Virtual_NV = /ata01/NVD_LOG.db (SSD NV log)</td><td class="src">nvdDonau3/NVDG_FuncDonau3.h:25</td></tr>
+          <tr><td>Nothing in Subset SETS EnhancedNVClear (only clears)</td><td class="src">grep system/ + QtPanel/ : chỉ fwupdate.cpp:3485 (clear)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Cây source: <code>Subset/S-S800/Src/application/mfp/system/nvd/</code> (+ <code>system/thr/thr/fwupdate.cpp</code>,
+    <code>system/thr/SATA2/THRC_HddTrans.cpp</code>, <code>QtPanel/fwu/</code>). Đọc chính:
+    <code>NVDC_Class.cpp</code>, <code>NVDC_FstStruct.cpp</code>, <code>NVDC_FstColorC.cpp</code>,
+    <code>NVDG_FuncDonau3.h/.cpp</code>, <code>NVDC_FWUpdateSetting.cpp/.h</code>,
+    <code>NVDC_DBColorC.cpp</code>, <code>NVDC_Setting.cpp/.h</code>, <code>APIC_NVBackup.cpp</code>.
+    Line number theo bản đọc tại thời điểm phân tích — verify lại trước khi dùng để sửa code.
+    Mọi ô <b class="v-gap">NEED SOURCE VERIFICATION</b> là chỗ chưa có bằng chứng trong cây Subset. Sơ đồ vẽ tay bằng inline SVG.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = "nvram-deep-theme";
+    var root = document.documentElement;
+    var btn = document.getElementById("themeToggle");
+    try { var s = localStorage.getItem(KEY); if (s === "dark" || s === "light") root.setAttribute("data-theme", s); } catch (e) {}
+    function cur() { var a = root.getAttribute("data-theme"); if (a) return a; return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; }
+    btn.addEventListener("click", function () { var n = cur() === "dark" ? "light" : "dark"; root.setAttribute("data-theme", n); try { localStorage.setItem(KEY, n); } catch (e) {} });
+  })();
+</script>
+
+</body>
+</html>

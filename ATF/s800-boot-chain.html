@@ -1,0 +1,807 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<title>Chuỗi khởi động ATF S800</title>
+<style>
+  :root{
+    --bg:#f2f0ea; --surface:#faf8f3; --surface-2:#e9e6dc;
+    --ink:#262320; --muted:#6b665c; --line:#d6d1c4;
+    --secure:#9c5f08; --normal:#37636a;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#14171c; --surface:#1b1f26; --surface-2:#242b34;
+      --ink:#e8e5dc; --muted:#9a958a; --line:#323945;
+      --secure:#e3aa53; --normal:#7fb4bb;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14171c; --surface:#1b1f26; --surface-2:#242b34;
+    --ink:#e8e5dc; --muted:#9a958a; --line:#323945;
+    --secure:#e3aa53; --normal:#7fb4bb;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:44rem;margin:0 auto;padding:clamp(1.5rem,4vw,3.5rem) clamp(1.1rem,4vw,2rem) 4rem}
+
+  header.ph{border-bottom:1px solid var(--line);padding-bottom:1.7rem;margin-bottom:1.6rem}
+  .eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.72rem;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--secure);margin:0 0 .95rem}
+  h1{font-family:"Chivo","Helvetica Neue",Arial,sans-serif;font-weight:700;
+    font-size:clamp(1.9rem,5.2vw,2.7rem);line-height:1.08;letter-spacing:-.02em;
+    margin:0 0 .85rem;text-wrap:balance}
+  .lead{font-size:1.08rem;margin:0 0 1.4rem;max-width:37rem}
+  .meta{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.76rem;
+    color:var(--muted);line-height:1.95;margin:0}
+  .meta b{color:var(--ink);font-weight:500}
+
+  .legend{display:flex;flex-wrap:wrap;gap:1.2rem;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:.76rem;color:var(--muted);margin:1.4rem 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:.5rem}
+  .sw{width:1.7rem;border-top:2.5px solid;display:inline-block}
+  .sw-sec{border-color:var(--secure)}
+  .sw-ns{border-color:var(--normal)}
+
+  section{margin-top:2.9rem}
+  h2{font-family:"Chivo",sans-serif;font-weight:700;font-size:1.32rem;
+    letter-spacing:-.01em;margin:0 0 .7rem;text-wrap:balance}
+  p{margin:0 0 1rem;max-width:38rem}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.86em;
+    background:var(--surface-2);padding:.04em .32em;border-radius:3px}
+
+  figure{margin:1.7rem 0 0;padding:1.15rem;background:var(--surface);
+    border:1px solid var(--line);border-radius:8px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:.85rem;color:var(--muted);margin-top:1rem;line-height:1.6}
+
+  /* per-stage spec cards */
+  .stage{margin-top:2.4rem;padding-top:1.7rem;border-top:1px solid var(--line)}
+  .stage:first-of-type{border-top:0;padding-top:.4rem}
+  .stage-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:.7rem;margin-bottom:.25rem}
+  .stage-hd h3{font-family:"Chivo",sans-serif;font-weight:700;font-size:1.16rem;
+    margin:0;letter-spacing:-.01em}
+  .chip{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.66rem;
+    letter-spacing:.07em;text-transform:uppercase;color:var(--secure);
+    border:1px solid var(--line);border-radius:999px;padding:.14em .62em;white-space:nowrap}
+  .chip.ns{color:var(--normal)}
+  .role{margin:.15rem 0 1rem;color:var(--muted);font-size:.95rem;max-width:38rem}
+  .spec{display:grid;gap:.55rem;margin:0 0 1.15rem}
+  .spec .row{display:grid;grid-template-columns:6.2rem 1fr;gap:.85rem}
+  @media (max-width:33rem){.spec .row{grid-template-columns:1fr;gap:.15rem}}
+  .spec .k{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.68rem;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:.2rem}
+  .spec .v{margin:0;max-width:32rem}
+  .spec .v ul{margin:.2rem 0 0;padding-left:1.05rem}
+  .spec .v li{margin:.12rem 0}
+  ol.how{margin:.5rem 0 0;padding-left:1.35rem;max-width:38rem}
+  ol.how>li{margin:.4rem 0;padding-left:.15rem}
+  ol.how ul{margin:.25rem 0 .3rem;padding-left:1rem;list-style:disc;color:var(--muted)}
+  ol.how ul code{background:none;padding:0}
+  .stage-lead{margin:1.5rem 0 0;font-size:.95rem;color:var(--muted)}
+
+  footer{margin-top:3.6rem;border-top:1px solid var(--line);padding-top:1.4rem;
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
+    color:var(--muted);line-height:2}
+  footer b{color:var(--ink);font-weight:500}
+
+  :focus-visible{outline:2px solid var(--secure);outline-offset:2px}
+  @media (prefers-reduced-motion:no-preference){
+    body{animation:fade .4s ease both}
+    @keyframes fade{from{opacity:0}to{opacity:1}}
+  }
+
+  /* diagram primitives */
+  .d-box{fill:var(--surface-2);stroke:var(--ink);stroke-width:1.5}
+  .d-box--sec{stroke:var(--secure)}
+  .d-box--ns{stroke:var(--normal)}
+  .d-ll{stroke:var(--line);stroke-width:1.5;stroke-dasharray:3 4}
+  .d-div{stroke:var(--secure);stroke-width:1;stroke-dasharray:4 5;opacity:.45}
+  .d-rule{stroke:var(--secure);stroke-width:1;stroke-dasharray:6 5;opacity:.7}
+  .d-flow{stroke:var(--ink);stroke-width:1.5;fill:none}
+  .d-flow--sec{stroke:var(--secure)}
+  .d-flow--ret{stroke-dasharray:5 4}
+  .d-name{fill:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-weight:600}
+  .d-mut{fill:var(--muted);font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .d-sec{fill:var(--secure);font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .mk{fill:var(--ink)}
+  .mk-sec{fill:var(--secure)}
+</style>
+
+<div class="wrap">
+
+  <header class="ph">
+    <p class="eyebrow">Firmware bring-up · atf/atf_s800</p>
+    <h1>Chuỗi khởi động ATF trên board S800</h1>
+    <p class="lead">Bản ARM Trusted Firmware của Marvell, Konica Minolta chỉnh cho máy in
+      bizhub S800. Trang này mổ xẻ từng stage — BLE, BL1, BL2, BL31, BL33 — làm gì,
+      nhận gì, trả gì, và làm bằng cách nào.</p>
+    <p class="meta">
+      <b>ATF</b> v1.3 &nbsp;·&nbsp; <b>Marvell</b> devel-16.07.3 &nbsp;·&nbsp; <b>PLAT</b>=quartz<br>
+      <b>SoC</b> Armada 8K — APN806 (2×Cortex-A72) + ASIC &ldquo;Quartz&rdquo; + service CPU R4<br>
+      <b>DRAM</b> 2 GB LPDDR4 &nbsp;·&nbsp; <b>BL33</b> ../uboot_s800/u-boot.bin &nbsp;·&nbsp; toolchain s800-linux-
+    </p>
+    <div class="legend">
+      <span><i class="sw sw-sec"></i> thế giới bảo mật — EL3 / TrustZone</span>
+      <span><i class="sw sw-ns"></i> thế giới thường — BL33, Linux</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Năm stage, một ranh giới tin cậy</h2>
+    <p>BootROM nạp <code>flash-image.bin</code> vào SRAM rồi chạy BLE; BLE khởi tạo
+      LPDDR4 và nhờ lõi R4 chép BL1 xuống DRAM. BL1 → BL2 → BL31 đều ở EL3 — CPU chỉ lần đầu
+      rời thế giới bảo mật khi BL31 <code>eret</code> xuống EL2 để vào U-Boot.
+      Build này đặt <code>TRUSTED_BOARD_BOOT=0</code> nên BL1/BL2 không thực sự
+      kiểm chữ ký ảnh.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 620" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Bảy stage nối tiếp: BootROM, BLE, BL1, BL2, BL31 chạy ở EL3 trong thế giới bảo mật; sau đó eret xuống EL2 vào BL33 U-Boot và Linux ở thế giới không bảo mật. Bước BLE sang BL1 do lõi R4 chép mã vào DRAM.">
+        <defs>
+          <marker id="ahA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path class="mk" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+          <marker id="ahA-sec" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path class="mk-sec" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <rect class="d-box d-box--sec" x="196" y="24" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="44" font-size="13">BootROM</text>
+        <text class="d-mut" x="212" y="60" font-size="10">nạp flash-image.bin từ SPI-NOR / eMMC</text>
+        <text class="d-mut" x="182" y="51" font-size="10.5" text-anchor="end">on-die ROM · EL3</text>
+        <text class="d-mut" x="536" y="51" font-size="9.5">mask ROM</text>
+
+        <line class="d-flow" x1="360" y1="72" x2="360" y2="110" marker-end="url(#ahA)"/>
+        <text class="d-mut" x="372" y="95" font-size="10">trao quyền</text>
+
+        <rect class="d-box d-box--sec" x="196" y="112" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="132" font-size="13">BLE — Binary Extension</text>
+        <text class="d-mut" x="212" y="148" font-size="10">train LPDDR4 (Quartz MC) · XOR DMA · MMU</text>
+        <text class="d-mut" x="182" y="139" font-size="10.5" text-anchor="end">SRAM 0xCCF0_0000 · EL3</text>
+        <text class="d-mut" x="536" y="139" font-size="9.5">ble/ble_main.c</text>
+
+        <line class="d-flow d-flow--sec" x1="360" y1="160" x2="360" y2="198" marker-end="url(#ahA-sec)"/>
+        <text class="d-sec" x="372" y="183" font-size="10">R4 chép BL1 → DRAM · xem Hình B</text>
+
+        <rect class="d-box d-box--sec" x="196" y="200" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="220" font-size="13">BL1</text>
+        <text class="d-mut" x="212" y="236" font-size="10">trusted boot · nạp BL2 từ FIP</text>
+        <text class="d-mut" x="182" y="227" font-size="10.5" text-anchor="end">DRAM · R4 copy · EL3</text>
+        <text class="d-mut" x="536" y="227" font-size="9.5">bl1/bl1_main.c</text>
+
+        <line class="d-flow" x1="360" y1="248" x2="360" y2="286" marker-end="url(#ahA)"/>
+        <text class="d-mut" x="372" y="271" font-size="10">nạp + xác thực BL2</text>
+
+        <rect class="d-box d-box--sec" x="196" y="288" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="308" font-size="13">BL2</text>
+        <text class="d-mut" x="212" y="324" font-size="10">nạp BL31 + BL33 từ FIP vào bộ nhớ</text>
+        <text class="d-mut" x="182" y="315" font-size="10.5" text-anchor="end">DRAM 0x1001_4000 · EL3→S-EL1</text>
+        <text class="d-mut" x="536" y="315" font-size="9.5">marvell_bl2_setup.c</text>
+
+        <line class="d-flow" x1="360" y1="336" x2="360" y2="374" marker-end="url(#ahA)"/>
+        <text class="d-mut" x="372" y="359" font-size="10">smc → BL1 → eret BL31</text>
+
+        <rect class="d-box d-box--sec" x="196" y="376" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="396" font-size="13">BL31 — Secure Monitor</text>
+        <text class="d-mut" x="212" y="412" font-size="10">apn806_init · GIC · rồi phục vụ PSCI mãi mãi</text>
+        <text class="d-mut" x="182" y="403" font-size="10.5" text-anchor="end">DRAM 0x1002_0000 · EL3</text>
+        <text class="d-mut" x="536" y="403" font-size="9.5">quartz/plat_bl31_setup.c</text>
+
+        <line class="d-rule" x1="44" y1="446" x2="330" y2="446"/>
+        <line class="d-rule" x1="390" y1="446" x2="676" y2="446"/>
+        <text class="d-sec" x="334" y="450" font-size="10" text-anchor="end">SECURE &#8594;</text>
+        <text class="d-sec" x="386" y="450" font-size="10">NON-SECURE&nbsp;&nbsp;·&nbsp;&nbsp;eret xuống EL2</text>
+        <line class="d-flow d-flow--sec" x1="360" y1="424" x2="360" y2="462" marker-end="url(#ahA-sec)"/>
+
+        <rect class="d-box d-box--ns" x="196" y="464" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="484" font-size="13">BL33 — U-Boot</text>
+        <text class="d-mut" x="212" y="500" font-size="10">bootloader thế giới thường</text>
+        <text class="d-mut" x="182" y="491" font-size="10.5" text-anchor="end">DRAM @ 0x1000 · EL2 NS</text>
+        <text class="d-mut" x="536" y="491" font-size="9.5">../uboot_s800</text>
+
+        <line class="d-flow" x1="360" y1="512" x2="360" y2="550" marker-end="url(#ahA)"/>
+        <text class="d-mut" x="372" y="535" font-size="10">bật kernel</text>
+
+        <rect class="d-box d-box--ns" x="196" y="552" width="328" height="46" rx="5"/>
+        <text class="d-name" x="212" y="572" font-size="13">Linux</text>
+        <text class="d-mut" x="212" y="588" font-size="10">kernel + userspace (bizhub MFP)</text>
+        <text class="d-mut" x="182" y="579" font-size="10.5" text-anchor="end">DRAM · EL2/EL1 NS</text>
+        <text class="d-mut" x="536" y="579" font-size="9.5">—</text>
+      </svg>
+      <figcaption>Cột trái: nơi mã thực thi và mức đặc quyền. Cột phải: file nguồn chính.
+        Marvell thêm <strong>BLE</strong> trước BL1 so với ATF chuẩn; BL1/BL2/BL31 nằm trong
+        vùng gọi là &ldquo;Trusted SRAM&rdquo; 256 KB nhưng thực chất là DRAM tại
+        <code>0x1000_0000</code> (xem Hình bản đồ bộ nhớ).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Bàn giao dữ liệu giữa các stage</h2>
+    <p>Mỗi stage để lại cho stage kế một cấu trúc dữ liệu ở vị trí đã thỏa thuận. Đây là
+      &ldquo;hợp đồng&rdquo; giữ cho chuỗi boot khớp nhau: mất một mảnh là stage sau assert
+      hoặc panic.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 210" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Luồng dữ liệu bàn giao: BLE chuyển header ảnh cho BL1; BL1 truyền meminfo_t qua x0 cho BL2; BL2 truyền bl31_params_t và hai entry_point_info cho BL31 sau khi flush cache; BL31 vào BL33 với x0 bằng MPIDR, ELR 0x1000, SPSR EL2. BL1 và BL2 đều đọc ảnh con từ FIP theo UUID.">
+        <defs>
+          <marker id="ahE" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path class="mk" d="M0,0 L10,5 L0,10 z"/>
+          </marker>
+        </defs>
+
+        <rect class="d-box d-box--sec" x="24"  y="24" width="92" height="32" rx="5"/>
+        <text class="d-name" x="70"  y="44" font-size="12" text-anchor="middle">BLE</text>
+        <rect class="d-box d-box--sec" x="182" y="24" width="92" height="32" rx="5"/>
+        <text class="d-name" x="228" y="44" font-size="12" text-anchor="middle">BL1</text>
+        <rect class="d-box d-box--sec" x="340" y="24" width="92" height="32" rx="5"/>
+        <text class="d-name" x="386" y="44" font-size="12" text-anchor="middle">BL2</text>
+        <rect class="d-box d-box--sec" x="498" y="24" width="92" height="32" rx="5"/>
+        <text class="d-name" x="544" y="44" font-size="12" text-anchor="middle">BL31</text>
+        <rect class="d-box d-box--ns"  x="644" y="24" width="92" height="32" rx="5"/>
+        <text class="d-name" x="690" y="44" font-size="12" text-anchor="middle">BL33</text>
+
+        <line class="d-flow" x1="116" y1="40" x2="180" y2="40" marker-end="url(#ahE)"/>
+        <line class="d-flow" x1="274" y1="40" x2="338" y2="40" marker-end="url(#ahE)"/>
+        <line class="d-flow" x1="432" y1="40" x2="496" y2="40" marker-end="url(#ahE)"/>
+        <line class="d-flow" x1="590" y1="40" x2="642" y2="40" marker-end="url(#ahE)"/>
+
+        <text class="d-mut" x="148" y="70" font-size="9" text-anchor="middle">header ảnh</text>
+        <text class="d-mut" x="148" y="81" font-size="9" text-anchor="middle">load + exec addr</text>
+        <text class="d-mut" x="306" y="70" font-size="9" text-anchor="middle">x0 = meminfo_t</text>
+        <text class="d-mut" x="306" y="81" font-size="9" text-anchor="middle">extents Trusted SRAM</text>
+        <text class="d-mut" x="464" y="70" font-size="9" text-anchor="middle">x0 = bl31_params_t</text>
+        <text class="d-mut" x="464" y="81" font-size="9" text-anchor="middle">+ ep_info ×2 · flush D$/L3</text>
+        <text class="d-mut" x="616" y="70" font-size="9" text-anchor="middle">x0 = MPIDR &amp; 0xffff</text>
+        <text class="d-mut" x="616" y="81" font-size="9" text-anchor="middle">ELR 0x1000 · SPSR EL2</text>
+
+        <line class="d-rule" x1="617" y1="16" x2="617" y2="92"/>
+        <text class="d-sec" x="617" y="104" font-size="8.5" text-anchor="middle">SECURE &#8594; NS</text>
+
+        <rect class="d-box" x="282" y="150" width="216" height="34" rx="5"/>
+        <text class="d-name" x="390" y="165" font-size="10" text-anchor="middle">FIP — fip.bin</text>
+        <text class="d-mut" x="390" y="178" font-size="8" text-anchor="middle">TOC + entry theo UUID: BL2 · BL31 · BL33</text>
+        <line class="d-flow d-flow--ret" x1="228" y1="58" x2="342" y2="148" marker-end="url(#ahE)"/>
+        <line class="d-flow d-flow--ret" x1="386" y1="58" x2="410" y2="148" marker-end="url(#ahE)"/>
+        <text class="d-mut" x="300" y="120" font-size="8.5" text-anchor="middle">load_auth_image() theo UUID</text>
+      </svg>
+      <figcaption>Mỗi mũi tên ngang là dữ liệu một stage để lại cho stage kế. BL2 phải
+        <code>flush_dcache_range()</code> + flush L3 (<code>0xF000_87BC</code>) vì BL31 dựng
+        bảng trang riêng. FIP nằm tại <code>PLAT_MARVELL_FIP_BASE = 0x1012_0000</code>;
+        BL1/BL2 rút từng ảnh con bằng <code>load_auth_image()</code> tra theo UUID chuẩn TBBR.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Chi tiết từng stage</h2>
+    <p>Với mỗi stage: <strong>mục đích</strong> (tại sao tồn tại), <strong>input</strong>
+      (nhận gì, từ đâu), <strong>output</strong> (tạo ra gì, cho ai), và
+      <strong>cách thực hiện</strong> (chuỗi hành động thật, kèm tên hàm / thanh ghi / địa chỉ).</p>
+
+    <!-- ============ BLE ============ -->
+    <div class="stage">
+      <div class="stage-hd">
+        <h3>BLE — Binary Extension</h3>
+        <span class="chip">EL3 · AArch64</span>
+        <span class="chip">SRAM 0xCCF0_0000</span>
+      </div>
+      <p class="role">Phần mã Marvell/KM chạy <em>trước</em> BL1. BootROM không biết khởi tạo
+        DRAM — BLE làm đúng việc đó rồi bàn giao. Không có BLE thì cả chuỗi boot dừng ngay.</p>
+
+      <div class="spec">
+        <div class="row"><span class="k">Mục đích</span><div class="v">
+          Đưa LPDDR4 vào trạng thái dùng được để các stage sau có RAM mà chạy; báo thông số
+          DRAM cho bootloader; khởi tạo console sớm để debug.</div></div>
+        <div class="row"><span class="k">Input</span><div class="v"><ul>
+          <li><code>bootrom_flags</code> trong <code>x0</code> — bit <code>BR_FLAG_SILENT</code>
+            (0x1) = &ldquo;boot từ UART, đừng in console&rdquo;.</li>
+          <li>Ảnh BLE trong preamble <code>flash-image.bin</code>, đã được BootROM chép vào
+            SRAM <code>BLE_BASE</code> (<code>ble.ld.S</code>).</li>
+          <li>Bảng cấu hình LPDDR4 tĩnh của KM (<code>KM_LPDDR4_config.h</code>,
+            <code>KM_LPDDR4_prot.h</code>) + thư viện DDR tiền biên dịch
+            <code>mv_ddr_lib.a</code> / <code>mv_ddr4_lib.a</code>.</li>
+          <li>(warm boot) thông số training đã lưu, đọc qua
+            <code>syncronize_boot_get(BOOT_SYNC_DDR_*)</code>.</li>
+        </ul></div></div>
+        <div class="row"><span class="k">Output</span><div class="v"><ul>
+          <li><strong>DRAM đã training</strong>, map ở địa chỉ 0 — điều kiện tiên quyết cho mọi stage sau.</li>
+          <li>Mảng <code>sys_info</code> tại <code>SYSTEM_INFO_ADDRESS = 0x0400_0000</code>:
+            <code>DRAM_BUS_WIDTH</code>, <code>DRAM_CS0_SIZE</code>, số chip-select
+            (<code>set_info()</code> trong <code>sys_info.c</code>).</li>
+          <li>Trạng thái training ghi vào scratch SRAM <code>0xC020_0000</code>
+            (số lần thử; <code>0x77</code> = OK) — workaround KM <code>OP_BTS-51229</code>.</li>
+          <li>Mailbox <code>__RO_START__ + 0x80000 := 0xDEADBEEF</code> (dấu &ldquo;BLE tới cuối&rdquo;).</li>
+          <li><code>return 0</code> → assembly bắt đầu thủ tục bàn giao R4 → BL1.</li>
+        </ul></div></div>
+      </div>
+
+      <ol class="how">
+        <li><code>ble_entry</code> (<code>ble_initial_boot.S</code>): đặt <code>sp = __start_start__</code>,
+          zero <code>.bss</code> bằng <code>memset</code>, bật generic timer
+          (<code>0xF058_1000 ← 1</code>, <code>cntp_ctl_el0 ← 1</code>).</li>
+        <li>Nhảy vào <code>ble_main(bootrom_flags)</code>:
+          <ul>
+            <li>ghi <code>0xE5</code> vào 2 KB đầu SRAM <code>0xC020_0000</code> (workaround SuperWarp, 2024/11/27);</li>
+            <li><code>uart_bypass</code> (<code>0xF06F_4004 ← 0x3000</code>) rồi
+              <code>console_init()</code> — UART 8250, nếu không SILENT;</li>
+            <li><code>getLogOutput()</code> — đọc GPIOH[25] (<code>0xE830_A700</code> bit 25,
+              &ldquo;LOG_SW&rdquo;) quyết định có in log không;</li>
+            <li><code>plat_delay_timer_init()</code>.</li>
+          </ul></li>
+        <li><strong><code>lpddr4_config()</code></strong> — phần nặng nhất:
+          <ul>
+            <li>đọc rev APN806 (<code>apn806_rev_id_get()</code> từ <code>0xF061_0FCC</code>),
+              chọn nhánh revA/revB;</li>
+            <li><code>adjust_top_freq_for_pll()</code> nắn tần số DDR yêu cầu về giá trị PLL hợp lệ;</li>
+            <li>cold boot: gọi <code>lpddr4_dynamic_config(DYNAMIC, 0)</code> trong vòng lặp
+              tối đa 6 lần, kiểm <code>lpddr4_training_Error</code> mỗi lần; xong đặt cờ <code>0x77</code>;</li>
+            <li>bên trong: hiệu chỉnh pad PHY (<code>pad_cal()</code>), reset PHY, gửi mode-register
+              tới LPDDR4 (<code>send_mrx</code>), chạy write/read leveling + DQ training — dùng
+              <strong>engine XOR-v2</strong> (<code>mv_xor_v2.c</code>) đọc/ghi mẫu
+              (<code>trainingPattern*</code>) nhanh và quét cửa sổ hợp lệ.</li>
+          </ul></li>
+        <li>Đặt mailbox <code>0xDEADBEEF</code>, <code>return 0</code>.</li>
+        <li>Quay lại <code>ble_entry</code>: tắt I/D-cache trong <code>SCTLR_EL3</code>, rồi
+          <strong>bàn giao BL1</strong> qua lõi R4 (chi tiết Hình B ngay dưới).</li>
+      </ol>
+
+      <p class="stage-lead">Bước 5 — cú bàn giao BLE → BL1 — nằm trọn trong assembly:</p>
+      <figure>
+        <svg viewBox="0 0 720 500" role="img" xmlns="http://www.w3.org/2000/svg"
+          aria-label="Sơ đồ trình tự giữa BLE và lõi R4: BLE huấn luyện DRAM, ghi cờ vào hộp thư 0xBFD8_0000, quay vòng chờ; R4 chép ảnh BL1 vào DRAM và trả về địa chỉ header; BLE đọc header, làm sạch cache rồi nhảy tới điểm vào BL1 nằm trong DRAM.">
+          <defs>
+            <marker id="ahB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path class="mk" d="M0,0 L10,5 L0,10 z"/>
+            </marker>
+            <marker id="ahB-sec" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path class="mk-sec" d="M0,0 L10,5 L0,10 z"/>
+            </marker>
+          </defs>
+
+          <rect class="d-box d-box--sec" x="112" y="18" width="156" height="32" rx="5"/>
+          <text class="d-name" x="190" y="38" font-size="11" text-anchor="middle">BLE · Cortex-A72 · EL3</text>
+          <rect class="d-box" x="442" y="18" width="156" height="32" rx="5"/>
+          <text class="d-name" x="520" y="38" font-size="11" text-anchor="middle">R4 · service CPU</text>
+
+          <line class="d-ll" x1="190" y1="50" x2="190" y2="452"/>
+          <line class="d-ll" x1="520" y1="50" x2="520" y2="452"/>
+
+          <circle class="d-flow" cx="38" cy="90" r="11"/>
+          <text class="d-name" x="38" y="94" font-size="11" text-anchor="middle">1</text>
+          <path class="d-flow" d="M190,84 h-40 v14 h40" marker-end="url(#ahB)"/>
+          <text class="d-mut" x="206" y="86" font-size="10">ble_main(): console · train LPDDR4 · XOR / MMU</text>
+
+          <circle class="d-flow" cx="38" cy="150" r="11"/>
+          <text class="d-name" x="38" y="154" font-size="11" text-anchor="middle">2</text>
+          <line class="d-flow d-flow--sec" x1="190" y1="150" x2="520" y2="150" marker-end="url(#ahB-sec)"/>
+          <text class="d-sec" x="355" y="143" font-size="10" text-anchor="middle">mailbox 0xBFD8_0000 := 1&nbsp;&nbsp;·&nbsp;&nbsp;DC cvac</text>
+
+          <circle class="d-flow" cx="38" cy="206" r="11"/>
+          <text class="d-name" x="38" y="210" font-size="11" text-anchor="middle">3</text>
+          <path class="d-flow" d="M190,200 h-40 v14 h40" marker-end="url(#ahB)"/>
+          <text class="d-mut" x="206" y="202" font-size="10">spin: dc ivac ; ldr&nbsp;&nbsp;—&nbsp;&nbsp;đợi R4</text>
+
+          <circle class="d-flow" cx="38" cy="266" r="11"/>
+          <text class="d-name" x="38" y="270" font-size="11" text-anchor="middle">4</text>
+          <line class="d-flow d-flow--ret" x1="520" y1="266" x2="190" y2="266" marker-end="url(#ahB)"/>
+          <text class="d-mut" x="355" y="259" font-size="10" text-anchor="middle">R4 chép ảnh BL1 → DRAM, rồi xoá mailbox</text>
+
+          <circle class="d-flow" cx="38" cy="322" r="11"/>
+          <text class="d-name" x="38" y="326" font-size="11" text-anchor="middle">5</text>
+          <line class="d-flow d-flow--ret" x1="520" y1="322" x2="190" y2="322" marker-end="url(#ahB)"/>
+          <text class="d-mut" x="355" y="315" font-size="10" text-anchor="middle">mailbox := địa chỉ header của ảnh</text>
+
+          <circle class="d-flow" cx="38" cy="378" r="11"/>
+          <text class="d-name" x="38" y="382" font-size="11" text-anchor="middle">6</text>
+          <path class="d-flow" d="M190,372 h-40 v14 h40" marker-end="url(#ahB)"/>
+          <text class="d-mut" x="206" y="374" font-size="10">đọc header · dc ivac vùng mã · ic ialluis</text>
+
+          <circle class="d-flow" cx="38" cy="424" r="11"/>
+          <text class="d-name" x="38" y="428" font-size="11" text-anchor="middle">7</text>
+          <line class="d-flow" x1="190" y1="418" x2="190" y2="440" marker-end="url(#ahB)"/>
+          <rect class="d-box d-box--sec" x="60" y="440" width="300" height="30" rx="5"/>
+          <text class="d-name" x="210" y="459" font-size="10" text-anchor="middle">BL1 — entry = header[0x1c], chạy trong DRAM</text>
+        </svg>
+        <figcaption>Lõi R4 vừa là bên chép mã lúc bàn giao, vừa là SCP phục vụ PSCI về sau
+          (Hình trong phần BL31). Mọi lần chạm hộp thư đều kèm thao tác cache tường minh vì
+          I/D-cache đã tắt.</figcaption>
+      </figure>
+    </div>
+
+    <!-- ============ BL1 ============ -->
+    <div class="stage">
+      <div class="stage-hd">
+        <h3>BL1 — First-stage Boot Loader</h3>
+        <span class="chip">EL3 · Secure</span>
+        <span class="chip">DRAM ~0x1010_0000</span>
+      </div>
+      <p class="role">Gốc tin cậy của phần software. Dựng môi trường EL3 tối thiểu (MMU,
+        vector, lớp IO) rồi nạp và trao quyền cho BL2.</p>
+
+      <div class="spec">
+        <div class="row"><span class="k">Mục đích</span><div class="v">
+          Thiết lập kiến trúc EL3, mở lớp truy cập ảnh (FIP), nạp BL2 vào bộ nhớ tin cậy
+          (và xác thực nếu bật TBBR), rồi <code>eret</code> xuống BL2 ở S-EL1.</div></div>
+        <div class="row"><span class="k">Input</span><div class="v"><ul>
+          <li>Được <code>ble_entry</code> gọi tại <code>header[0x1c]</code> (điểm vào
+            <code>bl1_entrypoint</code>), EL3, MMU tắt.</li>
+          <li>FIP nằm sẵn trong bộ nhớ tại <code>PLAT_MARVELL_FIP_BASE</code> (memmap IO device).</li>
+          <li>Hằng linker: <code>BL1_RO_BASE/LIMIT</code>, <code>BL1_RW_BASE/LIMIT</code>,
+            <code>MARVELL_BL_RAM_BASE/SIZE</code>.</li>
+        </ul></div></div>
+        <div class="row"><span class="k">Output</span><div class="v"><ul>
+          <li><code>meminfo_t bl1_ram_layout</code> — extents Trusted SRAM + phần trống
+            (đã <code>reserve_mem()</code> trừ vùng BL1), <strong>truyền cho BL2 qua <code>x0</code></strong>.</li>
+          <li><code>entry_point_info_t</code> của BL2 (<code>pc = BL2_BASE</code>, SPSR = S-EL1)
+            trong <code>image_desc</code>.</li>
+          <li>Ảnh BL2 đã nạp (và xác thực nếu TBBR) tại <code>BL2_BASE</code>.</li>
+          <li>Chuyển thực thi: <code>bl1_prepare_next_image</code> → <code>el3_exit()</code>
+            (<code>eret</code> xuống S-EL1).</li>
+        </ul></div></div>
+      </div>
+
+      <ol class="how">
+        <li><code>bl1_entrypoint</code> (assembly ATF): stack, vector <code>bl1_exceptions</code>,
+          gọi <code>bl1_early_platform_setup()</code>.</li>
+        <li><code>marvell_bl1_early_platform_setup()</code>: <code>uart_bypass</code> +
+          <code>console_init()</code>; <code>getLogOutput()</code>; điền
+          <code>bl1_ram_layout</code> (<code>total = MARVELL_BL_RAM_BASE/SIZE</code>, rồi
+          <code>reserve_mem()</code> trừ <code>BL1_RAM_BASE…LIMIT</code>).</li>
+        <li><code>bl1_plat_arch_setup()</code> → <code>arm_configure_mmu_el3()</code>: bảng trang
+          — RAM = RW-secure, vùng RO = RO-secure, thêm <code>0xE800_0000</code>+256 MB và
+          <code>0xD000_0000</code>+256 MB là DEVICE/NS (thanh ghi Quartz, GIC).</li>
+        <li><code>bl1_arch_setup()</code> — cấu hình kiến trúc chung (SCR_EL3, CPTR_EL3, CNTFRQ…).</li>
+        <li><code>bl1_platform_setup()</code> → <code>plat_marvell_io_setup()</code>:
+          <code>register_io_dev_fip()</code> + <code>register_io_dev_memmap()</code>, mở cả hai;
+          policy: <code>FIP_IMAGE_ID</code> qua memmap tại
+          <code>fip_block_spec{offset = PLAT_MARVELL_FIP_BASE}</code>, còn
+          <code>BL2/BL31/BL33_IMAGE_ID</code> qua <code>io_fip</code> tra theo <strong>UUID</strong>.</li>
+        <li><code>bl1_main()</code>: in version; <code>bl1_arch_setup()</code>;
+          (TBBR) <code>auth_mod_init()</code> — bỏ qua vì tắt; <code>image_id =
+          bl1_plat_get_next_image_id()</code> = <code>BL2_IMAGE_ID</code> (hoặc vào FWU).</li>
+        <li><code>bl1_load_bl2()</code>: <code>load_auth_image()</code> — <code>io_fip</code> mở
+          FIP trên memmap, tìm entry UUID <code>UUID_TRUSTED_BOOT_FIRMWARE_BL2</code>, copy vào
+          <code>BL2_BASE</code>.</li>
+        <li><code>bl1_prepare_next_image(BL2_IMAGE_ID)</code>: set <code>entry_point_info</code>
+          (SPSR = S-EL1), <code>bl1_plat_prepare_exit()</code>, <code>el3_exit()</code> →
+          <strong>eret xuống BL2</strong>. (<code>SPIN_ON_BL1_EXIT</code> tắt.)</li>
+      </ol>
+    </div>
+
+    <!-- ============ BL2 ============ -->
+    <div class="stage">
+      <div class="stage-hd">
+        <h3>BL2 — Second-stage Boot Loader</h3>
+        <span class="chip">S-EL1 · Secure</span>
+        <span class="chip">DRAM 0x1001_4000</span>
+      </div>
+      <p class="role">Nhạc trưởng nạp ảnh. Chạy ở S-EL1, đọc FIP, đặt BL31 vào bộ nhớ tin cậy
+        và BL33 vào DRAM thường, gói thông tin bàn giao cho BL31, rồi nhờ BL1 chuyển stage.</p>
+
+      <div class="spec">
+        <div class="row"><span class="k">Mục đích</span><div class="v">
+          Nạp mọi ảnh còn lại đúng vị trí + đúng thuộc tính bảo mật; dựng
+          <code>bl31_params_t</code> và các <code>entry_point_info</code>; flush xuống bộ nhớ
+          để BL31 (bảng trang riêng) đọc được.</div></div>
+        <div class="row"><span class="k">Input</span><div class="v"><ul>
+          <li><code>x0</code> = con trỏ <code>meminfo_t</code> do BL1 truyền → copy vào
+            <code>bl2_tzram_layout</code>.</li>
+          <li>FIP trong bộ nhớ (cùng policy IO như BL1).</li>
+          <li>Hằng: <code>BL31_BASE</code>, <code>MARVELL_NS_DRAM1_BASE/SIZE</code>,
+            <code>PLAT_MARVELL_NS_IMAGE_OFFSET = 0x1000</code>.</li>
+        </ul></div></div>
+        <div class="row"><span class="k">Output</span><div class="v"><ul>
+          <li><code>bl2_to_bl31_params_mem_t</code>: <code>bl31_params_t</code>
+            (magic <code>PARAM_BL31</code>), <code>image_info</code> ×3, và:</li>
+          <li><code>entry_point_info</code> <strong>BL33</strong> — <code>pc = 0x1000</code>,
+            <code>spsr</code> = EL2 AArch64 (nếu có EL2), <code>NON_SECURE</code>,
+            <code>args.arg0 = 0xffff &amp; MPIDR</code>;</li>
+          <li><code>entry_point_info</code> <strong>BL31</strong> — <code>SECURE</code>,
+            <code>spsr = SPSR_64(EL3, SP_ELx, DAIF masked)</code>; (debug)
+            <code>args.arg1 = MARVELL_BL31_PLAT_PARAM_VAL</code>;</li>
+          <li>ảnh BL31 tại <code>BL31_BASE</code>, ảnh BL33 (U-Boot) tại <code>0x0</code> vùng NS;</li>
+          <li><code>flush_dcache_range(bl31_params_mem)</code> + <code>flush_l3()</code>.</li>
+        </ul></div></div>
+      </div>
+
+      <ol class="how">
+        <li><code>bl2_entrypoint</code> nhận <code>x0</code>, set stack, gọi
+          <code>bl2_early_platform_setup(x0)</code>.</li>
+        <li><code>marvell_bl2_early_platform_setup()</code>: <code>console_init()</code> +
+          <code>getLogOutput()</code>; <code>bl2_tzram_layout = *mem_layout</code>;
+          <code>plat_marvell_io_setup()</code> (đăng ký lại fip + memmap trong ngữ cảnh BL2).</li>
+        <li><code>bl2_plat_arch_setup()</code> → <code>arm_configure_mmu_el1()</code> — bảng trang S-EL1.</li>
+        <li><code>bl2_main()</code> → <code>bl2_load_images()</code>:
+          <ul>
+            <li><code>load_scp_bl2()</code> — bỏ qua (<code>SCP_BL2_BASE</code> không định nghĩa;
+              firmware R4 nạp bằng đường khác);</li>
+            <li><code>bl2_plat_get_bl31_params()</code> — cấp <code>bl31_params_mem</code>,
+              <code>memset 0</code>, <code>SET_PARAM_HEAD()</code>, điền phần BL33 (MPIDR vào arg0);</li>
+            <li><code>load_bl31()</code>: <code>load_auth_image(BL31_IMAGE_ID, BL31_BASE)</code>
+              (UUID <code>UUID_EL3_RUNTIME_FIRMWARE_BL31</code>);
+              <code>bl2_plat_set_bl31_ep_info()</code> đặt SPSR/secure;</li>
+            <li><code>load_bl32()</code> — bỏ qua (<code>SPD=none</code>);</li>
+            <li><code>load_bl33()</code>: <code>bl2_plat_get_bl33_meminfo()</code> trả
+              <code>MARVELL_NS_DRAM1_BASE/SIZE</code>; <code>load_auth_image()</code> copy U-Boot
+              vào DRAM offset 0; <code>bl2_plat_set_bl33_ep_info()</code> đặt <code>NON_SECURE</code>
+              + SPSR EL2;</li>
+            <li><code>bl2_plat_flush_bl31_params()</code> — flush D-cache + <code>flush_l3()</code>
+              (ghi <code>0xF000_87BC</code>, <code>0xF000_8700</code>).</li>
+          </ul></li>
+        <li><code>smc(BL1_SMC_RUN_IMAGE, next_bl_ep_info, …)</code> → <strong>bẫy về BL1 ở EL3</strong>;
+          BL1 đọc <code>entry_point_info</code> của BL31, in <code>NOTICE("BL1: Booting BL31")</code>,
+          <code>el3_exit()</code> → <strong>eret vào BL31</strong> với
+          <code>x0 = bl31_params_t*</code>, <code>x1 = plat_params</code>.</li>
+      </ol>
+    </div>
+
+    <!-- ============ BL31 ============ -->
+    <div class="stage">
+      <div class="stage-hd">
+        <h3>BL31 — EL3 Runtime Firmware</h3>
+        <span class="chip">EL3 · Secure Monitor</span>
+        <span class="chip">DRAM 0x1002_0000</span>
+      </div>
+      <p class="role">Ảnh <strong>thường trú vĩnh viễn ở EL3</strong>. Trong boot: khởi tạo phần
+        cứng bảo mật rồi trao quyền cho BL33. Runtime: xử lý SMC từ thế giới thường — PSCI
+        (bật/tắt/suspend lõi qua R4) và định tuyến ngắt Secure/Non-secure.</p>
+
+      <div class="spec">
+        <div class="row"><span class="k">Mục đích</span><div class="v">
+          Là Secure Monitor: điểm bẫy EL3 duy nhất cho mọi chuyển đổi thế giới; sở hữu GIC, MHU,
+          quản lý context NS/S, và toàn bộ vòng đời nguồn của CPU.</div></div>
+        <div class="row"><span class="k">Input</span><div class="v"><ul>
+          <li><code>x0 = bl31_params_t*</code> (đã flush), <code>x1 = plat_params</code>
+            (debug: phải bằng <code>MARVELL_BL31_PLAT_PARAM_VAL</code>).</li>
+          <li>EL3, do BL1 <code>eret</code> vào; MMU tắt.</li>
+          <li>Runtime: các cuộc gọi <code>SMC</code> (PSCI function IDs) từ Linux/U-Boot; ngắt theo GIC.</li>
+        </ul></div></div>
+        <div class="row"><span class="k">Output</span><div class="v"><ul>
+          <li><code>bl33_image_ep_info</code> (+ <code>bl32</code> nếu có) copy từ <code>from_bl2</code>.</li>
+          <li>Phần cứng đã cấu hình: <strong>APN806</strong> (Aurora2/CCU point-of-coherency = DDR,
+            SMMU page 64 KB, mở quyền secure masters), <strong>GICv2</strong>, <strong>MHU</strong>
+            (mailbox tới R4), <code>psci_arch_init()</code>.</li>
+          <li>Bảng runtime services đã đăng ký (<code>runtime_svc_init()</code> quét
+            <code>.rt_svc_descs</code> — PSCI std_svc…).</li>
+          <li><code>cpu_context</code> NS: ELR = <code>0x1000</code>, SPSR = EL2,
+            <code>SCR_EL3.NS = 1</code>, <code>x0 = MPIDR &amp; 0xffff</code>.</li>
+          <li>Trao quyền: <code>eret</code> xuống BL33. Runtime: mỗi SMC trả kết quả; mỗi
+            <code>CPU_ON</code> làm lõi phụ chạy.</li>
+        </ul></div></div>
+      </div>
+
+      <ol class="how">
+        <li><code>bl31_entrypoint</code>: stack, vector <code>runtime_exceptions</code>, gọi
+          <code>bl31_early_platform_setup(x0, x1)</code>.</li>
+        <li><code>marvell_bl31_early_platform_setup()</code>: <code>console_init()</code>,
+          <code>getLogOutput()</code>; assert <code>from_bl2-&gt;h.type == PARAM_BL31</code> và
+          <code>plat_params == MARVELL_BL31_PLAT_PARAM_VAL</code>; copy
+          <code>bl33_image_ep_info = *from_bl2-&gt;bl33_ep_info</code>. (<code>USE_CCI</code> tắt.)</li>
+        <li><code>bl31_plat_arch_setup()</code> — bản quartz ghi đè: <code>plat_delay_timer_init()</code>,
+          <code>marvell_bl31_plat_arch_setup()</code> (<code>arm_configure_mmu_el3</code>), rồi
+          <strong><code>apn806_init()</code></strong>:
+          <ul>
+            <li><code>init_aurora2()</code>: GSPMU do CPU điều khiển; <strong>LLC tắt</strong>
+              (<code>LLC_DISABLE=1</code>); point-of-coherency = DDR (<code>CCU_HTC_CR</code>);
+              clean+invalidate thay vì chỉ invalidate (<code>CCU_LTC_CR</code>);</li>
+            <li><code>setup_smmu()</code>: <code>SMMU_sACR |= PG_64K</code>;</li>
+            <li><code>apn_sec_masters_access_en(1)</code>: mở <code>SEC_MOCHI_IN_ACC_REG</code>;</li>
+            <li><code>cp110_init()</code> <strong>bị bỏ</strong> cho quartz.</li>
+          </ul></li>
+        <li><code>bl31_main()</code> → <code>bl31_platform_setup()</code> →
+          <code>marvell_bl31_platform_setup()</code>: <code>plat_marvell_gic_driver_init()</code> +
+          <code>plat_marvell_gic_init()</code> (GICv2), <code>mhu_secure_init()</code>,
+          <code>psci_arch_init()</code>.</li>
+        <li><code>bl31_lib_init()</code> (<code>cm_init()</code>); <code>runtime_svc_init()</code> —
+          duyệt <code>.rt_svc_descs</code>, gọi <code>.init()</code> từng service; PSCI đăng ký
+          <code>plat_arm_psci_pm_ops</code> từ <code>quartz/plat_pm.c</code>.</li>
+        <li><code>bl31_prepare_next_image_entry()</code>:
+          <code>bl31_plat_get_next_image_ep_info(NON_SECURE)</code> = <code>&amp;bl33_image_ep_info</code>;
+          <code>cm_init_my_context()</code>, <code>cm_prepare_el3_exit()</code>.</li>
+        <li><code>bl31_plat_runtime_setup()</code> (mở lại console) rồi <code>el3_exit()</code> →
+          <strong>eret vào BL33</strong> (EL2, NS).</li>
+        <li><strong>Runtime</strong>: mọi <code>SMC</code> bẫy về <code>runtime_exceptions</code> ở
+          EL3 → <code>std_svc_smc_handler</code> → <code>psci_smc_handler</code> → ví dụ
+          <code>psci_cpu_on</code> → <code>a8k_pwr_domain_on</code> (ghi <code>CCU_RVBAR</code>,
+          gọi <code>scpi_set_css_power_state()</code>).</li>
+      </ol>
+
+      <p class="stage-lead">Runtime — mỗi lần Linux xin bật một lõi:</p>
+      <figure>
+        <svg viewBox="0 0 720 470" role="img" xmlns="http://www.w3.org/2000/svg"
+          aria-label="Sơ đồ trình tự PSCI CPU_ON: Linux phát SMC sang BL31; BL31 ghi CCU_RVBAR điểm vào warm-boot rồi gọi scpi_set_css_power_state qua MHU tới R4; R4 cấp nguồn và nhả reset lõi đích; lõi đích chạy _armada8k_cpu_entry rồi warm boot; BL31 eret trả điều khiển cho Linux.">
+          <defs>
+            <marker id="ahC" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path class="mk" d="M0,0 L10,5 L0,10 z"/>
+            </marker>
+            <marker id="ahC-sec" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path class="mk-sec" d="M0,0 L10,5 L0,10 z"/>
+            </marker>
+          </defs>
+
+          <rect class="d-box d-box--ns" x="64" y="16" width="172" height="32" rx="5"/>
+          <text class="d-name" x="150" y="36" font-size="11" text-anchor="middle">Linux · EL1 · NS</text>
+          <rect class="d-box d-box--sec" x="324" y="16" width="172" height="32" rx="5"/>
+          <text class="d-name" x="410" y="36" font-size="11" text-anchor="middle">BL31 · PSCI · EL3</text>
+          <rect class="d-box" x="566" y="16" width="150" height="32" rx="5"/>
+          <text class="d-name" x="641" y="36" font-size="11" text-anchor="middle">R4 · SCP</text>
+
+          <line class="d-ll" x1="150" y1="48" x2="150" y2="418"/>
+          <line class="d-ll" x1="410" y1="48" x2="410" y2="418"/>
+          <line class="d-ll" x1="641" y1="48" x2="641" y2="418"/>
+          <line class="d-div" x1="280" y1="54" x2="280" y2="418"/>
+          <text class="d-sec" x="280" y="64" font-size="9" text-anchor="middle">SMC · chuyển thế giới</text>
+
+          <circle class="d-flow" cx="34" cy="100" r="11"/>
+          <text class="d-name" x="34" y="104" font-size="11" text-anchor="middle">1</text>
+          <line class="d-flow d-flow--sec" x1="150" y1="100" x2="410" y2="100" marker-end="url(#ahC-sec)"/>
+          <text class="d-sec" x="280" y="93" font-size="10" text-anchor="middle">SMC  PSCI_CPU_ON(mpidr, ns_entry)</text>
+
+          <circle class="d-flow" cx="34" cy="152" r="11"/>
+          <text class="d-name" x="34" y="156" font-size="11" text-anchor="middle">2</text>
+          <path class="d-flow" d="M410,146 h44 v14 h-44" marker-end="url(#ahC)"/>
+          <text class="d-mut" x="398" y="148" font-size="9.5" text-anchor="end">cpu_on(): ghi CCU_RVBAR = entry &#8811; 16</text>
+
+          <circle class="d-flow" cx="34" cy="208" r="11"/>
+          <text class="d-name" x="34" y="212" font-size="11" text-anchor="middle">3</text>
+          <line class="d-flow" x1="410" y1="208" x2="641" y2="208" marker-end="url(#ahC)"/>
+          <text class="d-mut" x="526" y="201" font-size="10" text-anchor="middle">scpi_set_css_power_state(ON, ON, ON)</text>
+          <text class="d-mut" x="526" y="217" font-size="8.5" text-anchor="middle">SCPI qua MHU · buf 0x7FFF_0000 · 1 kênh / lõi</text>
+
+          <circle class="d-flow" cx="34" cy="262" r="11"/>
+          <text class="d-name" x="34" y="266" font-size="11" text-anchor="middle">4</text>
+          <line class="d-flow" x1="641" y1="250" x2="641" y2="292" marker-end="url(#ahC)"/>
+          <text class="d-mut" x="631" y="266" font-size="9" text-anchor="end">cấp nguồn + nhả reset</text>
+          <rect class="d-box d-box--sec" x="558" y="292" width="158" height="30" rx="5"/>
+          <text class="d-name" x="637" y="311" font-size="9.5" text-anchor="middle">Lõi đích (secondary)</text>
+
+          <circle class="d-flow" cx="34" cy="350" r="11"/>
+          <text class="d-name" x="34" y="354" font-size="11" text-anchor="middle">5</text>
+          <line class="d-flow d-flow--ret" x1="600" y1="322" x2="414" y2="350" marker-end="url(#ahC)"/>
+          <text class="d-mut" x="500" y="338" font-size="9" text-anchor="middle">lõi chạy _armada8k_cpu_entry → bl31_warm_entrypoint</text>
+
+          <circle class="d-flow" cx="34" cy="398" r="11"/>
+          <text class="d-name" x="34" y="402" font-size="11" text-anchor="middle">6</text>
+          <line class="d-flow d-flow--sec d-flow--ret" x1="410" y1="398" x2="150" y2="398" marker-end="url(#ahC-sec)"/>
+          <text class="d-sec" x="280" y="391" font-size="10" text-anchor="middle">eret → điểm vào lõi thứ cấp (NS)</text>
+        </svg>
+        <figcaption>Kiến trúc kiểu CSS/Juno: ATF trên A72 chỉ điều phối, lõi R4 giữ quyền
+          đóng/cắt nguồn. <code>CCU_RVBAR</code> phải căn 64 KB nên entry point được dịch phải 16 bit.
+          Nhiều handler suspend/standby trong <code>plat_pm.c</code> hiện còn là stub.</figcaption>
+      </figure>
+    </div>
+
+    <!-- ============ BL33 ============ -->
+    <div class="stage">
+      <div class="stage-hd">
+        <h3>BL33 — Non-trusted Firmware (U-Boot)</h3>
+        <span class="chip ns">EL2 · Non-secure</span>
+        <span class="chip ns">DRAM @ 0x1000</span>
+      </div>
+      <p class="role">Ảnh đầu tiên của thế giới thường. Không thuộc ATF — ở đây là U-Boot build
+        riêng (<code>../uboot_s800/u-boot.bin</code>). Khởi tạo thiết bị mức bo mạch rồi
+        nạp / boot nhân Linux.</p>
+
+      <div class="spec">
+        <div class="row"><span class="k">Mục đích</span><div class="v">
+          Bắc cầu từ firmware bảo mật sang OS: driver bo mạch (mạng, eMMC, USB, panel), sửa DTB,
+          nạp kernel. Với board S800 còn đọc <code>sys_info</code> để biết cấu hình DRAM.</div></div>
+        <div class="row"><span class="k">Input</span><div class="v"><ul>
+          <li>BL31 <code>eret</code> vào tại <code>PLAT_MARVELL_NS_IMAGE_OFFSET = 0x1000</code>,
+            ở <strong>EL2</strong> (hoặc EL1 nếu không có EL2), <strong>Non-secure</strong>,
+            DAIF masked.</li>
+          <li><code>x0 = 0xffff &amp; MPIDR</code> (ID lõi chính) — quy ước ATF ↔ BL33.</li>
+          <li>Ảnh U-Boot đã được BL2 copy vào DRAM offset 0.</li>
+          <li>Vùng <code>sys_info</code> tại <code>0x0400_0000</code>; DRAM đã hoạt động; tần số
+            hệ đếm <code>PLAT_REF_CLK_IN_HZ</code> (25 MHz) do BL31 khai báo qua
+            <code>plat_get_syscnt_freq2()</code>.</li>
+        </ul></div></div>
+        <div class="row"><span class="k">Output</span><div class="v"><ul>
+          <li>Nhân Linux nạp vào RAM + DTB đã chuẩn bị/patch (memory node theo DRAM thật,
+            <code>scp-shmem</code> khớp <code>0x7FFF_0000</code>…).</li>
+          <li>Chuyển quyền cho kernel (EL2 → EL1), truyền con trỏ DTB.</li>
+          <li>Runtime: mọi yêu cầu nguồn (SMP bring-up, reset, suspend) đi qua
+            <strong>PSCI SMC</strong> xuống BL31.</li>
+        </ul></div></div>
+      </div>
+
+      <ol class="how">
+        <li>BL2 <code>bl2_plat_set_bl33_ep_info()</code>: <code>SET_SECURITY_STATE(NON_SECURE)</code>;
+          <code>spsr = marvell_get_spsr_for_bl33_entry()</code> — đọc <code>ID_AA64PFR0_EL1</code>
+          để chọn <code>MODE_EL2</code> hay <code>MODE_EL1</code>.</li>
+        <li>BL2 <code>bl2_plat_get_bl33_meminfo()</code> trả <code>MARVELL_NS_DRAM1_BASE/SIZE</code>;
+          <code>load_auth_image()</code> copy <code>u-boot.bin</code> vào đó.</li>
+        <li>BL31 <code>bl31_prepare_next_image_entry()</code>: dựng <code>cpu_context</code> NS từ
+          <code>bl33_image_ep_info</code> (PC = 0x1000, SPSR, <code>SCR_EL3.NS = 1</code>,
+          <code>x0 = MPIDR</code>); <code>cm_prepare_el3_exit()</code>.</li>
+        <li><code>el3_exit()</code> khôi phục thanh ghi từ context NS rồi <code>eret</code> —
+          <strong>CPU rời TrustZone lần đầu</strong>, bắt đầu chạy U-Boot.</li>
+        <li>U-Boot tự lo phần còn lại (ngoài repo này): relocate, <code>board_init_r</code>,
+          driver model, đọc <code>sys_info</code>, <code>booti</code> nạp kernel; node
+          <code>arm,psci-0.2</code> trong DTB → mọi <code>CPU_ON</code> về sau là SMC xuống BL31.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bản đồ bộ nhớ</h2>
+    <p>Vùng gọi là &ldquo;Trusted SRAM&rdquo; (256 KB, <code>PLAT_MARVELL_TRUSTED_SRAM_SIZE</code>)
+      thực chất là DRAM tại <code>PLAT_MARVELL_ATF_BASE = 0x1000_0000</code> — con số này phải
+      trùng biến <code>CONFIG_*</code> bên U-Boot để nhân Linux biết vùng cần né. Boot-image
+      (BL1 + FIP) được R4 chép tới <code>0x1010_0000</code>.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 430" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Bên trái: chi tiết vùng ATF trong DRAM từ 0x10500000 xuống 0x10000000 — FIP, BL1 RO, khoảng trống, BL1 RW, BL31, BL2, shared mailbox. Bên phải: toàn cảnh DRAM 2 GB với SCPI shared ở 0x7FFF0000, vùng ATF ở 256 MB, sys_info ở 0x04000000 và BL33 tại địa chỉ 0.">
+        <text class="d-name" x="185" y="28" font-size="12" text-anchor="middle">Vùng ATF trong DRAM</text>
+        <text class="d-name" x="530" y="28" font-size="12" text-anchor="middle">Toàn cảnh DRAM · 2 GB</text>
+
+        <rect class="d-box" x="60" y="44" width="250" height="350" rx="4"/>
+        <line class="d-ll" x1="60" y1="44"  x2="310" y2="44"/>
+        <line class="d-ll" x1="60" y1="94"  x2="310" y2="94"/>
+        <line class="d-ll" x1="60" y1="144" x2="310" y2="144"/>
+        <line class="d-ll" x1="60" y1="194" x2="310" y2="194"/>
+        <line class="d-ll" x1="60" y1="244" x2="310" y2="244"/>
+        <line class="d-ll" x1="60" y1="294" x2="310" y2="294"/>
+        <line class="d-ll" x1="60" y1="344" x2="310" y2="344"/>
+        <line class="d-ll" x1="60" y1="394" x2="310" y2="394"/>
+
+        <text class="d-name" x="185" y="73"  font-size="10.5" text-anchor="middle">FIP (fip.bin)</text>
+        <text class="d-name" x="185" y="123" font-size="10.5" text-anchor="middle">BL1 · RO — ATF load</text>
+        <text class="d-mut"  x="185" y="173" font-size="10"   text-anchor="middle">(khoảng trống)</text>
+        <text class="d-name" x="185" y="223" font-size="10.5" text-anchor="middle">BL1 · RW</text>
+        <text class="d-name" x="185" y="273" font-size="10.5" text-anchor="middle">BL31</text>
+        <text class="d-name" x="185" y="323" font-size="10.5" text-anchor="middle">BL2</text>
+        <text class="d-name" x="185" y="373" font-size="10.5" text-anchor="middle">shared 4 KB · mailbox</text>
+
+        <text class="d-mut" x="316" y="47"  font-size="9">0x1050_0000</text>
+        <text class="d-mut" x="316" y="97"  font-size="9">0x1012_0000</text>
+        <text class="d-mut" x="316" y="147" font-size="9">0x1010_0000</text>
+        <text class="d-mut" x="316" y="197" font-size="9">0x1004_0000</text>
+        <text class="d-mut" x="316" y="247" font-size="9">0x1003_B000</text>
+        <text class="d-mut" x="316" y="297" font-size="9">0x1002_0000</text>
+        <text class="d-mut" x="316" y="347" font-size="9">0x1001_4000</text>
+        <text class="d-mut" x="316" y="397" font-size="9">0x1000_0000</text>
+
+        <rect class="d-box" x="420" y="44" width="54" height="350" rx="3"/>
+        <rect class="mk" x="414" y="46"  width="8" height="3"/>
+        <rect class="mk" x="414" y="92"  width="8" height="3"/>
+        <rect class="mk" x="414" y="150" width="8" height="3"/>
+        <rect class="mk" x="414" y="250" width="8" height="3"/>
+        <rect class="mk" x="414" y="390" width="8" height="3"/>
+        <line class="d-ll" x1="420" y1="150" x2="310" y2="44"/>
+        <line class="d-ll" x1="420" y1="168" x2="310" y2="394"/>
+        <rect class="d-rule" x="420" y="150" width="54" height="18" fill="none"/>
+
+        <text class="d-mut" x="486" y="49"  font-size="9">0x8000_0000 — 2 GB (đỉnh)</text>
+        <text class="d-mut" x="486" y="95"  font-size="9">0x7FFF_0000 — SCPI shared</text>
+        <text class="d-mut" x="486" y="153" font-size="9">0x1050_0000 — vùng ATF &#8593;</text>
+        <text class="d-mut" x="486" y="253" font-size="9">0x0400_0000 — sys_info</text>
+        <text class="d-mut" x="486" y="393" font-size="9">0x0 — BL33 → Linux</text>
+      </svg>
+      <figcaption>Không theo tỉ lệ. Comment <code>0x0400_0000</code> trong
+        <code>platform_def.h</code> cho vùng BL đã cũ; địa chỉ thật là <code>0x1000_0000</code>.
+        BLE chạy từ SRAM trên chip <code>0xCCF0_0000</code> (1 MB), tách biệt DRAM;
+        <code>0xC020_0000</code> là scratch KM ghi trạng thái training. Cờ warm-boot
+        <code>0x7FFF_FFF0</code>; NS entry BL33 = <code>0x1000</code>. Thanh ghi:
+        <code>REGS 0xF000_0000</code> · CCU +0x4000 · RFU +0x6F_0000 · GICD 0x21_0000 ·
+        CP110 0xF200_0000 · Quartz 0xE000_0000.</figcaption>
+    </figure>
+  </section>
+
+  <footer>
+    <b>Nguồn</b> — đọc mã trong atf/atf_s800<br>
+    ble/ble_initial_boot.S · ble/ble_main.c · ble/mv_lpddr4_apn806.c<br>
+    bl1/bl1_main.c · bl2/bl2_main.c · bl2/bl2_image_load.c · bl31/bl31_main.c<br>
+    plat/marvell/common/marvell_bl{1,2,31}_setup.c · marvell_io_storage.c · sys_info.c<br>
+    plat/marvell/a8k/quartz/{plat_bl31_setup,plat_pm,scpi,mhu}.c<br>
+    plat/marvell/a8k/common/apn806_setup.c · include/plat/marvell/a8k/common/{arm_def,platform_def}.h<br>
+    <br>
+    Sơ đồ &amp; phân tích tự dựng lại để học — không phải tài liệu chính thức của Marvell hay Konica Minolta.
+  </footer>
+
+</div>

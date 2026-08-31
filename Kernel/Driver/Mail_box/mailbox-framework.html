@@ -1,0 +1,948 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500&family=Karla:wght@400;600&family=Manrope:wght@700;800&display=swap">
+<title>Giải phẫu Mailbox Framework</title>
+<style>
+  :root{
+    --bg:#eeecf2; --surface:#f9f8fc; --surface-2:#dfdce8;
+    --ink:#1e1b26; --muted:#635e73; --line:#cac5d6;
+    --tx:#4338ca; --rx:#b45309;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#14121a; --surface:#1c1926; --surface-2:#272235;
+      --ink:#e6e3ee; --muted:#9a94ab; --line:#363048;
+      --tx:#9a8cf5; --rx:#e6a55c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14121a; --surface:#1c1926; --surface-2:#272235;
+    --ink:#e6e3ee; --muted:#9a94ab; --line:#363048;
+    --tx:#9a8cf5; --rx:#e6a55c;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"Karla",system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:47rem;margin:0 auto;padding:clamp(1.4rem,4vw,3.2rem) clamp(1rem,4vw,2rem) 4rem}
+
+  header.ph{border-bottom:2px solid var(--ink);padding-bottom:1.5rem;margin-bottom:1.1rem}
+  .eyebrow{font-family:"Fira Mono",ui-monospace,monospace;font-size:.7rem;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--tx);margin:0 0 .85rem}
+  h1{font-family:"Manrope","Helvetica Neue",Arial,sans-serif;font-weight:800;
+    font-size:clamp(1.9rem,5.3vw,2.75rem);line-height:1.05;letter-spacing:-.03em;
+    margin:0 0 .75rem;text-wrap:balance}
+  .lead{font-size:1.05rem;margin:0 0 1.2rem;max-width:37rem}
+  .meta{font-family:"Fira Mono",ui-monospace,monospace;font-size:.73rem;
+    color:var(--muted);line-height:1.85;margin:0}
+  .meta b{color:var(--ink);font-weight:500}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.45rem 1.1rem;font-family:"Fira Mono",ui-monospace,monospace;
+    font-size:.71rem;color:var(--muted);margin:1.1rem 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:.45rem}
+  .sw{width:1.5rem;border-top:2.5px solid;display:inline-block}
+  .sw-tx{border-color:var(--tx)} .sw-rx{border-color:var(--rx)}
+  .sw-k{border-color:var(--ink)}
+
+  .note{border:1px solid var(--tx);border-left-width:3px;border-radius:4px;
+    padding:.75rem .9rem;margin:1.2rem 0 0;background:var(--surface);font-size:.9rem}
+  .note b{color:var(--tx)}
+
+  section{margin-top:2.6rem}
+  .phase{font-family:"Fira Mono",ui-monospace,monospace;font-size:.68rem;
+    letter-spacing:.13em;text-transform:uppercase;color:var(--tx);
+    border-top:1px solid var(--line);padding-top:.9rem;margin:3.2rem 0 .2rem}
+  h2{font-family:"Manrope",sans-serif;font-weight:800;font-size:1.3rem;
+    letter-spacing:-.02em;margin:0 0 .2rem;text-wrap:balance;scroll-margin-top:1rem}
+  h2 .n{color:var(--tx);font-family:"Fira Mono",ui-monospace,monospace;
+    font-size:.76rem;font-weight:500;margin-right:.5rem}
+  h3{font-family:"Manrope",sans-serif;font-weight:700;font-size:1rem;margin:1.4rem 0 .35rem;
+    letter-spacing:-.01em}
+  .srcline{font-family:"Fira Mono",ui-monospace,monospace;font-size:.7rem;
+    color:var(--muted);margin:0 0 .85rem}
+  p{margin:0 0 .85rem;max-width:39rem}
+  code,.mono{font-family:"Fira Mono",ui-monospace,monospace;font-size:.83em;
+    background:var(--surface-2);padding:.04em .3em;border-radius:3px}
+  ul,ol{margin:.25rem 0 .9rem;padding-left:1.25rem;max-width:39rem}
+  li{margin:.22rem 0}
+  li code{background:none;padding:0}
+  strong{font-weight:600}
+  .src{font-family:"Fira Mono",ui-monospace,monospace;font-size:.69rem;
+    color:var(--muted);white-space:nowrap;border-bottom:1px dotted var(--line)}
+
+  figure{margin:1.4rem 0 0;padding:1rem;background:var(--surface);
+    border:1px solid var(--line);border-radius:5px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:.82rem;color:var(--muted);margin-top:.85rem;line-height:1.55}
+
+  .scroll{overflow-x:auto}
+  table.tbl{width:100%;border-collapse:collapse;font-size:.81rem;margin:.35rem 0 1rem;min-width:28rem}
+  .tbl th,.tbl td{text-align:left;padding:.38rem .55rem;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl th{font-family:"Fira Mono",ui-monospace,monospace;font-size:.64rem;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+  .tbl td code{font-size:.82em;background:var(--surface-2)}
+  .tbl tr:last-child td{border-bottom:0}
+
+  footer{margin-top:3.2rem;border-top:1px solid var(--line);padding-top:1.2rem;
+    font-family:"Fira Mono",ui-monospace,monospace;font-size:.71rem;
+    color:var(--muted);line-height:1.9}
+  footer b{color:var(--ink);font-weight:500}
+  a{color:var(--tx)}
+  :focus-visible{outline:2px solid var(--tx);outline-offset:2px}
+  @media (prefers-reduced-motion:no-preference){
+    body{animation:fade .35s ease both}@keyframes fade{from{opacity:0}to{opacity:1}}
+  }
+
+  /* diagram primitives */
+  .b{fill:var(--surface-2);stroke:var(--ink);stroke-width:1.4}
+  .b-tx{stroke:var(--tx)} .b-rx{stroke:var(--rx)}
+  .b-gh{fill:none;stroke:var(--line);stroke-width:1.2;stroke-dasharray:4 4}
+  .f{stroke:var(--ink);stroke-width:1.4;fill:none}
+  .f-tx{stroke:var(--tx);stroke-width:1.8}
+  .f-rx{stroke:var(--rx);stroke-width:1.8}
+  .f-x{stroke-dasharray:5 4}
+  .ll{stroke:var(--line);stroke-width:1.2;stroke-dasharray:3 4}
+  .rule{stroke:var(--ink);stroke-width:1.2;stroke-dasharray:7 5}
+  .rule-rx{stroke:var(--rx);stroke-width:1.2;stroke-dasharray:7 5}
+  .t{fill:var(--ink);font-family:"Manrope",system-ui,sans-serif;font-weight:700}
+  .m{fill:var(--muted);font-family:"Fira Mono",ui-monospace,monospace}
+  .mt{fill:var(--tx);font-family:"Fira Mono",ui-monospace,monospace}
+  .mr{fill:var(--rx);font-family:"Fira Mono",ui-monospace,monospace}
+  .ah{fill:var(--ink)} .ah-tx{fill:var(--tx)} .ah-rx{fill:var(--rx)}
+</style>
+
+<div class="wrap">
+
+  <header class="ph">
+    <p class="eyebrow">roadmap 33 mục · source-code driven · linux 5.10.241</p>
+    <h1>Giải phẫu Mailbox Framework</h1>
+    <p class="lead">Toàn bộ 33 chủ đề trong file <code>mailbox</code>, sắp theo 6 phase mà chính
+      file khuyến nghị. Điểm đặc biệt: board S800 <strong>thật sự chạy mailbox</strong>, nên mọi
+      ví dụ đều là phần cứng có thật.</p>
+    <p class="meta">
+      <b>Core</b> drivers/mailbox/mailbox.c — chỉ <b>633 dòng</b><br>
+      <b>Controller</b> mv_mhu.c → arm_mhu_base.c · <code>CONFIG_MV_MHU=y</code><br>
+      <b>Client</b> arm_scpi.c + km_scpi.c · <code>CONFIG_ARM_SCPI_PROTOCOL=y</code><br>
+      <b>DTS</b> quartz-sb.dtsi — <code>mhu@8e8009800</code> · <code>scpi@7fff0000</code>
+    </p>
+    <div class="legend">
+      <span><i class="sw sw-tx"></i> TX — Linux → remote</span>
+      <span><i class="sw sw-rx"></i> RX / interrupt — remote → Linux</span>
+      <span><i class="sw sw-k"></i> control &amp; setup</span>
+    </div>
+    <div class="note">
+      <b>Đây là mảnh ghép còn thiếu của phần ATF.</b> Trong sổ tay ATF S800 ta đã thấy BL31 nói
+      SCPI với lõi R4 qua MHU tại <code>0x7FFF_0000</code>. Kernel dùng
+      <strong>đúng phần cứng đó</strong>: DTS khai <code>scpi@7fff0000</code> với
+      <code>shmem</code> ở <code>ranges = &lt;0 0x0 0x7fff0000 0x8000&gt;</code>
+      <span class="src">quartz-sb.dtsi:79-92</span> — trùng khớp
+      <code>PLAT_CSS_SCP_COM_SHARED_MEM_BASE</code> trong ATF. Cả firmware EL3 lẫn Linux đều là
+      client của cùng một R4.
+    </div>
+  </header>
+
+  <p class="phase">Phase 1 — Foundation · mục 1–7</p>
+
+  <section id="what">
+    <h2><span class="n">01</span>Mailbox làm gì — và <em>không</em> làm gì</h2>
+    <p class="srcline">roadmap mục 2, 19, 31 · hiểu nhầm phổ biến nhất</p>
+    <p>Câu hỏi đúng không phải &ldquo;mailbox truyền dữ liệu thế nào&rdquo; mà là
+      <strong>mailbox truyền được bao nhiêu byte</strong>. Với MHU trên board này: đúng
+      <strong>4 byte</strong> — một lần <code>writel_relaxed()</code>
+      <span class="src">arm_mhu_base.c:110</span>. Mọi payload lớn hơn phải nằm ở shared memory.
+      Mailbox chỉ là <em>chuông cửa</em>.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 340" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="So sánh vai trò mailbox và shared memory. Linux ghi payload lớn vào vùng shared memory rồi bấm chuông mailbox chỉ với một từ 32 bit; remote CPU nhận ngắt, đọc shared memory, xử lý, ghi kết quả vào shared memory rồi bấm chuông ngược lại. Bên dưới là bảng phân tầng: mailbox là tầng signaling, shared memory là tầng payload, virtio là tầng vành khuyên mô tả, rpmsg là tầng kênh có tên, remoteproc là tầng nạp firmware — rpmsg không thay thế mailbox mà dùng mailbox làm tầng đáy.">
+        <defs>
+          <marker id="a1t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="a1r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="a1k" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <rect class="b" x="16" y="30" width="150" height="80" rx="4"/>
+        <text class="t" x="91" y="52" font-size="10" text-anchor="middle">Linux CPU</text>
+        <text class="m" x="91" y="68" font-size="7.5" text-anchor="middle">Cortex-A72</text>
+        <text class="m" x="91" y="82" font-size="7.5" text-anchor="middle">client driver</text>
+        <text class="m" x="91" y="96" font-size="7.5" text-anchor="middle">(arm_scpi.c)</text>
+
+        <rect class="b" x="574" y="30" width="150" height="80" rx="4"/>
+        <text class="t" x="649" y="52" font-size="10" text-anchor="middle">Remote CPU</text>
+        <text class="m" x="649" y="68" font-size="7.5" text-anchor="middle">Cortex-R4 (SCP)</text>
+        <text class="m" x="649" y="82" font-size="7.5" text-anchor="middle">firmware</text>
+        <text class="m" x="649" y="96" font-size="7.5" text-anchor="middle">quản lý nguồn/clock</text>
+
+        <rect class="b b-gh" x="230" y="26" width="280" height="42" rx="4"/>
+        <text class="t" x="370" y="43" font-size="9" text-anchor="middle">SHARED MEMORY — payload</text>
+        <text class="m" x="370" y="58" font-size="7.5" text-anchor="middle">0x7FFF_0000, 0x8000 byte · cả hai bên map trực tiếp</text>
+        <line class="f f-x" x1="166" y1="48" x2="228" y2="48" marker-end="url(#a1k)"/>
+        <line class="f f-x" x1="512" y1="48" x2="572" y2="48" marker-end="url(#a1k)"/>
+        <text class="m" x="196" y="42" font-size="7" text-anchor="middle">ghi</text>
+        <text class="m" x="542" y="42" font-size="7" text-anchor="middle">đọc</text>
+
+        <rect class="b b-tx" x="230" y="82" width="280" height="30" rx="4"/>
+        <text class="t" x="370" y="94" font-size="9" text-anchor="middle">MAILBOX — chỉ là chuông cửa</text>
+        <text class="mt" x="370" y="106" font-size="7.5" text-anchor="middle">MHU: writel 32 bit vào INTR_SET_OFS → IRQ bên kia</text>
+        <line class="f f-tx" x1="166" y1="97" x2="228" y2="97" marker-end="url(#a1t)"/>
+        <line class="f f-tx" x1="512" y1="97" x2="572" y2="97" marker-end="url(#a1t)"/>
+
+        <line class="f f-rx" x1="572" y1="125" x2="170" y2="125" marker-end="url(#a1r)"/>
+        <text class="mr" x="370" y="139" font-size="7.5" text-anchor="middle">chuông trả lời — "đã xong, kết quả ở shared memory"</text>
+
+        <line class="ll" x1="16" y1="158" x2="724" y2="158"/>
+        <text class="t" x="16" y="178" font-size="10">Mailbox nằm ở đâu trong chồng IPC — mục 20, 31</text>
+
+        <rect class="b" x="16" y="188" width="708" height="26" rx="3"/>
+        <text class="t" x="26" y="205" font-size="8.5">remoteproc — nạp firmware, boot/stop/crash-recovery lõi remote</text>
+        <text class="m" x="714" y="205" font-size="7" text-anchor="end">không bật trên board này</text>
+
+        <rect class="b" x="16" y="218" width="708" height="26" rx="3"/>
+        <text class="t" x="26" y="235" font-size="8.5">rpmsg — kênh có TÊN, nhiều endpoint, API giống socket</text>
+        <text class="m" x="714" y="235" font-size="7" text-anchor="end">không bật</text>
+
+        <rect class="b" x="16" y="248" width="708" height="26" rx="3"/>
+        <text class="t" x="26" y="265" font-size="8.5">virtio — vành khuyên mô tả (vring) trên shared memory, quản lý buffer</text>
+        <text class="m" x="714" y="265" font-size="7" text-anchor="end">không bật</text>
+
+        <rect class="b b-gh" x="16" y="278" width="708" height="26" rx="3"/>
+        <text class="t" x="26" y="295" font-size="8.5">shared memory — nơi byte thật sự nằm</text>
+        <text class="m" x="714" y="295" font-size="7" text-anchor="end">DTS: smemmbox</text>
+
+        <rect class="b b-tx" x="16" y="308" width="708" height="26" rx="3"/>
+        <text class="t" x="26" y="325" font-size="8.5">MAILBOX — kick / doorbell / signaling</text>
+        <text class="mt" x="714" y="325" font-size="7" text-anchor="end">CONFIG_MV_MHU=y ← board dùng tầng NÀY</text>
+      </svg>
+      <figcaption>Trả lời câu hỏi &ldquo;RPMsg có thay thế Mailbox không?&rdquo;:
+        <strong>không</strong> — rpmsg nằm <em>trên</em> mailbox và dùng mailbox làm cơ chế kick.
+        Board S800 dừng ở tầng đáy: SCPI tự cài giao thức trên shared memory + mailbox, không dùng
+        virtio/rpmsg. Đơn giản hơn, ít tầng hơn, nhưng phải tự lo đóng gói và token.</figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Cơ chế</th><th>Kích thước</th><th>Độ trễ</th><th>Phụ thuộc HW</th><th>Userspace thấy?</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Mailbox</strong></td><td>vài từ 32-bit</td><td>~µs (một writel + IRQ)</td><td><strong>có</strong> — cần khối MHU</td><td>không (trừ <code>mailbox-test</code>)</td></tr>
+        <tr><td>Shared memory</td><td>MB tùy ý</td><td>0 (truy cập trực tiếp)</td><td>chỉ cần bus chung</td><td>qua mmap nếu driver cho</td></tr>
+        <tr><td>RPMsg</td><td>~512 B/msg</td><td>~chục µs</td><td>gián tiếp (qua mailbox)</td><td>có — <code>/dev/rpmsg*</code></td></tr>
+        <tr><td>VirtIO</td><td>theo vring</td><td>~chục µs</td><td>không</td><td>không trực tiếp</td></tr>
+        <tr><td>Socket / Netlink</td><td>KB–MB</td><td>~trăm µs</td><td>không</td><td>có</td></tr>
+        <tr><td>ioctl / chardev</td><td>tùy</td><td>~µs (syscall)</td><td>không</td><td>có</td></tr>
+      </tbody>
+    </table></div>
+    <p>Vì sao SoC nhúng chọn <strong>Mailbox + Shared Memory</strong> thay vì socket: lõi remote
+      (R4/M4/DSP) thường <em>không chạy Linux</em>, không có TCP/IP stack, và phải phản hồi trong
+      vài chục µs. Socket cần cả stack mạng ở hai đầu; mailbox chỉ cần một thanh ghi.</p>
+  </section>
+
+  <section id="arch">
+    <h2><span class="n">02</span>Kiến trúc &amp; quyền sở hữu — 633 dòng core</h2>
+    <p class="srcline">roadmap mục 3, 4, 5, 6, 7, 14 · nguồn: mailbox.c · mailbox_client.h · mailbox_controller.h</p>
+    <p>Mailbox core nhỏ bất ngờ vì nó cố tình <strong>không</strong> làm gì nhiều: không định
+      dạng message, không buffer RX, không biết payload là gì. Nó chỉ giữ một hàng đợi TX và một
+      máy trạng thái &ldquo;lần gửi trước xong chưa&rdquo;.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 430" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Kiến trúc và quyền sở hữu Mailbox Framework: client driver sở hữu struct mbox_client và tự cấp phát nó, đăng ký callback rx_callback, tx_prepare, tx_done; mailbox core sở hữu logic hàng đợi trong mbox_chan gồm msg_data ring 20 phần tử, active_req, tx_complete và spinlock; controller driver cấp phát mảng mbox_chan và struct mbox_controller, cài mbox_chan_ops gồm send_data, startup, shutdown, last_tx_done, và trỏ con_priv tới dữ liệu riêng; phần cứng MHU có thanh ghi INTR_SET, INTR_STAT, INTR_CLR; Device Tree nối client với controller qua thuộc tính mboxes và phandle.">
+        <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a2t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a2r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="m" x="16" y="16" font-size="8">CONSUMER</text>
+        <rect class="b" x="16" y="24" width="330" height="76" rx="4"/>
+        <text class="t" x="26" y="41" font-size="9.5">CLIENT DRIVER — vd arm_scpi.c</text>
+        <text class="m" x="26" y="55" font-size="7.5">sở hữu &amp; cấp phát: struct mbox_client (nhúng trong scpi_chan:245)</text>
+        <text class="m" x="26" y="67" font-size="7.5">.rx_callback = scpi_handle_remote_msg   arm_scpi.c:438</text>
+        <text class="m" x="26" y="78" font-size="7.5">.tx_prepare  = scpi_tx_prepare          arm_scpi.c:450</text>
+        <text class="m" x="26" y="90" font-size="7.5">.tx_block=true  .tx_tout=20  .knows_txdone=false   :1223-1225</text>
+
+        <rect class="b b-gh" x="392" y="24" width="332" height="76" rx="4"/>
+        <text class="t" x="402" y="41" font-size="9.5">DEVICE TREE — nối hai bên</text>
+        <text class="m" x="402" y="55" font-size="7.5">provider: mhu@8e8009800 { #mbox-cells = &lt;1&gt; }  quartz-sb.dtsi:48</text>
+        <text class="m" x="402" y="67" font-size="7.5">consumer: scpi@7fff0000 { mboxes = &lt;&amp;mailbox 0&gt;; }  :87-89</text>
+        <text class="m" x="402" y="78" font-size="7.5">                          shmem  = &lt;&amp;smemmbox&gt;;   :91</text>
+        <text class="m" x="402" y="90" font-size="7.5">→ of_parse_phandle_with_args("mboxes","#mbox-cells")  mailbox.c:360</text>
+
+        <line class="f" x1="181" y1="100" x2="181" y2="122" marker-end="url(#a2)"/>
+        <text class="m" x="189" y="114" font-size="7.5">mbox_request_channel() / mbox_send_message()</text>
+        <line class="f f-x" x1="500" y1="100" x2="330" y2="122" marker-end="url(#a2)"/>
+
+        <text class="m" x="16" y="138" font-size="8">CORE — 633 dòng, không biết payload là gì</text>
+        <rect class="b" x="16" y="146" width="708" height="94" rx="4"/>
+        <text class="t" x="26" y="163" font-size="9.5">MAILBOX CORE — drivers/mailbox/mailbox.c</text>
+        <line class="ll" x1="26" y1="169" x2="714" y2="169"/>
+        <text class="t" x="26" y="184" font-size="8.5">struct mbox_chan   mailbox_controller.h:119 — CORE sở hữu logic, CONTROLLER cấp phát bộ nhớ</text>
+        <text class="m" x="36" y="197" font-size="7.5">void *msg_data[MBOX_TX_QUEUE_LEN]  ring 20 phần tử (:104) · msg_count · msg_free</text>
+        <text class="m" x="36" y="209" font-size="7.5">void *active_req      ← con trỏ message ĐANG bay; NULL = rảnh</text>
+        <text class="m" x="36" y="221" font-size="7.5">struct completion tx_complete   · spinlock_t lock  ← bảo vệ toàn bộ ở trên</text>
+        <text class="m" x="36" y="233" font-size="7.5">void *con_priv        ← CORE không đụng; controller tự quản</text>
+
+        <line class="f f-tx" x1="181" y1="240" x2="181" y2="262" marker-end="url(#a2t)"/>
+        <text class="mt" x="189" y="255" font-size="7.5">ops-&gt;send_data(chan, data)</text>
+        <line class="f f-rx" x1="600" y1="262" x2="600" y2="240" marker-end="url(#a2r)"/>
+        <text class="mr" x="608" y="255" font-size="7.5">mbox_chan_received_data()</text>
+
+        <text class="m" x="16" y="278" font-size="8">PROVIDER</text>
+        <rect class="b" x="16" y="286" width="708" height="76" rx="4"/>
+        <text class="t" x="26" y="303" font-size="9.5">CONTROLLER DRIVER — mv_mhu.c → arm_mhu_base.c</text>
+        <text class="m" x="26" y="317" font-size="7.5">cấp phát: struct arm_mhu { mbox_chan chan[1]; mbox_controller mbox; mhu_link mlink[1]; }  :37</text>
+        <text class="m" x="26" y="329" font-size="7.5">mhu_ops :142 — send_data :103 · startup :113 · shutdown :135 · last_tx_done :95</text>
+        <text class="m" x="26" y="341" font-size="7.5">txdone_irq=false · txdone_poll=TRUE · txpoll_period=1 ms   mhu_probe :180-182</text>
+        <text class="m" x="26" y="353" font-size="7.5">con_priv = &amp;mhu-&gt;mlink[i] → { irq, tx_reg, rx_reg }   :169-172</text>
+
+        <line class="rule" x1="16" y1="378" x2="724" y2="378"/>
+        <text class="m" x="16" y="375" font-size="7.5">RANH GIỚI PHẦN CỨNG</text>
+
+        <rect class="b" x="16" y="388" width="708" height="36" rx="4"/>
+        <text class="t" x="26" y="404" font-size="9">MHU @ 0x8_E800_9800 (1 KB) — 3 IRQ: 269 LP-NS · 268 HP-NS · 270 Secure</text>
+        <text class="m" x="26" y="417" font-size="7.5">INTR_STAT +0x0 · INTR_SET +0x4 · INTR_CLR +0x8 · RX bank +0x0 · TX bank +0xc   mv_mhu.c:16-23</text>
+      </svg>
+      <figcaption>Điểm hay nhầm về sở hữu: <code>struct mbox_chan</code> do
+        <strong>controller</strong> cấp phát (mảng trong <code>arm_mhu</code>) nhưng
+        <strong>core</strong> mới là bên khởi tạo và ghi vào nó — <code>chan-&gt;cl</code>,
+        <code>txdone_method</code>, <code>lock</code> đều do
+        <code>mbox_controller_register()</code> điền
+        <span class="src">mailbox.c:521-527</span>.</figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Object</th><th>Ai cấp phát</th><th>Ai khởi tạo</th><th>Ai giải phóng</th><th>Khóa bảo vệ</th></tr></thead>
+      <tbody>
+        <tr><td><code>mbox_client</code></td><td>client driver (nhúng)</td><td>client, trước khi request</td><td>client</td><td>không — chỉ đọc sau khi gán</td></tr>
+        <tr><td><code>mbox_chan</code></td><td><strong>controller</strong> (mảng)</td><td><strong>core</strong> <span class="src">mailbox.c:521</span></td><td>controller (devm)</td><td><code>chan-&gt;lock</code> spinlock</td></tr>
+        <tr><td><code>mbox_controller</code></td><td>controller driver</td><td>controller + core điền <code>of_xlate</code>, <code>poll_hrt</code></td><td>controller</td><td><code>con_mutex</code> cho list</td></tr>
+        <tr><td><code>mbox_chan_ops</code></td><td>controller, <code>static const</code></td><td>compile-time</td><td>—</td><td>bất biến</td></tr>
+        <tr><td><code>con_priv</code></td><td>controller</td><td>controller, trong probe</td><td>controller</td><td>controller tự lo</td></tr>
+        <tr><td>message (<code>void *</code>)</td><td><strong>client</strong></td><td>client</td><td>client — sau <code>tx_done</code></td><td>không copy, chỉ giữ con trỏ</td></tr>
+      </tbody>
+    </table></div>
+    <p><strong>Hệ quả quan trọng</strong>: core <em>không sao chép</em> message. Nó chỉ giữ
+      <code>void *</code> trong <code>msg_data[]</code>. Client
+      <strong>không được giải phóng hay tái dùng</strong> buffer cho tới khi
+      <code>tx_done()</code> được gọi — nếu không thì <code>send_data()</code> đọc phải rác.</p>
+  </section>
+
+  <p class="phase">Phase 2 — Message flow · mục 8–12, 15</p>
+
+  <section id="tx">
+    <h2><span class="n">03</span>TX — ring buffer và một message bay tại một thời điểm</h2>
+    <p class="srcline">roadmap mục 8, 10 · nguồn: mailbox.c:26-116, 257</p>
+    <p>Cơ chế cốt lõi: <code>active_req</code>. Đúng <strong>một</strong> message được giao cho
+      phần cứng tại một thời điểm; phần còn lại xếp hàng trong ring 20 phần tử. Vòng lặp chỉ tiếp
+      tục khi có ai đó &ldquo;tick&rdquo; máy trạng thái.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 450" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Luồng TX của mailbox: client gọi mbox_send_message, hàm này gọi add_to_rbuf đưa con trỏ message vào ring msg_data dưới spinlock rồi msg_submit; msg_submit kiểm tra nếu đã có active_req thì thoát ngay, ngược lại gọi tx_prepare của client rồi ops send_data của controller, nếu thành công thì gán active_req; nếu client đặt tx_block thì mbox_send_message chờ completion tx_complete với timeout; khi TX xong, tx_tick xoá active_req, gọi msg_submit cho message tiếp theo, gọi tx_done của client rồi complete tx_complete để đánh thức bên đang chờ.">
+        <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a3t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a3r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="14" width="300" height="42" rx="4"/>
+        <text class="t" x="26" y="31" font-size="9">mbox_send_message(chan, mssg)</text>
+        <text class="m" x="26" y="44" font-size="7.5">mailbox.c:257 · PROCESS context · gọi được từ atomic nếu !tx_block</text>
+
+        <rect class="b" x="16" y="70" width="300" height="50" rx="4"/>
+        <text class="t" x="26" y="87" font-size="8.5">add_to_rbuf()  :26</text>
+        <text class="m" x="26" y="100" font-size="7.5">spin_lock_irqsave(&amp;chan-&gt;lock)</text>
+        <text class="m" x="26" y="111" font-size="7.5">msg_count==20 → −ENOBUFS "Try increasing MBOX_TX_QUEUE_LEN"</text>
+        <line class="f" x1="166" y1="56" x2="166" y2="68" marker-end="url(#a3)"/>
+
+        <rect class="b b-gh" x="376" y="70" width="348" height="50" rx="4"/>
+        <text class="t" x="386" y="87" font-size="8.5">RING msg_data[20]  — chỉ lưu con trỏ, KHÔNG copy</text>
+        <text class="m" x="386" y="100" font-size="7.5">msg_free = chỉ số ô trống kế · msg_count = số message đang chờ</text>
+        <text class="m" x="386" y="111" font-size="7.5">idx quay vòng tại MBOX_TX_QUEUE_LEN−1  :44-47</text>
+        <line class="f f-x" x1="318" y1="95" x2="374" y2="95" marker-end="url(#a3)"/>
+
+        <rect class="b b-tx" x="16" y="134" width="300" height="76" rx="4"/>
+        <text class="t" x="26" y="151" font-size="8.5">msg_submit()  :53</text>
+        <text class="m" x="26" y="164" font-size="7.5">if (!msg_count || active_req) → thoát ngay  :61</text>
+        <text class="m" x="26" y="176" font-size="7.5">cl-&gt;tx_prepare(cl, data)  :74  ← client copy payload vào shmem</text>
+        <text class="m" x="26" y="188" font-size="7.5">err = mbox-&gt;ops-&gt;send_data(chan, data)  :76</text>
+        <text class="m" x="26" y="200" font-size="7.5">if (!err) { active_req = data; msg_count--; }  :78</text>
+        <line class="f" x1="166" y1="120" x2="166" y2="132" marker-end="url(#a3)"/>
+
+        <rect class="b b-tx" x="376" y="134" width="348" height="76" rx="4"/>
+        <text class="t" x="386" y="151" font-size="8.5">mhu_send_data()  arm_mhu_base.c:103</text>
+        <text class="m" x="386" y="164" font-size="7.5">writel_relaxed(*arg, mlink-&gt;tx_reg + INTR_SET_OFS)  :110</text>
+        <text class="m" x="386" y="176" font-size="7.5">→ ĐÚNG 4 BYTE. Không sleep. Luôn trả 0 (MHU không từ chối)</text>
+        <text class="m" x="386" y="188" font-size="7.5">→ phần cứng đặt IRQ line sang lõi R4</text>
+        <text class="m" x="386" y="200" font-size="7.5">Controller khác có thể trả −EBUSY nếu remote chưa đọc xong</text>
+        <line class="f f-tx" x1="318" y1="176" x2="374" y2="176" marker-end="url(#a3t)"/>
+
+        <rect class="b" x="16" y="224" width="300" height="62" rx="4"/>
+        <text class="t" x="26" y="241" font-size="8.5">if (cl-&gt;tx_block) — CHỜ  :271</text>
+        <text class="m" x="26" y="254" font-size="7.5">wait = tx_tout ? ms_to_jiffies(tx_tout) : 3600000 ms  :275-278</text>
+        <text class="m" x="26" y="266" font-size="7.5">wait_for_completion_timeout(&amp;chan-&gt;tx_complete, wait)  :280</text>
+        <text class="m" x="26" y="278" font-size="7.5">ret==0 → t = −ETIME; tx_tick(chan, −ETIME)  :281-284</text>
+        <line class="f" x1="166" y1="210" x2="166" y2="222" marker-end="url(#a3)"/>
+
+        <line class="rule-rx" x1="16" y1="304" x2="724" y2="304"/>
+        <text class="mr" x="16" y="300" font-size="8">↓ TX HOÀN TẤT — ai đó phải "tick" máy trạng thái ↓</text>
+
+        <rect class="b b-rx" x="376" y="316" width="348" height="66" rx="4"/>
+        <text class="t" x="386" y="333" font-size="8.5">Ba cách tick — xem hình kế tiếp</text>
+        <text class="m" x="386" y="346" font-size="7.5">TXDONE_BY_IRQ  → controller gọi mbox_chan_txdone()  :176</text>
+        <text class="m" x="386" y="358" font-size="7.5">TXDONE_BY_POLL → hrtimer txdone_hrtimer() :117 gọi last_tx_done()</text>
+        <text class="m" x="386" y="370" font-size="7.5">TXDONE_BY_ACK  → client gọi mbox_client_txdone()  :197</text>
+
+        <rect class="b b-rx" x="16" y="316" width="300" height="80" rx="4"/>
+        <text class="t" x="26" y="333" font-size="8.5">tx_tick(chan, r)  :93</text>
+        <text class="m" x="26" y="346" font-size="7.5">① mssg = active_req; active_req = NULL  (dưới spinlock) :97-99</text>
+        <text class="m" x="26" y="358" font-size="7.5">② msg_submit(chan) ← ĐẨY MESSAGE KẾ TIẾP  :102</text>
+        <text class="m" x="26" y="370" font-size="7.5">③ cl-&gt;tx_done(cl, mssg, r)  :108</text>
+        <text class="m" x="26" y="382" font-size="7.5">④ if (r != −ETIME &amp;&amp; tx_block) complete(&amp;tx_complete)  :111</text>
+        <line class="f f-rx" x1="374" y1="350" x2="318" y2="350" marker-end="url(#a3r)"/>
+
+        <path class="f f-x" d="M100,396 C60,400 40,300 90,286" marker-end="url(#a3)"/>
+        <text class="m" x="30" y="420" font-size="7.5">④ đánh thức</text>
+        <text class="m" x="30" y="431" font-size="7.5">bên đang tx_block</text>
+        <path class="f f-tx f-x" d="M240,396 C300,410 340,240 320,180" marker-end="url(#a3t)"/>
+        <text class="mt" x="330" y="420" font-size="7.5">② vòng lặp: message kế tiếp được gửi ngay trong tx_tick</text>
+      </svg>
+      <figcaption>Thứ tự trong <code>tx_tick</code> có chủ ý: <strong>đẩy message kế tiếp
+        <em>trước</em> khi gọi <code>tx_done</code></strong> — giữ phần cứng luôn bận, và cho phép
+        client gửi tiếp ngay từ trong <code>tx_done</code> mà không đệ quy vô hạn (vì
+        <code>active_req</code> lúc đó đã được gán lại).</figcaption>
+    </figure>
+  </section>
+
+  <section id="txdone">
+    <h2><span class="n">04</span>Ba cách biết &ldquo;đã gửi xong&rdquo; — khác biệt thật</h2>
+    <p class="srcline">roadmap mục 9 · nguồn: mailbox.h · mailbox.c:492-520, 398</p>
+    <p>Đây là chỗ dễ cấu hình sai nhất. Ba phương pháp không phải là tuỳ chọn phong cách — chúng
+      phụ thuộc <strong>phần cứng có báo được TX-done hay không</strong>.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 330" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Ba phương pháp phát hiện TX done. Với TXDONE_BY_IRQ, phần cứng có ngắt ACK riêng, ISR của controller gọi mbox_chan_txdone và vòng lặp đóng ngay lập tức. Với TXDONE_BY_POLL, phần cứng chỉ có thanh ghi trạng thái, core khởi động hrtimer chu kỳ txpoll_period gọi last_tx_done liên tục cho tới khi trả true, độ trễ bằng chu kỳ polling. Với TXDONE_BY_ACK, phần cứng không biết gì, chính giao thức phần mềm nhận gói ACK từ remote rồi client gọi mbox_client_txdone, độ trễ bằng thời gian remote trả lời. Board S800 dùng nhánh POLL.">
+        <defs><marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a4r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="290" y="12" width="160" height="30" rx="4"/>
+        <text class="t" x="370" y="31" font-size="9" text-anchor="middle">send_data() đã ghi register</text>
+
+        <text class="t" x="16" y="66" font-size="9">① TXDONE_BY_IRQ</text>
+        <text class="m" x="16" y="78" font-size="7">mbox->txdone_irq = true</text>
+        <rect class="b" x="16" y="86" width="220" height="66" rx="4"/>
+        <text class="m" x="26" y="102" font-size="7.5">phần cứng có ngắt ACK riêng</text>
+        <text class="m" x="26" y="114" font-size="7.5">ISR của controller gọi</text>
+        <text class="t" x="26" y="127" font-size="8">mbox_chan_txdone(chan, 0)</text>
+        <text class="m" x="26" y="139" font-size="7.5">mailbox.c:176 → tx_tick()</text>
+        <text class="m" x="26" y="150" font-size="7.5">context: HARDIRQ</text>
+        <path class="f" d="M310,42 C240,54 150,66 126,84" marker-end="url(#a4)"/>
+        <text class="mr" x="16" y="168" font-size="7.5">Độ trễ: tức thì. Tốt nhất.</text>
+
+        <text class="t" x="260" y="66" font-size="9">② TXDONE_BY_POLL  ← BOARD NÀY</text>
+        <text class="m" x="260" y="78" font-size="7">mbox->txdone_poll = true, txpoll_period = 1 ms</text>
+        <rect class="b b-rx" x="260" y="86" width="220" height="66" rx="4"/>
+        <text class="m" x="270" y="102" font-size="7.5">chỉ có thanh ghi trạng thái</text>
+        <text class="m" x="270" y="114" font-size="7.5">core chạy hrtimer txdone_hrtimer :117</text>
+        <text class="t" x="270" y="127" font-size="8">ops-&gt;last_tx_done(chan)</text>
+        <text class="m" x="270" y="139" font-size="7.5">mhu: đọc tx_reg INTR_STAT, ==0 là xong :95</text>
+        <text class="m" x="270" y="150" font-size="7.5">context: SOFTIRQ (hrtimer)</text>
+        <line class="f f-rx" x1="370" y1="42" x2="370" y2="84" marker-end="url(#a4r)"/>
+        <text class="mr" x="260" y="168" font-size="7.5">Độ trễ: tới 1 chu kỳ poll. Bắt buộc phải cài last_tx_done.</text>
+
+        <text class="t" x="504" y="66" font-size="9">③ TXDONE_BY_ACK</text>
+        <text class="m" x="504" y="78" font-size="7">cả hai cờ = false, HOẶC poll + knows_txdone</text>
+        <rect class="b" x="504" y="86" width="220" height="66" rx="4"/>
+        <text class="m" x="514" y="102" font-size="7.5">phần cứng không báo gì</text>
+        <text class="m" x="514" y="114" font-size="7.5">giao thức phần mềm nhận gói ACK,</text>
+        <text class="t" x="514" y="127" font-size="8">mbox_client_txdone(chan, 0)</text>
+        <text class="m" x="514" y="139" font-size="7.5">mailbox.c:197 → tx_tick()</text>
+        <text class="m" x="514" y="150" font-size="7.5">context: tuỳ client (thường RX callback)</text>
+        <path class="f" d="M430,42 C500,54 590,66 614,84" marker-end="url(#a4)"/>
+        <text class="m" x="504" y="168" font-size="7.5">Độ trễ: bằng thời gian remote trả lời.</text>
+
+        <line class="ll" x1="16" y1="186" x2="724" y2="186"/>
+        <text class="t" x="16" y="206" font-size="9.5">Core chọn phương pháp ở đâu</text>
+        <text class="m" x="16" y="224" font-size="8">mbox_controller_register()  mailbox.c:499-506:</text>
+        <text class="m" x="16" y="237" font-size="8">   txdone_irq ? BY_IRQ : txdone_poll ? BY_POLL : BY_ACK      ← ưu tiên IRQ &gt; POLL &gt; ACK</text>
+        <text class="m" x="16" y="250" font-size="8">   BY_POLL mà thiếu ops-&gt;last_tx_done → −EINVAL "last_tx_done method is absent"  :509</text>
+        <text class="m" x="16" y="268" font-size="8">mbox_request_channel()  mailbox.c:398:</text>
+        <text class="m" x="16" y="281" font-size="8">   if (txdone_method == BY_POLL &amp;&amp; cl-&gt;knows_txdone) → chuyển sang BY_ACK</text>
+        <text class="mr" x="16" y="299" font-size="8">Board S800: mv_mhu đặt txdone_poll=true, SCPI đặt knows_txdone=FALSE (arm_scpi.c:1225)</text>
+        <text class="mr" x="16" y="312" font-size="8">→ giữ nguyên TXDONE_BY_POLL, hrtimer 1 ms chạy suốt thời gian có TX đang bay.</text>
+        <text class="m" x="16" y="326" font-size="7.5">Tài liệu ghi rõ: "must never set both txdone_poll and txdone_irq"  mailbox_controller.h:38-40</text>
+      </svg>
+      <figcaption>Nhánh giữa là nhánh board này thực sự chạy. Hệ quả đo được: mỗi
+        <code>mbox_send_message()</code> tốn tối đa 1 ms chỉ để phát hiện TX xong — với
+        <code>tx_tout = 20 ms</code> của SCPI thì vẫn dư, nhưng đây là trần thông lượng thực tế
+        của mọi lệnh SCPI trên máy này.</figcaption>
+    </figure>
+  </section>
+
+  <section id="rx">
+    <h2><span class="n">05</span>RX — core không buffer gì cả</h2>
+    <p class="srcline">roadmap mục 11, 12 · nguồn: mailbox.c:158 · arm_mhu_base.c:44</p>
+    <p>Đường RX ngắn đến mức gây ngạc nhiên: <code>mbox_chan_received_data()</code> chỉ có
+      <strong>hai dòng thân hàm</strong> — kiểm <code>rx_callback</code> khác NULL rồi gọi nó.
+      Không hàng đợi, không sao chép, không đổi context. Toàn bộ chạy trong hardirq.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 380" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Luồng RX: remote CPU ghi thanh ghi MHU làm ngắt kích hoạt; Linux IRQ subsystem gọi mhu_rx_interrupt, hàm này đọc INTR_STAT lấy giá trị 32 bit, nếu bằng 0 trả IRQ_NONE, ngược lại gọi mbox_chan_received_data với con trỏ tới biến val trên stack; core gọi thẳng rx_callback của client là scpi_handle_remote_msg, hàm này bỏ qua giá trị val và thay vào đó đọc shared memory để lấy command và payload thật, tìm xfer đang chờ theo token rồi complete; sau khi callback trở về, ISR mới ghi INTR_CLR để ack ngắt.">
+        <defs><marker id="a5r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="230" y="12" width="280" height="32" rx="4"/>
+        <text class="t" x="370" y="30" font-size="9" text-anchor="middle">Lõi R4 ghi thanh ghi MHU → IRQ 269</text>
+
+        <text class="mr" x="16" y="62" font-size="8">HARDIRQ ↓ — toàn bộ khối dưới đây chạy atomic, KHÔNG được sleep</text>
+        <rect class="b b-rx" x="16" y="70" width="708" height="196" rx="4" fill="none" stroke-dasharray="4 4"/>
+
+        <rect class="b b-rx" x="196" y="82" width="348" height="58" rx="4"/>
+        <text class="t" x="206" y="99" font-size="8.5">mhu_rx_interrupt()  arm_mhu_base.c:44</text>
+        <text class="m" x="206" y="112" font-size="7.5">val = readl_relaxed(mlink-&gt;rx_reg + INTR_STAT_OFS)  :49</text>
+        <text class="m" x="206" y="124" font-size="7.5">if (!val) return IRQ_NONE;   ← IRQF_SHARED, phải kiểm  :50</text>
+        <text class="m" x="206" y="135" font-size="7.5">mbox_chan_received_data(chan, (void *)&amp;val)  :53</text>
+        <line class="f f-rx" x1="370" y1="44" x2="370" y2="80" marker-end="url(#a5r)"/>
+
+        <rect class="b b-rx" x="196" y="152" width="348" height="46" rx="4"/>
+        <text class="t" x="206" y="169" font-size="8.5">mbox_chan_received_data()  mailbox.c:158</text>
+        <text class="m" x="206" y="182" font-size="7.5">if (chan-&gt;cl-&gt;rx_callback)</text>
+        <text class="m" x="206" y="193" font-size="7.5">    chan-&gt;cl-&gt;rx_callback(chan-&gt;cl, mssg);   ← HẾT. 2 dòng.</text>
+        <line class="f f-rx" x1="370" y1="140" x2="370" y2="150" marker-end="url(#a5r)"/>
+
+        <rect class="b b-rx" x="196" y="210" width="348" height="46" rx="4"/>
+        <text class="t" x="206" y="227" font-size="8.5">scpi_handle_remote_msg()  arm_scpi.c:438</text>
+        <text class="m" x="206" y="240" font-size="7.5">container_of(c, struct scpi_chan, cl)  ← lấy lại state client</text>
+        <text class="m" x="206" y="251" font-size="7.5">cmd = ioread32(&amp;mem-&gt;command);  scpi_process_cmd()  :444-447</text>
+        <line class="f f-rx" x1="370" y1="198" x2="370" y2="208" marker-end="url(#a5r)"/>
+
+        <rect class="b b-gh" x="574" y="152" width="150" height="104" rx="4"/>
+        <text class="t" x="649" y="169" font-size="8" text-anchor="middle">SHARED MEMORY</text>
+        <text class="m" x="649" y="182" font-size="7" text-anchor="middle">rx_payload</text>
+        <text class="m" x="649" y="194" font-size="7" text-anchor="middle">0x7FFF_0000</text>
+        <text class="m" x="649" y="210" font-size="7" text-anchor="middle">PAYLOAD THẬT</text>
+        <text class="m" x="649" y="222" font-size="7" text-anchor="middle">nằm ở đây,</text>
+        <text class="m" x="649" y="234" font-size="7" text-anchor="middle">KHÔNG phải trong</text>
+        <text class="m" x="649" y="246" font-size="7" text-anchor="middle">tham số mssg</text>
+        <line class="f f-x" x1="572" y1="232" x2="546" y2="232" marker-end="url(#a5)"/>
+
+        <rect class="b b-rx" x="16" y="210" width="160" height="46" rx="4"/>
+        <text class="m" x="26" y="227" font-size="7.5">complete(&amp;xfer-&gt;done)</text>
+        <text class="m" x="26" y="239" font-size="7.5">arm_scpi.c:435</text>
+        <text class="m" x="26" y="250" font-size="7.5">→ đánh thức tiến trình</text>
+        <line class="f f-rx" x1="194" y1="232" x2="178" y2="232" marker-end="url(#a5r)"/>
+
+        <rect class="b b-rx" x="196" y="276" width="348" height="34" rx="4"/>
+        <text class="t" x="206" y="293" font-size="8.5">writel_relaxed(val, mlink-&gt;rx_reg + INTR_CLR_OFS)  :55</text>
+        <text class="m" x="206" y="305" font-size="7.5">ACK ngắt — SAU khi callback trả về, đúng như tài liệu yêu cầu</text>
+        <line class="f f-rx" x1="370" y1="256" x2="370" y2="274" marker-end="url(#a5r)"/>
+
+        <text class="m" x="16" y="332" font-size="8">Quy tắc trong mailbox_controller.h:29-30: "The controller should ACK the RX only after this call returns."</text>
+        <text class="m" x="16" y="346" font-size="8">→ nếu ACK trước, remote có thể ghi message mới đè lên shared memory khi client chưa đọc xong.</text>
+        <text class="m" x="16" y="364" font-size="8">rx_callback KHÔNG được sleep: không mutex, không msleep, không copy_to_user. Muốn xử lý dài → schedule_work().</text>
+      </svg>
+      <figcaption>Tham số <code>mssg</code> mà client nhận chỉ là con trỏ tới biến
+        <code>u32 val</code> <strong>trên stack của ISR</strong>
+        <span class="src">arm_mhu_base.c:47</span> — nó hết hiệu lực ngay khi ISR trả về. SCPI
+        thậm chí bỏ qua giá trị này và đọc thẳng shared memory. Đây là bằng chứng rõ nhất rằng
+        mailbox chỉ là chuông, không phải kênh dữ liệu.</figcaption>
+    </figure>
+  </section>
+
+  <section id="dt">
+    <h2><span class="n">06</span>Device Tree → mbox_chan: cuộc tra cứu</h2>
+    <p class="srcline">roadmap mục 13, 15, 16, 17 · nguồn: mailbox.c:344-414</p>
+
+    <figure>
+      <svg viewBox="0 0 740 350" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Đường từ Device Tree tới mbox_chan: client gọi mbox_request_channel với index, hàm lấy con_mutex rồi of_parse_phandle_with_args đọc thuộc tính mboxes của node client, trả về phandle tới node controller cùng args; core duyệt danh sách mbox_cons so of_node, gọi of_xlate của controller để đổi args thành con trỏ mbox_chan, mặc định là of_mbox_index_xlate lấy chans index args0; nếu chan->cl khác NULL thì trả EBUSY vì kênh đã có chủ; nếu chưa tìm thấy controller thì trả EPROBE_DEFER để driver core thử lại sau; cuối cùng gán chan->cl, init completion, chọn txdone_method rồi gọi startup của controller.">
+        <defs><marker id="a6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a6r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b b-gh" x="16" y="12" width="330" height="70" rx="4"/>
+        <text class="t" x="26" y="29" font-size="8.5">DEVICE TREE — quartz-sb.dtsi</text>
+        <text class="m" x="26" y="43" font-size="7.5">mailbox: mhu@8e8009800 {          :48</text>
+        <text class="m" x="26" y="54" font-size="7.5">    #mbox-cells = &lt;1&gt;;             :54  ← 1 ô args</text>
+        <text class="m" x="26" y="65" font-size="7.5">scpi_protocol: scpi@7fff0000 {    :87</text>
+        <text class="m" x="26" y="76" font-size="7.5">    mboxes = &lt;&amp;mailbox 0&gt;;         :89  ← phandle + args[0]=0</text>
+
+        <rect class="b" x="392" y="12" width="332" height="70" rx="4"/>
+        <text class="t" x="402" y="29" font-size="8.5">mbox_request_channel(cl, index)  mailbox.c:344</text>
+        <text class="m" x="402" y="43" font-size="7.5">mutex_lock(&amp;con_mutex)  :358 ← khóa toàn cục, chống đua probe</text>
+        <text class="m" x="402" y="54" font-size="7.5">of_parse_phandle_with_args(of_node, "mboxes",</text>
+        <text class="m" x="402" y="65" font-size="7.5">                           "#mbox-cells", index, &amp;spec)  :360</text>
+        <text class="m" x="402" y="76" font-size="7.5">lỗi parse → trả luôn mã lỗi của OF  :363-367</text>
+        <line class="f" x1="348" y1="47" x2="390" y2="47" marker-end="url(#a6)"/>
+
+        <rect class="b" x="196" y="98" width="348" height="58" rx="4"/>
+        <text class="t" x="206" y="115" font-size="8.5">duyệt danh sách controller đã đăng ký  :370-376</text>
+        <text class="m" x="206" y="128" font-size="7.5">chan = ERR_PTR(−EPROBE_DEFER);   ← MẶC ĐỊNH  :370</text>
+        <text class="m" x="206" y="140" font-size="7.5">list_for_each_entry(mbox, &amp;mbox_cons, node)</text>
+        <text class="m" x="206" y="151" font-size="7.5">    if (mbox-&gt;dev-&gt;of_node == spec.np) chan = mbox-&gt;of_xlate(mbox, &amp;spec);</text>
+        <line class="f" x1="558" y1="82" x2="420" y2="96" marker-end="url(#a6)"/>
+
+        <rect class="b" x="196" y="170" width="348" height="46" rx="4"/>
+        <text class="t" x="206" y="187" font-size="8.5">of_mbox_index_xlate()  mailbox.c:474 (mặc định)</text>
+        <text class="m" x="206" y="200" font-size="7.5">ind = sp-&gt;args[0]; if (ind &gt;= num_chans) return −EINVAL;</text>
+        <text class="m" x="206" y="211" font-size="7.5">return &amp;mbox-&gt;chans[ind];   ← con trỏ vào MẢNG của controller</text>
+        <line class="f" x1="370" y1="156" x2="370" y2="168" marker-end="url(#a6)"/>
+
+        <rect class="b b-rx" x="16" y="236" width="220" height="60" rx="4"/>
+        <text class="t" x="26" y="253" font-size="8.5">chan-&gt;cl != NULL ?</text>
+        <text class="m" x="26" y="266" font-size="7.5">→ −EBUSY "mailbox not free"  :385-389</text>
+        <text class="m" x="26" y="278" font-size="7.5">MỘT kênh = MỘT client.</text>
+        <text class="m" x="26" y="290" font-size="7.5">Không chia sẻ, không refcount.</text>
+        <path class="f f-rx" d="M280,216 C250,224 220,228 200,234" marker-end="url(#a6r)"/>
+
+        <rect class="b b-rx" x="256" y="236" width="220" height="60" rx="4"/>
+        <text class="t" x="266" y="253" font-size="8.5">không tìm thấy controller ?</text>
+        <text class="m" x="266" y="266" font-size="7.5">→ −EPROBE_DEFER  :370</text>
+        <text class="m" x="266" y="278" font-size="7.5">driver core thử probe lại sau.</text>
+        <text class="m" x="266" y="290" font-size="7.5">Đây là cách xử lý thứ tự probe.</text>
+        <line class="f f-rx" x1="370" y1="216" x2="370" y2="234" marker-end="url(#a6r)"/>
+
+        <rect class="b" x="496" y="236" width="228" height="60" rx="4"/>
+        <text class="t" x="506" y="253" font-size="8.5">thành công  :391-410</text>
+        <text class="m" x="506" y="266" font-size="7.5">chan-&gt;cl = cl; init_completion(&amp;tx_complete)</text>
+        <text class="m" x="506" y="278" font-size="7.5">chọn txdone_method  :398</text>
+        <text class="m" x="506" y="290" font-size="7.5">ops-&gt;startup(chan) ← ĐƯỢC PHÉP SLEEP  :403</text>
+        <path class="f" d="M460,216 C500,224 540,228 560,234" marker-end="url(#a6)"/>
+
+        <text class="m" x="16" y="316" font-size="8">mhu_startup() arm_mhu_base.c:113 — ở đây mới request_irq(IRQF_SHARED), và chỉ nếu mlink-&gt;irq != 0 :121</text>
+        <text class="m" x="16" y="330" font-size="8">→ IRQ chỉ được xin KHI có client. Không client = không ngắt. mhu_shutdown() :135 free_irq() ngược lại.</text>
+        <text class="m" x="16" y="344" font-size="7.5">mbox_request_channel_byname() :416 chỉ là wrapper: đọc "mbox-names" tìm index rồi gọi hàm trên.</text>
+      </svg>
+      <figcaption>Hai giá trị trả về cần phân biệt rõ khi debug:
+        <code>-EPROBE_DEFER</code> nghĩa là <em>controller chưa probe</em> (sẽ thử lại, thường tự
+        khỏi); <code>-EBUSY</code> nghĩa là <em>kênh đã có chủ khác</em> (sẽ không bao giờ tự khỏi
+        — phải sửa DTS hoặc gỡ client kia).</figcaption>
+    </figure>
+  </section>
+
+  <p class="phase">Phase 3–4 — Tích hợp phần cứng &amp; nâng cao · mục 18–25</p>
+
+  <section id="board">
+    <h2><span class="n">07</span>Chuỗi thật trên board — Linux, ATF và R4 cùng một MHU</h2>
+    <p class="srcline">roadmap mục 18, 19, 21 · nguồn: quartz-sb.dtsi · arm_scpi.c · km_scpi.c + sổ tay ATF</p>
+    <p>Đây là ví dụ &ldquo;real-world&rdquo; mà roadmap yêu cầu, và nó có thật trên chính board
+      này. Điều đáng chú ý: <strong>hai bên độc lập của Linux</strong> — firmware EL3 (BL31) và
+      kernel — cùng nói SCPI với R4 qua cùng khối MHU.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Chuỗi thật trên board S800: bên trái là các client kernel gồm SCPI power domain, SCPI clock và km_scpi đặc thù Konica Minolta, tất cả gọi scpi_send_message rồi mbox_send_message vào mailbox core rồi mv_mhu; song song, firmware ATF BL31 ở EL3 cũng gửi SCPI qua cùng khối MHU khi xử lý PSCI CPU_ON; cả hai chia sẻ vùng shared memory 0x7FFF0000; lõi R4 chạy firmware đọc lệnh, điều khiển nguồn clock rồi trả lời bằng cách bấm chuông ngược.">
+        <defs><marker id="a7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a7t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a7r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="m" x="16" y="16" font-size="8">LINUX — EL1</text>
+        <rect class="b" x="16" y="24" width="120" height="46" rx="4"/>
+        <text class="t" x="76" y="41" font-size="8" text-anchor="middle">scpi_pm_domain</text>
+        <text class="m" x="76" y="53" font-size="7" text-anchor="middle">power domain</text>
+        <text class="m" x="76" y="64" font-size="7" text-anchor="middle">ARM_SCPI_POWER_DOMAIN=y</text>
+
+        <rect class="b" x="146" y="24" width="120" height="46" rx="4"/>
+        <text class="t" x="206" y="41" font-size="8" text-anchor="middle">clk-scpi</text>
+        <text class="m" x="206" y="53" font-size="7" text-anchor="middle">clock provider</text>
+        <text class="m" x="206" y="64" font-size="7" text-anchor="middle">COMMON_CLK_SCPI=y</text>
+
+        <rect class="b" x="276" y="24" width="140" height="46" rx="4"/>
+        <text class="t" x="346" y="41" font-size="8" text-anchor="middle">km_scpi.c ← KM riêng</text>
+        <text class="m" x="346" y="53" font-size="7" text-anchor="middle">AP_CTL · SET_AP_STATUS</text>
+        <text class="m" x="346" y="64" font-size="7" text-anchor="middle">scpi_send_message_ext() :33</text>
+
+        <rect class="b" x="16" y="84" width="400" height="34" rx="4"/>
+        <text class="t" x="26" y="101" font-size="8.5">arm_scpi.c — CLIENT: đóng gói lệnh, token, xfer list, chờ completion</text>
+        <text class="m" x="26" y="113" font-size="7.5">scpi_send_message() → tx_prepare copy payload vào shmem → mbox_send_message() :567</text>
+        <line class="f" x1="76" y1="70" x2="76" y2="82" marker-end="url(#a7)"/>
+        <line class="f" x1="206" y1="70" x2="206" y2="82" marker-end="url(#a7)"/>
+        <line class="f" x1="346" y1="70" x2="346" y2="82" marker-end="url(#a7)"/>
+
+        <rect class="b" x="16" y="132" width="400" height="30" rx="4"/>
+        <text class="t" x="26" y="151" font-size="8.5">MAILBOX CORE — mailbox.c (ring, active_req, hrtimer poll 1 ms)</text>
+        <line class="f" x1="216" y1="118" x2="216" y2="130" marker-end="url(#a7)"/>
+
+        <rect class="b" x="16" y="176" width="400" height="30" rx="4"/>
+        <text class="t" x="26" y="195" font-size="8.5">mv_mhu.c → arm_mhu_base.c — CONTROLLER</text>
+        <line class="f f-tx" x1="216" y1="162" x2="216" y2="174" marker-end="url(#a7t)"/>
+
+        <text class="m" x="452" y="16" font-size="8">FIRMWARE — EL3</text>
+        <rect class="b" x="452" y="24" width="272" height="94" rx="4"/>
+        <text class="t" x="462" y="41" font-size="8.5">ATF BL31 — plat/marvell/a8k/quartz</text>
+        <text class="m" x="462" y="55" font-size="7.5">scpi.c · mhu.c — bản SCPI RIÊNG, không dùng</text>
+        <text class="m" x="462" y="66" font-size="7.5">mailbox framework (không có Linux ở EL3)</text>
+        <text class="m" x="462" y="80" font-size="7.5">Khi Linux gọi PSCI CPU_ON → SMC → BL31 →</text>
+        <text class="m" x="462" y="91" font-size="7.5">scpi_set_css_power_state() → MHU → R4</text>
+        <text class="m" x="462" y="106" font-size="7.5">buffer 128 B/kênh, 1 kênh ảo mỗi lõi</text>
+
+        <line class="f f-tx" x1="588" y1="118" x2="588" y2="222" marker-end="url(#a7t)"/>
+        <text class="mt" x="596" y="170" font-size="7.5">cùng khối MHU</text>
+        <text class="mt" x="596" y="182" font-size="7.5">kênh khác</text>
+
+        <line class="rule" x1="16" y1="222" x2="724" y2="222"/>
+        <text class="m" x="16" y="219" font-size="7.5">PHẦN CỨNG</text>
+
+        <rect class="b" x="16" y="232" width="400" height="46" rx="4"/>
+        <text class="t" x="26" y="249" font-size="8.5">MHU @ 0x8_E800_9800</text>
+        <text class="m" x="26" y="262" font-size="7.5">writel INTR_SET → IRQ sang R4 · readl INTR_STAT ← IRQ 269 từ R4</text>
+        <text class="m" x="26" y="273" font-size="7.5">quartz-sb.dtsi:48-55 · amba id 0x1bb098 (arm_mhu_base.c:203)</text>
+        <line class="f f-tx" x1="216" y1="206" x2="216" y2="230" marker-end="url(#a7t)"/>
+
+        <rect class="b b-gh" x="452" y="232" width="272" height="46" rx="4"/>
+        <text class="t" x="462" y="249" font-size="8.5">SHARED MEMORY 0x7FFF_0000 (32 KB)</text>
+        <text class="m" x="462" y="262" font-size="7.5">smemmbox: scp-shmem@0 reg &lt;0x0 0x100&gt;  dtsi:81-84</text>
+        <text class="m" x="462" y="273" font-size="7.5">= PLAT_CSS_SCP_COM_SHARED_MEM_BASE trong ATF</text>
+
+        <rect class="b" x="196" y="300" width="348" height="52" rx="4"/>
+        <text class="t" x="370" y="318" font-size="9.5" text-anchor="middle">Cortex-R4 — SCP firmware</text>
+        <text class="m" x="370" y="332" font-size="7.5" text-anchor="middle">đọc lệnh từ shmem · bật/tắt nguồn, clock, lõi CPU</text>
+        <text class="m" x="370" y="344" font-size="7.5" text-anchor="middle">cũng chính là lõi chép BL1 vào DRAM lúc boot (xem sổ tay ATF)</text>
+        <line class="f f-tx" x1="290" y1="278" x2="330" y2="298" marker-end="url(#a7t)"/>
+        <line class="f f-tx" x1="560" y1="278" x2="450" y2="298" marker-end="url(#a7t)"/>
+        <path class="f f-rx" d="M196,326 C120,326 60,300 60,282" marker-end="url(#a7r)"/>
+        <text class="mr" x="70" y="316" font-size="7.5">IRQ 269 → mhu_rx_interrupt</text>
+      </svg>
+      <figcaption>Cùng một lõi R4 phục vụ ba khách hàng: BL31 lúc PSCI, kernel lúc quản lý
+        clock/power domain, và <code>km_scpi.c</code> cho lệnh riêng của Konica Minolta
+        (<code>KM_SCPI_CMD_AP_CTL</code>, <code>SET_AP_STATUS</code>
+        <span class="src">km_scpi.c:74, 94</span>). Đó là lý do vùng shared memory phải được chia
+        rạch ròi giữa firmware và kernel.</figcaption>
+    </figure>
+
+    <h3>Cái gì framework lo, cái gì bạn phải tự viết — mục 18</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Việc</th><th>Ai lo</th></tr></thead>
+      <tbody>
+        <tr><td>Xếp hàng nhiều message, đảm bảo một TX tại một thời điểm</td><td><strong>Mailbox core</strong></td></tr>
+        <tr><td>Phát hiện TX-done, timeout, đánh thức bên chờ</td><td><strong>Mailbox core</strong></td></tr>
+        <tr><td>Ghi/đọc thanh ghi, quản lý IRQ</td><td><strong>Controller driver</strong></td></tr>
+        <tr><td>Định dạng lệnh, mã lệnh, độ dài payload</td><td>bạn — giao thức ứng dụng</td></tr>
+        <tr><td>Token/sequence để ghép request với response</td><td>bạn — SCPI dùng <code>ch-&gt;token</code> <span class="src">arm_scpi.c:465</span></td></tr>
+        <tr><td>Bố cục shared memory, ai ghi vùng nào</td><td>bạn — thoả thuận với firmware</td></tr>
+        <tr><td>Retry, timeout mức ứng dụng, khôi phục khi remote treo</td><td>bạn</td></tr>
+        <tr><td>Cache coherency của shared memory</td><td>bạn (<code>ioread32</code>/<code>memcpy_toio</code>, hoặc map non-cacheable)</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="race">
+    <h2><span class="n">08</span>Timeout gặp TX-done: cuộc đua và cách core xử lý</h2>
+    <p class="srcline">roadmap mục 23, 24 · nguồn: mailbox.c:93-116, 271-289</p>
+    <p>Đây là câu hỏi hay nhất trong roadmap. Điều gì xảy ra nếu
+      <code>wait_for_completion_timeout()</code> hết giờ <em>đúng lúc</em> hrtimer phát hiện TX
+      xong? Cả hai đều gọi <code>tx_tick()</code>.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 330" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Cuộc đua timeout và TX-done: hai đường cùng gọi tx_tick, một từ tiến trình khi hết giờ, một từ hrtimer khi last_tx_done trả true. tx_tick lấy spinlock, đọc active_req rồi gán NULL ngay lập tức; bên nào vào trước lấy được con trỏ, bên vào sau thấy NULL và thoát sớm trước khi gọi tx_done, nên tx_done chỉ chạy đúng một lần. Ngoài ra dòng cuối tx_tick chỉ complete khi r khác ETIME, nên đường timeout không tự đánh thức chính mình.">
+        <defs><marker id="a8" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a8r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="14" width="300" height="46" rx="4"/>
+        <text class="t" x="26" y="31" font-size="8.5">Đường A — PROCESS: hết giờ</text>
+        <text class="m" x="26" y="44" font-size="7.5">wait_for_completion_timeout() trả 0  :280</text>
+        <text class="m" x="26" y="55" font-size="7.5">t = −ETIME; tx_tick(chan, −ETIME)  :282-283</text>
+
+        <rect class="b b-rx" x="424" y="14" width="300" height="46" rx="4"/>
+        <text class="t" x="434" y="31" font-size="8.5">Đường B — SOFTIRQ: TX xong</text>
+        <text class="m" x="434" y="44" font-size="7.5">txdone_hrtimer :117 → last_tx_done() trả true</text>
+        <text class="m" x="434" y="55" font-size="7.5">tx_tick(chan, 0)  :128</text>
+
+        <line class="f" x1="166" y1="60" x2="320" y2="86" marker-end="url(#a8)"/>
+        <line class="f f-rx" x1="574" y1="60" x2="420" y2="86" marker-end="url(#a8r)"/>
+
+        <rect class="b" x="196" y="90" width="348" height="94" rx="4"/>
+        <text class="t" x="206" y="107" font-size="9">tx_tick()  mailbox.c:93 — điểm hội tụ</text>
+        <text class="mt" x="206" y="123" font-size="7.5">spin_lock_irqsave(&amp;chan-&gt;lock, flags);          :97</text>
+        <text class="mt" x="206" y="135" font-size="7.5">mssg = chan-&gt;active_req;                        :98</text>
+        <text class="mt" x="206" y="147" font-size="7.5">chan-&gt;active_req = NULL;      ← LẤY VÀ XOÁ NGUYÊN TỬ  :99</text>
+        <text class="mt" x="206" y="159" font-size="7.5">spin_unlock_irqrestore(&amp;chan-&gt;lock, flags);     :100</text>
+        <text class="m" x="206" y="176" font-size="7.5">msg_submit(chan);   ← cả hai đường đều đẩy message kế  :102</text>
+
+        <rect class="b" x="16" y="204" width="330" height="70" rx="4"/>
+        <text class="t" x="26" y="221" font-size="8.5">Bên vào TRƯỚC — mssg != NULL</text>
+        <text class="m" x="26" y="234" font-size="7.5">cl-&gt;tx_done(cl, mssg, r)  ← chạy ĐÚNG MỘT LẦN  :108</text>
+        <text class="m" x="26" y="246" font-size="7.5">if (r != −ETIME &amp;&amp; tx_block)</text>
+        <text class="m" x="26" y="257" font-size="7.5">    complete(&amp;chan-&gt;tx_complete);  :111-112</text>
+        <text class="m" x="26" y="269" font-size="7.5">→ nếu là đường A (−ETIME) thì KHÔNG complete</text>
+
+        <rect class="b b-rx" x="376" y="204" width="348" height="70" rx="4"/>
+        <text class="t" x="386" y="221" font-size="8.5">Bên vào SAU — mssg == NULL</text>
+        <text class="m" x="386" y="234" font-size="7.5">if (!mssg) return;   ← THOÁT SỚM  :104-105</text>
+        <text class="m" x="386" y="246" font-size="7.5">không gọi tx_done, không complete</text>
+        <text class="m" x="386" y="258" font-size="7.5">→ client KHÔNG bao giờ nhận hai lần tx_done</text>
+        <text class="m" x="386" y="269" font-size="7.5">   cho cùng một message</text>
+
+        <line class="f" x1="290" y1="184" x2="220" y2="202" marker-end="url(#a8)"/>
+        <line class="f f-rx" x1="450" y1="184" x2="520" y2="202" marker-end="url(#a8r)"/>
+
+        <text class="m" x="16" y="296" font-size="8">Chốt lại: spinlock quanh ĐÚNG hai dòng đọc-và-xoá active_req là toàn bộ cơ chế chống đua.</text>
+        <text class="m" x="16" y="310" font-size="8">Điều kiện r != −ETIME ở dòng :111 tránh việc đường timeout tự complete rồi lần sau nhầm là thành công.</text>
+        <text class="m" x="16" y="324" font-size="7.5">Hệ quả cần biết: sau timeout, message CÓ THỂ vẫn đang được remote xử lý — client phải tự lo idempotency.</text>
+      </svg>
+      <figcaption>Điểm tinh tế mà đọc lướt sẽ bỏ sót: <code>tx_tick</code> đọc-và-xoá
+        <code>active_req</code> trong cùng một vùng khoá, rồi kiểm <code>!mssg</code>
+        <em>ngoài</em> khoá. Ai lấy được con trỏ thì người đó thông báo; người còn lại im lặng
+        rút.</figcaption>
+    </figure>
+
+    <h3>Các cuộc đua khác — mục 23</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Tình huống</th><th>Cơ chế bảo vệ</th><th>Nguồn</th></tr></thead>
+      <tbody>
+        <tr><td>TX mới trong khi TX cũ đang bay</td><td><code>msg_submit</code> thấy <code>active_req != NULL</code> → chỉ xếp hàng</td><td><span class="src">mailbox.c:61</span></td></tr>
+        <tr><td>Hai client cùng xin một kênh</td><td><code>con_mutex</code> toàn cục + kiểm <code>chan-&gt;cl</code></td><td><span class="src">:358, 385</span></td></tr>
+        <tr><td>IRQ đến khi client đang gỡ</td><td><code>mbox_free_channel</code> gọi <code>shutdown()</code> (free_irq) <strong>trước</strong> khi xoá <code>cl</code></td><td><span class="src">:459-464</span></td></tr>
+        <tr><td>Ring đầy</td><td><code>add_to_rbuf</code> trả <code>-ENOBUFS</code> dưới spinlock</td><td><span class="src">:34-37</span></td></tr>
+        <tr><td>hrtimer bị start hai lần</td><td><code>poll_hrt_lock</code> + <code>hrtimer_is_queued()</code></td><td><span class="src">:86-88, 137</span></td></tr>
+        <tr><td>Remote treo giữa chừng</td><td><strong>không có</strong> — framework không biết. Client phải tự timeout</td><td>—</td></tr>
+      </tbody>
+    </table></div>
+    <p class="srcline">Lưu ý <code>mbox_free_channel</code> <span class="src">:461</span>: &ldquo;The
+      queued TX requests are simply aborted, no callbacks are made&rdquo; — message còn trong ring
+      bị <strong>vứt lặng lẽ</strong>, client không nhận <code>tx_done</code>.</p>
+  </section>
+
+  <section id="km">
+    <h2><span class="n">09</span>Sửa đổi riêng của board — không có trong mainline</h2>
+    <p class="srcline">phát hiện khi so với kernel gốc · quan trọng khi vá hoặc nâng cấp kernel</p>
+    <p>Ba chỗ trong mailbox đã bị Konica Minolta sửa. Nếu bạn tra tài liệu mainline sẽ không thấy
+      chúng, và nếu nâng kernel thì phải port lại.</p>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Sửa đổi</th><th>Vị trí</th><th>Ticket</th><th>Tác dụng</th></tr></thead>
+      <tbody>
+        <tr><td>Thêm op <code>wdt_ca72_end</code> vào <code>mbox_chan_ops</code></td><td><span class="src">mailbox_controller.h:53</span></td><td>OP_BTS-15484 (2019/10/09)</td><td>mở rộng phạm vi watchdog CA72</td></tr>
+        <tr><td>Gọi op đó cuối <code>mbox_send_message</code> khi <code>disable_nonboot_cpus_flg == 1</code></td><td><span class="src">mailbox.c:255, 287-290</span></td><td>OP_BTS-15484</td><td>sau khi tắt các lõi phụ, nhận phản hồi LPPP bằng <em>polling</em> thay vì IRQ</td></tr>
+        <tr><td>Cài đặt <code>mhu_wdt_ca72_end()</code></td><td><span class="src">arm_mhu_base.c:69</span></td><td>OP_BTS-15484</td><td>vòng lặp <code>msleep(10)</code> tối đa 100 lần đọc <code>INTR_STAT</code>; quá hạn → <code>emergency_restart()</code></td></tr>
+        <tr><td>Comment trên khối <code>tx_block</code></td><td><span class="src">mailbox.c:270</span></td><td>AR.1062884 (2018/10/08)</td><td>&ldquo;PowerManager Oops&rdquo; — đánh dấu vùng từng gây lỗi</td></tr>
+      </tbody>
+    </table></div>
+
+    <p><strong>Vì sao cần</strong> <span class="src">arm_mhu_base.c:66-68</span>: comment ghi rõ
+      &ldquo;hàm này được gọi trong trạng thái ngắt không tới&rdquo; — khi CPU shutdown đã tắt các
+      lõi phụ và ngắt, đường RX qua <code>mhu_rx_interrupt</code> chết. Nên KM thay bằng polling
+      đồng bộ ngay trong <code>mbox_send_message</code>. Đây là một <em>lối thoát hiểm</em> hợp
+      lý nhưng phá vỡ mô hình của framework: nó gọi <code>mbox_chan_received_data()</code> từ
+      process context <span class="src">:89</span> thay vì từ ISR.</p>
+    <p class="srcline">Cảnh báo khi port lên kernel mới: <code>mbox_chan_ops</code> mainline
+      không có trường <code>wdt_ca72_end</code>, nên mọi controller driver khác trong cây
+      (<code>omap-mailbox.c</code>, <code>imx-mailbox.c</code>…) sẽ để trường đó <code>NULL</code>
+      — gọi mà không kiểm là NULL-deref.</p>
+  </section>
+
+  <p class="phase">Phase 5–6 — Debug &amp; đọc source · mục 26–30, 33</p>
+
+  <section id="debug">
+    <h2><span class="n">10</span>Debug — 10 triệu chứng, đường tra ngắn nhất</h2>
+    <p class="srcline">roadmap mục 25, 26</p>
+
+    <figure>
+      <svg viewBox="0 0 740 300" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Cây quyết định debug mailbox. Câu hỏi một: controller đã đăng ký chưa, kiểm bằng dmesg và sysfs; nếu chưa thì lỗi ở probe controller, kiểm DTS compatible, amba id, ioremap. Nếu rồi, câu hỏi hai: client có lấy được kênh không; EPROBE_DEFER nghĩa là thứ tự probe, EBUSY nghĩa là kênh đã có chủ, lỗi parse nghĩa là sai mboxes hoặc mbox-cells. Nếu lấy được, câu hỏi ba: TX có tới remote không, kiểm bằng đếm ngắt trong proc interrupts và ftrace trên mhu_send_data; nếu remote không phản hồi thì kiểm shared memory và giao thức, nếu ngắt không tăng thì kiểm số IRQ trong DTS và interrupt-parent.">
+        <defs><marker id="a9" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a9r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-rx" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="270" y="12" width="200" height="30" rx="4"/>
+        <text class="t" x="370" y="31" font-size="9" text-anchor="middle">Mailbox không hoạt động</text>
+
+        <rect class="b" x="250" y="54" width="240" height="34" rx="4"/>
+        <text class="t" x="370" y="70" font-size="8.5" text-anchor="middle">① Controller đăng ký chưa?</text>
+        <text class="m" x="370" y="82" font-size="7" text-anchor="middle">dmesg | grep -i mhu ; ls /sys/bus/amba/drivers/mhu/</text>
+        <line class="f" x1="370" y1="42" x2="370" y2="52" marker-end="url(#a9)"/>
+
+        <rect class="b b-rx" x="16" y="102" width="230" height="66" rx="4"/>
+        <text class="t" x="26" y="118" font-size="8">CHƯA → lỗi probe controller</text>
+        <text class="m" x="26" y="131" font-size="7">□ compatible khớp? "arm,mhu","arm,primecell"</text>
+        <text class="m" x="26" y="142" font-size="7">□ amba id 0x1bb098 đọc từ CID/PID register</text>
+        <text class="m" x="26" y="153" font-size="7">□ ioremap_resource lỗi? reg sai địa chỉ</text>
+        <text class="m" x="26" y="164" font-size="7">□ clock/power domain của khối MHU đã bật?</text>
+        <path class="f f-rx" d="M280,88 C230,94 170,96 150,100" marker-end="url(#a9r)"/>
+
+        <rect class="b" x="266" y="102" width="240" height="34" rx="4"/>
+        <text class="t" x="386" y="118" font-size="8.5" text-anchor="middle">② Client lấy được kênh?</text>
+        <text class="m" x="386" y="130" font-size="7" text-anchor="middle">dmesg | grep -E "mailbox not free|can't parse"</text>
+        <line class="f" x1="386" y1="88" x2="386" y2="100" marker-end="url(#a9)"/>
+
+        <rect class="b b-rx" x="510" y="102" width="214" height="66" rx="4"/>
+        <text class="t" x="520" y="118" font-size="8">Mã lỗi nói gì</text>
+        <text class="m" x="520" y="131" font-size="7">−EPROBE_DEFER → controller chưa probe (tự khỏi)</text>
+        <text class="m" x="520" y="142" font-size="7">−EBUSY        → kênh đã có chủ (KHÔNG tự khỏi)</text>
+        <text class="m" x="520" y="153" font-size="7">−EINVAL       → args[0] ≥ num_chans</text>
+        <text class="m" x="520" y="164" font-size="7">lỗi OF        → sai "mboxes" / "#mbox-cells"</text>
+        <line class="f f-rx" x1="506" y1="119" x2="508" y2="119" marker-end="url(#a9r)"/>
+
+        <rect class="b" x="266" y="182" width="240" height="34" rx="4"/>
+        <text class="t" x="386" y="198" font-size="8.5" text-anchor="middle">③ TX có tới remote?</text>
+        <text class="m" x="386" y="210" font-size="7" text-anchor="middle">grep mhu /proc/interrupts — đếm có tăng không</text>
+        <line class="f" x1="386" y1="136" x2="386" y2="180" marker-end="url(#a9)"/>
+
+        <rect class="b b-rx" x="16" y="182" width="230" height="66" rx="4"/>
+        <text class="t" x="26" y="198" font-size="8">Ngắt KHÔNG tăng</text>
+        <text class="m" x="26" y="211" font-size="7">□ interrupts trong DTS đúng số? 269/268/270</text>
+        <text class="m" x="26" y="222" font-size="7">□ interrupt-parent = &lt;&amp;gic&gt; ?</text>
+        <text class="m" x="26" y="233" font-size="7">□ mhu_startup có được gọi (client đã request)?</text>
+        <text class="m" x="26" y="244" font-size="7">□ ftrace: trace-cmd record -p function -l mhu_send_data</text>
+        <path class="f f-rx" d="M280,205 C250,207 170,205 150,190" marker-end="url(#a9r)"/>
+
+        <rect class="b b-rx" x="510" y="182" width="214" height="66" rx="4"/>
+        <text class="t" x="520" y="198" font-size="8">Ngắt tăng nhưng vô nghĩa</text>
+        <text class="m" x="520" y="211" font-size="7">□ shared memory: bố cục hai bên có khớp?</text>
+        <text class="m" x="520" y="222" font-size="7">□ token/sequence có bị lệch (mất một response)?</text>
+        <text class="m" x="520" y="233" font-size="7">□ TX timeout −ETIME lặp → firmware R4 treo</text>
+        <text class="m" x="520" y="244" font-size="7">□ hoạt động 1 lần rồi treo = active_req kẹt</text>
+        <line class="f f-rx" x1="506" y1="199" x2="508" y2="199" marker-end="url(#a9r)"/>
+
+        <line class="ll" x1="16" y1="262" x2="724" y2="262"/>
+        <text class="m" x="16" y="278" font-size="8">Bật log core:  echo 'file mailbox.c +p' &gt; /sys/kernel/debug/dynamic_debug/control</text>
+        <text class="m" x="16" y="291" font-size="8">Test thủ công:  CONFIG_MAILBOX_TEST=m → /sys/kernel/debug/mailbox/ (board này TẮT, có thể bật để bring-up)</text>
+      </svg>
+      <figcaption>Ba câu hỏi tách bài toán làm bốn vùng. Câu ③ là ranh giới đắt nhất: nó phân
+        biệt &ldquo;Linux không gửi&rdquo; với &ldquo;Linux gửi nhưng remote không hiểu&rdquo; —
+        hai lớp hoàn toàn khác nhau về công cụ debug.</figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Triệu chứng</th><th>Return / log</th><th>Nguyên nhân thường gặp</th></tr></thead>
+      <tbody>
+        <tr><td>Controller không probe</td><td>không có log gì</td><td>DTS thiếu node, compatible sai, hoặc <code>CONFIG_MV_MHU</code> tắt</td></tr>
+        <tr><td>Client không xin được kênh</td><td><code>-EPROBE_DEFER</code> lặp mãi</td><td>controller probe fail — tra ngược lên câu ①</td></tr>
+        <tr><td>&ldquo;mailbox not free&rdquo;</td><td><code>-EBUSY</code> <span class="src">mailbox.c:387</span></td><td>hai client cùng trỏ <code>&lt;&amp;mailbox 0&gt;</code></td></tr>
+        <tr><td>&ldquo;Try increasing MBOX_TX_QUEUE_LEN&rdquo;</td><td><code>-ENOBUFS</code> <span class="src">:264</span></td><td>gửi nhanh hơn remote xử lý — remote chậm hoặc treo</td></tr>
+        <tr><td>&ldquo;last_tx_done method is absent&rdquo;</td><td><code>-EINVAL</code> <span class="src">:510</span></td><td>đặt <code>txdone_poll</code> mà quên cài op</td></tr>
+        <tr><td>&ldquo;Controller can't run the TX ticker&rdquo;</td><td>dev_err <span class="src">:179</span></td><td>gọi <code>mbox_chan_txdone</code> khi không phải BY_IRQ</td></tr>
+        <tr><td>TX timeout</td><td><code>-ETIME</code> <span class="src">:282</span></td><td>remote không đọc; hoặc <code>tx_tout</code> nhỏ hơn thời gian xử lý thật</td></tr>
+        <tr><td>rx_callback không bao giờ chạy</td><td>im lặng</td><td>IRQ chưa xin (client chưa request kênh), hoặc IRQ number sai trong DTS</td></tr>
+        <tr><td>Chạy một lần rồi treo</td><td>im lặng</td><td><code>active_req</code> không bao giờ được xoá — thiếu tick (xem mục 04)</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="check">
+    <h2><span class="n">11</span>Tự kiểm tra — 10 câu</h2>
+    <p class="srcline">trả lời được cả 10 thì đọc được bất kỳ mailbox driver nào</p>
+    <ol>
+      <li>Mailbox truyền được bao nhiêu byte một lần trên board này, và payload thật nằm ở đâu?</li>
+      <li><code>mbox_chan</code> do ai cấp phát và ai khởi tạo? Hai bên đó có phải một không?</li>
+      <li>Vì sao core không sao chép message, và điều đó ràng buộc client thế nào?</li>
+      <li><code>active_req</code> làm gì? Nếu nó không bao giờ được xoá thì hiện tượng là gì?</li>
+      <li>Kể ba cách phát hiện TX-done và điều kiện phần cứng của mỗi cách.</li>
+      <li>Board này dùng cách nào, và hệ quả về độ trễ là gì?</li>
+      <li><code>rx_callback</code> chạy trong context nào? Được gọi <code>mutex_lock</code> không?</li>
+      <li>Vì sao controller phải ACK ngắt <em>sau</em> khi <code>mbox_chan_received_data</code> trả về?</li>
+      <li>Timeout và TX-done xảy ra cùng lúc — vì sao <code>tx_done</code> không bị gọi hai lần?</li>
+      <li><code>-EPROBE_DEFER</code> và <code>-EBUSY</code> khác nhau ra sao khi debug?</li>
+    </ol>
+  </section>
+
+  <footer>
+    <b>Nguồn</b> — Kernel/K-S800/Src, linux 5.10.241<br>
+    drivers/mailbox/mailbox.c (633 dòng) · mailbox.h<br>
+    drivers/mailbox/mv_mhu.c → arm_mhu_base.c (222 dòng)<br>
+    include/linux/mailbox_client.h (49) · include/linux/mailbox_controller.h (141)<br>
+    drivers/firmware/arm_scpi.c · km_scpi.c<br>
+    arch/arm64/boot/dts/marvell/quartz-sb.dtsi:48-92<br>
+    arch/arm64/configs/EagleBK_defconfig<br>
+    <br>
+    Mọi tên hàm, struct và số dòng lấy từ source thật — không suy đoán.<br>
+    Đọc kèm sổ tay &ldquo;Chuỗi khởi động ATF S800&rdquo; cho phía firmware EL3 của cùng khối MHU.
+  </footer>
+
+</div>

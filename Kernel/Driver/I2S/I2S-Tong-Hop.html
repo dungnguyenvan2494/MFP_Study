@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I2S / Audio Driver — Tổng Hợp</title>
+<meta name="description" content="Gộp 9 file nghiên cứu I2S trong Kernel/Driver/I2S/ thành một tài liệu có tổ chức: lý thuyết giao thức I2S, mô hình ASoC 4 lớp minh hoạ bằng Samsung i2s.c, và driver THẬT trên board K-S800 (Marvell SSPA + rt5640).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f3f1ee;
+  --surface:#ffffff;
+  --surface-2:#ebe7e1;
+  --surface-3:#ded8cf;
+  --ink:#181511;
+  --ink-2:#5a5348;
+  --ink-3:#8a8175;
+  --rule:#ddd6cb;
+  --rule-strong:#c3b9aa;
+  --accent:#7a4a1e;
+  --accent-ink:#5e3714;
+  --accent-soft:#f0e2cf;
+  --blue:#2f5a7a;
+  --blue-soft:#dde9f0;
+  --warn:#8f5f0d;
+  --warn-soft:#f4ead6;
+  --err:#a03030;
+  --err-soft:#f6e2e0;
+  --ok:#2e6b46;
+  --ok-soft:#dfeee5;
+  --code-bg:#efeae2;
+  --code-ink:#211d16;
+  --shadow:0 1px 2px rgba(24,21,17,.05),0 8px 24px -18px rgba(24,21,17,.35);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14120e;
+    --surface:#1b1813;
+    --surface-2:#221e17;
+    --surface-3:#2c261c;
+    --ink:#ece6da;
+    --ink-2:#b3a893;
+    --ink-3:#8a7f6c;
+    --rule:#2c261c;
+    --rule-strong:#3c3424;
+    --accent:#d29a55;
+    --accent-ink:#e3b276;
+    --accent-soft:#2c2013;
+    --blue:#8ab2d6;
+    --blue-soft:#152430;
+    --warn:#d2a052;
+    --warn-soft:#2a2113;
+    --err:#e08a83;
+    --err-soft:#2c1917;
+    --ok:#78c69c;
+    --ok-soft:#152820;
+    --code-bg:#100e0a;
+    --code-ink:#ddd5c6;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -20px rgba(0,0,0,.85);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14120e; --surface:#1b1813; --surface-2:#221e17; --surface-3:#2c261c;
+  --ink:#ece6da; --ink-2:#b3a893; --ink-3:#8a7f6c;
+  --rule:#2c261c; --rule-strong:#3c3424;
+  --accent:#d29a55; --accent-ink:#e3b276; --accent-soft:#2c2013;
+  --blue:#8ab2d6; --blue-soft:#152430;
+  --warn:#d2a052; --warn-soft:#2a2113;
+  --err:#e08a83; --err-soft:#2c1917;
+  --ok:#78c69c; --ok-soft:#152820;
+  --code-bg:#100e0a; --code-ink:#ddd5c6;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -20px rgba(0,0,0,.85);
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15.5px; line-height:1.68; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:Archivo,"IBM Plex Sans",system-ui,sans-serif;text-wrap:balance;margin:0}
+code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+
+.shell{display:grid;grid-template-columns:280px minmax(0,1fr);gap:0;min-height:100vh}
+.rail{border-right:1px solid var(--rule);background:var(--surface);position:sticky;top:0;height:100vh;overflow-y:auto;padding:26px 20px 44px}
+.rail__brand{display:flex;flex-direction:column;gap:2px;padding-bottom:16px;margin-bottom:14px;border-bottom:1px solid var(--rule)}
+.rail__brand b{font-family:Archivo;font-weight:700;font-size:17px;letter-spacing:-.015em}
+.rail__brand span{font-size:11.5px;color:var(--ink-3);font-family:"IBM Plex Mono";letter-spacing:.02em}
+.toc{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.toc li.part{margin-top:14px;font-family:"IBM Plex Mono";font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:4px 8px}
+.toc a{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:baseline;text-decoration:none;color:var(--ink-2);padding:5px 8px;border-radius:5px;font-size:13.3px;line-height:1.35}
+.toc a em{font-family:"IBM Plex Mono";font-style:normal;font-size:11px;color:var(--ink-3);letter-spacing:.03em}
+.toc a:hover{background:var(--surface-2);color:var(--ink)}
+.rail__note{margin-top:20px;padding-top:14px;border-top:1px solid var(--rule);font-size:11.3px;color:var(--ink-3);line-height:1.5}
+
+main{min-width:0;padding:0 0 96px}
+.wrap{max-width:80ch;margin:0 auto;padding:0 32px}
+.wrap--wide{max-width:108ch}
+
+.mast{border-bottom:1px solid var(--rule);background:linear-gradient(180deg,var(--surface) 0%,var(--bg) 100%);padding:60px 0 40px;margin-bottom:8px}
+.mast h1{font-size:clamp(30px,4.4vw,46px);font-weight:700;letter-spacing:-.026em;line-height:1.06}
+.mast .kicker{font-family:"IBM Plex Mono";font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;display:block}
+.mast p.lede{font-size:17px;color:var(--ink-2);margin:16px 0 0;max-width:66ch;line-height:1.6}
+.mast .facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.fact{font-family:"IBM Plex Mono";font-size:11.3px;padding:4px 10px;border-radius:3px;background:var(--surface-2);border:1px solid var(--rule);color:var(--ink-2)}
+
+section{padding-top:50px;scroll-margin-top:12px}
+.sechead{margin-bottom:20px;padding-bottom:13px;border-bottom:2px solid var(--ink)}
+.sechead .num{font-family:"IBM Plex Mono";font-size:11.5px;letter-spacing:.14em;color:var(--accent);display:block;margin-bottom:6px}
+.sechead h2{font-size:clamp(23px,2.8vw,30px);font-weight:700;letter-spacing:-.02em;line-height:1.14}
+.sechead p{margin:9px 0 0;color:var(--ink-2);font-size:14.6px}
+.parthead{margin:64px 0 -6px;padding:20px 24px;background:var(--accent-soft);border-radius:8px;border-left:4px solid var(--accent)}
+.parthead .plabel{font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink)}
+.parthead h2{font-size:22px;margin-top:4px}
+.parthead p{margin:8px 0 0;color:var(--ink-2);font-size:14px}
+
+h3{font-size:18.5px;font-weight:600;letter-spacing:-.01em;margin:32px 0 4px}
+h4{font-size:15px;font-weight:600;margin:22px 0 4px;letter-spacing:-.005em}
+.src{font-family:"IBM Plex Mono";font-size:11.3px;color:var(--ink-3);display:block;margin-bottom:11px;letter-spacing:.005em;word-break:break-all}
+p{margin:11px 0}
+ul,ol{margin:11px 0;padding-left:21px}
+li{margin:4px 0}
+li::marker{color:var(--ink-3)}
+strong{font-weight:600}
+a{color:var(--accent-ink)}
+
+code{background:var(--code-bg);color:var(--code-ink);padding:1.5px 5px;border-radius:3px;font-size:.87em;border:1px solid var(--rule)}
+pre{background:var(--code-bg);color:var(--code-ink);border:1px solid var(--rule);border-radius:6px;padding:13px 15px;overflow-x:auto;font-size:12.4px;line-height:1.6;margin:13px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit;color:inherit}
+.tbl{overflow-x:auto;margin:15px 0;border:1px solid var(--rule);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.2px}
+th,td{padding:7px 11px;text-align:left;border-bottom:1px solid var(--rule);vertical-align:top}
+th{background:var(--surface-2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr.grp td{background:var(--surface-3);font-weight:600;font-size:11.5px;letter-spacing:.03em;color:var(--ink-2)}
+td code{font-size:.88em}
+.num-col{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:11px 15px;border-radius:0 6px 6px 0;margin:15px 0;font-size:14px}
+.note>strong:first-child{display:block;font-family:Archivo;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:4px}
+.note.trap{border-left-color:var(--warn);background:var(--warn-soft)}
+.note.trap>strong:first-child{color:var(--warn)}
+.note.bad{border-left-color:var(--err);background:var(--err-soft)}
+.note.bad>strong:first-child{color:var(--err)}
+.note.info{border-left-color:var(--blue);background:var(--blue-soft)}
+.note.info>strong:first-child{color:var(--blue)}
+.note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+.note.ok>strong:first-child{color:var(--ok)}
+.note p{margin:5px 0}
+.note p:first-of-type{margin-top:0}
+.note p:last-child{margin-bottom:0}
+
+.layer{display:inline-block;font-family:"IBM Plex Mono";font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid currentColor;vertical-align:middle;margin-right:6px}
+.layer--mach{color:var(--err)}
+.layer--cpu{color:var(--accent)}
+.layer--plat{color:var(--blue)}
+.layer--codec{color:var(--ok)}
+
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:11px;margin:15px 0}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:13px 15px}
+.card h4{margin:0 0 5px;font-size:13.6px}
+.card p{margin:0;font-size:13.2px;color:var(--ink-2)}
+.card .mono{font-size:11.6px;color:var(--accent);display:block;margin-bottom:5px}
+
+.steps{list-style:none;padding:0;margin:16px 0;counter-reset:s}
+.steps>li{counter-increment:s;position:relative;padding-left:38px;margin:0 0 13px}
+.steps>li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:2px;font-family:"IBM Plex Mono";font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:3px;width:27px;height:19px;display:flex;align-items:center;justify-content:center;letter-spacing:.02em}
+.steps>li>b{display:block;font-weight:600;font-size:14px}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 15px;margin:13px 0;font-size:13.6px}
+.kv dt{font-family:"IBM Plex Mono";font-size:12px;color:var(--accent-ink);white-space:nowrap}
+.kv dd{margin:0;color:var(--ink-2)}
+
+hr{border:0;border-top:1px solid var(--rule);margin:32px 0}
+.toplink{display:inline-block;margin-top:24px;font-family:"IBM Plex Mono";font-size:11.3px;color:var(--ink-3);text-decoration:none;letter-spacing:.04em}
+.toplink:hover{color:var(--accent)}
+footer{margin-top:60px;border-top:1px solid var(--rule);padding:24px 0 50px}
+footer p{margin:0;font-size:12.2px;color:var(--ink-3);letter-spacing:.01em}
+
+.watch{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:16px 18px;margin:15px 0}
+.watch h4{margin:0 0 8px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent-ink)}
+.watch ul{margin:0;padding-left:20px}
+.watch li{margin:7px 0;font-size:13.6px}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);padding:18px 20px 22px}
+  .toc{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:2px}
+  .wrap{padding:0 20px}
+  .mast{padding:38px 0 30px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="shell">
+<nav class="rail" aria-label="Mục lục">
+  <div class="rail__brand">
+    <b>I2S / Audio Driver</b>
+    <span>K-S800 · ASoC · Samsung i2s.c mẫu · SSPA thật</span>
+  </div>
+  <ul class="toc">
+    <li><a href="#s0"><em>00</em><span>Bản đồ &amp; điểm mấu chốt</span></a></li>
+    <li class="part">Phần I — Giao thức</li>
+    <li><a href="#s1"><em>01</em><span>I2S ở mức tín hiệu</span></a></li>
+    <li class="part">Phần II — Mô hình ASoC (mẫu: Samsung)</li>
+    <li><a href="#s2"><em>02</em><span>ASoC 4 lớp — tổng quan</span></a></li>
+    <li><a href="#s3"><em>03</em><span>CPU DAI — sound/soc/samsung/i2s.c</span></a></li>
+    <li><a href="#s4"><em>04</em><span>Platform/DMA — dmaengine.c</span></a></li>
+    <li><a href="#s5"><em>05</em><span>Power Management</span></a></li>
+    <li class="part">Phần III — Driver thật trên board</li>
+    <li><a href="#s6"><em>06</em><span>K-S800: SSPA (Marvell) + rt5640</span></a></li>
+    <li class="part">Tra cứu</li>
+    <li><a href="#s7"><em>07</em><span>Tổng hợp &amp; bản đồ nguồn</span></a></li>
+  </ul>
+  <p class="rail__note">Gộp từ 9 file trong <span class="mono">Kernel/Driver/I2S/</span>: 2 markdown + 6 HTML (SVG). Sơ đồ SVG gốc được diễn lại thành bảng/ASCII để dễ đọc tuyến tính; toàn bộ số liệu, bit-offset, tên hàm giữ nguyên từ nguồn.</p>
+</nav>
+
+<main>
+<header class="mast">
+  <div class="wrap wrap--wide">
+    <span class="kicker">Linux ASoC · I2S protocol · Samsung i2s.c (mẫu) · Marvell SSPA (thật)</span>
+    <h1>Từ 4 sợi dây tới <code style="font-size:.86em;background:none;border:0;padding:0;color:var(--accent)">aplay song.wav</code></h1>
+    <p class="lede">Tài liệu này gộp 9 ghi chú rời rạc thành một mạch đọc liền: bắt đầu từ tín hiệu vật lý trên dây, lên mô hình 4 lớp của ASoC (minh hoạ bằng driver tham chiếu <code>sound/soc/samsung/i2s.c</code>), rồi đối chiếu với driver <strong>thật sự chạy trên board K-S800</strong> — hoàn toàn khác IP (Marvell SSPA, không phải Samsung I2S).</p>
+    <div class="facts">
+      <span class="fact">9 file nguồn · ~356 KB</span>
+      <span class="fact">2 IP khác nhau: Samsung I2S (mẫu) vs Marvell SSPA (thật)</span>
+      <span class="fact">4 lớp ASoC: Machine · CPU DAI · Platform/DMA · Codec</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 00 ============ -->
+<section id="s0"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">00 — BẢN ĐỒ</span>
+    <h2>Đọc cái gì ở đâu, và điều dễ nhầm nhất</h2>
+  </div>
+
+  <div class="note bad">
+    <strong>Điểm mấu chốt — đọc trước khi đọc bất cứ gì khác</strong>
+    <p>Cây kernel <code>Kernel/K-S800/Src</code> chứa <strong>hai IP âm thanh hoàn toàn khác nhau</strong>:</p>
+    <p>1) <code>sound/soc/samsung/i2s.c</code> — driver CPU DAI cho khối <strong>Samsung/Exynos I2S</strong>, đi kèm machine driver mẫu <code>odroid.c</code> + codec <strong>MAX98090</strong>. Đây là code <em>có trong tree</em> nhưng <strong>không có bằng chứng nó chạy trên board K-S800 thật</strong> — 7 trong 9 file nguồn (2 markdown, 5 HTML) phân tích sâu chính driver này vì nó là ví dụ ASoC được viết kỹ, dùng để <em>học mô hình 4 lớp</em>.</p>
+    <p>2) <code>sound/soc/pxa/{mmp-sspa.c, pegmatite.c, s800_rt5640.c}</code> — driver cho khối <strong>SSPA</strong> (Serial Synchronous Port for Audio) của SoC Marvell "pegmatite", ghép với codec <strong>RT5640</strong> qua machine driver <code>s800_rt5640.c</code> (compatible <code>km,s800-audio-rt5640</code>). Đây là driver <strong>thật, khớp Device Tree của board K-S800</strong> (<code>quartz-sb.dtsi</code>) — xác nhận bằng cách đọc trực tiếp DT, không suy đoán.</p>
+    <p>Hai driver <strong>không dùng chung một dòng code nào</strong> ngoài framework ASoC core. Phần II của tài liệu này (mục 02-05) dùng Samsung i2s.c làm <strong>giáo cụ</strong> để hiểu mô hình 4 lớp — kiến thức đó áp dụng được cho SSPA vì cùng framework, nhưng <strong>tên hàm, tên thanh ghi, giá trị bit hoàn toàn khác</strong>. Phần III (mục 06) mới là driver thật của board.</p>
+  </div>
+
+  <div class="tbl"><table>
+    <thead><tr><th>File gốc</th><th>Nội dung</th><th>Nằm ở mục</th></tr></thead>
+    <tbody>
+      <tr><td><code>I2S.md</code></td><td>Mô hình 4 lớp ASoC (tổng quan) + lý thuyết giao thức I2S + bảng thanh ghi tóm tắt, dùng Samsung i2s.c làm ví dụ</td><td>02, 03</td></tr>
+      <tr><td><code>MACHINE DRIVER (odroid.c).md</code></td><td>Giải thích sâu <code>sound/soc/samsung/i2s.c</code> — cấu trúc dữ liệu, mọi callback, clock provider, probe, đồng bộ hoá (tiêu đề file gây nhầm — nội dung thật là về i2s.c, không phải odroid.c)</td><td>03</td></tr>
+      <tr><td><code>i2s-sspa-arch.md</code></td><td><strong>Driver thật trên K-S800</strong>: kiến trúc SSPA/Marvell, 5 sơ đồ Mermaid (kiến trúc, probe, runtime, struct, register, state machine)</td><td>06</td></tr>
+      <tr><td><code>i2s-from-the-wire-up.html</code></td><td>I2S mức tín hiệu: 4 dây, timing, I2S/LJ/RJ, polarity, master/slave, chuỗi MCLK→RFS→BFS→PSR, 7 case debug</td><td>01</td></tr>
+      <tr><td><code>asoc-4-layer-example.html</code></td><td>Ví dụ cụ thể: <code>aplay</code> 48kHz/16-bit/stereo trên Odroid+MAX98090 truy vết qua 4 lớp</td><td>02</td></tr>
+      <tr><td><code>i2s-samsung-cpudai.html</code></td><td>Vòng đời callback, cấu trúc dữ liệu, PM, debug/quan sát, watch-list cho i2s.c (bản có sơ đồ của file .md ở trên)</td><td>03</td></tr>
+      <tr><td><code>samsung-i2s-register-map.html</code></td><td>Bản đồ thanh ghi đầy đủ nhất: mọi bit I2SCON/I2SMOD/I2SPSR, timeline ghi register 1 phiên playback, chuỗi bare-metal thuần register</td><td>03</td></tr>
+      <tr><td><code>asoc-platform-dma-layer.html</code></td><td>Lớp 3 chi tiết: stack thật đằng sau <code>dmaengine.c</code> (12 dòng), địa chỉ FIFO→DMA config, cyclic DMA, iDMA</td><td>04</td></tr>
+      <tr><td><code>samsung-i2s-runtime-pm.html</code></td><td>Runtime PM: 2 lối vào hội tụ, lưu/khôi phục 3 thanh ghi, 3 kiểu bracket get_sync/put</td><td>05</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<!-- ============ PART I ============ -->
+<div class="wrap wrap--wide"><div class="parthead">
+  <span class="plabel">Phần I — Nền tảng giao thức</span>
+  <h2>I2S là gì, độc lập với mọi driver</h2>
+  <p>Kiến thức trong phần này áp dụng cho <strong>mọi</strong> IP I2S/SSPA — đây là vật lý và chuẩn giao thức, không phải chi tiết cài đặt Linux.</p>
+</div></div>
+
+<!-- ============ 01 ============ -->
+<section id="s1"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">01 — GIAO THỨC</span>
+    <h2>I2S ở mức tín hiệu — 4 dây, timing, format, polarity, master/slave</h2>
+    <p>Cách nhanh nhất để đọc được bất kỳ driver I2S nào không phải là mở file <code>.c</code> — là hiểu 4 dây tín hiệu, rồi timing từng cạnh clock, rồi mới đi ngược vào register.</p>
+  </div>
+
+  <div class="note">
+    <strong>Ba thứ không đồng nhất — đừng trộn</strong>
+    <p><code>I2S specification</code> (chuẩn giao thức, giống nhau mọi nơi) <strong>≠</strong> <code>kiến trúc thanh ghi của một SoC cụ thể</code> (Samsung I2SMOD khác Marvell SSPA_TXCTL) <strong>≠</strong> <code>API Linux ASoC</code> (cách driver gọi framework). Nhầm ba tầng này là nguồn gốc phần lớn hiểu lầm khi đọc driver mới.</p>
+  </div>
+
+  <h3>1.1 · Bốn dây tín hiệu</h3>
+  <p>Ví dụ chuẩn dùng xuyên bài: <b>Fs = 48 kHz · stereo · 16-bit</b> ⇒ LRCLK 48 kHz, BFS 32 ⇒ BCLK 1.536 MHz, RFS 256 ⇒ MCLK 12.288 MHz. CPU I2S là master.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Dây</th><th>Tên khác</th><th>Ý nghĩa</th><th>Tần số</th><th>Sai thì audio bị</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">BCLK</td><td>SCLK, bit clock</td><td>nhịp cho từng bit</td><td>= sample_rate × số_kênh × số_bit (BFS × Fs)</td><td>cao độ sai / bit trượt / nhiễu</td></tr>
+      <tr><td class="mono">LRCLK</td><td>WS, FS, frame clock</td><td>0=kênh trái, 1=kênh phải</td><td>= sample_rate (Fs)</td><td>sai Fs (×2, ½…) / đảo L↔R</td></tr>
+      <tr><td class="mono">SDATA</td><td>SD, DOUT/DIN</td><td>dữ liệu nối tiếp, MSB trước</td><td>mỗi bit đổi ở ↓BCLK</td><td>lỗi bit / lệch 1 bit → méo, đảo dấu</td></tr>
+      <tr><td class="mono">MCLK</td><td>CDCLK, SYSCLK</td><td>master clock cấp cho codec chạy ADC/DAC</td><td>thường 256×fs hoặc 512×fs</td><td>DAC sai clock → câm / méo / aliasing</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Timing một bit:</strong> mỗi bit chiếm đúng 1 chu kỳ BCLK. Bên phát đặt bit mới lên dây ở <b>cạnh xuống</b> BCLK; bên thu chốt giá trị ở <b>cạnh lên</b> tiếp theo (giữa bit) — đủ thời gian ổn định. WS đổi mức <em>một BCLK trước</em> MSB — đó là <strong>độ trễ 1 bit</strong> đặc trưng của I2S chuẩn.</p>
+
+  <h4>Vì sao có độ trễ 1 bit</h4>
+  <p>Trong I2S chuẩn, MSB xuất hiện 1 BCLK <em>sau</em> cạnh LRCLK. Lý do thiết kế: bên phát và bên thu không cần thống nhất trước độ dài từ — cạnh frame chỉ nói "từ mới bắt đầu", bên thu tự đếm bit từ đó. Độ trễ cho biên độ ổn định và cho phép cùng một dây chở 16, 24 hay 32 bit.</p>
+
+  <h3>1.2 · Vì sao các tần số ràng buộc nhau — một chuỗi chia, không phải công thức rời</h3>
+  <ul>
+    <li><b>LRCLK = Fs</b> = 48 000 Hz. Một frame LRCLK mang đúng một cặp mẫu L+R.</li>
+    <li><b>BCLK = BFS × LRCLK</b>. Cần đủ bit chở dữ liệu: 16-bit × 2 kênh = 32 bit/frame ⇒ tối thiểu BFS 32 ⇒ BCLK = 32 × 48 000 = <b>1.536 MHz</b>.</li>
+    <li><b>MCLK = RFS × LRCLK</b> = 256 × 48 000 = <b>12.288 MHz</b>. Codec cần MCLK là bội nguyên của Fs (256× hoặc 384×) để chạy bộ chuyển đổi sigma-delta.</li>
+    <li><b>MCLK / BCLK = RFS / BFS = 256 / 32 = 8</b>. BCLK luôn là MCLK chia cho một số nguyên.</li>
+  </ul>
+  <pre><code>nguồn RCLK (SoC, vd 49.152 MHz)
+   │  ÷ PSR (prescaler, SoC-specific)
+   ▼
+MCLK = 256 × Fs = 12.288 MHz   (chỉ cấp cho codec)
+   │                              │
+   │  ÷ RFS = 256                 │  ÷ (RFS/BFS) = 8
+   ▼                              ▼
+LRCLK = Fs = 48 000 Hz       BCLK = BFS × LRCLK = 1.536 MHz
+   [SPEC]                         [SPEC]
+
+word 16-bit × 2 kênh = 32 bit/frame ⇒ BFS tối thiểu = 32   [SPEC]
+Giá trị RFS/BFS hợp lệ (256,384,512… / 16,24,32,48…) là bảng cứng của phần cứng — không chọn tuỳ ý.   [SoC]</code></pre>
+  <p>Nhãn <strong>[SPEC]</strong> = quan hệ bắt buộc theo chuẩn I2S · <strong>[SoC]</strong> = tập giá trị hợp lệ do silicon quyết định · <strong>[LINUX]</strong> = cách driver tính/ghi giá trị đó xuống thanh ghi. Ba nhãn này lặp lại xuyên suốt tài liệu.</p>
+
+  <h3>1.3 · I2S vs Left-Justified vs Right-Justified</h3>
+  <p>Cùng một khe kênh và cùng dữ liệu 16-bit, ba định dạng khác nhau ở <b>vị trí 16 bit dữ liệu nằm trong khe</b>:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Format</th><th>Vị trí MSB</th><th>Vị trí LSB</th><th>Cần biết trước word length?</th></tr></thead>
+    <tbody>
+      <tr><td><b>I2S</b> (chuẩn)</td><td>1 BCLK sau cạnh LRCLK (độ trễ 1 bit)</td><td>ngay sau MSB, phần cuối khe có thể trống</td><td>Không — bên thu tự đếm từ cạnh frame</td></tr>
+      <tr><td><b>Left-Justified</b></td><td>trùng cạnh LRCLK, không trễ</td><td>ngay sau MSB</td><td>Không</td></tr>
+      <tr><td><b>Right-Justified</b></td><td>tuỳ word length</td><td>trùng cạnh cuối khe</td><td><b>Có</b> — bên thu bắt buộc biết độ dài từ mới tìm được MSB</td></tr>
+    </tbody>
+  </table></div>
+  <p>Khi <code>BFS = 2 × word length</code>, Left-J và Right-J trùng nhau; khác biệt chỉ lộ ra khi khe rộng hơn dữ liệu thật.</p>
+
+  <h3>1.4 · Polarity — NB/IB · NF/IF</h3>
+  <p><code>NB</code> = Normal Bit clock, <code>IB</code> = Inverted · <code>NF</code> = Normal Frame clock, <code>IF</code> = Inverted.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Cấu hình</th><th>WS thấp = kênh</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">NB_NF</td><td>trái</td><td>mặc định</td></tr>
+      <tr><td class="mono">NB_IF</td><td>phải (đảo)</td><td>nếu CPU dùng NF mà codec dùng IF → hai kênh L/R hoán đổi</td></tr>
+      <tr><td class="mono">IB_NF / IB_IF</td><td>—</td><td>đảo cạnh BCLK — <b>nhiều SoC không có bit điều khiển riêng cho việc này</b> (vd Samsung I2SMOD không có), driver từ chối với <code>-EINVAL</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>1.5 · Master / Slave — ai phát clock</h3>
+  <p>Bên nào <b>phát</b> BCLK + LRCLK thì bên đó là master. <code>CBS_CFS</code> = <b>C</b>odec <b>B</b>it-clock <b>S</b>lave + <b>C</b>odec <b>F</b>rame <b>S</b>lave ⇒ codec <em>nhận</em> clock ⇒ <b>CPU phát</b> (tên viết tắt luôn mô tả phía <em>codec</em>). Đa số SoC chỉ hỗ trợ 2 trường hợp đối xứng:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Mode</th><th>Ai master</th><th>Prescaler</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">CBS_CFS</td><td>CPU I2S</td><td>tính từ nguồn clock nội</td><td>trường hợp phổ biến nhất</td></tr>
+      <tr><td class="mono">CBM_CFM</td><td>Codec</td><td><b>bỏ qua hoàn toàn</b></td><td>CPU chỉ nhận BCLK/LRCLK từ codec; MCLK vẫn có thể do CPU hoặc PLL riêng cấp</td></tr>
+      <tr><td class="mono">CBS_CFM / CBM_CFS</td><td>—</td><td>—</td><td>tách chủ BCLK và chủ LRCLK — hầu hết SoC <b>không hỗ trợ</b>, driver trả <code>-EINVAL</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>1.6 · Bảy case debug "đóng đinh"</h3>
+  <div class="grid2">
+    <div class="card"><h4>1 · BCLK/LRCLK tỉ lệ sai (vd 16 thay vì 32)</h4><p>Word length bị nhận nhầm 8-bit, hoặc machine ép BFS sai, hoặc bộ đếm LRCLK phía codec đếm sai số bit/frame.</p></div>
+    <div class="card"><h4>2 · BCLK/LRCLK đúng nhưng audio nhiễu/đảo bit</h4><p>Kiểm tra: format lệch (I2S vs Left-J → trượt 1 bit), word length lệch giữa CPU/codec, <code>dma addr_width</code> sai (2 vs 4 byte), endianness, cạnh lấy mẫu BCLK.</p></div>
+    <div class="card"><h4>3 · Kênh trái/phải bị đảo</h4><p>Bit polarity (LRP) lệch giữa CPU và codec: một bên NB_NF, bên kia NB_IF.</p></div>
+    <div class="card"><h4>4 · Codec có clock nhưng câm</h4><p>Lần theo: DMA active chưa? FIFO underrun? codec hw_params (I2C) đã chạy? đường DAPM Playback→DAC→amp đã power-up? route trong DT đúng chưa?</p></div>
+    <div class="card"><h4>5 · Một bên rising edge, bên kia falling edge</h4><p>Bên thu chốt SDATA lệch nửa chu kỳ bit ⇒ đọc nhằm vùng chuyển tiếp ⇒ nhiễu/metastable. Nếu SoC không đảo được BCLK, lỗi nằm ở cấu hình codec.</p></div>
+    <div class="card"><h4>6 · BCLK cao bất thường (vd 3.072 MHz ở 48kHz)</h4><p>BFS = 64 ⇒ khe kênh 32-bit (dữ liệu 24-bit + padding, hoặc thật sự 32-bit) — không phải lỗi, là cấu hình có chủ đích.</p></div>
+    <div class="card"><h4>7 · Vì sao MCLK 12.288 MHz phổ biến với 48kHz</h4><p>12 288 000 = 256 × 48 000: bội nguyên codec cần, và dẫn được từ PLL audio chuẩn (24.576/49.152 MHz). Họ 44.1kHz dùng 11.2896 MHz tương ứng.</p></div>
+  </div>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<!-- ============ PART II ============ -->
+<div class="wrap wrap--wide"><div class="parthead">
+  <span class="plabel">Phần II — Mô hình ASoC 4 lớp (giáo cụ: Samsung i2s.c)</span>
+  <h2>Cách Linux tổ chức một driver âm thanh nhúng</h2>
+  <p>Bốn mục tiếp theo dùng <code>sound/soc/samsung/i2s.c</code> + <code>odroid.c</code> + <code>MAX98090</code> làm ví dụ xuyên suốt — <strong>không phải driver của board K-S800</strong> (xem cảnh báo ở mục 00), nhưng mô hình 4 lớp và cách đọc callback áp dụng được cho mọi IP I2S/SSPA, kể cả SSPA thật ở mục 06.</p>
+</div></div>
+
+<!-- ============ 02 ============ -->
+<section id="s2"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">02 — ASoC 4 LỚP</span>
+    <h2>Machine ↔ Platform/DMA ↔ CPU DAI ↔ Codec</h2>
+    <p>ASoC (ALSA System-on-Chip) tách driver âm thanh nhúng thành 4 mảnh độc lập để tái sử dụng: cùng một codec dùng được trên nhiều SoC, cùng một khối I2S dùng được với nhiều codec, chỉ phần "ghép nối" là riêng cho từng bo mạch.</p>
+  </div>
+
+  <pre><code>  ┌─────────────────────────────────────────────────────────────────┐
+  │  MACHINE DRIVER (odroid.c) — snd_soc_card + snd_soc_dai_link[]    │
+  │  "bo mạch này: I2S số mấy nối với codec nào, format gì"           │
+  └───────┬───────────────────┬──────────────────────┬───────────────┘
+          │ mỗi dai_link ghép 1 phần tử từ mỗi lớp:   │
+          ▼                   ▼                       ▼
+   ┌────────────┐     ┌───────────────┐        ┌──────────────┐
+   │ PLATFORM/  │     │   CPU DAI     │        │  CODEC DAI    │
+   │ DMA (PCM)  │◄───►│  (I2S) i2s.c  │◄──────►│ max98090/...  │
+   │dmaengine.c │ FIFO│ dai_ops       │  dây   │ dai_ops +     │
+   │            │ addr│ hw_params/... │  I2S   │ widgets/ctls  │
+   └─────┬──────┘     └───────┬───────┘        └──────┬───────┘
+     DMA │ RAM↔FIFO       SFR │ I2SCON/MOD/PSR   I2C/│SPI cấu hình
+         ▼                    ▼                       ▼
+      bộ nhớ            chân BCLK/LRCLK/SDATA/MCLK   loa/mic</code></pre>
+
+  <h3>2.1 · Bốn lớp — ai làm gì, ai không làm gì</h3>
+  <div class="grid2">
+    <div class="card">
+      <span class="mono"><span class="layer layer--mach">L4</span>Machine — odroid.c</span>
+      <h4>Keo dán của một bo mạch</h4>
+      <p>Khai "board này ghép I2S <code>3830000.i2s</code> với codec MAX98090, định dạng I2S, CPU làm master". Tính MCLK, gọi <code>clk_set_rate</code> và <code>snd_soc_dai_set_sysclk</code>. <b>Không chạm thanh ghi I2S, không chạm DMA.</b></p>
+    </div>
+    <div class="card">
+      <span class="mono"><span class="layer layer--cpu">L2</span>CPU DAI — i2s.c</span>
+      <h4>Máy phát clock + cửa FIFO</h4>
+      <p>Ghi I2SMOD (format, độ rộng mẫu, stereo), tính prescaler ghi I2SPSR để chia clock đúng BCLK/LRCLK. Đưa <b>địa chỉ FIFO</b> cho lớp Platform. <b>Không tự đọc/ghi RAM.</b></p>
+    </div>
+    <div class="card">
+      <span class="mono"><span class="layer layer--plat">L3</span>Platform/DMA — dmaengine.c</span>
+      <h4>Người vận chuyển</h4>
+      <p>Cấp phát ring buffer RAM, khai <code>snd_pcm_hardware</code>, lập trình kênh dmaengine chép mẫu RAM → địa chỉ FIFO (do CPU DAI đưa). Chỉ biết "địa chỉ đích" — không biết đó là thanh ghi gì.</p>
+    </div>
+    <div class="card">
+      <span class="mono"><span class="layer layer--codec">L1</span>Codec DAI — MAX98090</span>
+      <h4>Chip bên kia dây</h4>
+      <p>Qua bus <b>I2C</b> (tách hẳn khỏi dây I2S), cấu hình DAC cho rate/format, nhận MCLK. DAPM bật đường tín hiệu <code>AIF Playback → DAC → HP amp → HPOUT</code> theo route trong Device Tree.</p>
+    </div>
+  </div>
+
+  <h3>2.2 · Truy vết một lần <code>aplay</code> qua cả 4 lớp</h3>
+  <p><b>Ví dụ xuyên suốt:</b> <code>aplay song.wav</code> — 48000 Hz, S16_LE, 2 kênh — trên Odroid (Exynos), khối I2S tại <code>3830000.i2s</code>, codec MAX98090 nối qua I2C.<br><span class="mono">dai_fmt = I2S | NB_NF | CBS_CFS → codec là slave, I2S sinh BCLK/LRCLK · RFS 256 · BFS 32</span></p>
+
+  <div class="tbl"><table>
+    <thead><tr><th>Bước (ASoC core)</th><th><span class="layer layer--mach">Machine</span></th><th><span class="layer layer--codec">Codec DAI</span></th><th><span class="layer layer--cpu">CPU DAI (I2S)</span></th><th><span class="layer layer--plat">Platform/DMA</span></th></tr></thead>
+    <tbody>
+      <tr><td>open / startup</td><td class="mono">.startup ops</td><td class="mono">.startup</td><td class="mono">i2s_startup()</td><td>—</td></tr>
+      <tr><td>hw_params</td><td class="mono">tính clock, set_sysclk</td><td class="mono">DAC 48k/16-bit (I2C)</td><td class="mono">I2SMOD, chọn dma_playback</td><td class="mono">cấp buffer, cấu hình kênh DMA</td></tr>
+      <tr><td>prepare</td><td>—</td><td>—</td><td class="mono">config_setup(): RFS/BFS/PSR</td><td>—</td></tr>
+      <tr><td>trigger(START)</td><td>—</td><td>—</td><td class="mono">i2s_trigger(): CON_TXDMA + FIFO</td><td class="mono">khởi động DMA RAM→FIFO</td></tr>
+      <tr><td>DAPM (chạy nền)</td><td class="mono">route trong DT</td><td class="mono">mở DAC → HP amp → HPOUT</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p>Sau <code>trigger(START)</code>: DMA bơm mẫu vào FIFO, khối I2S phát BCLK/LRCLK/SDATA ra dây, codec (đã bật đường DAPM) nhận và đẩy ra loa. Đóng: <code>trigger(STOP)</code> → <code>shutdown</code> theo thứ tự ngược.</p>
+
+  <div class="note bad">
+    <strong>Điểm dễ nhầm nhất trong sơ đồ</strong>
+    <p><b>CPU DAI không nằm trên đường dữ liệu.</b> Nó chỉ trao địa chỉ thanh ghi FIFO (vd <code>0x3830010</code>) cho lớp Platform qua <code>snd_soc_dai_init_dma_data()</code>; chính lớp Platform mới là bên thật sự chép RAM vào đó. Và <b>bus điều khiển codec (I2C) tách hẳn khỏi dây dữ liệu (SDATA)</b> — CPU DAI và Codec DAI không gọi nhau trực tiếp, quan hệ master/slave và format do Machine áp qua <code>dai_fmt</code>.</p>
+  </div>
+
+  <h3>2.3 · Vì sao tách 4 lớp — ba "hợp đồng" cố định</h3>
+  <p>Mỗi cặp lớp nối nhau qua một giao diện hẹp. Đổi một hộp thì giao diện không đổi, ba hộp kia không phải sửa:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Giao diện</th><th>Nội dung</th></tr></thead>
+    <tbody>
+      <tr><td>① Platform ↔ CPU DAI</td><td>địa chỉ FIFO (vd <code>0x3830010</code>) + <code>snd_pcm_hardware</code></td></tr>
+      <tr><td>② CPU DAI ↔ Codec DAI</td><td><code>dai_fmt</code> (I2S, ai master) + rate/format phải khớp</td></tr>
+      <tr><td>③ Machine → cả 3 lớp</td><td><code>dai_link</code> (chọn 1 phần tử mỗi lớp) + <code>dai_fmt</code> + clock</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Lớp</th><th>Thay đổi khi…</th><th>Không phải sửa</th></tr></thead>
+    <tbody>
+      <tr><td>Codec DAI</td><td>đổi chip codec</td><td>I2S, DMA, machine</td></tr>
+      <tr><td>CPU DAI (I2S)</td><td>đổi SoC/IP I2S</td><td>codec, machine</td></tr>
+      <tr><td>Platform/DMA</td><td>đổi bộ điều khiển DMA</td><td>codec, I2S</td></tr>
+      <tr><td>Machine</td><td>đổi bo mạch (nối chân, chọn format, clock)</td><td>3 lớp kia</td></tr>
+    </tbody>
+  </table></div>
+  <p>Trong repo K-S800 (nhánh Samsung): khối I2S = <code>i2s.c</code> (dùng lại cho mọi Exynos), platform = <code>dmaengine.c</code>, còn các bo mạch khác nhau chỉ khác ở machine driver (<code>odroid.c</code>, <code>arndale.c</code>, <code>smdk_wm8994.c</code>, <code>tm2_wm5110.c</code>, <code>snow.c</code>…), mỗi file chỉ khai <code>snd_soc_card</code> + <code>dai_link</code> + clock/format riêng.</p>
+
+  <h3>2.4 · Machine driver ghép nối như thế nào — <code>odroid.c</code></h3>
+  <p>Tạo <code>struct snd_soc_card</code> chứa mảng <code>snd_soc_dai_link[]</code>, rồi <code>devm_snd_soc_register_card()</code> (<code>odroid.c:305</code>). Mỗi <code>dai_link</code> ghép đúng 1 phần tử từ mỗi lớp:</p>
+  <pre><code>SND_SOC_DAILINK_DEFS(primary,
+    DAILINK_COMP_ARRAY(COMP_EMPTY()),                  // CPU DAI  (điền từ DT)
+    DAILINK_COMP_ARRAY(COMP_DUMMY()),                  // CODEC DAI
+    DAILINK_COMP_ARRAY(COMP_PLATFORM("3830000.i2s"))); // PLATFORM/DMA</code></pre>
+  <p>Machine driver đặt quan hệ master/slave và format chung: <code>.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBS_CFS</code> (<code>odroid.c:183</code>) — <code>CBS_CFS</code> = codec là slave, I2S sinh BCLK/LRCLK. Và đặt clock theo sample-rate trong <code>snd_soc_ops</code>: <code>odroid_card_be_hw_params()</code> tính <code>pll_freq</code>/<code>rfs</code>, gọi <code>clk_set_rate()</code> cho <code>sclk_i2s</code> và <code>snd_soc_dai_set_sysclk(codec_dai, …)</code> (<code>odroid.c:56-118</code>).</p>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<!-- ============ 03 ============ -->
+<section id="s3"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">03 — CPU DAI</span>
+    <h2><span class="layer layer--cpu">L2</span><code>sound/soc/samsung/i2s.c</code> — "đầu I2S phía CPU"</h2>
+    <p>Nhiệm vụ tóm gọn: tạo ra các xung clock âm thanh và đẩy/lấy mẫu số qua FIFO phần cứng. Nó KHÔNG tự chép dữ liệu từ RAM, KHÔNG biết loa/mic nối vào đâu, KHÔNG cấu hình codec. Tác giả gốc: Jaswinder Singh, Samsung, 2010.</p>
+  </div>
+
+  <h3>3.1 · Vòng đời callback — <code>snd_soc_dai_ops</code></h3>
+  <p>Lõi ASoC gọi bảng callback theo đúng thứ tự này mỗi khi ứng dụng phát/thu:</p>
+  <pre><code>MỘT LẦN · khi mở luồng                                MỖI LẦN · start/stop
+startup() → set_fmt() → set_sysclk() → hw_params() → trigger(START) → trigger(STOP)
+                                                            ↓ config_setup()          shutdown()</code></pre>
+  <div class="tbl"><table>
+    <thead><tr><th>Callback</th><th>Việc chính</th><th>Ghi vào</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">startup()</td><td>đánh dấu <code>DAI_OPENED</code>, chọn DAI "manager" giữ clock chung</td><td>chỉ cờ <code>mode</code>, chưa chạm SFR</td></tr>
+      <tr><td class="mono">set_fmt()</td><td>dịch <code>SND_SOC_DAIFMT_*</code> (I2S/LJ/RJ, polarity, master/slave) thành bit</td><td>I2SMOD: SDF, LRP, MSS</td></tr>
+      <tr><td class="mono">set_sysclk()</td><td>chọn nguồn RCLK, gate hoặc phát MCLK/CDCLK ra codec</td><td>I2SMOD: OPCLK, CDCLKCON, RCLKSRC</td></tr>
+      <tr><td class="mono">hw_params()</td><td>số kênh + độ rộng mẫu; trao địa chỉ FIFO cho lớp DMA</td><td>I2SMOD: BLC, DCn; <code>snd_soc_dai_init_dma_data()</code></td></tr>
+      <tr><td class="mono">trigger(START)</td><td><code>config_setup()</code> chốt BFS/RFS, tính prescaler; bật kênh</td><td>I2SMOD: RFS/BFS; I2SPSR; I2SCON: ACTIVE+TXDMA_ACTIVE</td></tr>
+      <tr><td class="mono">trigger(STOP)/shutdown()</td><td>tắt hướng truyền, flush FIFO, xoá <code>OPENED</code>, bỏ ràng buộc <code>rfs=bfs=0</code></td><td>I2SCON: PAUSE, ~ACTIVE; I2SFIC: FLUSH</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note trap">
+    <strong>Guard chung trên mọi hàm <code>set_*</code></strong>
+    <p>Nếu khối đang chạy và giá trị mới ≠ giá trị đang chạy → trả <code>-EAGAIN</code> kèm log <code>"Other DAI busy"</code>. <b>Đây không phải lỗi</b> — là từ chối thay đổi an toàn, vì primary và secondary DAI chia sẻ một khối phần cứng; machine driver phải cấu hình 2 luồng cho tương thích (cùng rate/format).</p>
+  </div>
+
+  <h3>3.2 · Cấu trúc dữ liệu</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Struct</th><th>Phạm vi</th><th>Trường chính</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="9" class="mono">samsung_i2s_priv</td><td rowspan="9">cả controller</td><td class="mono">addr</td></tr>
+      <tr><td class="mono">clk, op_clk</td></tr>
+      <tr><td class="mono">rclk_srcrate</td></tr>
+      <tr><td class="mono">variant_regs, quirks</td></tr>
+      <tr><td class="mono">clk_table[3], clk_data</td></tr>
+      <tr><td class="mono">suspend_i2smod/i2scon/i2spsr</td></tr>
+      <tr><td class="mono">lock, pcm_lock</td></tr>
+      <tr><td class="mono">slave_mode</td></tr>
+      <tr><td class="mono">dai[]</td></tr>
+      <tr><td rowspan="4" class="mono">i2s_dai</td><td rowspan="4">một "cổng" DAI (1 khối có thể trưng ra 2)</td><td class="mono">rfs, bfs</td></tr>
+      <tr><td class="mono">pri_dai / sec_dai</td></tr>
+      <tr><td class="mono">mode (DAI_OPENED / DAI_MANAGER)</td></tr>
+      <tr><td class="mono">dma_playback / dma_capture / idma_playback</td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid2">
+    <div class="card"><span class="mono">addr</span><h4>Vùng thanh ghi đã ioremap</h4><p>Toàn bộ truy cập phần cứng đi qua đây.</p></div>
+    <div class="card"><span class="mono">variant_regs, quirks</span><h4>Đặc tả đời IP</h4><p>Qua các đời IP (v3 S3C6410 → v7 Exynos7), vị trí bit trong I2SMOD bị dời. Thay vì <code>#ifdef</code>, driver gói offset vào struct, chọn theo <code>compatible</code> DT — cùng một <code>set_rfs()</code> chạy cho mọi đời.</p></div>
+    <div class="card"><span class="mono">lock / pcm_lock</span><h4>Hai spinlock, đừng lẫn</h4><p><code>priv->lock</code>: bảo vệ read-modify-write lên I2SMOD/I2SCON/I2SPSR. <code>priv->pcm_lock</code>: bảo vệ <code>i2s->mode</code> khi 2 DAI mở/đóng song song.</p></div>
+    <div class="card"><span class="mono">primary / secondary</span><h4>Hai FIFO trên 1 khối</h4><p>Primary (<code>ID=1</code>): phát+thu, DMA ngoài, luôn có. Secondary (<code>ID=2</code>, chỉ khi <code>QUIRK_SEC_DAI</code>): chỉ phát, FIFO riêng <code>I2STXDS</code>, có thể dùng iDMA — trộn 2 luồng nhạc không cần bật/tắt clock.</p></div>
+  </div>
+
+  <h3>3.3 · Bản đồ thanh ghi đầy đủ — <code>i2s-regs.h</code></h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Off</th><th>Register</th><th>Chức năng</th><th>R/W</th><th>Ai dùng (i2s.c)</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="5">Control / Status</td></tr>
+      <tr><td class="mono">0x00</td><td class="mono">I2SCON</td><td>Bật khối, bật/pause DMA-request, cờ FIFO đầy/rỗng/underrun, reset</td><td>R/W + RO</td><td class="mono">i2s_txctrl/rxctrl · trigger · dai_probe · runtime PM</td></tr>
+      <tr class="grp"><td colspan="5">Mode / Format / Clock</td></tr>
+      <tr><td class="mono">0x04</td><td class="mono">I2SMOD</td><td><b>Register quan trọng nhất.</b> Format khung, master/slave, độ rộng mẫu, RFS/BFS, nguồn RCLK, gate CDCLK, hướng TX/RX, đa kênh</td><td>R/W</td><td class="mono">set_fmt · set_sysclk · hw_params · config_setup</td></tr>
+      <tr class="grp"><td colspan="5">Prescaler</td></tr>
+      <tr><td class="mono">0x0c</td><td class="mono">I2SPSR</td><td>Chia clock nguồn → RCLK. Bộ chia số nguyên + bit enable</td><td>R/W</td><td class="mono">config_setup (bỏ nếu slave_mode)</td></tr>
+      <tr class="grp"><td colspan="5">FIFO control</td></tr>
+      <tr><td class="mono">0x08</td><td class="mono">I2SFIC</td><td>Flush FIFO primary + đọc mức FIFO</td><td>R/W + RO</td><td class="mono">i2s_fifo · i2s_delay · dai_probe</td></tr>
+      <tr><td class="mono">0x18</td><td class="mono">I2SFICS</td><td>Flush + mức FIFO của DAI thứ hai</td><td>R/W + RO</td><td class="mono">i2s_fifo(sec) · i2s_delay(sec)</td></tr>
+      <tr class="grp"><td colspan="5">TX/RX Data (cửa sổ FIFO — MMIO, không phải RAM)</td></tr>
+      <tr><td class="mono">0x10</td><td class="mono">I2STXD</td><td>Ghi 1 word → đẩy vào TX FIFO</td><td>W</td><td class="mono">DMA (dma_playback.addr = regs_base+0x10)</td></tr>
+      <tr><td class="mono">0x14</td><td class="mono">I2SRXD</td><td>Đọc 1 word ← pop khỏi RX FIFO</td><td>R</td><td class="mono">DMA (dma_capture.addr = regs_base+0x14)</td></tr>
+      <tr><td class="mono">0x1c</td><td class="mono">I2STXDS</td><td>Cửa sổ TX FIFO của DAI thứ hai</td><td>W</td><td class="mono">DMA "tx-sec"</td></tr>
+      <tr class="grp"><td colspan="5">Internal DMA — iDMA (chỉ I2S0)</td></tr>
+      <tr><td class="mono">0x20</td><td class="mono">I2SAHB</td><td>Bật DMA nội, reload, mask/clear ngắt mức</td><td>R/W</td><td class="mono">idma.c</td></tr>
+      <tr><td class="mono">0x24</td><td class="mono">I2SSTR0</td><td>Địa chỉ bắt đầu buffer SRAM cho iDMA</td><td>R/W</td><td class="mono">idma_enqueue</td></tr>
+      <tr><td class="mono">0x28</td><td class="mono">I2SSIZE</td><td>Kích thước khối truyền iDMA</td><td>R/W</td><td class="mono">idma_enqueue</td></tr>
+      <tr><td class="mono">0x2c</td><td class="mono">I2STRNCNT</td><td>Số word iDMA đã truyền</td><td>R</td><td class="mono">idma_getpos</td></tr>
+      <tr><td class="mono">0x30..0x3c</td><td class="mono">I2SLVL0..3ADDR</td><td>Địa chỉ kích ngắt "mức" của iDMA</td><td>R/W</td><td class="mono">idma_enqueue · iis_irq</td></tr>
+      <tr class="grp"><td colspan="5">Khác</td></tr>
+      <tr><td class="mono">0x4c</td><td class="mono">I2STDM</td><td>Cấu hình TDM (khi BFS &gt; 48)</td><td>R/W</td><td class="mono">QUIRK_SUPPORTS_TDM</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>I2SCON — bảng bit đầy đủ</h4>
+  <div class="tbl"><table>
+    <thead><tr><th>Macro</th><th>Bit</th><th>Kiểu</th><th>=0</th><th>=1</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">CON_ACTIVE</td><td class="mono">0</td><td>R/W</td><td>khối tắt, clock nối tiếp dừng</td><td>khối chạy: BCLK/LRCLK ra, serializer hoạt động</td></tr>
+      <tr><td class="mono">CON_RXDMA_ACTIVE</td><td class="mono">1</td><td>R/W</td><td>không sinh RX DMA request</td><td>FIFO RX có data → kéo request → DMA đọc I2SRXD</td></tr>
+      <tr><td class="mono">CON_TXDMA_ACTIVE</td><td class="mono">2</td><td>R/W</td><td>không sinh TX DMA request → FIFO cạn dần</td><td>FIFO TX còn chỗ → kéo request → DMA ghi I2STXD</td></tr>
+      <tr><td class="mono">CON_RXCH_PAUSE / TXCH_PAUSE</td><td class="mono">3 / 4</td><td>R/W</td><td>kênh chạy bình thường</td><td>đóng băng kênh nhưng giữ clock (DAI kia còn chạy)</td></tr>
+      <tr><td class="mono">CON_RXDMA_PAUSE / TXDMA_PAUSE</td><td class="mono">5 / 6</td><td>R/W</td><td>request DMA hoạt động</td><td>tạm ngừng sinh request, giữ nội dung FIFO</td></tr>
+      <tr><td class="mono">CON_RXFIFO_FULL</td><td class="mono">7</td><td>RO</td><td>còn chỗ</td><td>RX FIFO đầy — DMA không kịp đọc → overflow</td></tr>
+      <tr><td class="mono">CON_TXFIFO_FULL</td><td class="mono">8</td><td>RO</td><td>còn chỗ</td><td>TX FIFO đầy → khối tự hạ DMA request</td></tr>
+      <tr><td class="mono">CON_RXFIFO_EMPTY</td><td class="mono">9</td><td>RO</td><td>còn data</td><td>RX FIFO rỗng</td></tr>
+      <tr><td class="mono">CON_TXFIFO_EMPTY</td><td class="mono">10</td><td>RO</td><td>còn data</td><td>TX FIFO rỗng → sắp underrun</td></tr>
+      <tr><td class="mono">CON_LRINDEX</td><td class="mono">11</td><td>RO</td><td>serializer ở kênh trái</td><td>đang ở kênh phải</td></tr>
+      <tr><td class="mono">CON_FTXURSTATUS</td><td class="mono">17</td><td>RO</td><td>không underrun</td><td><b>đã xảy ra underrun</b> primary TX FIFO</td></tr>
+      <tr><td class="mono">CON_TXSDMA_ACTIVE</td><td class="mono">18</td><td>R/W</td><td>secondary TX DMA tắt</td><td>bật request DMA cho FIFO thứ hai</td></tr>
+      <tr><td class="mono">CON_RSTCLR</td><td class="mono">31</td><td>R/W</td><td>khối giữ ở reset</td><td>nhả reset — bắt buộc ghi 1 lúc khởi động</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>I2SMOD — bảng trường đầy đủ (layout v3)</h4>
+  <div class="tbl"><table>
+    <thead><tr><th>Trường</th><th>Bit</th><th>Giá trị</th><th>Hàm ghi</th><th>Tác động lên dây / hardware</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="5">Master / Slave</td></tr>
+      <tr><td class="mono">MSS</td><td class="mono">11</td><td class="mono">0=master · 1=slave</td><td class="mono">i2s_set_fmt</td><td>0: khối tự sinh BCLK+LRCLK. 1: nhận từ codec, bỏ PSR</td></tr>
+      <tr class="grp"><td colspan="5">Audio format</td></tr>
+      <tr><td class="mono">SDF</td><td class="mono">6:5</td><td class="mono">0=IIS · 1=MSB(RJ) · 2=LSB(LJ)</td><td class="mono">i2s_set_fmt</td><td>0: MSB trễ 1 BCLK sau WS. 1: LSB căn cuối khe. 2: MSB trùng cạnh WS</td></tr>
+      <tr><td class="mono">LRP</td><td class="mono">7</td><td class="mono">0=LLOW · 1=RLOW</td><td class="mono">i2s_set_fmt</td><td>nửa frame nào là kênh trái; lệch giữa CPU/codec → đảo L/R</td></tr>
+      <tr class="grp"><td colspan="5">Word length</td></tr>
+      <tr><td class="mono">BLCP/BLCS/BLC</td><td class="mono">25:24 / 27:26 / 14:13</td><td class="mono">0=16 · 1=8 · 2=24 bit</td><td class="mono">i2s_hw_params</td><td>số bit dữ liệu hợp lệ trong mỗi khe</td></tr>
+      <tr class="grp"><td colspan="5">Channel</td></tr>
+      <tr><td class="mono">DC1_EN / DC2_EN</td><td class="mono">16 / 17</td><td class="mono">bật cặp kênh phụ</td><td class="mono">i2s_hw_params</td><td>khung mang &gt;2 kênh</td></tr>
+      <tr class="grp"><td colspan="5">Clock source</td></tr>
+      <tr><td class="mono">RCLKSRC</td><td class="mono">10</td><td class="mono">0=opclk0 · 1=opclk1</td><td class="mono">i2s_set_sysclk</td><td>chọn mux nguồn RCLK trước prescaler</td></tr>
+      <tr><td class="mono">CDCLKCON</td><td class="mono">12</td><td class="mono">0=out(phát) · 1=gate</td><td class="mono">set_sysclk · dai_probe(=1)</td><td>0: MCLK ra chân codec. 1: không rò MCLK khi chưa dùng</td></tr>
+      <tr><td class="mono">OPCLK</td><td class="mono">31:30</td><td class="mono">0=CDCLK_OUT·1=IN·2=BCLK_OUT·3=PCLK</td><td class="mono">i2s_set_sysclk</td><td>chọn tín hiệu nào lái ra chân OPCLK</td></tr>
+      <tr class="grp"><td colspan="5">Clock ratio</td></tr>
+      <tr><td class="mono">RCLK (RFS)</td><td class="mono">4:3</td><td class="mono">0=256·1=512·2=384·3=768 FS</td><td class="mono">set_rfs ← config_setup</td><td>MCLK = RFS × LRCLK</td></tr>
+      <tr><td class="mono">BCLK (BFS)</td><td class="mono">2:1</td><td class="mono">0=32·1=48·2=16·3=24 FS</td><td class="mono">set_bfs ← config_setup</td><td>BCLK = BFS × LRCLK</td></tr>
+      <tr class="grp"><td colspan="5">TX/RX mode</td></tr>
+      <tr><td class="mono">TXR</td><td class="mono">9:8</td><td class="mono">0=TXONLY·1=RXONLY·2=TXRX</td><td class="mono">i2s_txctrl/rxctrl</td><td>đổi động khi DAI kia bật/tắt</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>I2SPSR — công thức trung tâm</h4>
+  <pre><code>source (op_clk) ──► I2SPSR (÷ psr) ──► MCLK/RCLK ──► ÷ RFS ──► LRCLK = Fs
+                                                  └──────────► BCLK (= BFS × LRCLK)
+
+Ví dụ  Fs = 48 kHz · RFS = 256 · BFS = 32 · source = 49.152 MHz
+   psr   = source / Fs / RFS = 49 152 000 / 48 000 / 256 = 4
+   ghi   = ((psr − 1) &lt;&lt; 8) | PSR_PSREN = (3 &lt;&lt; 8) | (1 &lt;&lt; 15) = 0x8300</code></pre>
+  <p>Chỉ ghi ở <code>config_setup()</code>, và chỉ khi <b>không</b> slave (<code>!priv->slave_mode</code>) và IP có mux+prescaler (<code>!QUIRK_NO_MUXPSR</code>).</p>
+
+  <h3>3.4 · <code>i2s_txctrl()`/`i2s_rxctrl()`</code> — logic tinh tế nhất file</h3>
+  <p>Bật/tắt một hướng truyền:</p>
+  <ul>
+    <li><b>Bật TX:</b> set <code>CON_ACTIVE | CON_TXDMA_ACTIVE</code>, bỏ pause; đồng thời chỉnh trường <b>TXR</b> trong I2SMOD (TX-only / RX-only / TX+RX) tuỳ hướng còn lại có đang chạy không.</li>
+    <li><b>Tắt TX:</b> nếu <b>DAI kia vẫn đang TX</b> thì chỉ pause phần của mình rồi return, <b>không</b> clear <code>CON_ACTIVE</code> (không được tắt clock chung). Chỉ khi không còn ai chạy mới clear <code>CON_ACTIVE</code>.</li>
+  </ul>
+  <p><code>i2s_fifo()</code>: flush FIFO — set bit flush, chờ ~1µs bằng busy-loop, rồi clear. Gọi khi stop stream và lúc probe để dọn rác.</p>
+
+  <h3>3.5 · Vòng đời register — cross-reference đầy đủ</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Lifecycle</th><th>Hàm</th><th>Ghi</th><th>Bit/field</th><th>Hardware effect</th></tr></thead>
+    <tbody>
+      <tr><td>probe</td><td class="mono">samsung_i2s_probe</td><td class="mono">—</td><td class="mono">dma_playback.addr = base+I2STXD</td><td>trao địa chỉ FIFO cho Lớp 3</td></tr>
+      <tr><td>dai probe</td><td class="mono">samsung_i2s_dai_probe</td><td class="mono">I2SCON, I2SMOD, I2SFIC</td><td class="mono">CON_RSTCLR=1; TXR clr; FIC_TX/RXFLUSH; CDCLKCON=1</td><td>nhả reset, dọn FIFO, gate MCLK mặc định</td></tr>
+      <tr><td>set_fmt</td><td class="mono">i2s_set_fmt</td><td class="mono">I2SMOD</td><td class="mono">SDF, LRP, MSS</td><td>kiểu khung + master/slave</td></tr>
+      <tr><td>set_sysclk</td><td class="mono">i2s_set_sysclk</td><td class="mono">I2SMOD</td><td class="mono">OPCLK, CDCLKCON, RCLKSRC</td><td>chọn nguồn RCLK, bật/gate MCLK</td></tr>
+      <tr><td>hw_params</td><td class="mono">i2s_hw_params</td><td class="mono">I2SMOD</td><td class="mono">BLCP/BLCS/BLC, DC1/DC2_EN</td><td>độ rộng mẫu + số kênh</td></tr>
+      <tr><td>prepare/START</td><td class="mono">config_setup</td><td class="mono">I2SMOD, I2SPSR</td><td class="mono">RCLK, BCLK; PSR_PSREN+psr-1</td><td>chốt tỉ lệ clock, bật prescaler</td></tr>
+      <tr><td>trigger START</td><td class="mono">i2s_txctrl(1)</td><td class="mono">I2SCON, I2SMOD</td><td class="mono">CON_ACTIVE, TXDMA_ACTIVE; TXR</td><td>khối chạy, dây có tín hiệu</td></tr>
+      <tr><td>running (poll)</td><td class="mono">i2s_delay</td><td class="mono">— (đọc I2SFIC)</td><td class="mono">TXCOUNT/RXCOUNT</td><td>báo độ trễ FIFO cho ALSA</td></tr>
+      <tr><td>trigger STOP</td><td class="mono">i2s_txctrl(0)</td><td class="mono">I2SCON, I2SMOD, I2SFIC</td><td class="mono">TXDMA_PAUSE, ~ACTIVE; FIC_TXFLUSH</td><td>ngừng request, tắt khối nếu rảnh</td></tr>
+      <tr><td>runtime suspend</td><td class="mono">i2s_runtime_suspend</td><td class="mono">— (cache)</td><td class="mono">suspend_i2s{mod,con,psr}</td><td>lưu 3 register rồi tắt clock</td></tr>
+      <tr><td>runtime resume</td><td class="mono">i2s_runtime_resume</td><td class="mono">I2SCON, I2SMOD, I2SPSR</td><td class="mono">ghi trả, thứ tự CON→MOD→PSR</td><td>khôi phục cấu hình sau khi bật clock</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>3.6 · Boss level — phát 1 sample chỉ bằng register (không dùng khái niệm ASoC)</h3>
+  <pre><code>SETUP (một lần)
+ 1. ioremap vùng SFR  →  base
+ 2. bật clock lõi "iis"  +  nguồn op_clk
+ 3. I2SCON |= CON_RSTCLR                    ; nhả reset khối
+ 4. I2SFIC |= FIC_TXFLUSH ; chờ ~1µs ; &= ~FIC_TXFLUSH   ; FIFO sạch
+ 5. I2SMOD :  SDF=IIS  LRP=0  MSS=0         ; khung I2S, CPU master
+             BLCP=16bit  RFS=256FS  BFS=32FS  CDCLKCON=0
+ 6. psr = op_clk_rate / (48000 · 256)
+    I2SPSR = ((psr-1) &lt;&lt; 8) | PSR_PSREN    ; chốt MCLK = 12.288 MHz
+
+CHẠY
+ 7. DMA: src = &amp;buffer_RAM (tăng) ; dst = base + I2STXD (cố định)
+ 8. dmaengine issue  →  DMA bắt đầu chép RAM → I2STXD
+ 9. I2SMOD TXR = TXONLY
+10. I2SCON |= CON_ACTIVE | CON_TXDMA_ACTIVE ; &= ~PAUSE bits
+        → serializer tạo BCLK/LRCLK → khối kéo DMA request mỗi khi FIFO còn chỗ
+        → DMA ghi word vào I2STXD → TX FIFO → serializer dịch bit ra SDATA (↓BCLK)
+        → codec chốt bit ở ↑BCLK
+   (FIFO đầy → CON_TXFIFO_FULL=1 → request nghỉ; FIFO vơi → request lại)
+
+DỪNG
+11. I2SCON |= CON_TXDMA_PAUSE ; &= ~CON_TXDMA_ACTIVE
+12. nếu không còn hướng nào chạy: I2SCON &= ~CON_ACTIVE
+13. I2SFIC |= FIC_TXFLUSH (rồi clear)       ; bỏ mẫu thừa
+14. dmaengine terminate</code></pre>
+  <p>Bước 1-2 → <code>samsung_i2s_probe()</code> · 3-4 → <code>samsung_i2s_dai_probe()</code> · 5 (SDF/LRP/MSS) → <code>i2s_set_fmt()</code>, (BLCP) → <code>i2s_hw_params()</code>, (RFS/BFS) → <code>config_setup()</code> · 6 → <code>config_setup()</code> · 7 → <code>snd_soc_dai_init_dma_data()</code> + Lớp 3 · 8 → <code>snd_dmaengine_pcm_trigger(START)</code> · 9-10 → <code>i2s_trigger(START)</code> · 11-13 → <code>i2s_trigger(STOP)</code>.</p>
+
+  <h3>3.7 · Quan sát &amp; debug qua filesystem</h3>
+  <div class="kv">
+    <span class="k">/sys/kernel/debug/asoc/</span><span>DAPM widget/route — "Playback Mixer", "Mixer DAI TX", primary/secondary có active không.</span>
+    <span class="k">/sys/kernel/debug/clk/clk_summary</span><span>Nếu driver làm clock provider: <code>rclk_src</code> (mux), <code>prescaler</code> (divider), <code>cdclk</code> (gate=MCLK) và tần số thực đang chạy.</span>
+    <span class="k">/proc/asound/cardN/pcm*/sub*/status</span><span>Trường <code>delay</code> lấy từ <code>i2s_delay()</code> — số frame còn kẹt trong FIFO.</span>
+    <span class="k">…/power/runtime_status</span><span>Dưới <code>/sys/devices/platform/*i2s*/</code>: active/suspended, runtime_suspended_time.</span>
+    <span class="k">dmesg</span><span>Log <code>"Other DAI busy"</code> khi primary/secondary tranh chấp; log <code>err_*</code> khi probe hỏng.</span>
+  </div>
+
+  <div class="watch">
+    <h4>Watch list — CPU DAI</h4>
+    <ul>
+      <li><b>Primary &amp; secondary dùng chung 1 khối.</b> <code>-EAGAIN</code>/"Other DAI busy" là từ chối an toàn, không phải bug.</li>
+      <li><b>Hai spinlock, đừng lẫn</b> — <code>lock</code> cho thanh ghi, <code>pcm_lock</code> cho trạng thái mở/đóng.</li>
+      <li><b>Khái niệm "manager"</b> — chỉ DAI giữ <code>DAI_MANAGER</code> mới đổi clock chung; nhường lại khi đóng nếu bên kia còn mở.</li>
+      <li><b><code>variant_regs</code> theo đời IP</b> — luôn tính offset qua <code>priv->variant_regs->*_off</code>, không hardcode.</li>
+      <li><b>CDCLK gate mặc định</b> — <code>dai_probe</code> gate MCLK ngay từ đầu để không rò clock ra codec khi chưa dùng.</li>
+      <li><b>Sai <code>rclk_srcrate</code> ⇒ sai toàn bộ sample rate</b> — công thức <code>psr = rclk_srcrate/frmclk/rfs</code> là trung tâm.</li>
+      <li><b>slave mode</b> (codec master): bỏ qua prescaler hoàn toàn.</li>
+      <li><b>Thiết bị phụ <code>-sec</code></b> chỉ tồn tại để lớp DMA có 1 <code>device</code> riêng cho kênh "tx-sec".</li>
+    </ul>
+  </div>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<!-- ============ 04 ============ -->
+<section id="s4"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">04 — PLATFORM/DMA</span>
+    <h2><span class="layer layer--plat">L3</span><code>dmaengine.c</code> — lớp duy nhất chạm vào RAM</h2>
+    <p>Cấp bộ đệm, khai giới hạn phần cứng cho ALSA, lái một kênh DMA chép mẫu giữa RAM và thanh ghi FIFO — tại địa chỉ mà Lớp 2 đã đưa. Bất ngờ: <code>sound/soc/samsung/dmaengine.c</code> chỉ <b>12 dòng code thật</b>.</p>
+  </div>
+
+  <div class="note">
+    <strong>Lớp 3 KHÔNG</strong>
+    <p>Không biết dữ liệu là audio (chỉ thấy "bộ đệm → địa chỉ đích"); không đọc/ghi I2SCON/MOD/PSR; không biết codec tồn tại; không sinh clock. Nó chỉ là <b>người vận chuyển</b>.</p>
+  </div>
+
+  <h3>4.1 · Input → xử lý → output, theo địa chỉ thật</h3>
+  <ol class="steps">
+    <li><b>Cấp bộ đệm</b> (khi dựng PCM): <code>dmaengine_pcm_new()</code> → <code>snd_pcm_set_managed_buffer()</code> → RAM DMA-coherent. <code>runtime->dma_area</code> = VA kernel, <code>runtime->dma_addr</code> = địa chỉ bus mà DMA dùng (vd <code>0xAF120000</code>).</li>
+    <li><b>App ghi:</b> <code>aplay</code> → <code>write()</code> → mẫu PCM đổ vào <code>dma_area</code>. Period 1024 frame = 4096 B, 4 period ⇒ buffer 16384 B.</li>
+    <li><b>hw_params → cấu hình kênh:</b> <code>snd_hwparams_to_dma_slave_config()</code>: 16-bit ⇒ <code>dst_addr_width=BUSWIDTH_2</code>, playback ⇒ <code>direction=DMA_MEM_TO_DEV</code>. <code>*_set_config_from_dai_data()</code>: <code>dst_addr = regs_base+I2STXD</code> (lấy từ Lớp 2). <code>dmaengine_slave_config(chan,&amp;cfg)</code>.</li>
+    <li><b>trigger(START) → 1 descriptor:</b> <code>dmaengine_prep_dma_cyclic(chan, dma_addr, buffer_bytes, period_bytes, MEM_TO_DEV)</code> → <code>dmaengine_submit()</code> → <code>dma_async_issue_pending()</code>.</li>
+    <li><b>Chạy:</b> DMA đọc burst từ nguồn <b>tăng dần</b> (<code>0xAF120000</code>, <code>...010</code>…); mỗi burst ghi vào <b>cùng</b> địa chỉ đích <b>cố định</b> (<code>0x3830010</code>). Hết 1 period ⇒ IRQ ⇒ <code>dmaengine_pcm_dma_complete()</code> ⇒ <code>snd_pcm_period_elapsed()</code> ⇒ đánh thức app ghi tiếp. Hết buffer ⇒ vòng lại đầu.</li>
+    <li><b>Báo vị trí:</b> <code>pointer()</code> → <code>dmaengine_tx_status()</code> → <code>residue</code>. <code>pos = buffer_bytes − residue</code> ⇒ <code>hw_ptr</code>. <code>state.in_flight_bytes</code> ⇒ <code>runtime->delay</code>.</li>
+    <li><b>Output tiêu thụ:</b> byte trong FIFO ⇒ serializer của <b>Lớp 2</b> ⇒ SDATA ⇒ codec. Lớp 3 dừng lại đúng ở địa chỉ FIFO.</li>
+  </ol>
+
+  <h3>4.2 · 12 dòng keo, 3 tầng bên dưới</h3>
+  <pre><code>sound/soc/samsung/dmaengine.c                     ← Samsung CHỈ viết tầng này
+  samsung_asoc_dma_platform_register(): điền snd_dmaengine_pcm_config
+  prepare_slave_config = generic · chan_names="tx"/"rx" · flag COMPAT
+        │  devm_snd_dmaengine_pcm_register()
+        ▼
+sound/soc/soc-generic-dmaengine-pcm.c              ← generic, dùng chung mọi SoC
+  struct snd_soc_component_driver dmaengine_pcm_component · probe_order=LATE
+  open · close · hw_params · trigger · pointer · pcm_construct · sync_stop
+        │  mỗi op ủy quyền cho 1 helper lõi
+        ▼
+sound/core/pcm_dmaengine.c                          ← helper lõi, dùng chung mọi SoC
+  dmaengine_prep_dma_cyclic · dmaengine_submit · dma_async_issue_pending
+  dmaengine_terminate_async · dmaengine_tx_status · *_set_config_from_dai_data
+        │  verbs &lt;linux/dmaengine.h&gt;
+        ▼
+DMA driver riêng — pl330 / s3c-pl330  (drivers/dma/)  ← NẰM NGOÀI ASoC
+  Thực sự chuyển từng byte. Có IRQ, thanh ghi, hàng đợi mô tả riêng.</code></pre>
+  <p><code>dmaengine.c</code> của Samsung chỉ tồn tại để (a) chọn tên kênh và (b) bật cờ <code>COMPAT</code> cho board không dùng Device Tree. Đổi từ pl330 sang bộ DMA khác: <b>không sửa file nào trong <code>sound/</code></b> — chỉ đổi <code>dmas</code>/<code>dma-names</code> trong DT.</p>
+
+  <h3>4.3 · Bảng ops → động từ DMA</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Component op</th><th>Gọi xuống</th><th>Động từ dmaengine</th><th>Kết quả ròng</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">pcm_construct</td><td class="mono">dmaengine_pcm_new</td><td class="mono">dma_request_slave_channel</td><td>Xin kênh DMA + <code>snd_pcm_set_managed_buffer</code></td></tr>
+      <tr><td class="mono">open</td><td class="mono">set_runtime_hwparams</td><td class="mono">dma_get_slave_caps</td><td>Suy <code>snd_pcm_hardware</code> từ khả năng kênh</td></tr>
+      <tr><td class="mono">hw_params</td><td class="mono">prepare_slave_config</td><td class="mono">dmaengine_slave_config</td><td>Nạp dst_addr, buswidth, hướng vào kênh</td></tr>
+      <tr><td class="mono">trigger(START)</td><td class="mono">prepare_and_submit</td><td class="mono">prep_dma_cyclic → submit → issue_pending</td><td>Dựng 1 descriptor vòng, khởi động RAM→FIFO</td></tr>
+      <tr><td class="mono">trigger(STOP)</td><td class="mono">snd_dmaengine_pcm_trigger</td><td class="mono">dmaengine_terminate_async</td><td>Dừng kênh (không chờ)</td></tr>
+      <tr><td class="mono">pointer</td><td class="mono">snd_dmaengine_pcm_pointer</td><td class="mono">dmaengine_tx_status</td><td><code>pos = buffer − residue</code>; <code>delay = in_flight_bytes</code></td></tr>
+      <tr><td class="mono">sync_stop</td><td class="mono">snd_dmaengine_pcm_sync_stop</td><td class="mono">dmaengine_synchronize</td><td>Chặn tới khi mọi callback DMA chạy xong (chống race)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>4.4 · <code>snd_pcm_hardware</code> đến từ bộ DMA, không phải từ khối I2S</h3>
+  <p>Nếu <code>config->pcm_hardware</code> là <code>NULL</code> (đúng với Samsung), <code>dmaengine_pcm_set_runtime_hwparams()</code> dựng bảng năng lực từ chính kênh DMA:</p>
+  <div class="kv">
+    <span class="k">period_bytes_max</span><span><code>dma_get_max_seg_size()</code> — segment lớn nhất bộ DMA kéo được một lần.</span>
+    <span class="k">formats</span><span><code>refine_runtime_hwparams()</code> lọc theo <code>dst_addr_widths</code> DMA báo — DMA không kéo được 3 byte ⇒ S24_3LE bị ẩn khỏi userspace.</span>
+    <span class="k">INFO_PAUSE/RESUME</span><span>chỉ bật nếu <code>dma_caps.cmd_pause &amp;&amp; cmd_resume</code>.</span>
+  </div>
+  <p>Hệ quả: cùng file driver, hai bo mạch gắn hai bộ DMA khác nhau sẽ trưng ra dải rate/format/độ trễ khác nhau cho <code>aplay</code>.</p>
+
+  <h3>4.5 · iDMA — biến thể DMA nội SRAM</h3>
+  <p>Khối I2S0 có DMA nội (iDMA) bơm vào SRAM on-chip, cho phép tắt DRAM/bus khi phát nhạc chờ. <code>idma.c</code> là một "Lớp 3 khác": cùng bảng <code>snd_soc_component_driver</code>, khác toàn bộ bên dưới.</p>
+  <div class="tbl"><table>
+    <thead><tr><th></th><th>DMA ngoài — dmaengine.c</th><th>iDMA — idma.c</th></tr></thead>
+    <tbody>
+      <tr><td>Bộ đệm</td><td>DRAM, <code>set_managed_buffer</code>, prealloc 512KB</td><td>SRAM on-chip, <code>ioremap(lp_tx_addr)</code></td></tr>
+      <tr><td>Engine</td><td>kênh pl330 ngoài, <code>prep_dma_cyclic()</code></td><td>DMA nội khối I2S: <code>I2SAHB(DMAEN)</code>, <code>I2SSTR0</code>, <code>I2SLVL0ADDR</code>, <code>MOD_TXS_IDMA</code></td></tr>
+      <tr><td>IRQ</td><td>của bộ DMA (pl330)</td><td><code>iis_irq</code> riêng, ping-pong mức 0</td></tr>
+      <tr><td>Số period</td><td>2…∞</td><td>1…2</td></tr>
+      <tr><td>Dùng khi</td><td>phát nhạc thường</td><td>audio công suất thấp (tắt DRAM)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Kích hoạt bởi <code>QUIRK_SUPPORTS_IDMA</code> + <code>idma_reg_addr_init()</code> trong <code>samsung_i2s_dai_probe()</code>.</p>
+
+  <h3>4.6 · Đăng ký trong probe của I2S</h3>
+  <ul>
+    <li><b>Primary:</b> <code>samsung_asoc_dma_platform_register(&amp;pdev->dev, pri_dai->filter, "tx", "rx", NULL)</code> — sau khi đã set <code>dma_playback.addr</code>/<code>dma_capture.addr</code>.</li>
+    <li><b>Secondary</b> (<code>QUIRK_SEC_DAI</code>): gọi lần nữa trên <code>platform_device</code> phụ với kênh "tx-sec" và <code>dma_dev = &amp;pdev->dev</code> để kênh phân giải theo OF node của primary.</li>
+    <li><code>probe_order = SND_SOC_COMP_ORDER_LATE</code> ⇒ component PCM bind <b>sau</b> CPU DAI, đảm bảo <code>dma_data</code> sẵn sàng khi <code>hw_params</code> chạy.</li>
+    <li><b>DT vs COMPAT:</b> có DT ⇒ <code>dma_request_chan()</code> đọc <code>dmas</code>/<code>dma-names</code>. Không DT ⇒ cờ <code>COMPAT</code> + <code>compat_filter_fn</code> do platform_data của I2S cấp.</li>
+  </ul>
+
+  <h3>4.7 · Quan sát &amp; debug</h3>
+  <div class="kv">
+    <span class="k">/proc/asound/card*/pcm*p/sub*/hw_params</span><span>rate/format/channels/period_bytes/buffer_bytes thực tế đã chốt.</span>
+    <span class="k">…/sub*/status</span><span><code>hw_ptr</code>/<code>appl_ptr</code>/<code>delay</code> — <code>delay</code> đến từ <code>pointer()</code> Lớp 3.</span>
+    <span class="k">/sys/kernel/debug/dmaengine/summary</span><span>liệt kê kênh DMA, kênh nào đang bị PCM giữ.</span>
+    <span class="k">dmesg</span><span><code>"Missing dma channel for stream"</code> (thiếu <code>dmas</code> trong DT), <code>"…falling back to period counting"</code> (kênh không báo caps).</span>
+  </div>
+
+  <div class="watch">
+    <h4>Watch list — Platform/DMA</h4>
+    <ul>
+      <li><b>Địa chỉ FIFO là hợp đồng một chiều.</b> Nếu <code>dma_playback.addr</code> sai (Lớp 2), DMA ghi lung tung — không lỗi rõ ràng, chỉ nghe rè.</li>
+      <li><b>Descriptor là cyclic, không phải per-period.</b> Không có chỗ "nạp period tiếp theo" — chỉ có <code>period_elapsed()</code> báo lên.</li>
+      <li><b><code>snd_pcm_hardware</code> phản chiếu bộ DMA, không phải khối I2S.</b> Bug "format lạ bị từ chối" thường nằm ở <code>dma_get_slave_caps()</code>.</li>
+      <li><b>NO_RESIDUE ⇒ con trỏ giật</b> — độ trễ và đồng bộ A/V xấu đi.</li>
+      <li><b><code>probe_order=LATE</code> quan trọng</b> — nếu PCM bind trước CPU DAI, <code>get_dma_data()</code> trả NULL.</li>
+      <li><b>Secondary cần <code>dma_dev</code></b> — thiếu ⇒ kênh "tx-sec" probe defer mãi.</li>
+      <li><b>iDMA ≠ dmaengine</b> — buffer SRAM không cache-coherent theo cách thường; chỉ có trên I2S0.</li>
+    </ul>
+  </div>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<!-- ============ 05 ============ -->
+<section id="s5"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">05 — POWER MANAGEMENT</span>
+    <h2>Lưu 3 thanh ghi, tắt clock, ghi trả</h2>
+    <p>PM ở đây làm đúng một việc: tắt clock của khối I2S giữa hai lần dùng để đỡ tốn điện. Vì tắt clock thì thanh ghi mất nội dung, driver lưu <code>I2SMOD/I2SCON/I2SPSR</code> trước khi tắt và ghi trả sau khi bật.</p>
+  </div>
+
+  <h3>5.1 · Hai lối vào, một hiện thực</h3>
+  <p><b>Runtime PM</b> (khi rảnh) và <b>system sleep</b> (khi máy ngủ) hội tụ vào cùng <code>i2s_runtime_suspend()</code>/<code>i2s_runtime_resume()</code>. System sleep chỉ là <code>pm_runtime_force_suspend/resume</code> — gọi callback runtime <em>nếu</em> thiết bị đang active, còn không thì không làm gì.</p>
+  <pre><code>System sleep                              Runtime idle
+component .suspend/.resume =              usage count → 0
+  pm_runtime_force_suspend/resume         PM core tự autosuspend
+        │                                       │
+        └───────────────┬───────────────────────┘
+                         ▼
+        i2s_runtime_suspend(dev) / i2s_runtime_resume(dev)
+        SET_RUNTIME_PM_OPS(...)
+
+SUSPEND:  ① readl(I2SMOD/I2SCON/I2SPSR) → priv->suspend_*   ② clk_disable_unprepare(op_clk, clk)
+RESUME :  ① clk_prepare_enable(clk, op_clk)   ② writel  I2SCON → I2SMOD → I2SPSR</code></pre>
+  <p>Có <b>hai</b> hook system-sleep trỏ về cùng chỗ: <code>samsung_i2s_component.suspend/.resume</code> (ASoC gọi khi sound card ngủ) và <code>samsung_i2s_driver.driver.pm</code> (PM core gọi qua device tree) — cả hai đều là <code>pm_runtime_force_suspend/resume</code>. <b>Zero</b> logic lưu/khôi phục riêng cho system sleep.</p>
+
+  <div class="note">
+    <strong>Vì sao CON phải nằm trong tập lưu, dù luồng đã dừng</strong>
+    <p>Không lưu <code>I2SCON</code> thì mất <code>CON_RSTCLR[31]</code> — khối quay lại reset và mọi <code>writel</code> sau đó vô hiệu. Thứ tự ghi trả khi resume luôn là <b>CON → MOD → PSR</b>: CON nhả reset trước để MOD/PSR ghi được. <code>FIFO/I2STXD</code> không cần lưu vì <code>trigger(STOP)</code> đã flush và luồng đã dừng.</p>
+  </div>
+
+  <h3>5.2 · Ba kiểu "bracket" giữ khối thức</h3>
+  <p><code>i2s_runtime_suspend</code> chỉ chạy khi <b>usage count về 0</b>. Ba loại cặp <code>get_sync…put</code> nâng/hạ count đó, lồng nhau:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Hàm</th><th>get/put</th><th>Loại</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">i2s_startup / i2s_shutdown</td><td class="mono">get_sync / put</td><td><b>OPEN bracket</b></td><td>giữ suốt thời gian PCM mở (kể cả pause/prepared)</td></tr>
+      <tr><td class="mono">i2s_trigger START/STOP</td><td class="mono">get_sync / put</td><td><b>RUNNING bracket</b></td><td>ref phụ, chặn autosuspend khi đang stream — lồng bên trong OPEN</td></tr>
+      <tr><td class="mono">i2s_set_fmt / set_sysclk / set_clkdiv / dai_probe</td><td class="mono">get_sync / put</td><td><b>one-shot</b></td><td>đánh thức khối chớp nhoáng để ghi 1 thanh ghi rồi cho ngủ lại — gọi được cả lúc ngoài stream</td></tr>
+      <tr><td class="mono">i2s_hw_params / i2s_delay</td><td class="mono">— (WARN_ON active)</td><td>—</td><td>KHÔNG tự get_sync; tin rằng đang trong OPEN/RUNNING bracket. WARN nổ = bug thứ tự callback</td></tr>
+    </tbody>
+  </table></div>
+  <pre><code>get_sync(dev)                       put(dev)
+   │  (nếu đang ngủ)                    │
+   ▼                                    ▼
+i2s_runtime_resume()              count-- ; nếu = 0 → (autosuspend delay)
+   clk_prepare_enable(clk, op_clk)                       │
+   writel  CON → MOD → PSR                               ▼
+   │                                        i2s_runtime_suspend()
+   ▼                                            readl 3 reg → priv->suspend_*
+[ readl / writel an toàn ]                       clk_disable_unprepare(op_clk, clk)</code></pre>
+
+  <h3>5.3 · Khi <code>CONFIG_PM</code> tắt</h3>
+  <ul>
+    <li><code>i2s_suspend/resume</code> = NULL; <code>SET_RUNTIME_PM_OPS</code> biên dịch rỗng.</li>
+    <li><code>pm_runtime_get_sync</code> vẫn gọi được nhưng không có callback → thiết bị coi như "luôn active".</li>
+    <li>Clock bật một lần trong <code>samsung_i2s_probe()</code> và <b>không bao giờ tắt</b> — khối ăn điện liên tục nhưng không mất nội dung thanh ghi.</li>
+  </ul>
+  <p>Nói cách khác: PM ở đây là <em>tối ưu điện năng, không phải chức năng</em>. Bỏ nó đi thì audio vẫn chạy đúng.</p>
+
+  <div class="watch">
+    <h4>Watch list — Power Management</h4>
+    <ul>
+      <li><b>Thêm hàm chạm thanh ghi ⇒ phải bọc bracket.</b> Quên <code>get_sync/put</code> ⇒ đọc/ghi khi clock tắt ⇒ treo hoặc rác.</li>
+      <li><b>Đừng thêm register vào đường suspend một cách tuỳ tiện</b> — bit trạng thái không nằm trong MOD/CON/PSR phải có biến lưu riêng.</li>
+      <li><b><code>I2SCON</code> nằm trong tập lưu vì <code>RSTCLR</code></b> — đừng "tối ưu" bỏ nó.</li>
+      <li><b>System sleep = runtime PM</b> — đừng viết logic lưu/khôi phục thứ hai trong <code>i2s_suspend</code>.</li>
+      <li><b>RUNNING bracket chặn autosuspend khi đang phát</b> — bỏ <code>get_sync</code> ở trigger(START) ⇒ khối có thể ngủ giữa bài.</li>
+      <li><b>Thứ tự resume CON → MOD → PSR</b> — giữ nguyên, CON nhả reset trước.</li>
+    </ul>
+  </div>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<!-- ============ PART III ============ -->
+<div class="wrap wrap--wide"><div class="parthead">
+  <span class="plabel">Phần III — Driver thật trên board K-S800</span>
+  <h2>SSPA (Marvell) — không phải Samsung I2S</h2>
+  <p>Từ đây trở đi là driver <strong>thật</strong>, xác nhận trực tiếp qua Device Tree <code>quartz-sb.dtsi</code> của board K-S800. Mô hình 4 lớp học ở Phần II áp dụng được, nhưng mọi tên hàm/thanh ghi đều khác.</p>
+</div></div>
+
+<!-- ============ 06 ============ -->
+<section id="s6"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">06 — SSPA</span>
+    <h2>K-S800 · Marvell MMP "pegmatite" / quartz-sb</h2>
+    <p>Board này <b>không có IP tên "i2s"</b> trong mainline nghĩa thông thường. Bộ điều khiển I2S của SoC là <b>SSPA</b> (Serial Synchronous Port for Audio). Toàn bộ đường audio là một card ASoC gồm 4 mảnh.</p>
+  </div>
+
+  <div class="tbl"><table>
+    <thead><tr><th>Vai trò ASoC</th><th>File</th><th>Driver / compatible</th></tr></thead>
+    <tbody>
+      <tr><td><span class="layer layer--mach">L4</span>Machine (sound card)</td><td class="mono">sound/soc/pxa/s800_rt5640.c</td><td class="mono">s800_rt5640_driver — km,s800-audio-rt5640</td></tr>
+      <tr><td><span class="layer layer--cpu">L2</span>CPU DAI = I2S controller</td><td class="mono">sound/soc/pxa/mmp-sspa.c</td><td class="mono">asoc_mmp_sspa_driver ("mmp-sspa-dai") — marvell,pegmatite-ssp-dai</td></tr>
+      <tr><td><span class="layer layer--plat">L3</span>Platform (PCM/DMA)</td><td class="mono">sound/soc/pxa/pegmatite.c (hoặc mmp-pcm.c)</td><td class="mono">devm_snd_dmaengine_pcm_register() trên mv61 CDMA</td></tr>
+      <tr><td><span class="layer layer--codec">L1</span>Codec</td><td class="mono">sound/soc/codecs/rt5640.c</td><td class="mono">rt5640 (I2C control + I2S data)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Register offset SSPA: <code>sound/soc/pxa/mmp-sspa.h</code>. DMA descriptor: <code>platform_data/mv61_cdma.h</code>.</p>
+
+  <h3>6.1 · Kiến trúc phân lớp</h3>
+  <pre><code> userspace:   aplay / tinyalsa
+                  |  ioctl(SNDRV_PCM_*)
+ ALSA core:   snd_pcm  ->  ASoC soc-pcm  ------------------------------+
+                  |                 |                 |               |
+                  v                 v                 v               v
+            machine card       CPU DAI          platform/PCM       codec DAI
+          s800_rt5640.c       mmp-sspa.c        pegmatite.c        rt5640.c
+          (ghép DT phandle)   (lập trình SSPA)  (dmaengine PCM)    (I2C ctrl)
+                  |                 |                 |               |
+                  |                 v                 v               |
+                  |          [SSPA regs]        mv61 CDMA (cyclic)    |
+                  |           TXD/RXD FIFO   MEM --> 0xE8008880 (TXD) |
+                  |                 |                 |               |
+                  |                 +--------+--------+               |
+                  |                          v                       |
+                  |                 BCLK / LRCLK / SDATA  ----------> RT5640 --> loa/tai nghe
+                  |                                                   ^
+                  +------------------ I2C (thanh ghi codec) ----------+</code></pre>
+  <p>Userspace mở thiết bị PCM → ASoC <code>soc-pcm</code> fan-out mỗi thao tác xuống <em>ba</em> driver song song: CPU DAI (<code>mmp-sspa</code>) lập trình khối SSPA, Platform (<code>pegmatite</code>) xin kênh DMA cyclic, Codec (<code>rt5640</code>) chỉnh thanh ghi qua I2C. Machine driver <code>s800_rt5640.c</code> chỉ ghép ba mảnh lại lúc probe qua các phandle DT (<code>km,i2s-controller</code>, <code>km,audio-codec</code>) và đặt định dạng khung là I2S. Dữ liệu audio đi thẳng RAM → mv61 CDMA → FIFO <code>SSPA_TXD</code>, không qua CPU.</p>
+
+  <h3>6.2 · Luồng probe / đăng ký</h3>
+  <ol class="steps">
+    <li><b>OF match "marvell,pegmatite-ssp-dai"</b> → <code>asoc_mmp_sspa_probe()</code>: <code>devm_kzalloc</code> sspa_priv/ssp_device/dma_params[2]; <code>devm_ioremap_resource</code> (SSPA MMIO); <code>devm_clk_get</code> + <code>clk_get("mmp-audio","mmp-sysclk")</code>.</li>
+    <li><code>of_id->data = &amp;pegmatite_dma_ops</code> → gọi <code>priv_dma_ops->register_dma(pdev)</code> = <code>pegmatite_sspa_probe()</code> → <code>devm_snd_dmaengine_pcm_register(&amp;sspa_pcm_config, COMPAT|NO_RESIDUE|HALF_DUPLEX|NO_DT)</code>.</li>
+    <li><code>priv_dma_ops->enable_dma()</code> → set <code>SSPA_CFG.DMA_EN</code>; đặt <code>disable_tx_workaround = 1</code> (nhánh pegmatite).</li>
+    <li><code>devm_snd_soc_register_component(&amp;mmp_sspa_component, &amp;mmp_sspa_dai, 1)</code>.</li>
+    <li>Riêng biệt: OF match <code>"km,s800-audio-rt5640"</code> → <code>s800_rt5640.c</code> probe: tạo sysfs group (dump thanh ghi codec); <code>of_parse_phandle "km,audio-codec"</code> → node rt5640; <code>of_parse_phandle "km,i2s-controller"</code> → node sspa (dùng cho cả cpus và platforms); <code>snd_soc_of_parse_card_name</code>/<code>_audio_routing</code>.</li>
+    <li><code>devm_snd_soc_register_card(snd_soc_s800_rt5640)</code> → ASoC core khớp <code>dai_link "RT5640"</code>: cpu=sspa, codec=rt5640-aif1, platform=sspa; áp <code>dai_fmt = I2S | NB_NF | CBS_CFS</code>.</li>
+  </ol>
+  <p>Hai platform driver probe độc lập; machine driver probe sau, phân giải 2 phandle DT rồi mới ghép card.</p>
+
+  <h3>6.3 · Luồng runtime khi phát nhạc</h3>
+  <ol class="steps">
+    <li><b>open()</b> → <code>mmp_pcm_open</code>/dmaengine open → <code>snd_dmaengine_pcm_open_request_chan(filter)</code> → <code>dma_request_channel(DMA_CYCLIC, &amp;i2s_dma_parms_tx)</code>.</li>
+    <li><b>hw_params(rate, format, channels)</b> → nếu fmt đổi: <code>mmp_sspa_set_dai_fmt()</code> ghi <code>TXSP/RXSP ← MSL/FSP/FPER(63)/FWID(31)</code>; <code>TXCTL/RXCTL ← XDATDLY(1)</code> (I2S). Báo lỗi nếu <code>SSPA_SP_S_EN</code> đang bật (port đang chạy). Rồi <code>mmp_sspa_hw_params()</code> ghi <code>XFRLEN1(ch-1), XWDLEN1(32), XSSZ1(size), TXFIFO_LL/RXFIFO_UL</code>; <code>dma_params->addr = phys_base + SSPA_TXD</code>. Machine: <code>s800_rt5640_asoc_hw_params()</code> → <code>snd_soc_dai_set_sysclk(RT5640_SCLK_S_PLL1, 256×rate)</code>.</li>
+    <li><b>prepare()</b> → nạp buffer cyclic vào CDMA.</li>
+    <li><b>trigger(START)</b> → <code>snd_dmaengine_pcm_trigger(START)</code> chạy CDMA vòng; <code>mmp_sspa_trigger(START)</code>: nếu <code>running_cnt==0</code>: <code>mmp_sspa_rx_enable()</code> (<b>quirk: luôn bật RX</b>); playback → <code>mmp_sspa_tx_enable()</code> (S_EN|WEN vào TXSP); <code>running_cnt++</code>. DMA đổ mẫu MEM→TXD FIFO; HW phát BCLK/LRCLK/SDATA (khung 64-bit/frame).</li>
+    <li><b>trigger(STOP)</b> → <code>running_cnt--</code>; playback → <code>tx_disable()</code>; nếu <code>==0</code> → <code>rx_disable()</code>.</li>
+    <li><b>close()</b> → <code>snd_dmaengine_pcm_close_release_chan()</code>.</li>
+  </ol>
+  <p><code>hw_params</code> là nơi việc nặng xảy ra: <code>set_dai_fmt</code> viết kiểu khung I2S (delay 1 bit = <code>XDATDLY(1)</code>, 64 BCLK/frame = <code>FPER(63)</code>), <code>hw_params</code> viết số kênh và kích thước mẫu, tính địa chỉ FIFO đích cho DMA. <code>trigger(START)</code> chỉ bật/tắt bit <code>S_EN</code> trên TXSP/RXSP.</p>
+
+  <div class="note trap">
+    <strong>Quirk phần cứng: RX phải luôn bật</strong>
+    <p><code>running_cnt</code> là bộ đếm tham chiếu cho cổng RX. Stream đầu tiên (bất kể playback hay capture) bật RX; playback bật thêm TX. Chỉ khi <code>running_cnt</code> về 0 thì RX mới được tắt. Đây là workaround cho lỗi phần cứng SSPA nơi TX không chạy nếu RX chưa được kích hoạt. Máy trạng thái: <code>Idle → RxOnly (START capture) → TxRx (START playback, tx_enable, cnt=2) → RxOnly (STOP playback) → Idle (STOP capture)</code>.</p>
+  </div>
+
+  <h3>6.4 · Quan hệ struct</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Struct</th><th>Trường</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="5" class="mono">sspa_priv</td><td class="mono">ssp_device *sspa</td><td>chứa <code>mmio_base</code>/<code>phys_base</code> để đọc/ghi thanh ghi</td></tr>
+      <tr><td class="mono">dma_params[2]</td><td>mảng <code>snd_dmaengine_dai_dma_data</code> — 1 cho playback, 1 cho capture</td></tr>
+      <tr><td class="mono">audio_clk, sysclk</td><td>hai clock nguồn</td></tr>
+      <tr><td class="mono">dai_fmt, running_cnt</td><td>trạng thái runtime</td></tr>
+      <tr><td class="mono">disable_tx_workaround</td><td>cờ theo <code>of_device_id</code></td></tr>
+      <tr><td class="mono">of_device_id</td><td>"marvell,mmp-ssp-dai" → data=NULL<br>"marvell,pegmatite-ssp-dai" → data=&amp;pegmatite_dma_ops</td><td>chọn hành vi DMA theo compatible</td></tr>
+      <tr><td class="mono">mv61_dma_slave</td><td class="mono">i2s_dma_parms_tx</td><td>vtype=CYCLIC, flowctrl=MEM_TO_PERIPH, dest_pid=13 (I2S_TX_PID; 23 nếu KM_BIZHUB), dest_reg=0xE8008880 (SSPA base+TXD)</td></tr>
+    </tbody>
+  </table></div>
+  <p><code>sspa_priv</code> là drvdata trung tâm. <code>of_device_id</code> quyết định hành vi: compatible <code>pegmatite-ssp-dai</code> gắn <code>pegmatite_dma_ops</code> → dùng dmaengine PCM COMPAT với mô tả DMA cyclic, đích là thanh ghi <code>SSPA_TXD</code> tuyệt đối <code>0xE8008880</code>.</p>
+
+  <h3>6.5 · Bản đồ thanh ghi SSPA — <code>mmp-sspa.h</code></h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Offset</th><th>Register</th><th>Ghi vào bởi</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="3">RX (0x00..0x20)</td></tr>
+      <tr><td class="mono">0x00</td><td class="mono">SSPA_RXD — FIFO data</td><td class="mono">mv61 CDMA (đọc)</td></tr>
+      <tr><td class="mono">0x08</td><td class="mono">SSPA_RXCTL — XFRLEN/XWDLEN/XSSZ/XDATDLY</td><td class="mono">mmp_sspa_hw_params()</td></tr>
+      <tr><td class="mono">0x0C</td><td class="mono">SSPA_RXSP — S_EN/WEN/MSL/FSP/FWID/S_RST/FFLUSH</td><td class="mono">set_dai_fmt() / trigger()</td></tr>
+      <tr><td class="mono">0x10</td><td class="mono">SSPA_RXFIFO_UL</td><td class="mono">mmp_sspa_hw_params()</td></tr>
+      <tr class="grp"><td colspan="3">TX (0x80..0xA0)</td></tr>
+      <tr><td class="mono">0x80</td><td class="mono">SSPA_TXD — FIFO data (đích DMA)</td><td class="mono">mv61 CDMA (ghi mẫu 16-bit)</td></tr>
+      <tr><td class="mono">0x88</td><td class="mono">SSPA_TXCTL</td><td class="mono">set_dai_fmt() / hw_params()</td></tr>
+      <tr><td class="mono">0x8C</td><td class="mono">SSPA_TXSP (+ TXSP_FPER(x))</td><td class="mono">set_dai_fmt() / trigger()</td></tr>
+      <tr><td class="mono">0x90</td><td class="mono">SSPA_TXFIFO_LL</td><td class="mono">mmp_sspa_hw_params()</td></tr>
+      <tr class="grp"><td colspan="3">Khác</td></tr>
+      <tr><td class="mono">0x100</td><td class="mono">SSPA_CFG — bit0 DMA_EN</td><td class="mono">enable_dma() = mmp_sspa_cdma_enable()</td></tr>
+    </tbody>
+  </table></div>
+  <p>Khối SSPA đối xứng TX/RX, TX bắt đầu từ offset <code>0x80</code>. <code>*SP</code> (Serial Port) là thanh ghi định dạng khung + enable; <code>*CTL</code> là độ dài word/frame/sample; <code>CFG</code> chỉ có bit <code>DMA_EN</code>. <code>set_dai_fmt</code> cấu hình <code>*SP</code>/<code>*CTL</code> (phải làm khi port tắt), <code>hw_params</code> tinh chỉnh <code>*CTL</code> + ngưỡng FIFO, <code>trigger</code> chỉ chạm bit <code>S_EN</code> trên <code>*SP</code>.</p>
+
+  <h3>6.6 · So sánh nhanh: Samsung I2S (mẫu, Phần II) vs Marvell SSPA (thật)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Khái niệm</th><th>Samsung I2S (i2s.c)</th><th>Marvell SSPA (mmp-sspa.c)</th></tr></thead>
+    <tbody>
+      <tr><td>Register format/clock chính</td><td class="mono">I2SMOD</td><td class="mono">TXSP/RXSP + TXCTL/RXCTL</td></tr>
+      <tr><td>Register enable/status</td><td class="mono">I2SCON</td><td class="mono">bit S_EN trong TXSP/RXSP</td></tr>
+      <tr><td>Prescaler clock</td><td class="mono">I2SPSR (psr = src/Fs/RFS)</td><td>không có — dùng PLL codec (RT5640_SCLK_S_PLL1)</td></tr>
+      <tr><td>FIFO TX</td><td class="mono">I2STXD @ regs_base+0x10</td><td class="mono">SSPA_TXD @ phys_base+0x80 (tuyệt đối 0xE8008880)</td></tr>
+      <tr><td>DMA engine</td><td>dmaengine generic (pl330…)</td><td>mv61 CDMA (cyclic, dest_pid cố định)</td></tr>
+      <tr><td>Quirk đặc thù</td><td>2 DAI chung 1 khối → "-EAGAIN Other DAI busy"</td><td>RX phải luôn bật khi có bất kỳ stream nào (running_cnt)</td></tr>
+      <tr><td>Codec</td><td>MAX98090 (ví dụ trong tài liệu)</td><td><b>RT5640</b> (thật trên board)</td></tr>
+      <tr><td>Machine driver</td><td class="mono">odroid.c</td><td class="mono">s800_rt5640.c</td></tr>
+      <tr><td>Điểm chung</td><td colspan="2">Cùng mô hình 4 lớp ASoC; cùng kiểu callback <code>set_fmt→hw_params→trigger</code>; cùng nguyên tắc "CPU DAI chỉ trao địa chỉ FIFO, không tự chép RAM"</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>6.7 · Con trỏ file — tra nhanh</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Thành phần</th><th>Đường dẫn</th></tr></thead>
+    <tbody>
+      <tr><td>CPU DAI / I2S controller</td><td class="mono">Kernel/K-S800/Src/sound/soc/pxa/mmp-sspa.c</td></tr>
+      <tr><td>Register map SSPA</td><td class="mono">Kernel/K-S800/Src/sound/soc/pxa/mmp-sspa.h</td></tr>
+      <tr><td>Platform PCM (pegmatite/quartz-sb)</td><td class="mono">Kernel/K-S800/Src/sound/soc/pxa/pegmatite.c</td></tr>
+      <tr><td>Platform PCM (nhánh mmp-tdma + SRAM)</td><td class="mono">Kernel/K-S800/Src/sound/soc/pxa/mmp-pcm.c</td></tr>
+      <tr><td>Machine / sound card</td><td class="mono">Kernel/K-S800/Src/sound/soc/pxa/s800_rt5640.c</td></tr>
+      <tr><td>Kconfig</td><td class="mono">sound/soc/pxa/Kconfig (SND_MMP_SOC_SSPA, SND_SSPA_SOC_KM_RT5640)</td></tr>
+      <tr><td>Makefile</td><td class="mono">sound/soc/pxa/Makefile (snd-soc-mmp-sspa-objs += pegmatite.o)</td></tr>
+      <tr><td>Device Tree</td><td class="mono">Kernel/K-S800/Src/arch/arm64/boot/dts/marvell/quartz-sb.dtsi</td></tr>
+    </tbody>
+  </table></div>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<!-- ============ 07 ============ -->
+<section id="s7"><div class="wrap wrap--wide">
+  <div class="sechead">
+    <span class="num">07 — TRA CỨU</span>
+    <h2>Tổng hợp một trang</h2>
+  </div>
+
+  <h3>7.1 · Thứ tự đọc đề nghị</h3>
+  <ol class="steps">
+    <li><b>Nếu mới học ASoC:</b> mục 01 (giao thức) → 02 (4 lớp) → 03 (CPU DAI mẫu, đọc theo thứ tự: <code>i2s-regs.h</code> → struct → helper → <code>dai_ops</code> → clock provider → PM) → 04 → 05.</li>
+    <li><b>Nếu cần sửa/debug driver thật trên K-S800:</b> đọc thẳng mục 06, dùng mục 02-05 làm tài liệu tra cứu khái niệm khi gặp thuật ngữ lạ (DAPM, dai_link, trigger…).</li>
+    <li><b>Dò runtime:</b> bật <code>CONFIG_SND_DEBUG</code>, <code>dmesg</code>, <code>ftrace</code> trên các hàm liên quan, xem <code>/sys/kernel/debug/asoc</code>.</li>
+  </ol>
+
+  <h3>7.2 · Ba nhãn SPEC / SoC / LINUX — nhắc lại</h3>
+  <div class="kv">
+    <span class="k">SPEC</span><span>quan hệ bắt buộc theo chuẩn I2S (LRCLK=Fs, MCLK=RFS·Fs, BCLK=BFS·Fs, BFS≥2·word) — giống nhau trên mọi chip.</span>
+    <span class="k">SoC</span><span>tập giá trị hợp lệ + có/không có phần cứng cho một tính năng (RFS/BFS hợp lệ, có mux+prescaler hay không, có bit đảo BCLK hay không) — do silicon quyết định.</span>
+    <span class="k">LINUX</span><span>cách driver tính toán và ghi giá trị đó xuống thanh ghi cụ thể — khác nhau hoàn toàn giữa i2s.c và mmp-sspa.c dù cùng phục vụ 1 chuẩn SPEC.</span>
+  </div>
+
+  <h3>7.3 · Watch-list gộp toàn bộ (Samsung i2s.c làm giáo cụ)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Chủ đề</th><th>Điều dễ sai nhất</th></tr></thead>
+    <tbody>
+      <tr><td>Format</td><td>Trộn "LSB/MSB" trong tên register với thứ tự bit truyền — dữ liệu luôn MSB-first, tên chỉ nói kiểu căn (Left-J/Right-J).</td></tr>
+      <tr><td>Polarity</td><td>Nhiều SoC không có bit đảo BCLK riêng — chỉ đảo được frame clock (NF/IF), không phải bit clock (NB/IB).</td></tr>
+      <tr><td>Đồng bộ hoá</td><td>"-EAGAIN / Other DAI busy" là từ chối an toàn khi 2 DAI chung 1 khối đang chạy, không phải bug.</td></tr>
+      <tr><td>DMA</td><td>Descriptor DMA là <b>cyclic</b> (1 mô tả tự lặp), không phải "nạp từng period" — chỉ có callback báo period đã qua.</td></tr>
+      <tr><td>PM</td><td>Thứ tự ghi trả sau resume luôn <b>CON → MOD → PSR</b> vì CON mang bit reset.</td></tr>
+      <tr><td>Board K-S800</td><td>Codec thật là <b>RT5640</b> qua <b>SSPA</b>, không phải MAX98090 qua Samsung I2S — đừng lẫn khi tra cứu tên hàm.</td></tr>
+      <tr><td>Quirk phần cứng SSPA</td><td>RX phải luôn bật khi có bất kỳ stream nào chạy (kể cả chỉ playback) — bug phần cứng, không phải thiết kế driver.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>7.4 · Bản đồ file nguồn → mục</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>File gốc trong <code>Kernel/Driver/I2S/</code></th><th>Mục</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">I2S.md</td><td>02, 03</td></tr>
+      <tr><td class="mono">MACHINE DRIVER (odroid.c).md</td><td>03</td></tr>
+      <tr><td class="mono">i2s-sspa-arch.md</td><td>06</td></tr>
+      <tr><td class="mono">i2s-from-the-wire-up.html</td><td>01</td></tr>
+      <tr><td class="mono">asoc-4-layer-example.html</td><td>02</td></tr>
+      <tr><td class="mono">i2s-samsung-cpudai.html</td><td>03</td></tr>
+      <tr><td class="mono">samsung-i2s-register-map.html</td><td>03</td></tr>
+      <tr><td class="mono">asoc-platform-dma-layer.html</td><td>04</td></tr>
+      <tr><td class="mono">samsung-i2s-runtime-pm.html</td><td>05</td></tr>
+    </tbody>
+  </table></div>
+
+  <a class="toplink" href="#s0">↑ về đầu</a>
+</div></section>
+
+<footer>
+  <div class="wrap wrap--wide">
+    <p>Tổng hợp từ 9 file trong <span class="mono">Kernel/Driver/I2S/</span> · Samsung i2s.c là driver mẫu để học ASoC 4 lớp · driver thật của board K-S800 là Marvell SSPA (<code>mmp-sspa.c</code>) + codec RT5640, ghép bởi <code>s800_rt5640.c</code>. Sơ đồ SVG gốc được diễn lại thành bảng/ASCII; số liệu, tên hàm, bit-offset giữ nguyên từ nguồn.</p>
+  </div>
+</footer>
+
+</main>
+</div>
+
+</body>
+</html>

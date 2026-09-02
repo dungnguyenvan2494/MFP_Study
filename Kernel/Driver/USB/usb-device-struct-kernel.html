@@ -745,36 +745,11 @@ Cắm thiết bị Full-Speed (pull-up ở D+):
   <h3>1.12 · Liên hệ Linux kernel: transfer type được xác định ở đâu?</h3>
   <span class="src">include/linux/usb.h · drivers/usb/core/urb.c (đã grep &amp; đọc trực tiếp trong repo, linux-5.10.241)</span>
   <p>Năm mảnh ghép, đúng thứ tự dữ liệu chảy qua khi driver gọi <code>usb_submit_urb()</code>:</p>
-  <pre><code>struct usb_endpoint_descriptor    ← ch9.h:410 — RAW BYTE từ thiết bị, chứa SỰ THẬT gốc
-   .bmAttributes  &amp; 0x03 = 0/1/2/3 = CONTROL/ISOC/BULK/INT (USB_ENDPOINT_XFER_*, ch9.h:436-439)
-         │
-         │  cached lúc enumerate (usb_parse_configuration(), phần 07.2)
-         ▼
-struct usb_host_endpoint           ← usb.h:67 — bản sao sống trong kernel
-   .desc = (bản copy của descriptor trên)
-         │
-         │  con trỏ vào đây, xếp theo hướng+số hiệu
-         ▼
-struct usb_device
-   .ep_in[16] / .ep_out[16]        ← usb.h:658-659 — bảng tra cứu O(1)
-         │
-         │  driver không đọc mảng này trực tiếp — driver TỰ TẠO "pipe" bằng macro
-         ▼
-struct urb                         ← usb.h:1550
-   .pipe   = usb_sndbulkpipe(dev, epnum) / usb_rcvintpipe(...) / usb_sndctrlpipe(...) / usb_rcvisocpipe(...)
-             mỗi macro OR sẵn một hằng PIPE_* (usb.h:1939-1942):
-             PIPE_ISOCHRONOUS=0, PIPE_INTERRUPT=1, PIPE_CONTROL=2, PIPE_BULK=3
-   .dev, .complete, .context, .transfer_buffer... = driver tự điền
-         │
-         ▼
-usb_submit_urb(urb, ...)           ← urb.c:367
-   ep = usb_pipe_endpoint(dev, urb-&gt;pipe);      /* urb.c:390 — tra dev->ep_in[]/ep_out[]
-                                                     CHỈ dùng bit hướng + số hiệu của pipe,
-                                                     KHÔNG dùng bit PIPE_* type! */
-   xfertype = usb_endpoint_type(&amp;ep-&gt;desc);      /* urb.c:401 — ĐỌC THẲNG bmAttributes
-                                                     đã cache — đây là NGUỒN SỰ THẬT DUY NHẤT */
-   /* toàn bộ validate sau đó (maxpacket, cờ hợp lệ, làm tròn interval — phần 4.12)
-      dựa trên xfertype vừa đọc từ DESCRIPTOR, không dựa trên urb->pipe */</code></pre>
+  <div class="imgcard">
+    <img src="../../../Flow_Descriotor_to_URB.png"
+         alt="Flow: từ descriptor đến URB vào kernel. Bước 1: raw descriptor từ thiết bị, struct usb_endpoint_descriptor.bmAttributes & 0x03 = 0/1/2/3 = CONTROL/ISOC/BULK/INT (ch9.h:436-439) — đây là sự thật gốc. Bước 2: cached lúc enumerate thành struct usb_host_endpoint.desc (usb.h:67) — bản copy sống trong kernel. Bước 3: usb_device.ep_in[16]/ep_out[16] (usb.h:658-659) — bảng tra cứu O(1) theo hướng+số hiệu. Bước 4: driver tự tạo urb.pipe bằng macro usb_sndbulkpipe/usb_rcvintpipe/usb_sndctrlpipe/usb_rcvisocpipe, mỗi macro OR sẵn hằng PIPE_* (usb.h:1939-1942) — PIPE_* chỉ là gợi ý, kernel không tin vào đó để quyết định kiểu transfer. Bước 5: usb_submit_urb() (urb.c:367) — ep=usb_pipe_endpoint() chỉ dùng bit hướng+số hiệu; xfertype=usb_endpoint_type(&ep->desc) (urb.c:401) đọc thẳng bmAttributes đã cache, đây là nguồn sự thật duy nhất mà mọi validate sau đó dựa vào."
+         loading="lazy" decoding="async">
+  </div>
   <div class="note">
     <strong>Trả lời thẳng câu hỏi</strong>
     <p><strong>Transfer type được xác định ở endpoint descriptor (<code>bmAttributes</code>), đọc và cache lúc <em>enumerate</em>, rồi được <em>đọc lại</em> mỗi lần <code>usb_submit_urb()</code> chạy — không phải ở URB.</strong> Trường <code>urb-&gt;pipe</code> không "chứa" transfer type theo nghĩa quyết định; nó chỉ mang theo <em>lời khai của driver</em> (qua việc chọn đúng macro <code>usb_snd*pipe()</code>/<code>usb_rcv*pipe()</code>) — driver biết phải khai gì vì đã tự đọc descriptor này trong <code>.probe()</code> qua <code>usb_endpoint_type(epd)</code> (chính hàm dùng trong <code>match_endpoint()</code>, phần 4.5). Nói cách khác: <strong>descriptor là nguồn sự thật gốc, hai lần đọc (probe + submit) đều quay về nó — pipe chỉ là phương tiện chuyển tiếp.</strong></p>
@@ -884,70 +859,27 @@ for (i = 0; i &lt; npackets; i++) {
   </ol>
 
   <h3>1.16 · Chồng phần mềm — chỉ HCD được chạm phần cứng</h3>
-  <pre><code>┌────────────────────────────────────────────────────────────────────┐
-│ USERSPACE   libusb / app mở /dev/bus/usb/BBB/DDD + ioctl           │
-│             → xử lý trong core/devio.c (usbdev_do_ioctl :2491)     │
-├────────────────────────────────────────────────────────────────────┤
-│ CLASS DRIVER  usb-storage, usb-serial, uvcvideo, usb-skeleton.c    │
-│               bind vào INTERFACE, tạo URB                          │
-├────────────────────────────────────────────────────────────────────┤
-│ USBCORE     urb.c (vòng đời URB)      message.c (API đồng bộ)      │
-│             driver.c (match/probe)    hub.c (enumeration)          │
-│             hcd.c (khung chung cho mọi HCD)                        │
-├────────────────────────────────────────────────────────────────────┤
-│ HCD         ehci-ambarella.c (glue) ──► ehci-hcd.c (làm việc nặng) │
-│             ohci-ambarella.c (fallback USB 1.1)                    │
-├────────────────────────────────────────────────────────────────────┤
-│ HARDWARE    EHCI @0xe001f000 · OHCI @0xe001e000 · PHY @0xed080050  │
-└────────────────────────────────────────────────────────────────────┘</code></pre>
+  <div class="imgcard">
+    <img src="../../../Chong_phan_mem.png"
+         alt="Chồng phần mềm USB, chỉ HCD được chạm phần cứng. Cột trái 5 tầng: USERSPACE (libusb/app mở /dev/bus/usb/BBB/DDD + ioctl → devio.c usbdev_do_ioctl:2491) → CLASS DRIVER (usb-storage, usb-serial, uvcvideo, usb-skeleton.c — bind vào interface, tạo URB) → USBCORE/KERNEL CORE (urb.c vòng đời URB, message.c API đồng bộ usb_control_msg/usb_bulk_msg, driver.c match/probe/id_table, hub.c enumeration/port mgmt, hcd.c khung chung usb_hcd_submit_urb/giveback/suspend/reset) → HCD (ehci-ambarella.c glue layer platform/clock/irq → ehci-hcd.c workhorse QH/qTD/schedule/doorbell/irq, ohci-ambarella.c fallback USB1.1) → HARDWARE (EHCI @0xe001f000, OHCI @0xe001e000, PHY @0xed080050, USB BUS D+/D-). Cột phải: vòng đời URB tổng quát (tạo→submit→HCD xếp lịch→thiết bị xử lý→complete), luồng enumeration khi cắm thiết bị (hub_irq→hub_event→hub_port_connect→usb_new_device→device_add→usb_device_match→usb_probe_interface→skel_probe→usb_register_dev), và luồng data I/O từ app đến thiết bị và ngược lại qua devio.c/class driver/usb_submit_urb/HCD schedule/usb_hcd_irq/copy_to_user."
+         loading="lazy" decoding="async">
+  </div>
   <p>Glue driver CV25 mỏng đúng như tài liệu mô tả: <code>ehci-ambarella.c:102-149</code> chỉ làm <code>usb_create_hcd()</code> → ioremap thanh ghi → lấy PHY qua phandle <code>amb,usbphy</code> → <code>usb_phy_init()</code> → <code>usb_add_hcd()</code>, rồi giao hết cho EHCI core chung.</p>
 
   <h3>1.17 · Hai flow cần thuộc</h3>
   <h4>Flow A — cắm thiết bị (enumeration → probe)</h4>
-  <pre><code>[HW]    Port đổi trạng thái: có thiết bị cắm vào
-   │       (hub báo qua interrupt IN endpoint mà hub driver luôn treo sẵn 1 URB)
-   ▼
-[CORE]  hub_irq()                        core/hub.c:716   ← CHẠY TRONG NGẮT
-   │       chỉ đánh thức worker: kick_hub_wq()  hub.c:651
-   ▼       ─── chuyển sang process context (workqueue hub_wq) ───
-[CORE]  hub_event() → hub_port_connect_change() → hub_port_connect()
-   │                                    core/hub.c:5449 / 5251 / 5007
-   │       reset port, SET_ADDRESS, đọc device descriptor (control qua ep0)
-   ▼
-[CORE]  usb_new_device()                 core/hub.c:2508
-   │       đăng ký vào device model, chọn configuration, phát uevent
-   │       → udev/mdev ở userspace modprobe module nếu cần
-   ▼       ─── lặp với TỪNG interface của config được chọn ───
-[CORE]  usb_device_match()               core/driver.c:793
-   │       so id_table của các driver đã đăng ký
-   ▼       match!
-[CORE]  usb_probe_interface()            core/driver.c:283
-   ▼
-[DRV]   skel_probe()                     usb-skeleton.c:488
-           duyệt endpoint tìm bulk-in/out, usb_set_intfdata(),
-           usb_register_dev() → tạo /dev/skel0</code></pre>
+  <div class="imgcard">
+    <img src="../../../Flow_Cam_thiet_bi.png"
+         alt="Flow: từ thiết bị cắm vào đến driver (ví dụ usb-skeleton). 1 [HW] Port đổi trạng thái, hub báo qua interrupt IN endpoint. 2 [CORE] hub_irq() core/hub.c:716, chạy trong ngắt, chỉ kick_hub_wq() đánh thức worker, chuyển sang process context workqueue hub_wq. 3 [CORE] hub_event() → hub_port_connect_change() → hub_port_connect() core/hub.c:5449/5251/5007 — debounce, reset port, SET_ADDRESS, GET_DESCRIPTOR qua ep0. 4 [CORE] usb_new_device() core/hub.c:2508 — cấp phát usb_device, đăng ký device model, chọn configuration, phát uevent KOBJ_ADD cho udev/mdev modprobe. 5 [CORE] usb_device_match() core/driver.c:793 — so id_table của driver đã đăng ký, match! 6 [CORE] usb_probe_interface() core/driver.c:283 — gọi driver->probe(). 7 [DRV] skel_probe() usb-skeleton.c:488 — tìm bulk-in/out, usb_set_intfdata(), usb_register_dev() tạo /dev/skel0."
+         loading="lazy" decoding="async">
+  </div>
 
   <h4>Flow B — vòng đời một URB</h4>
-  <pre><code>[DRV]   usb_alloc_urb()                  core/urb.c:70
-   │     usb_fill_bulk_urb()             usb.h:1636
-   │       gói: pipe + buffer DMA-able + độ dài + callback
-   ▼
-[CORE]  usb_submit_urb(urb, GFP_KERNEL)  core/urb.c:352
-   │       kiểm tra hợp lệ → usb_hcd_submit_urb()  core/hcd.c:1532
-   │       ⚠ trả về 0 = "ĐÃ XẾP HÀNG", KHÔNG phải "đã truyền xong"
-   ▼
-[HCD]   EHCI băm URB thành qTD, gắn vào lịch phần cứng
-   ▼       ─── phần cứng tự chạy, CPU rảnh làm việc khác ───
-[HW]    Controller truyền từng packet, DMA, rồi phát IRQ
-   │       (gói "short" — kể cả dài 0 — đánh dấu kết thúc bulk transfer)
-   ▼
-[HCD]   usb_hcd_irq()                    core/hcd.c:2340
-   ▼
-[CORE]  usb_hcd_giveback_urb()           core/hcd.c:1730
-   │       DMA-unmap, điền urb->status + actual_length, gọi callback
-   ▼
-[DRV]   skel_write_bulk_callback()       usb-skeleton.c:332
-           NGỮ CẢNH NGẮT — không được ngủ!</code></pre>
+  <div class="imgcard">
+    <img src="../../../Flow_driver_gui_URB.png"
+         alt="Flow: từ driver gửi URB đến khi nhận callback hoàn tất. 1 [DRV] usb_alloc_urb() core/urb.c:70, usb_fill_bulk_urb() usb.h:1636 — gói pipe+buffer DMA-able+độ dài+callback. 2 [CORE] usb_submit_urb(urb, GFP_KERNEL) core/urb.c:352 — kiểm tra hợp lệ, usb_hcd_submit_urb() core/hcd.c:1532; trả về 0 chỉ nghĩa là ĐÃ XẾP HÀNG, không phải đã truyền xong. 3 [HCD] EHCI băm URB thành qTD, gắn vào lịch phần cứng, doorbell — từ đây phần cứng tự chạy. 4 [HW] Controller truyền từng packet DMA rồi phát IRQ; short packet (kể cả 0 byte) đánh dấu kết thúc bulk transfer. 5 [HCD] usb_hcd_irq() core/hcd.c:2340 — đọc status, xác định URB hoàn tất. 6 [CORE] usb_hcd_giveback_urb() core/hcd.c:1730 — DMA-unmap, điền urb->status/actual_length, gọi callback trong ngữ cảnh ngắt. 7 [DRV] skel_write_bulk_callback() usb-skeleton.c:332 — ngữ cảnh ngắt, không được ngủ."
+         loading="lazy" decoding="async">
+  </div>
   <p><strong>API đồng bộ chỉ là lớp bọc</strong> xây trên đường async này: <code>usb_control_msg()</code> (<code>message.c:135</code>) và <code>usb_bulk_msg()</code> (<code>message.c:229</code>) tự tạo URB, submit, ngủ chờ xong. Tiện cho probe/cấu hình — chính hub driver enumerate bằng <code>usb_control_msg</code> — nhưng không dùng được trong ngắt.</p>
 
   <h3>1.18 · Đường userspace: usbfs</h3>
@@ -1301,28 +1233,11 @@ cat /dev/skel0                   # đường đọc (bulk-in)</code></pre>
   <h3>3.9 · <code>insmod</code> làm gì — hai luồng hội tụ tại <code>skel_probe()</code></h3>
   <span class="src">drivers/usb/core/ + drivers/usb/usb-skeleton.c</span>
   <p>Có <strong>2 sự kiện độc lập</strong>, xảy ra theo bất kỳ thứ tự nào, nhưng luôn <strong>hội tụ</strong> tại cùng 1 điểm: driver-core so khớp <code>usb_device_id</code> rồi gọi <code>.probe()</code>.</p>
-  <pre><code>LUỒNG A — nạp module                    LUỒNG B — cắm thiết bị
-─────────────────────────               ────────────────────────────
-insmod usb-skeleton.ko                  hub_irq() → kick_hub_wq()
-   │                                       │
-module_usb_driver()                     hub_event() → hub_port_connect()
-   │                                       │
-usb_register_driver()  driver.c:943     usb_new_device()      hub.c:2508
-   │                                       │
-driver_register()      base/driver.c    usb_set_configuration()
-   │                                       │  tạo struct usb_interface
-bus_add_driver()                        device_add(&amp;intf-&gt;dev)
-   │                                       │
-driver_attach()                            │
-   │  quét NGƯỢC mọi device đã có          │
-   └───────────────┬───────────────────────┘
-                   ▼
-        usb_device_match()      driver.c:793
-        so id_table ↔ VID:PID của interface
-                   ▼   match!
-        usb_probe_interface()   driver.c:283
-                   ▼
-        skel_probe()            usb-skeleton.c:488</code></pre>
+  <div class="imgcard">
+    <img src="../../../Luong_nap_module_luong_cam_thiet_bi.png"
+         alt="Luồng nạp module và luồng cắm thiết bị gặp nhau tại probe. LUỒNG A — nạp module (driver vào kernel): 1 insmod usb-skeleton.ko, 2 module_usb_driver(), 3 usb_register_driver() driver.c:943, 4 driver_register() base/driver.c, 5 bus_add_driver(), 6 driver_attach() — quét ngược mọi device đã có. LUỒNG B — cắm thiết bị (device vào kernel): 1 hub_irq() → kick_hub_wq() (IRQ context), 2 hub_event() → hub_port_connect() (workqueue), 3 usb_new_device() hub.c:2508, 4 usb_set_configuration() — đọc descriptor, chọn cấu hình, cấp địa chỉ, 5 tạo struct usb_interface mỗi interface, 6 device_add(&intf->dev) — đưa interface vào device model. Hai luồng hội tụ: 7 usb_device_match() driver.c:793 so id_table với VID:PID/class/interface, MATCH! → 8 usb_probe_interface() driver.c:283, 9 skel_probe() usb-skeleton.c:488 — duyệt endpoint, tìm bulk-in/out, usb_set_intfdata(), usb_register_dev() tạo /dev/skel0. Kết quả sau probe: /dev node, liên kết dữ liệu qua usb_set_intfdata, sẵn sàng submit URB, và quản lý vòng đời khi rút thiết bị gọi disconnect."
+         loading="lazy" decoding="async">
+  </div>
   <div class="note">
     <strong>Điểm cốt lõi</strong>
     <p>Nạp module (Luồng A) chỉ đăng ký "tôi biết xử lý VID:PID nào" vào driver-core — nó <strong>không tự gọi <code>skel_probe()</code></strong> trừ khi thiết bị khớp đã tồn tại sẵn trên bus (khi đó <code>driver_attach()</code> quét ngược lại). Cắm thiết bị (Luồng B) chỉ tạo <code>usb_interface</code> và gọi <code>device_add()</code> — cũng <strong>không tự gọi <code>skel_probe()</code></strong> trừ khi đã có driver đăng ký khớp VID:PID từ trước. <code>.probe()</code> chỉ chạy đúng 1 lần, tại giao điểm, do driver-core (<code>drivers/base/dd.c</code>) quyết định — <strong>không phải usbcore tự gọi trực tiếp</strong>.</p>
@@ -2084,19 +1999,11 @@ static struct acpi_bus_type usb_acpi_bus = {
   </div>
 
   <h3>5.1 · Host controller phát hiện thay đổi<span class="ctx ctx--hw">Hardware</span></h3>
-  <pre><code>┌──────────────────────────────────────────────────────────────┐
-│ USB Host Controller (trong CPU / Chipset) — UHCI/OHCI/EHCI/xHCI│
-└──────────────────────────────────────────────────────────────┘
-        │                  │                  │
-        ▼                  ▼                  ▼
-┌──────────────────┐  ┌────────────────────┐  ┌─────────────────────┐
-│ Port PHY         │  │ Status Registers   │  │ Interrupt Generator │
-│ • D+ receiver    │  │ • CCS : Connected  │  │ • Monitor port      │
-│ • D− receiver    │  │ • CSC : Connect    │  │   status changes    │
-│ • Comparator     │  │   Status Change    │  │ • Detect CSC bit    │
-│                  │  │ • D+/D− line state │  │ • Raise IRQ to CPU  │
-│                  │  │ • LSDA: Low-Speed  │  │                     │
-└──────────────────┘  └────────────────────┘  └─────────────────────┘</code></pre>
+  <div class="imgcard">
+    <img src="../../../5.1.HostController_Phat_hien_thay_doi.png"
+         alt="USB Host Controller (trong CPU/Chipset — UHCI/OHCI/EHCI/xHCI) gồm 3 khối: Port PHY (D+/D- receiver, comparator, line state detect, pull-up/pull-down — phát hiện kết nối và đọc mức điện áp D+/D-) → Status Registers MMIO (CCS Connected Status, CSC Connect Status Change, PEC, PR, D+/D- Line State, LSDA Low-Speed Device Attach — CPU đọc qua MMIO) → Interrupt Generator (monitor port status registers, phát hiện CSC=1, gửi IRQ tới CPU). Luồng cắm thiết bị → phát hiện → IRQ → phần mềm, 5 bước: 1 Cắm thiết bị vào cổng (hub/host port nhận nguồn VBUS và tín hiệu D+/D-), 2 PHY phát hiện thay đổi (D+ pull-up cho FS/LS device, line state đổi J↔K/SE0/SE1), 3 Cập nhật Status Registers (set CCS=1, CSC=1, cập nhật D+/D- line state, LSDA nếu là thiết bị LS), 4 Sinh ngắt IRQ (phát hiện CSC=1, assert IRQ line, gửi tới PIC/APIC), 5 CPU xử lý ngắt (IDT → ISR usb_hcd_irq, đọc/clear status regs, giao việc cho USB core hub_event — bắt đầu enumeration). Kèm bảng trạng thái line J/K/SE0/SE1 (D+/D- high/low, ý nghĩa idle/reset/suspend) và bảng bit thanh ghi Port Status kiểu OHCI/EHCI (CCS, CSC, LSDA, PRSC, POCI, PSS, PR, PEC)."
+         loading="lazy" decoding="async">
+  </div>
   <div class="rail-time">
     <div class="tick"><span class="t">T = 0 ms</span><div class="d"><b>Thiết bị được cắm.</b> Tiếp điểm cơ khí chạm nhau.</div></div>
     <div class="tick"><span class="t">T = 1–5 ms</span><div class="d"><b>Điện áp D+/D− thay đổi.</b> Pull-up trên thiết bị tác động, D+ (FS) hoặc D− (LS) chuyển 0V → ~3V.</div></div>
@@ -2155,21 +2062,11 @@ static struct acpi_bus_type usb_acpi_bus = {
 
   <h3>5.3 · IRQ handler được đăng ký từ đâu</h3>
   <span class="src">ehci-platform.c:231-363 → core/hcd.c:2655 → core/hcd.c:2597</span>
-  <pre><code>ehci_platform_probe()                    [ehci-platform.c:231]
-    ├─ irq = platform_get_irq(dev, 0)    [:257]  ← từ device tree
-    ├─ hcd = usb_create_hcd()            [:261]
-    ├─ hcd->regs = devm_ioremap_resource()
-    └─ usb_add_hcd(hcd, irq, IRQF_SHARED) [:361]
-        ↓ [hcd.c:2655]
-        ├─ hcd_buffer_create() / usb_register_bus() / usb_alloc_dev()
-        ├─ hcd->driver->reset(hcd)
-        ├─ init_giveback_urb_bh()
-        └─ usb_hcd_request_irqs(hcd, irq, IRQF_SHARED)   [hcd.c:2804]
-             ↓ [hcd.c:2597]
-             request_irq(irqnum, &usb_hcd_irq, irqflags,
-                         hcd->irq_descr, hcd);           [hcd.c:2606]
-                ↓ kernel/irq/manage.c
-                __setup_irq() → ghi vào IRQ descriptor table</code></pre>
+  <div class="imgcard">
+    <img src="../../../IRQ_handler_duoc_dang_ki_tu_dau.png"
+         alt="EHCI controller probe → đăng ký IRQ → sẵn sàng phát hiện/cắm thiết bị. 1 ehci_platform_probe() ehci-platform.c:231 — irq=platform_get_irq(dev,0) từ device tree :257, hcd=usb_create_hcd() :261, hcd->regs=devm_ioremap_resource(), rồi usb_add_hcd(hcd,irq,IRQF_SHARED) :361. 2 usb_add_hcd() hcd.c:2655 — hcd_buffer_create(), usb_register_bus(), hcd->self.root_hub=usb_alloc_dev() tạo root hub, hcd->driver->reset(hcd) là ehci_reset, init_giveback_urb_bh(), rồi usb_hcd_request_irqs(hcd,irq,IRQF_SHARED) hcd.c:2804. 3 usb_hcd_request_irqs() hcd.c:2597 — irqnum=irq_to_desc(irq)->irq_data.irq, ret=request_irq(irqnum,&usb_hcd_irq,irqflags,hcd->irq_descr,hcd) hcd.c:2606. 4 request_irq() kernel/irq/manage.c — __request_irq, __setup_irq ghi irqaction vào IRQ descriptor table của CPU, enable_irq() cho phép IRQ ở mức GIC/IC. Kết quả: USB HCD đã đăng ký handler usb_hcd_irq cho IRQ này, sẵn sàng nhận ngắt. Sau khi đăng ký, khi cắm thiết bị: PHY set CSC=1 → controller phát IRQ → CPU nhận IRQ, IDT nhảy vào usb_hcd_irq(irq, dev_id) với dev_id là struct usb_hcd* → HCD đọc USBSTS/PORTSC, xác định nguyên nhân, clear status, schedule bottom-half (tasklet/workqueue) nếu cần → usbcore xử lý tiếp hub_irq()→kick_hub_wq()→hub_event() → thiết bị sẵn sàng, userspace thấy qua udev, mở /dev/bus/usb/... Kèm sơ đồ Kernel IRQ Descriptor (irq_desc[IRQN].action là linked list các irqaction, mỗi irqaction có handler/flags/name/dev_id/next — IRQF_SHARED cho phép nhiều thiết bị dùng chung 1 IRQ line)."
+         loading="lazy" decoding="async">
+  </div>
   <div class="tbl"><table>
     <thead><tr><th>Tham số <code>request_irq</code></th><th>Ví dụ</th><th>Ý nghĩa</th></tr></thead>
     <tbody>
@@ -2707,30 +2604,11 @@ Bit 3 = 0: no reset</code></pre>
   <p><strong>Kết luận:</strong> device CONNECTED, FULL-SPEED, port POWERED, CONNECTION CHANGED → cần hành động, đi tiếp tới <code>hub_port_init()</code>.</p>
 
   <h3>6.5 · Phát hiện thay đổi kết nối — cây quyết định</h3>
-  <pre><code>port_event(hub, port1)
-    ↓
-hub_port_status() → portstatus, portchange (từ hub device)
-    ↓
-[ĐIỂM QUYẾT ĐỊNH 1]
-if (portchange &amp; USB_PORT_STAT_C_CONNECTION)      ← bit 0 của change
-    │
-    ├─ TRUE: Connection status ĐÃ THAY ĐỔI
-    │   │
-    │   ├─ connect_change = 1
-    │   │
-    │   ├─ usb_clear_port_feature(PORT_C_CONNECTION)
-    │   │     └─ Xoá bit change để hub không báo lại
-    │   │
-    │   └─ [ĐIỂM QUYẾT ĐỊNH 2]
-    │       if (portstatus &amp; USB_PORT_STAT_CONNECTION)   ← bit 0 của status
-    │       ├─ TRUE:  Device CONNECTED ✓
-    │       │         → hub_port_connect_change() → hub_port_init()
-    │       │
-    │       └─ FALSE: Device DISCONNECTED ✗
-    │                 → usb_disconnect() → gỡ khỏi tree
-    │
-    └─ FALSE: không có connection change
-        └─ Kiểm tra change khác (enable, overcurrent, suspend...)</code></pre>
+  <div class="imgcard">
+    <img src="../../../Phat_hien_thay_doi_ket_noi.png"
+         alt="Xử lý sự kiện thay đổi kết nối trên hub port. port_event(hub, port1) hub.c → hub_port_status(hub, port1, &portstatus, &portchange) đọc PORT_STATUS (RO, hiện trạng cổng) và PORT_CHANGE (RWC, các bit thay đổi) từ hub device qua GET_STATUS Class Request. Điểm quyết định 1: if (portchange & USB_PORT_STAT_C_CONNECTION) — bit 0 của PORT_CHANGE. FALSE → kiểm tra các thay đổi khác (C_ENABLE, C_OVERCURRENT, C_SUSPEND, C_RESET, C_PORT_RESUME). TRUE → connect_change=1, usb_clear_port_feature(hub, port1, USB_PORT_FEAT_C_CONNECTION) xoá bit change để hub không báo lại, rồi tới Điểm quyết định 2: if (portstatus & USB_PORT_STAT_CONNECTION) — bit 0 của PORT_STATUS. TRUE → Device CONNECTED → hub_port_connect_change(hub, port1) → hub_port_init(hub, port1): reset port, xác định tốc độ LS/FS/HS, enable port, enumerate thiết bị, usb_new_device(), thêm vào USB device tree. FALSE → Device DISCONNECTED → usb_disconnect(hub->hdev, port1): gỡ device khỏi USB tree, gọi driver disconnect, free resources, phát uevent remove, hub port quay về trạng thái rỗi. Lưu ý quan trọng: PORT_CHANGE là RWC nên phải clear bit sau khi xử lý; PORT_STATUS là RO chỉ đọc không ghi trực tiếp; nếu không clear C_CONNECTION hub sẽ báo lặp lại; mỗi bit change độc lập, có thể xảy ra đồng thời. Luồng tổng quát khi cắm/rút: 1 thiết bị cắm/rút D+/D- thay đổi mức điện áp → 2 hub phát hiện, set C_CONNECTION bit 0 trong PORT_CHANGE → 3 hub IRQ báo cho host qua interrupt IN endpoint của hub → 4 hub_irq()→kick_hub_wq() (workqueue) → 5 port_event() xử lý như flowchart trên → 6 kết quả: thêm hoặc gỡ thiết bị trong USB tree."
+         loading="lazy" decoding="async">
+  </div>
   <div class="note trap">
     <strong>Vì sao phải <code>usb_clear_port_feature()</code>?</strong>
     <p>Hub device firmware duy trì các change bit. Nếu không xoá, hub sẽ liên tục báo "Connection changed!" mỗi lần poll. Kernel phải xác nhận: "OK, tôi đã nhận thông báo, đừng làm phiền về <em>lần thay đổi này</em> nữa." Cụ thể: gửi USB control message <code>ClearPortFeature(PORT_C_CONNECTION)</code> → hub xoá bit 0 của port change register → lần poll sau bit 0 = 0. Đây là USB standard protocol, không phải hack.</p>
@@ -4111,25 +3989,11 @@ end_iaa_cycle(ehci);</code></pre>
       <tr><td><code>GetHubDescriptor</code></td><td>—</td><td>Tổng hợp từ <code>hcs_params</code>, <strong>không đọc phần cứng</strong></td></tr>
     </tbody>
   </table></div>
-  <pre><code>hub_wq                     ehci_hub_control              PORTSC
-  │                                │                        │
-  │ SetPortFeature(PORT_RESET)     │                        │
-  ├───────────────────────────────►│  temp &= ~PORT_RWC_BITS │
-  │                                ├───────────────────────►│ PORT_RESET=1
-  │                                │                        │ (phần cứng phát SE0)
-  │ ── chờ 50 ms ──                │                        │
-  │ ClearPortFeature(PORT_RESET)   │                        │
-  ├───────────────────────────────►├───────────────────────►│ PORT_RESET=0
-  │                                │                        │ (chirp handshake)
-  │                                │  check_reset_complete  │
-  │                                │◄───────────────────────┤ PORT_PE=?
-  │        ┌───────────────────────┴────────────────────┐   │
-  │        │ PORT_PE=1 → high-speed, EHCI giữ port      │   │
-  │        │ PORT_PE=0 → ghi PORT_OWNER=1, nhường       │   │
-  │        └────────────────────────────────────────────┘   │
-  │ GetPortStatus                  │                        │
-  ├───────────────────────────────►│                        │
-  │◄─── speed, enabled ────────────┤                        │</code></pre>
+  <div class="imgcard">
+    <img src="../../../Phan_cung_gia_lap_phan_mem.png"
+         alt="USB Port Reset & Handshake — luồng giữa hub_wq, ehci_hub_control và PORTSC. 1 hub_wq gửi SetPortFeature(PORT_RESET) (bRequest=SET_FEATURE, wValue=PORT_RESET=4, wIndex=port1) qua usb_control_msg() → ehci_hub_control xử lý SET_FEATURE(PORT_RESET): temp=readl(PORTSC1), temp&=~PORT_RWC_BITS, temp|=PORT_RESET, writel(temp,PORTSC1) → PORTSC1 PR bit=1, phần cứng phát SE0 trên D+/D- (reset signaling ≥50ms theo USB2.0 spec TRST). Chờ tối thiểu 50ms. 2 hub_wq gửi ClearPortFeature(PORT_RESET) → ehci_hub_control xử lý CLEAR_FEATURE(PORT_RESET): tương tự nhưng temp&=~PORT_RESET → PORTSC1 PR=0, phần cứng bắt đầu chirp handshake (host phát chuỗi K/J, device High-Speed phản hồi chirp K/J, cuối cùng host set PORT_PE=1 nếu chirp hợp lệ; nếu FS/LS device không có chirp hợp lệ thì host set PORT_OWNER=1). ehci_hub_control lặp đọc PORTSC1 kiểm tra RESET bit tự clear về 0 hoặc timeout (check_reset_complete), đọc PORT_PE để quyết định: PORT_PE=1 (High-Speed) → EHCI giữ port tiếp tục quản lý, tiến hành enumeration; PORT_PE=0 (Full/Low-Speed) → ghi PORT_OWNER=1, nhường port cho companion controller OHCI/UHCI. 3 hub_wq gửi GetPortStatus → trả về wPortStatus/wPortChange (đọc PORTSC1 & PORTSC_RO_BITS / W1C_BITS). Dòng thời gian: 0ms SetPortFeature PORT_RESET=1 SE0 phát ra, 50ms ClearPortFeature PORT_RESET=0 bắt đầu chirp, ~60ms handshake chirp K/J thiết bị phản hồi, >60ms Port Enable=1 nếu HS hoặc OWNER=1 nếu FS/LS."
+         loading="lazy" decoding="async">
+  </div>
   <p><code>ehci_handover_companion_ports()</code> (hub:33) giải quyết tình huống hiếm nhưng khó chịu: khi bus suspend rồi resume, port đang do companion giữ phải được reset lại để companion nhận diện tiếp. Hàm gọi <code>ehci_hub_control(SetPortFeature, USB_PORT_FEAT_RESET)</code> cho từng port trong <code>ehci-&gt;owned_ports</code>, chờ <code>msleep(90)</code>, rồi kiểm tra lại <code>PORT_OWNER</code>.</p>
 
   <a class="toplink" href="#s0">↑ về đầu</a>
@@ -4280,41 +4144,11 @@ ehci@e001f000 {
   </div>
 
   <h3>10.1 · Toàn bộ đường đi, một khung hình</h3>
-  <pre><code>  cắm dây
-     │
-     ▼
-┌─ PHẦN CỨNG ─────────────────────────────────────────────────┐
-│ điện trở pull-up trên D+/D− → controller thấy đổi trạng thái │
-│ set bit PORT_CSC trong PORTSC → phát IRQ line 65             │
-└──────────────────────────┬──────────────────────────────────┘
-                           ▼
-┌─ PHASE 1 · IRQ context ─ ~300 µs ───────────────────────────┐
-│ usb_hcd_irq → ehci_irq → ehci_hub_status_data               │
-│ → usb_hcd_poll_rh_status → hub_irq (completion của URB)     │
-│ → kick_hub_wq()  ── đánh thức hub_wq rồi TRẢ IRQ ngay ──    │
-└──────────────────────────┬──────────────────────────────────┘
-                           ▼
-┌─ PHASE 2 · workqueue ─ ~100 ms ─────────────────────────────┐
-│ hub_event → hub_port_status → GetPortStatus (control URB)   │
-│ → debounce 100 ms → quyết định: nối / rút / đổi trạng thái  │
-└──────────────────────────┬──────────────────────────────────┘
-                           ▼
-┌─ PHASE 3 · workqueue ─ ~250 ms ─────────────────────────────┐
-│ hub_port_connect → usb_alloc_dev → hub_port_init            │
-│   reset 50 ms → đọc 8 byte descriptor → reset lần 2          │
-│   → SET_ADDRESS → đọc 18 byte → đọc config descriptor       │
-│ → usb_new_device → device_add                               │
-│   → usb_device_match → generic driver probe                 │
-│   → usb_set_configuration → tạo interface device            │
-│     → mỗi interface: match id_table → driver->probe()       │
-└──────────────────────────┬──────────────────────────────────┘
-                           ▼
-              /dev/sda · /dev/ttyUSB0 · /dev/input/eventN
-                           │
-                           ▼
-              open/read/write → usb_alloc_urb → usb_fill_*_urb
-              → usb_submit_urb → HCD xếp qTD vào QH
-              → phần cứng DMA → IRQ → complete() → xong</code></pre>
+  <div class="imgcard">
+    <img src="../../../Overview_Flow.png"
+         alt="Cắm thiết bị USB vào Host — toàn bộ đường đi một khung hình. 0 Phần cứng: pull-up D+/D- → Controller EHCI thấy đổi trạng thái → PORTSC set bit PORT_CSC (bit 4, Connect Status Change) → IRQ line 65 phát ra. 1 Phase 1 IRQ context ~300µs: usb_hcd_irq()→ehci_irq()→ehci_hub_status_data()→usb_hcd_poll_rh_status()→hub_irq() (URB complete)→kick_hub_wq() đánh thức hub_wq workqueue; IRQ handler chỉ đọc/clear PORTSC, trả IRQ ngay để không mất ngắt khác. 2 Phase 2 workqueue ~100ms: hub_event()→hub_port_status() gửi GET_STATUS control URB, đọc PORT_STATUS/PORT_CHANGE, xoá bit change đã xử lý qua ClearPortFeature, debounce 100ms lọc nhiễu, quyết định nối/rút/đổi trạng thái theo các bit C_CONNECTION/C_ENABLE/C_OVERCURRENT/C_RESET/C_SUSPEND. 3 Phase 3 workqueue ~250ms: hub_port_connect()→usb_alloc_dev() cấp phát struct usb_device→hub_port_init() enumeration gồm Reset#1 50ms (SetPortFeature/ClearPortFeature PORT_RESET), đọc 8 byte device descriptor <1ms, Reset#2 50ms, SET_ADDRESS ~1ms, đọc 18 byte descriptor đầy đủ ~1ms, đọc configuration descriptor ~1-10ms →usb_new_device() đăng ký→usb_device_match() chọn driver→driver->probe() khởi tạo; sau enumeration: device_add, uevent tới userspace udev/mdev, usb_set_configuration(), tạo interface device, match id_table, tạo node /dev/sda /dev/ttyUSB0 /dev/input/eventN /dev/video0. 4 Luồng I/O dữ liệu sau khi thiết bị sẵn sàng: ứng dụng open/read/write→VFS/File ops→Driver→usb_alloc_urb()→usb_fill_*_urb()→usb_submit_urb()→HCD xếp qTD vào QH→phần cứng DMA qua scheduler→thiết bị USB→IRQ hoàn tất→HCD giveback_urb→URB complete() callback→driver→ứng dụng nhận kết quả. Tổng thời gian điển hình từ khi cắm đến khi sẵn sàng sử dụng ≈ 300µs + 100ms + 250ms ≈ 350ms (chỉ là điển hình, tuỳ hub/thiết bị/dây cáp/tải hệ thống)."
+         loading="lazy" decoding="async">
+  </div>
 
   <h3>10.2 · Ngân sách thời gian</h3>
   <div class="tbl"><table>

@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Public+Sans:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap">
+<title>Giải phẫu V4L2 Camera Stack</title>
+<style>
+  :root{
+    --bg:#eceeec; --surface:#f8faf8; --surface-2:#dde3dd;
+    --ink:#1a211c; --muted:#5f6b62; --line:#c6cfc7;
+    --data:#1f6b4a; --irq:#b03a2e;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#12160f; --surface:#1a1f19; --surface-2:#262d24;
+      --ink:#e4e9e2; --muted:#96a094; --line:#333c31;
+      --data:#57bd8e; --irq:#e5806f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12160f; --surface:#1a1f19; --surface-2:#262d24;
+    --ink:#e4e9e2; --muted:#96a094; --line:#333c31;
+    --data:#57bd8e; --irq:#e5806f;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:47rem;margin:0 auto;padding:clamp(1.4rem,4vw,3.2rem) clamp(1rem,4vw,2rem) 4rem}
+
+  header.ph{border-bottom:2px solid var(--ink);padding-bottom:1.5rem;margin-bottom:1.1rem}
+  .eyebrow{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.7rem;
+    letter-spacing:.15em;text-transform:uppercase;color:var(--data);margin:0 0 .85rem}
+  h1{font-family:"Archivo","Helvetica Neue",Arial,sans-serif;font-weight:700;
+    font-size:clamp(1.9rem,5.3vw,2.75rem);line-height:1.04;letter-spacing:-.025em;
+    margin:0 0 .75rem;text-wrap:balance}
+  .lead{font-size:1.05rem;margin:0 0 1.2rem;max-width:37rem}
+  .meta{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.73rem;
+    color:var(--muted);line-height:1.85;margin:0}
+  .meta b{color:var(--ink);font-weight:500}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.45rem 1.1rem;font-family:"Roboto Mono",ui-monospace,monospace;
+    font-size:.71rem;color:var(--muted);margin:1.1rem 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:.45rem}
+  .sw{width:1.5rem;border-top:2.5px solid;display:inline-block}
+  .sw-d{border-color:var(--data)} .sw-i{border-color:var(--irq)}
+  .sw-k{border-color:var(--ink)}
+
+  .warn{border:1px solid var(--irq);border-left-width:3px;border-radius:4px;
+    padding:.75rem .9rem;margin:1.2rem 0 0;background:var(--surface);font-size:.9rem}
+  .warn b{color:var(--irq)}
+
+  section{margin-top:2.6rem}
+  .phase{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.68rem;
+    letter-spacing:.13em;text-transform:uppercase;color:var(--data);
+    border-top:1px solid var(--line);padding-top:.9rem;margin:3.2rem 0 .2rem}
+  h2{font-family:"Archivo",sans-serif;font-weight:700;font-size:1.32rem;
+    letter-spacing:-.015em;margin:0 0 .2rem;text-wrap:balance;scroll-margin-top:1rem}
+  h2 .n{color:var(--data);font-family:"Roboto Mono",ui-monospace,monospace;
+    font-size:.78rem;font-weight:500;margin-right:.5rem}
+  h3{font-family:"Archivo",sans-serif;font-weight:600;font-size:1rem;margin:1.4rem 0 .35rem;
+    letter-spacing:-.005em}
+  .srcline{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.7rem;
+    color:var(--muted);margin:0 0 .85rem}
+  p{margin:0 0 .85rem;max-width:39rem}
+  code,.mono{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.83em;
+    background:var(--surface-2);padding:.04em .3em;border-radius:3px}
+  ul,ol{margin:.25rem 0 .9rem;padding-left:1.25rem;max-width:39rem}
+  li{margin:.22rem 0}
+  li code{background:none;padding:0}
+  strong{font-weight:600}
+  .src{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.69rem;
+    color:var(--muted);white-space:nowrap;border-bottom:1px dotted var(--line)}
+
+  figure{margin:1.4rem 0 0;padding:1rem;background:var(--surface);
+    border:1px solid var(--line);border-radius:5px}
+  figure svg{display:block;width:100%;height:auto}
+  figcaption{font-size:.82rem;color:var(--muted);margin-top:.85rem;line-height:1.55}
+
+  .scroll{overflow-x:auto}
+  table.tbl{width:100%;border-collapse:collapse;font-size:.81rem;margin:.35rem 0 1rem;min-width:28rem}
+  .tbl th,.tbl td{text-align:left;padding:.38rem .55rem;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl th{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.64rem;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+  .tbl td code{font-size:.82em;background:var(--surface-2)}
+  .tbl tr:last-child td{border-bottom:0}
+
+  footer{margin-top:3.2rem;border-top:1px solid var(--line);padding-top:1.2rem;
+    font-family:"Roboto Mono",ui-monospace,monospace;font-size:.71rem;
+    color:var(--muted);line-height:1.9}
+  footer b{color:var(--ink);font-weight:500}
+  a{color:var(--data)}
+  :focus-visible{outline:2px solid var(--data);outline-offset:2px}
+  @media (prefers-reduced-motion:no-preference){
+    body{animation:fade .35s ease both}@keyframes fade{from{opacity:0}to{opacity:1}}
+  }
+
+  /* diagram primitives */
+  .b{fill:var(--surface-2);stroke:var(--ink);stroke-width:1.4}
+  .b-d{stroke:var(--data)} .b-i{stroke:var(--irq)}
+  .b-gh{fill:none;stroke:var(--line);stroke-width:1.2;stroke-dasharray:4 4}
+  .f{stroke:var(--ink);stroke-width:1.4;fill:none}
+  .f-d{stroke:var(--data);stroke-width:2}
+  .f-i{stroke:var(--irq)}
+  .f-x{stroke-dasharray:5 4}
+  .ll{stroke:var(--line);stroke-width:1.2;stroke-dasharray:3 4}
+  .rule{stroke:var(--ink);stroke-width:1.2;stroke-dasharray:7 5}
+  .rule-i{stroke:var(--irq);stroke-width:1.2;stroke-dasharray:7 5}
+  .t{fill:var(--ink);font-family:"Archivo",system-ui,sans-serif;font-weight:600}
+  .m{fill:var(--muted);font-family:"Roboto Mono",ui-monospace,monospace}
+  .md{fill:var(--data);font-family:"Roboto Mono",ui-monospace,monospace}
+  .mi{fill:var(--irq);font-family:"Roboto Mono",ui-monospace,monospace}
+  .ah{fill:var(--ink)} .ah-d{fill:var(--data)} .ah-i{fill:var(--irq)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="ph">
+    <p class="eyebrow">roadmap 48 mục · source-code driven · linux 5.10.241</p>
+    <h1>Giải phẫu V4L2 Camera Stack</h1>
+    <p class="lead">Toàn bộ 48 chủ đề trong <code>v4l2_study</code>, sắp theo 7 phase mà chính
+      file khuyến nghị, mọi kết luận neo vào source thật trong
+      <code>Kernel/K-S800/Src</code>.</p>
+    <p class="meta">
+      <b>Kernel</b> 5.10.241 <span class="src">Makefile:2-4</span><br>
+      <b>Core</b> drivers/media/v4l2-core · common/videobuf2 · mc<br>
+      <b>Driver tham chiếu</b> marvell-ccic/mcam-core.c (capture thật) · test-drivers/vimc (media graph)
+    </p>
+    <div class="legend">
+      <span><i class="sw sw-k"></i> control path — ioctl, cấu hình</span>
+      <span><i class="sw sw-d"></i> data path — buffer &amp; frame</span>
+      <span><i class="sw sw-i"></i> interrupt context — không ngủ được</span>
+    </div>
+    <div class="warn">
+      <b>Điều kiện tiên quyết cần biết trước.</b> Board S800 <strong>không build V4L2</strong>:
+      <code>CONFIG_MEDIA_SUPPORT is not set</code>
+      <span class="src">arch/arm64/configs/EagleBK_defconfig</span>. Không có
+      <code>/dev/video0</code> trên máy này, không có sensor, không có CSI. Mã nguồn V4L2 vẫn đầy
+      đủ trong cây — nên đây là học <em>từ source tree</em>, không phải debug board.
+      Muốn thực hành thì bật <code>CONFIG_MEDIA_SUPPORT</code> +
+      <code>CONFIG_VIDEO_VIMC</code> (driver ảo, không cần phần cứng).
+    </div>
+  </header>
+
+  <section id="ver">
+    <h2>Khác biệt phiên bản — đọc trước khi tra tài liệu online</h2>
+    <p>Roadmap của bạn nhắc vài tên API chỉ có ở kernel mới. Trên 5.10 chúng
+      <strong>không tồn tại</strong>; tra nhầm sẽ mất thời gian.</p>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Roadmap viết</th><th>Trên 5.10.241 thực tế là</th><th>Nguồn</th></tr></thead>
+      <tbody>
+        <tr><td><code>v4l2_async_connection</code></td><td><code>struct v4l2_async_subdev</code></td><td><span class="src">include/media/v4l2-async.h:79</span></td></tr>
+        <tr><td><code>v4l2_async_nf_register()</code></td><td><code>v4l2_async_notifier_register()</code></td><td><span class="src">v4l2-async.c:540</span></td></tr>
+        <tr><td><code>media_entity_init()</code></td><td><code>media_entity_pads_init()</code></td><td><span class="src">mc-entity.c:197</span></td></tr>
+        <tr><td><code>video_device_pipeline_start()</code></td><td><code>media_pipeline_start()</code></td><td><span class="src">mc-entity.c:532</span></td></tr>
+        <tr><td>vb2 <code>queue_setup</code> 4 tham số</td><td>5 tham số kèm <code>struct device *alloc_devs[]</code></td><td><span class="src">videobuf2-core.h:417</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <p class="phase">Phase 1 — Foundation · mục 1–5, 47</p>
+
+  <section id="arch">
+    <h2><span class="n">01</span>Kiến trúc tổng thể — control path tách khỏi data path</h2>
+    <p class="srcline">roadmap mục 1, 47 · nguồn: v4l2-dev.c · v4l2-ioctl.c · videobuf2-core.c</p>
+    <p>V4L2 tồn tại để giải một bài toán: <strong>mọi thiết bị video đều khác nhau, nhưng ứng dụng
+      chỉ muốn viết một lần</strong>. Giải pháp là hai đường tách biệt — một đường
+      <em>điều khiển</em> đi qua ioctl (đồng bộ, process context), và một đường <em>dữ liệu</em>
+      đi qua vb2 + DMA (bất đồng bộ, kết thúc trong interrupt). Nhầm lẫn hai đường này là gốc
+      của hầu hết hiểu sai về V4L2.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 470" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Kiến trúc V4L2 với hai đường tách biệt: đường điều khiển đi từ ứng dụng qua ioctl, v4l2_fops, video_ioctl2, bảng v4l2_ioctls, tới v4l2_ioctl_ops của driver rồi tới subdev và thanh ghi phần cứng; đường dữ liệu đi từ vb2 buffer qua DMA vào bộ nhớ, phần cứng ghi frame rồi raise interrupt, driver ISR gọi vb2_buffer_done, đánh thức tiến trình đang chờ DQBUF; hai đường gặp nhau ở vb2_queue.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ard" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ari" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-i" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <text class="m" x="150" y="16" font-size="9">ĐƯỜNG ĐIỀU KHIỂN</text>
+        <text class="md" x="470" y="16" font-size="9">ĐƯỜNG DỮ LIỆU</text>
+
+        <rect class="b" x="16" y="26" width="708" height="34" rx="4"/>
+        <text class="t" x="28" y="43" font-size="10">USERSPACE — v4l2-ctl · GStreamer v4l2src · FFmpeg · app tự viết</text>
+        <text class="m" x="28" y="55" font-size="8">open("/dev/video0") · ioctl() · mmap() · poll() · munmap() · close()</text>
+
+        <line class="rule" x1="16" y1="72" x2="724" y2="72"/>
+        <text class="m" x="16" y="69" font-size="7.5">syscall — chuyển user → kernel, copy_from_user</text>
+
+        <rect class="b" x="16" y="82" width="330" height="40" rx="4"/>
+        <text class="t" x="26" y="98" font-size="9">v4l2_fops   v4l2-dev.c:469</text>
+        <text class="m" x="26" y="110" font-size="7.5">.unlocked_ioctl = v4l2_ioctl :353 → vdev-&gt;fops-&gt;unlocked_ioctl</text>
+
+        <rect class="b b-d" x="394" y="82" width="330" height="40" rx="4"/>
+        <text class="t" x="404" y="98" font-size="9">v4l2_mmap   v4l2-dev.c:389</text>
+        <text class="m" x="404" y="110" font-size="7.5">→ vb2_mmap → mem_ops-&gt;mmap → map trang DMA vào user</text>
+
+        <rect class="b" x="16" y="134" width="330" height="52" rx="4"/>
+        <text class="t" x="26" y="150" font-size="9">video_ioctl2()   v4l2-ioctl.c:3358</text>
+        <text class="m" x="26" y="162" font-size="7.5">→ video_usercopy() → __video_do_ioctl() :2941</text>
+        <text class="m" x="26" y="173" font-size="7.5">tra bảng v4l2_ioctls[] :2794, lấy mutex, gọi info-&gt;func()</text>
+        <line class="f" x1="181" y1="122" x2="181" y2="132" marker-end="url(#ar)"/>
+
+        <rect class="b" x="16" y="198" width="330" height="52" rx="4"/>
+        <text class="t" x="26" y="214" font-size="9">v4l2_ioctl_ops của driver   v4l2-ioctl.h:296</text>
+        <text class="m" x="26" y="226" font-size="7.5">vidioc_querycap · enum_fmt · s_fmt · reqbufs · qbuf …</text>
+        <text class="m" x="26" y="237" font-size="7.5">phần lớn driver ủy quyền cho vb2_ioctl_* :982-1079</text>
+        <line class="f" x1="181" y1="186" x2="181" y2="196" marker-end="url(#ar)"/>
+
+        <rect class="b b-d" x="394" y="134" width="330" height="116" rx="4"/>
+        <text class="t" x="404" y="150" font-size="9.5">videobuf2 — vb2_queue</text>
+        <text class="m" x="404" y="163" font-size="7.5">videobuf2-core.h:567 · trái tim của data path</text>
+        <text class="m" x="404" y="177" font-size="7.5">vb2_core_reqbufs :739   cấp buffer</text>
+        <text class="m" x="404" y="189" font-size="7.5">vb2_core_qbuf    :1607  user → driver</text>
+        <text class="m" x="404" y="201" font-size="7.5">vb2_core_streamon:2071  bật stream</text>
+        <text class="m" x="404" y="213" font-size="7.5">vb2_core_dqbuf   :1910  driver → user (ngủ chờ)</text>
+        <text class="m" x="404" y="227" font-size="7.5">vb2_buffer_done  :1031  ← GỌI TỪ IRQ</text>
+        <text class="m" x="404" y="241" font-size="7.5">danh sách: queued_list · done_list · done_wq</text>
+
+        <path class="f f-x" d="M346,222 C370,222 376,200 392,196" marker-end="url(#ar)"/>
+        <text class="m" x="352" y="262" font-size="7.5">ioctl gọi vào vb2</text>
+
+        <rect class="b" x="16" y="278" width="330" height="52" rx="4"/>
+        <text class="t" x="26" y="294" font-size="9">v4l2_subdev ops   v4l2-subdev.h:776</text>
+        <text class="m" x="26" y="306" font-size="7.5">core / video / pad ops — sensor, CSI RX, ISP</text>
+        <text class="m" x="26" y="317" font-size="7.5">gọi qua v4l2_subdev_call(sd, pad, set_fmt, …)</text>
+        <line class="f" x1="181" y1="250" x2="181" y2="276" marker-end="url(#ar)"/>
+
+        <rect class="b b-d" x="394" y="278" width="330" height="52" rx="4"/>
+        <text class="t" x="404" y="294" font-size="9">vb2_mem_ops → DMA   videobuf2-core.h:118</text>
+        <text class="m" x="404" y="306" font-size="7.5">vb2_dma_contig_memops  dma-contig.c:692</text>
+        <text class="m" x="404" y="317" font-size="7.5">dma_alloc_attrs :150 → dma_addr_t cho phần cứng</text>
+        <line class="f f-d" x1="559" y1="250" x2="559" y2="276" marker-end="url(#ard)"/>
+
+        <line class="rule" x1="16" y1="346" x2="724" y2="346"/>
+        <text class="m" x="16" y="343" font-size="7.5">RANH GIỚI PHẦN CỨNG</text>
+
+        <rect class="b" x="16" y="356" width="330" height="46" rx="4"/>
+        <text class="t" x="26" y="372" font-size="9">Ghi thanh ghi qua I2C / MMIO</text>
+        <text class="m" x="26" y="384" font-size="7.5">sensor: exposure, gain, format, số lane</text>
+        <text class="m" x="26" y="395" font-size="7.5">CSI RX / ISP: bật lane, crop, bật DMA</text>
+        <line class="f" x1="181" y1="330" x2="181" y2="354" marker-end="url(#ar)"/>
+
+        <rect class="b b-d" x="394" y="356" width="330" height="46" rx="4"/>
+        <text class="t" x="404" y="372" font-size="9">DMA ghi pixel vào RAM</text>
+        <text class="m" x="404" y="384" font-size="7.5">controller là bus-master, dùng dma_addr_t</text>
+        <text class="m" x="404" y="395" font-size="7.5">xong một frame → FRAME DONE interrupt</text>
+        <line class="f f-d" x1="559" y1="330" x2="559" y2="354" marker-end="url(#ard)"/>
+
+        <line class="rule-i" x1="16" y1="418" x2="724" y2="418"/>
+        <rect class="b b-i" x="394" y="426" width="330" height="38" rx="4"/>
+        <text class="t" x="404" y="442" font-size="9">ISR driver → vb2_buffer_done(vb, DONE)</text>
+        <text class="m" x="404" y="454" font-size="7.5">list_add_tail(done_list) + wake_up(&amp;q-&gt;done_wq) :1077</text>
+        <line class="f f-i" x1="559" y1="402" x2="559" y2="424" marker-end="url(#ari)"/>
+        <path class="f f-i f-x" d="M394,445 C300,445 220,300 396,250" marker-end="url(#ari)"/>
+        <text class="mi" x="230" y="440" font-size="7.5">đánh thức tiến trình đang ngủ trong DQBUF</text>
+      </svg>
+      <figcaption>Hai cột là hai đường. Chúng chỉ gặp nhau ở <code>vb2_queue</code>: ioctl
+        <em>đẩy</em> buffer vào (QBUF), interrupt <em>trả</em> buffer ra (buffer_done), và DQBUF
+        ngủ chờ giữa hai bên. Nắm được hình này là nắm được 80% V4L2.</figcaption>
+    </figure>
+
+    <h3>Trách nhiệm từng tầng</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Tầng</th><th>Trách nhiệm</th><th>Thư mục</th><th>Context</th></tr></thead>
+      <tbody>
+        <tr><td>Application</td><td>chọn format, cấp/nhận buffer, hiển thị-mã hóa</td><td>userspace</td><td>process</td></tr>
+        <tr><td>V4L2 core</td><td>quản lý <code>/dev/videoX</code>, dispatch ioctl, kiểm tham số</td><td><code>v4l2-core/</code></td><td>process</td></tr>
+        <tr><td>videobuf2</td><td>vòng đời buffer, cấp DMA memory, hàng đợi + wait queue</td><td><code>common/videobuf2/</code></td><td>process + IRQ</td></tr>
+        <tr><td>Media Controller</td><td>đồ thị entity/pad/link, khóa pipeline khi stream</td><td><code>mc/</code></td><td>process</td></tr>
+        <tr><td>Bridge / capture driver</td><td>lập trình DMA, xử lý IRQ, cài <code>vb2_ops</code></td><td><code>platform/</code></td><td>process + IRQ</td></tr>
+        <tr><td>Subdev (sensor/CSI/ISP)</td><td>cấu hình phần cứng riêng qua I2C/MMIO</td><td><code>i2c/</code>, <code>platform/</code></td><td>process</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="ioctl">
+    <h2><span class="n">02</span>ioctl — bảng tra, không phải switch case</h2>
+    <p class="srcline">roadmap mục 2, 3 · nguồn: v4l2-dev.c · v4l2-ioctl.c</p>
+    <p>Hiểu sai phổ biến: nghĩ rằng V4L2 core có một <code>switch(cmd)</code> khổng lồ. Thực tế
+      là một <strong>bảng tra tĩnh</strong> <code>v4l2_ioctls[]</code> index theo
+      <code>_IOC_NR(cmd)</code>, mỗi entry mang cả hàm xử lý lẫn cờ khóa và hàm in debug.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Đường đi của một ioctl V4L2: userspace gọi ioctl với VIDIOC_S_FMT, syscall vào fs/ioctl.c, tới v4l2_fops.unlocked_ioctl là v4l2_ioctl, hàm này lấy video_device rồi gọi fops->unlocked_ioctl của driver thường là video_ioctl2; video_ioctl2 gọi video_usercopy để copy_from_user rồi __video_do_ioctl; hàm này tra bảng v4l2_ioctls theo _IOC_NR, kiểm valid_ioctls bitmap và priority, lấy mutex rồi gọi info->func trỏ tới vidioc_s_fmt_vid_cap của driver.">
+        <defs><marker id="i2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="14" width="300" height="38" rx="4"/>
+        <text class="t" x="26" y="30" font-size="9">ioctl(fd, VIDIOC_S_FMT, &amp;fmt)</text>
+        <text class="m" x="26" y="42" font-size="7.5">userspace · struct v4l2_format trên stack app</text>
+
+        <line class="rule" x1="16" y1="62" x2="724" y2="62"/>
+        <text class="m" x="330" y="59" font-size="7.5">syscall</text>
+
+        <rect class="b" x="16" y="72" width="300" height="38" rx="4"/>
+        <text class="t" x="26" y="88" font-size="9">fs/ioctl.c → file-&gt;f_op-&gt;unlocked_ioctl</text>
+        <text class="m" x="26" y="100" font-size="7.5">f_op = v4l2_fops (gán khi __video_register_device)</text>
+        <line class="f" x1="166" y1="52" x2="166" y2="70" marker-end="url(#i2)"/>
+
+        <rect class="b" x="16" y="130" width="300" height="46" rx="4"/>
+        <text class="t" x="26" y="146" font-size="9">v4l2_ioctl()   v4l2-dev.c:353</text>
+        <text class="m" x="26" y="158" font-size="7.5">vdev = video_devdata(filp) :234 — tra từ minor</text>
+        <text class="m" x="26" y="169" font-size="7.5">if (video_is_registered) → vdev-&gt;fops-&gt;unlocked_ioctl</text>
+        <line class="f" x1="166" y1="110" x2="166" y2="128" marker-end="url(#i2)"/>
+
+        <rect class="b" x="16" y="196" width="300" height="46" rx="4"/>
+        <text class="t" x="26" y="212" font-size="9">video_ioctl2()   v4l2-ioctl.c:3358</text>
+        <text class="m" x="26" y="224" font-size="7.5">= video_usercopy(file, cmd, arg, __video_do_ioctl)</text>
+        <text class="m" x="26" y="235" font-size="7.5">copy_from_user vào buffer kernel, kiểm _IOC_SIZE</text>
+        <line class="f" x1="166" y1="176" x2="166" y2="194" marker-end="url(#i2)"/>
+
+        <rect class="b" x="16" y="262" width="300" height="80" rx="4"/>
+        <text class="t" x="26" y="278" font-size="9">__video_do_ioctl()   v4l2-ioctl.c:2941</text>
+        <text class="m" x="26" y="291" font-size="7.5">① ops = vfd-&gt;ioctl_ops; nếu NULL → warn + ENOTTY</text>
+        <text class="m" x="26" y="303" font-size="7.5">② info = &amp;v4l2_ioctls[_IOC_NR(cmd)]</text>
+        <text class="m" x="26" y="315" font-size="7.5">③ test_bit(_IOC_NR, vfd-&gt;valid_ioctls) → ENOTTY nếu tắt</text>
+        <text class="m" x="26" y="327" font-size="7.5">④ v4l2_prio_check() nếu INFO_FL_PRIO</text>
+        <text class="m" x="26" y="338" font-size="7.5">⑤ ret = info-&gt;func(ops, file, fh, arg) :3012</text>
+        <line class="f" x1="166" y1="242" x2="166" y2="260" marker-end="url(#i2)"/>
+
+        <rect class="b" x="392" y="130" width="332" height="112" rx="4"/>
+        <text class="t" x="402" y="146" font-size="9.5">v4l2_ioctls[]   v4l2-ioctl.c:2794</text>
+        <text class="m" x="402" y="159" font-size="7.5">mảng tĩnh, index = _IOC_NR(cmd)</text>
+        <line class="ll" x1="402" y1="166" x2="714" y2="166"/>
+        <text class="m" x="402" y="180" font-size="7.5">IOCTL_INFO(VIDIOC_QUERYCAP, v4l_querycap, …)</text>
+        <text class="m" x="402" y="192" font-size="7.5">IOCTL_INFO(VIDIOC_S_FMT,    v4l_s_fmt,    …)</text>
+        <text class="m" x="402" y="204" font-size="7.5">IOCTL_INFO(VIDIOC_QBUF,     v4l_qbuf,     …)</text>
+        <text class="m" x="402" y="216" font-size="7.5">…</text>
+        <text class="m" x="402" y="232" font-size="7.5">mỗi entry: .func .flags .debug — macro tại :2758</text>
+        <path class="f f-x" d="M316,300 C350,300 370,240 390,200" marker-end="url(#i2)"/>
+        <text class="m" x="340" y="262" font-size="7" text-anchor="middle">tra bảng</text>
+
+        <rect class="b" x="392" y="262" width="332" height="46" rx="4"/>
+        <text class="t" x="402" y="278" font-size="9">v4l_s_fmt() — wrapper trong core</text>
+        <text class="m" x="402" y="290" font-size="7.5">rẽ theo fmt-&gt;type: VIDEO_CAPTURE / OUTPUT / MPLANE…</text>
+        <text class="m" x="402" y="301" font-size="7.5">rồi gọi ops-&gt;vidioc_s_fmt_vid_cap(file, fh, fmt)</text>
+        <line class="f" x1="558" y1="242" x2="558" y2="260" marker-end="url(#i2)"/>
+
+        <rect class="b" x="392" y="328" width="332" height="46" rx="4"/>
+        <text class="t" x="402" y="344" font-size="9">DRIVER: .vidioc_s_fmt_vid_cap</text>
+        <text class="m" x="402" y="356" font-size="7.5">kiểm/nắn format, lưu vào state, có thể gọi subdev set_fmt</text>
+        <text class="m" x="402" y="367" font-size="7.5">v4l2_ioctl_ops — include/media/v4l2-ioctl.h:296</text>
+        <line class="f" x1="558" y1="308" x2="558" y2="326" marker-end="url(#i2)"/>
+
+        <text class="m" x="16" y="362" font-size="7.5">Khóa: lock = vdev-&gt;lock hoặc</text>
+        <text class="m" x="16" y="373" font-size="7.5">queue-&gt;lock (nếu ioctl thuộc</text>
+        <text class="m" x="16" y="384" font-size="7.5">nhóm buffer) — core tự lấy,</text>
+        <text class="m" x="16" y="395" font-size="7.5">driver KHÔNG tự lấy lại.</text>
+      </svg>
+      <figcaption>Hai cơ chế lọc trước khi tới driver: <code>valid_ioctls</code> bitmap (core tự
+        tính lúc <code>video_register_device</code> dựa trên ops nào driver cài) và
+        <code>v4l2_prio_check</code>. Đó là lý do một ioctl có thể trả <code>ENOTTY</code>
+        <em>dù</em> driver có hàm — vì cờ <code>V4L2_CAP_*</code> hoặc
+        <code>vdev-&gt;device_caps</code> chưa khai.</figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>ioctl</th><th>struct truyền</th><th>Ai thường xử lý</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td><code>VIDIOC_QUERYCAP</code></td><td><code>v4l2_capability</code></td><td>driver</td><td>bắt buộc; trả <code>device_caps</code></td></tr>
+        <tr><td><code>VIDIOC_ENUM_FMT</code></td><td><code>v4l2_fmtdesc</code></td><td>driver</td><td>lặp <code>index</code> tới <code>EINVAL</code></td></tr>
+        <tr><td><code>VIDIOC_G/S/TRY_FMT</code></td><td><code>v4l2_format</code></td><td>driver</td><td>TRY không đổi state; S_FMT hỏng nếu đang stream</td></tr>
+        <tr><td><code>VIDIOC_REQBUFS</code></td><td><code>v4l2_requestbuffers</code></td><td><code>vb2_ioctl_reqbufs</code> <span class="src">vb2-v4l2.c:982</span></td><td>count=0 = giải phóng hết</td></tr>
+        <tr><td><code>VIDIOC_QUERYBUF</code></td><td><code>v4l2_buffer</code></td><td><code>vb2_ioctl_querybuf</code> <span class="src">:1040</span></td><td>trả <code>m.offset</code> để mmap</td></tr>
+        <tr><td><code>VIDIOC_QBUF</code></td><td><code>v4l2_buffer</code></td><td><code>vb2_ioctl_qbuf</code> <span class="src">:1049</span></td><td>→ <code>vb2_core_qbuf</code> :1607</td></tr>
+        <tr><td><code>VIDIOC_DQBUF</code></td><td><code>v4l2_buffer</code></td><td><code>vb2_ioctl_dqbuf</code> <span class="src">:1059</span></td><td>ngủ trừ khi <code>O_NONBLOCK</code></td></tr>
+        <tr><td><code>VIDIOC_STREAMON/OFF</code></td><td><code>v4l2_buf_type</code></td><td><code>vb2_ioctl_streamon</code> <span class="src">:1069</span></td><td>ON có thể chưa gọi driver nếu thiếu buffer</td></tr>
+        <tr><td><code>VIDIOC_QUERYCTRL</code> / <code>G_CTRL</code> / <code>S_CTRL</code></td><td><code>v4l2_queryctrl</code> / <code>v4l2_control</code></td><td>ctrl framework</td><td><code>v4l2_s_ctrl</code> <span class="src">v4l2-ctrls.c:4297</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="objects">
+    <h2><span class="n">03</span>Bản đồ cấu trúc — ai tạo, ai sở hữu, ai hủy</h2>
+    <p class="srcline">roadmap mục 4, 5, 36, 37 · nguồn: v4l2-dev.h · v4l2-device.h · media-entity.h</p>
+
+    <figure>
+      <svg viewBox="0 0 740 420" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Đồ thị sở hữu V4L2: driver tạo v4l2_device làm gốc; v4l2_device có danh sách subdevs chứa các v4l2_subdev và trỏ tới media_device; mỗi video_device trỏ ngược v4l2_dev và chứa con trỏ queue tới vb2_queue cùng ioctl_ops và fops; vb2_queue sở hữu mảng bufs các vb2_buffer, mỗi vb2_buffer bọc trong vb2_v4l2_buffer và có các vb2_plane mang dma_addr; mỗi subdev và video_device đều có một media_entity với các media_pad nối nhau bằng media_link; struct file khi mở trỏ tới video_device qua private_data và v4l2_fh.">
+        <defs><marker id="o1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="o1d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="270" y="14" width="200" height="40" rx="4"/>
+        <text class="t" x="370" y="30" font-size="9.5" text-anchor="middle">v4l2_device</text>
+        <text class="m" x="370" y="43" font-size="7.5" text-anchor="middle">v4l2-device.h:47 · GỐC của tất cả</text>
+
+        <rect class="b" x="20" y="88" width="200" height="52" rx="4"/>
+        <text class="t" x="120" y="104" font-size="9.5" text-anchor="middle">video_device</text>
+        <text class="m" x="120" y="117" font-size="7.5" text-anchor="middle">v4l2-dev.h:263</text>
+        <text class="m" x="120" y="129" font-size="7.5" text-anchor="middle">→ /dev/videoX</text>
+        <line class="f" x1="290" y1="54" x2="180" y2="86" marker-end="url(#o1)"/>
+        <text class="m" x="222" y="66" font-size="7">-&gt;v4l2_dev</text>
+
+        <rect class="b" x="270" y="88" width="200" height="52" rx="4"/>
+        <text class="t" x="370" y="104" font-size="9.5" text-anchor="middle">v4l2_subdev ×N</text>
+        <text class="m" x="370" y="117" font-size="7.5" text-anchor="middle">v4l2-subdev.h:897</text>
+        <text class="m" x="370" y="129" font-size="7.5" text-anchor="middle">sensor · CSI RX · ISP</text>
+        <line class="f" x1="370" y1="54" x2="370" y2="86" marker-end="url(#o1)"/>
+        <text class="m" x="378" y="72" font-size="7">-&gt;subdevs (list)</text>
+
+        <rect class="b" x="520" y="88" width="200" height="52" rx="4"/>
+        <text class="t" x="620" y="104" font-size="9.5" text-anchor="middle">media_device</text>
+        <text class="m" x="620" y="117" font-size="7.5" text-anchor="middle">media-device.h:145</text>
+        <text class="m" x="620" y="129" font-size="7.5" text-anchor="middle">→ /dev/mediaX</text>
+        <line class="f" x1="450" y1="54" x2="560" y2="86" marker-end="url(#o1)"/>
+        <text class="m" x="520" y="66" font-size="7">-&gt;mdev</text>
+
+        <rect class="b" x="270" y="176" width="200" height="46" rx="4"/>
+        <text class="t" x="370" y="192" font-size="9" text-anchor="middle">media_entity</text>
+        <text class="m" x="370" y="205" font-size="7.5" text-anchor="middle">media-entity.h:290 · nhúng trong</text>
+        <text class="m" x="370" y="216" font-size="7.5" text-anchor="middle">cả subdev VÀ video_device</text>
+        <line class="f" x1="370" y1="140" x2="370" y2="174" marker-end="url(#o1)"/>
+        <path class="f f-x" d="M120,140 C120,190 250,200 268,200" marker-end="url(#o1)"/>
+        <line class="f f-x" x1="590" y1="140" x2="470" y2="190" marker-end="url(#o1)"/>
+        <text class="m" x="540" y="170" font-size="7">-&gt;entities</text>
+
+        <rect class="b" x="270" y="248" width="94" height="40" rx="4"/>
+        <text class="t" x="317" y="264" font-size="8.5" text-anchor="middle">media_pad</text>
+        <text class="m" x="317" y="277" font-size="7" text-anchor="middle">:189 SINK/SRC</text>
+        <rect class="b" x="376" y="248" width="94" height="40" rx="4"/>
+        <text class="t" x="423" y="264" font-size="8.5" text-anchor="middle">media_link</text>
+        <text class="m" x="423" y="277" font-size="7" text-anchor="middle">:132 nối 2 pad</text>
+        <line class="f" x1="317" y1="222" x2="317" y2="246" marker-end="url(#o1)"/>
+        <text class="m" x="264" y="238" font-size="7" text-anchor="end">-&gt;pads[]</text>
+        <line class="f" x1="364" y1="268" x2="374" y2="268" marker-end="url(#o1)"/>
+
+        <rect class="b b-d" x="20" y="176" width="200" height="52" rx="4"/>
+        <text class="t" x="120" y="192" font-size="9.5" text-anchor="middle">vb2_queue</text>
+        <text class="m" x="120" y="205" font-size="7.5" text-anchor="middle">videobuf2-core.h:567</text>
+        <text class="m" x="120" y="217" font-size="7.5" text-anchor="middle">driver nhúng, gán vdev-&gt;queue</text>
+        <line class="f f-d" x1="120" y1="140" x2="120" y2="174" marker-end="url(#o1d)"/>
+        <text class="m" x="128" y="158" font-size="7">-&gt;queue</text>
+
+        <rect class="b b-d" x="20" y="248" width="200" height="46" rx="4"/>
+        <text class="t" x="120" y="264" font-size="9" text-anchor="middle">vb2_buffer bufs[VB2_MAX_FRAME]</text>
+        <text class="m" x="120" y="277" font-size="7.5" text-anchor="middle">videobuf2-core.h:245 · state, index</text>
+        <text class="m" x="120" y="288" font-size="7.5" text-anchor="middle">bọc trong vb2_v4l2_buffer (v4l2.h:44)</text>
+        <line class="f f-d" x1="120" y1="228" x2="120" y2="246" marker-end="url(#o1d)"/>
+
+        <rect class="b b-d" x="20" y="314" width="200" height="46" rx="4"/>
+        <text class="t" x="120" y="330" font-size="9" text-anchor="middle">vb2_plane planes[]</text>
+        <text class="m" x="120" y="343" font-size="7.5" text-anchor="middle">videobuf2-core.h:174</text>
+        <text class="m" x="120" y="354" font-size="7.5" text-anchor="middle">mem_priv → dma_addr_t phần cứng dùng</text>
+        <line class="f f-d" x1="120" y1="294" x2="120" y2="312" marker-end="url(#o1d)"/>
+
+        <rect class="b" x="520" y="248" width="200" height="46" rx="4"/>
+        <text class="t" x="620" y="264" font-size="9" text-anchor="middle">v4l2_ctrl_handler</text>
+        <text class="m" x="620" y="277" font-size="7.5" text-anchor="middle">v4l2-ctrls.h:363 · danh sách v4l2_ctrl :239</text>
+        <text class="m" x="620" y="288" font-size="7.5" text-anchor="middle">gắn vào subdev HOẶC video_device</text>
+        <path class="f f-x" d="M470,200 C500,200 512,236 518,246" marker-end="url(#o1)"/>
+
+        <rect class="b" x="270" y="330" width="200" height="52" rx="4"/>
+        <text class="t" x="370" y="346" font-size="9" text-anchor="middle">struct file (mỗi open)</text>
+        <text class="m" x="370" y="359" font-size="7.5" text-anchor="middle">private_data → v4l2_fh</text>
+        <text class="m" x="370" y="370" font-size="7.5" text-anchor="middle">video_devdata(file) → video_device</text>
+        <path class="f f-x" d="M270,352 C200,352 130,320 120,296" marker-end="url(#o1)"/>
+      </svg>
+      <figcaption>Nét liền = sở hữu/chứa; nét đứt = tham chiếu chéo. Điểm hay bị bỏ sót:
+        <code>media_entity</code> được <strong>nhúng trong cả hai</strong> —
+        <code>v4l2_subdev.entity</code> và <code>video_device.entity</code> — nên video node cũng
+        là một node trên media graph, đó là cách <code>media-ctl</code> nhìn thấy nó.</figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Object</th><th>Ai cấp phát</th><th>Ai đăng ký</th><th>Ai hủy</th></tr></thead>
+      <tbody>
+        <tr><td><code>v4l2_device</code></td><td>driver (nhúng trong priv)</td><td><code>v4l2_device_register</code> <span class="src">v4l2-device.c:17</span></td><td><code>v4l2_device_unregister</code> <span class="src">:88</span></td></tr>
+        <tr><td><code>video_device</code></td><td>driver nhúng, hoặc <code>video_device_alloc</code> <span class="src">v4l2-dev.h:428</span></td><td><code>video_register_device</code> → <code>__video_register_device</code> <span class="src">v4l2-dev.c:876</span></td><td><code>video_unregister_device</code> <span class="src">:1080</span> + <code>release()</code></td></tr>
+        <tr><td><code>v4l2_subdev</code></td><td>driver sensor/CSI/ISP</td><td><code>v4l2_async_register_subdev</code> <span class="src">v4l2-async.c:750</span></td><td><code>v4l2_async_unregister_subdev</code></td></tr>
+        <tr><td><code>media_device</code></td><td>driver bridge</td><td><code>__media_device_register</code> <span class="src">mc-device.c:732</span></td><td><code>media_device_unregister</code> <span class="src">:801</span></td></tr>
+        <tr><td><code>media_entity</code></td><td>nhúng trong subdev / vdev</td><td><code>media_device_register_entity</code> <span class="src">mc-device.c:616</span></td><td><code>media_device_unregister_entity</code> <span class="src">:681</span></td></tr>
+        <tr><td><code>vb2_queue</code></td><td>driver nhúng</td><td><code>vb2_queue_init</code> <span class="src">vb2-v4l2.c:935</span></td><td><code>vb2_queue_release</code></td></tr>
+        <tr><td><code>vb2_buffer</code></td><td><strong>vb2</strong> — <code>__vb2_queue_alloc</code> <span class="src">vb2-core.c:395</span></td><td>tự động khi REQBUFS</td><td>REQBUFS(0) hoặc close</td></tr>
+        <tr><td>bộ nhớ DMA</td><td>tùy memory model — xem mục 06</td><td><code>mem_ops-&gt;alloc</code></td><td><code>mem_ops-&gt;put</code> khi refcount = 0</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <p class="phase">Phase 2 — Camera architecture · mục 6, 7, 8, 17, 18</p>
+
+  <section id="graph">
+    <h2><span class="n">04</span>Media graph — pipeline là dữ liệu, không phải mã</h2>
+    <p class="srcline">roadmap mục 7, 8, 20 · nguồn: mc-entity.c · vimc-core.c</p>
+    <p>Trước Media Controller, một driver camera phải hard-code toàn bộ đường đi. Media Controller
+      biến đường đi thành <strong>đồ thị dữ liệu mà userspace đọc và sửa được</strong> — đó là
+      lý do <code>media-ctl</code> có thể đổi routing mà không cần biên dịch lại kernel.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 340" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Media graph của một pipeline camera: entity sensor có một source pad nối bằng link tới sink pad của CSI-2 receiver; CSI receiver có source pad nối tới sink pad của ISP; ISP có source pad nối tới sink pad của video capture entity, entity này chính là video_device xuất ra /dev/video0. Bên dưới ghi ioctl nào cấu hình phần nào: VIDIOC_SUBDEV_S_FMT trên từng pad, MEDIA_IOC_SETUP_LINK trên link, VIDIOC_S_FMT trên video node.">
+        <defs><marker id="g1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="40" width="130" height="54" rx="4"/>
+        <text class="t" x="81" y="58" font-size="9" text-anchor="middle">Sensor</text>
+        <text class="m" x="81" y="70" font-size="7" text-anchor="middle">v4l2_subdev (I2C)</text>
+        <text class="m" x="81" y="81" font-size="7" text-anchor="middle">ENTITY · SENSOR</text>
+        <circle class="b b-d" cx="146" cy="67" r="6"/>
+        <text class="md" x="146" y="105" font-size="7" text-anchor="middle">pad0 SRC</text>
+
+        <rect class="b" x="196" y="40" width="130" height="54" rx="4"/>
+        <text class="t" x="261" y="58" font-size="9" text-anchor="middle">CSI-2 Receiver</text>
+        <text class="m" x="261" y="70" font-size="7" text-anchor="middle">v4l2_subdev (platform)</text>
+        <text class="m" x="261" y="81" font-size="7" text-anchor="middle">ENTITY · V4L2_SUBDEV</text>
+        <circle class="b b-d" cx="196" cy="67" r="6"/>
+        <circle class="b b-d" cx="326" cy="67" r="6"/>
+        <text class="md" x="196" y="105" font-size="7" text-anchor="middle">pad0 SINK</text>
+        <text class="md" x="326" y="105" font-size="7" text-anchor="middle">pad1 SRC</text>
+
+        <rect class="b" x="376" y="40" width="130" height="54" rx="4"/>
+        <text class="t" x="441" y="58" font-size="9" text-anchor="middle">ISP</text>
+        <text class="m" x="441" y="70" font-size="7" text-anchor="middle">Bayer → YUV, crop</text>
+        <text class="m" x="441" y="81" font-size="7" text-anchor="middle">ENTITY · PROC_VIDEO</text>
+        <circle class="b b-d" cx="376" cy="67" r="6"/>
+        <circle class="b b-d" cx="506" cy="67" r="6"/>
+        <text class="md" x="376" y="105" font-size="7" text-anchor="middle">pad0 SINK</text>
+        <text class="md" x="506" y="105" font-size="7" text-anchor="middle">pad1 SRC</text>
+
+        <rect class="b" x="556" y="40" width="150" height="54" rx="4"/>
+        <text class="t" x="631" y="58" font-size="9" text-anchor="middle">Video Capture</text>
+        <text class="m" x="631" y="70" font-size="7" text-anchor="middle">video_device + vb2_queue</text>
+        <text class="m" x="631" y="81" font-size="7" text-anchor="middle">ENTITY · IO_V4L</text>
+        <circle class="b b-d" cx="556" cy="67" r="6"/>
+        <text class="md" x="556" y="105" font-size="7" text-anchor="middle">pad0 SINK</text>
+
+        <line class="f f-d" x1="152" y1="67" x2="190" y2="67" marker-end="url(#g1)"/>
+        <line class="f f-d" x1="332" y1="67" x2="370" y2="67" marker-end="url(#g1)"/>
+        <line class="f f-d" x1="512" y1="67" x2="550" y2="67" marker-end="url(#g1)"/>
+        <text class="md" x="171" y="34" font-size="7" text-anchor="middle">LINK</text>
+        <text class="md" x="351" y="34" font-size="7" text-anchor="middle">LINK</text>
+        <text class="md" x="531" y="34" font-size="7" text-anchor="middle">LINK</text>
+        <text class="m" x="171" y="24" font-size="6.5" text-anchor="middle">IMMUTABLE?</text>
+        <text class="m" x="531" y="24" font-size="6.5" text-anchor="middle">ENABLED</text>
+
+        <rect class="b" x="556" y="118" width="150" height="30" rx="4"/>
+        <text class="t" x="631" y="137" font-size="8.5" text-anchor="middle">/dev/video0</text>
+        <line class="f f-d" x1="631" y1="94" x2="631" y2="116" marker-end="url(#g1)"/>
+
+        <line class="ll" x1="16" y1="166" x2="724" y2="166"/>
+        <text class="t" x="16" y="184" font-size="9.5">Userspace cấu hình cái gì ở đâu</text>
+
+        <text class="m" x="16" y="204" font-size="8">MEDIA_IOC_DEVICE_INFO / G_TOPOLOGY  → /dev/media0, đọc toàn bộ graph</text>
+        <text class="m" x="16" y="217" font-size="8">MEDIA_IOC_SETUP_LINK                → bật/tắt link  __media_entity_setup_link  mc-entity.c:830</text>
+        <text class="m" x="16" y="230" font-size="8">VIDIOC_SUBDEV_S_FMT (/dev/v4l-subdevX) → format TRÊN TỪNG PAD</text>
+        <text class="m" x="16" y="243" font-size="8">VIDIOC_S_FMT (/dev/video0)          → format ở video node (phải khớp pad nguồn)</text>
+        <text class="m" x="16" y="256" font-size="8">VIDIOC_STREAMON                     → driver gọi media_pipeline_start  mc-entity.c:532</text>
+
+        <text class="m" x="16" y="280" font-size="8">Kernel dựng graph bằng:</text>
+        <text class="m" x="16" y="293" font-size="8">  media_entity_pads_init(entity, num_pads, pads)   mc-entity.c:197</text>
+        <text class="m" x="16" y="306" font-size="8">  media_create_pad_link(src, srcpad, sink, sinkpad, flags)   ví dụ vimc-core.c:139</text>
+        <text class="m" x="16" y="319" font-size="8">  media_device_register_entity(mdev, entity)   mc-device.c:616</text>
+        <text class="m" x="16" y="332" font-size="7.5">FLAG quan trọng: MEDIA_LNK_FL_IMMUTABLE (không tắt được) · _ENABLED (đang hoạt động)</text>
+      </svg>
+      <figcaption><code>media_pipeline_start()</code> đi bộ trên đồ thị từ video node ngược lên,
+        đánh dấu mọi entity là &ldquo;đang streaming&rdquo; và <strong>khóa</strong> link — sau đó
+        <code>MEDIA_IOC_SETUP_LINK</code> sẽ trả <code>EBUSY</code>. Đó là lý do phải
+        <code>media-ctl</code> <em>trước</em> khi <code>STREAMON</code>.</figcaption>
+    </figure>
+  </section>
+
+  <section id="async">
+    <h2><span class="n">05</span>Async notifier — cuộc hẹn hai chiều</h2>
+    <p class="srcline">roadmap mục 6, 17, 18 · nguồn: v4l2-async.c · v4l2-fwnode.c</p>
+    <p>Vì sao cần bất đồng bộ: sensor nằm trên I2C bus, CSI receiver là platform device. Thứ tự
+      probe <strong>không xác định</strong>. Framework giải bằng một cuộc hẹn: bên nào tới sau sẽ
+      kích hoạt việc ghép đôi.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 330" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Cuộc hẹn async hai chiều: nhánh trái sensor probe gọi v4l2_i2c_subdev_init rồi v4l2_async_register_subdev, hàm này duyệt notifier_list tìm asd khớp; nhánh phải bridge probe parse device tree bằng v4l2_fwnode_endpoint_parse tạo mảng asd rồi v4l2_async_notifier_register, hàm này duyệt subdev_list. Bên nào chạy sau sẽ tìm thấy bên kia và gọi v4l2_async_match_notify, hàm này đăng ký subdev vào v4l2_device, gọi callback bound, và khi hết asd thì gọi callback complete để tạo link và đăng ký video node.">
+        <defs><marker id="n1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="16" width="300" height="30" rx="4"/>
+        <text class="t" x="166" y="35" font-size="9.5" text-anchor="middle">SENSOR driver probe() — I2C</text>
+        <rect class="b" x="424" y="16" width="300" height="30" rx="4"/>
+        <text class="t" x="574" y="35" font-size="9.5" text-anchor="middle">BRIDGE/CSI driver probe() — platform</text>
+
+        <rect class="b" x="16" y="60" width="300" height="42" rx="4"/>
+        <text class="m" x="26" y="76" font-size="7.5">v4l2_i2c_subdev_init(&amp;sd, client, &amp;ops)</text>
+        <text class="m" x="26" y="88" font-size="7.5">media_entity_pads_init(&amp;sd.entity, 1, &amp;pad)</text>
+        <text class="m" x="26" y="99" font-size="7.5">sd.fwnode = dev_fwnode(dev)   v4l2-async.c:762</text>
+        <line class="f" x1="166" y1="46" x2="166" y2="58" marker-end="url(#n1)"/>
+
+        <rect class="b" x="424" y="60" width="300" height="42" rx="4"/>
+        <text class="m" x="434" y="76" font-size="7.5">v4l2_device_register(dev, &amp;v4l2_dev)</text>
+        <text class="m" x="434" y="88" font-size="7.5">of_graph → v4l2_fwnode_endpoint_parse :500</text>
+        <text class="m" x="434" y="99" font-size="7.5">đọc data-lanes :166 · bus-type :433 → tạo asd[]</text>
+        <line class="f" x1="574" y1="46" x2="574" y2="58" marker-end="url(#n1)"/>
+
+        <rect class="b" x="16" y="116" width="300" height="46" rx="4"/>
+        <text class="t" x="26" y="132" font-size="8.5">v4l2_async_register_subdev()  :750</text>
+        <text class="m" x="26" y="144" font-size="7.5">duyệt notifier_list, mỗi notifier:</text>
+        <text class="m" x="26" y="155" font-size="7.5">  asd = v4l2_async_find_match(notifier, sd) :775</text>
+        <line class="f" x1="166" y1="102" x2="166" y2="114" marker-end="url(#n1)"/>
+
+        <rect class="b" x="424" y="116" width="300" height="46" rx="4"/>
+        <text class="t" x="434" y="132" font-size="8.5">v4l2_async_notifier_register()  :540</text>
+        <text class="m" x="434" y="144" font-size="7.5">duyệt subdev_list (các sd đã chờ sẵn):</text>
+        <text class="m" x="434" y="155" font-size="7.5">  v4l2_async_notifier_try_all_subdevs()</text>
+        <line class="f" x1="574" y1="102" x2="574" y2="114" marker-end="url(#n1)"/>
+
+        <path class="f" d="M316,140 C350,140 356,166 366,178" marker-end="url(#n1)"/>
+        <path class="f" d="M424,140 C390,140 384,166 374,178" marker-end="url(#n1)"/>
+        <text class="m" x="370" y="132" font-size="7.5" text-anchor="middle">bên nào SAU thì khớp</text>
+
+        <rect class="b b-d" x="180" y="182" width="380" height="60" rx="4"/>
+        <text class="t" x="190" y="198" font-size="9">v4l2_async_match_notify()   v4l2-async.c:293</text>
+        <text class="m" x="190" y="211" font-size="7.5">① v4l2_device_register_subdev(v4l2_dev, sd) :302</text>
+        <text class="m" x="190" y="223" font-size="7.5">② notifier-&gt;ops-&gt;bound(notifier, sd, asd) :306 ← driver lưu con trỏ sd</text>
+        <text class="m" x="190" y="235" font-size="7.5">③ list_del(&amp;asd-&gt;list) + list_move(sd → notifier-&gt;done) :313-317</text>
+
+        <rect class="b b-d" x="180" y="256" width="380" height="60" rx="4"/>
+        <text class="t" x="190" y="272" font-size="9">Khi danh sách asd rỗng → complete()</text>
+        <text class="m" x="190" y="285" font-size="7.5">v4l2_async_notifier_call_complete() :45</text>
+        <text class="m" x="190" y="297" font-size="7.5">driver tạo media_create_pad_link() nối sensor ↔ CSI</text>
+        <text class="m" x="190" y="309" font-size="7.5">rồi v4l2_device_register_subdev_nodes() + media_device_register()</text>
+        <line class="f f-d" x1="370" y1="242" x2="370" y2="254" marker-end="url(#n1)"/>
+      </svg>
+      <figcaption>Kiểu khớp mặc định trên DT là <code>V4L2_ASYNC_MATCH_FWNODE</code>
+        <span class="src">v4l2-async.h:33</span> — so <code>sd-&gt;fwnode</code> với
+        <code>asd-&gt;match.fwnode</code> lấy từ <code>remote-endpoint</code>
+        (<code>match_fwnode</code> <span class="src">v4l2-async.c:73</span>). Sai
+        <code>remote-endpoint</code> trong DTS = <code>bound()</code> không bao giờ được gọi =
+        graph không bao giờ complete = <strong>không có /dev/video0</strong>.</figcaption>
+    </figure>
+
+    <h3>Device Tree ↔ code — mục 17</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Thuộc tính DT</th><th>Ai đọc</th><th>Đổ vào</th></tr></thead>
+      <tbody>
+        <tr><td><code>port</code> / <code>endpoint</code></td><td><code>of_graph_*</code> → <code>fwnode</code></td><td><code>asd-&gt;match.fwnode</code></td></tr>
+        <tr><td><code>remote-endpoint</code></td><td><code>v4l2_fwnode_endpoint_parse</code> <span class="src">:500</span></td><td>xác định đầu kia của link</td></tr>
+        <tr><td><code>data-lanes = &lt;1 2 3 4&gt;</code></td><td><span class="src">v4l2-fwnode.c:166-184</span></td><td><code>bus.mipi_csi2.num_data_lanes</code></td></tr>
+        <tr><td><code>bus-type = &lt;4&gt;</code></td><td><span class="src">v4l2-fwnode.c:433</span></td><td>chọn CSI2_DPHY / PARALLEL…</td></tr>
+        <tr><td><code>clocks</code>, <code>reset-gpios</code>, <code>*-supply</code></td><td>driver sensor tự đọc</td><td>power sequence trong <code>s_power</code>/runtime PM</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <p class="phase">Phase 3 — Buffer · mục 9, 10, 11, 12</p>
+
+  <section id="vb2">
+    <h2><span class="n">06</span>VB2 — máy trạng thái buffer và ai đẩy nó đi</h2>
+    <p class="srcline">roadmap mục 9, 10 · nguồn: videobuf2-core.c · videobuf2-core.h:219</p>
+    <p>Đây là phần phải học thật sâu. Mọi bug &ldquo;không có frame&rdquo; đều là buffer bị kẹt ở
+      một trong bảy trạng thái này. Điều quan trọng: <strong>mỗi mũi tên do một chủ thể khác nhau
+      kéo</strong> — userspace, vb2, driver, hay interrupt.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Máy trạng thái vb2_buffer: từ DEQUEUED, QBUF đưa qua PREPARING rồi PREPARED và QUEUED nằm trong queued_list; khi streaming, vb2 gọi __enqueue_in_driver đưa buffer sang ACTIVE và driver sở hữu, tăng owned_by_drv_count; phần cứng DMA ghi xong raise interrupt, driver ISR gọi vb2_buffer_done chuyển sang DONE hoặc ERROR, đưa vào done_list và wake_up done_wq; DQBUF lấy khỏi done_list, gọi buf_finish và trở về DEQUEUED. STREAMOFF ép mọi buffer về DEQUEUED.">
+        <defs><marker id="s1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="s1d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="s1i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-i" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="m" x="16" y="16" font-size="8">CHỦ THỂ KÉO:</text>
+        <text class="m" x="110" y="16" font-size="8">─── userspace ioctl</text>
+        <text class="md" x="250" y="16" font-size="8">─── vb2 / driver</text>
+        <text class="mi" x="380" y="16" font-size="8">─── interrupt</text>
+
+        <rect class="b" x="16" y="34" width="130" height="40" rx="4"/>
+        <text class="t" x="81" y="52" font-size="9" text-anchor="middle">DEQUEUED</text>
+        <text class="m" x="81" y="65" font-size="7" text-anchor="middle">userspace sở hữu</text>
+
+        <rect class="b" x="196" y="34" width="130" height="40" rx="4"/>
+        <text class="t" x="261" y="52" font-size="9" text-anchor="middle">PREPARING</text>
+        <text class="m" x="261" y="65" font-size="7" text-anchor="middle">__buf_prepare :1372</text>
+
+        <rect class="b" x="376" y="34" width="130" height="40" rx="4"/>
+        <text class="t" x="441" y="52" font-size="9" text-anchor="middle">QUEUED</text>
+        <text class="m" x="441" y="65" font-size="7" text-anchor="middle">trong queued_list</text>
+
+        <rect class="b b-d" x="556" y="34" width="150" height="40" rx="4"/>
+        <text class="t" x="631" y="52" font-size="9" text-anchor="middle">ACTIVE</text>
+        <text class="m" x="631" y="65" font-size="7" text-anchor="middle">DRIVER + DMA sở hữu</text>
+
+        <line class="f" x1="146" y1="54" x2="194" y2="54" marker-end="url(#s1)"/>
+        <text class="m" x="170" y="30" font-size="7" text-anchor="middle">QBUF</text>
+        <line class="f f-d" x1="326" y1="54" x2="374" y2="54" marker-end="url(#s1d)"/>
+        <text class="m" x="350" y="30" font-size="7" text-anchor="middle">prepared</text>
+        <line class="f f-d" x1="506" y1="54" x2="554" y2="54" marker-end="url(#s1d)"/>
+        <text class="md" x="530" y="30" font-size="7" text-anchor="middle">enqueue</text>
+
+        <text class="m" x="196" y="94" font-size="7">vb2_core_qbuf :1607</text>
+        <text class="m" x="196" y="105" font-size="7">list_add_tail(queued_list) :1712</text>
+        <text class="md" x="470" y="94" font-size="7">__enqueue_in_driver :1360</text>
+        <text class="md" x="470" y="105" font-size="7">→ vb2_ops-&gt;buf_queue(vb)</text>
+        <text class="md" x="470" y="116" font-size="7">owned_by_drv_count++</text>
+
+        <line class="rule-i" x1="16" y1="140" x2="724" y2="140"/>
+        <text class="mi" x="16" y="136" font-size="8">↓ PHẦN CỨNG DMA ghi frame · rồi FRAME DONE IRQ ↓</text>
+
+        <rect class="b b-i" x="556" y="152" width="150" height="52" rx="4"/>
+        <text class="t" x="631" y="169" font-size="9" text-anchor="middle">vb2_buffer_done()</text>
+        <text class="m" x="631" y="182" font-size="7" text-anchor="middle">videobuf2-core.c:1031</text>
+        <text class="m" x="631" y="193" font-size="7" text-anchor="middle">GỌI TỪ ISR — atomic</text>
+        <line class="f f-i" x1="631" y1="74" x2="631" y2="150" marker-end="url(#s1i)"/>
+
+        <rect class="b b-i" x="376" y="152" width="130" height="52" rx="4"/>
+        <text class="t" x="441" y="169" font-size="9" text-anchor="middle">DONE / ERROR</text>
+        <text class="m" x="441" y="182" font-size="7" text-anchor="middle">trong done_list</text>
+        <text class="m" x="441" y="193" font-size="7" text-anchor="middle">:1059</text>
+        <line class="f f-i" x1="554" y1="178" x2="508" y2="178" marker-end="url(#s1i)"/>
+
+        <text class="mi" x="376" y="222" font-size="7">spin_lock_irqsave(&amp;q-&gt;done_lock) :1057</text>
+        <text class="mi" x="376" y="233" font-size="7">atomic_dec(&amp;q-&gt;owned_by_drv_count) :1065</text>
+        <text class="mi" x="376" y="244" font-size="7">wake_up(&amp;q-&gt;done_wq) :1077  ← ĐÁNH THỨC DQBUF</text>
+
+        <rect class="b" x="196" y="152" width="130" height="52" rx="4"/>
+        <text class="t" x="261" y="169" font-size="9" text-anchor="middle">DQBUF trả về</text>
+        <text class="m" x="261" y="182" font-size="7" text-anchor="middle">vb2_core_dqbuf :1910</text>
+        <text class="m" x="261" y="193" font-size="7" text-anchor="middle">buf_finish + fill_user_buffer</text>
+        <line class="f" x1="374" y1="178" x2="328" y2="178" marker-end="url(#s1)"/>
+
+        <line class="f" x1="196" y1="170" x2="150" y2="80" marker-end="url(#s1)"/>
+        <text class="m" x="150" y="130" font-size="7" text-anchor="middle">__vb2_dqbuf :1897</text>
+        <text class="m" x="150" y="141" font-size="7" text-anchor="middle">→ DEQUEUED</text>
+
+        <line class="ll" x1="16" y1="262" x2="724" y2="262"/>
+        <text class="t" x="16" y="280" font-size="9.5">Điểm nghẽn thường gặp — buffer kẹt ở đâu thì lỗi gì</text>
+        <text class="m" x="16" y="298" font-size="8">kẹt QUEUED, không sang ACTIVE → start_streaming chưa gọi (thiếu min_buffers_needed) hoặc buf_queue không lập trình DMA</text>
+        <text class="m" x="16" y="311" font-size="8">kẹt ACTIVE mãi mãi          → IRQ không tới, hoặc ISR không gọi vb2_buffer_done → DQBUF treo vĩnh viễn</text>
+        <text class="m" x="16" y="324" font-size="8">DONE nhưng DQBUF không dậy  → thiếu wake_up (đã có sẵn trong vb2) hoặc app poll sai fd</text>
+        <text class="m" x="16" y="337" font-size="8">WARN "buf_queue without start" → driver trả buffer bằng vb2_buffer_done trong start_streaming lỗi</text>
+        <text class="m" x="16" y="356" font-size="8">STREAMOFF: vb2_core_streamoff :2124 → __vb2_queue_cancel ép MỌI buffer về DEQUEUED,</text>
+        <text class="m" x="16" y="369" font-size="8">driver PHẢI trả hết buffer đang giữ trong stop_streaming, nếu không WARN owned_by_drv_count != 0</text>
+        <text class="m" x="16" y="390" font-size="7.5">Trạng thái thứ 7: VB2_BUF_STATE_IN_REQUEST — chỉ dùng với Request API (media_request), bỏ qua nếu chưa cần.</text>
+      </svg>
+      <figcaption>Ranh giới đỏ là ranh giới context: mọi thứ phía trên chạy trong process
+        context dưới <code>q-&gt;lock</code>; <code>vb2_buffer_done</code> chạy trong ISR và chỉ
+        dùng <code>spin_lock_irqsave(&amp;q-&gt;done_lock)</code>. Hai khóa khác nhau — đó là lý do
+        ISR không bao giờ deadlock với DQBUF.</figcaption>
+    </figure>
+
+    <h3>vb2_ops — hợp đồng driver phải cài</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Callback</th><th>Khi nào gọi</th><th>Context</th><th>Bắt buộc</th></tr></thead>
+      <tbody>
+        <tr><td><code>queue_setup</code></td><td>REQBUFS — hỏi driver cần bao nhiêu buffer, mỗi buffer mấy plane, kích thước</td><td>process</td><td>có</td></tr>
+        <tr><td><code>buf_prepare</code></td><td>QBUF lần đầu cho buffer đó — kiểm kích thước, set payload</td><td>process</td><td>không</td></tr>
+        <tr><td><code>buf_queue</code></td><td>vb2 giao buffer cho driver — <strong>lập trình DMA ở đây</strong></td><td>process</td><td>có</td></tr>
+        <tr><td><code>start_streaming</code></td><td>STREAMON khi đủ buffer — bật phần cứng, gọi <code>s_stream</code> subdev</td><td>process</td><td>không</td></tr>
+        <tr><td><code>stop_streaming</code></td><td>STREAMOFF — tắt DMA và <strong>trả hết buffer</strong></td><td>process</td><td>không</td></tr>
+        <tr><td><code>buf_finish</code></td><td>trước khi DQBUF trả về userspace</td><td>process</td><td>không</td></tr>
+        <tr><td><code>wait_prepare</code>/<code>wait_finish</code></td><td>nhả/lấy lại <code>q-&gt;lock</code> quanh lúc ngủ trong DQBUF</td><td>process</td><td>nên dùng bản mặc định</td></tr>
+      </tbody>
+    </table></div>
+    <p>Ví dụ thật — Marvell CCIC cài đúng 6 cái:
+      <code>mcam_vb2_ops</code> <span class="src">marvell-ccic/mcam-core.c:1206</span> với
+      <code>queue_setup</code> <span class="src">:1079</span>,
+      <code>buf_queue</code> <span class="src">:1099</span> (thêm buffer vào
+      <code>cam-&gt;buffers</code> dưới <code>spin_lock_irqsave</code> rồi
+      <code>mcam_read_setup</code> nếu đang chờ),
+      <code>start_streaming</code> <span class="src">:1144</span>,
+      <code>stop_streaming</code> <span class="src">:1183</span>, và hai
+      <code>vb2_ops_wait_*</code> mặc định.</p>
+  </section>
+
+  <section id="mem">
+    <h2><span class="n">07</span>Ba mô hình bộ nhớ — khác nhau ở <em>ai cấp phát</em></h2>
+    <p class="srcline">roadmap mục 11, 12, 40 · nguồn: videobuf2-dma-contig.c</p>
+    <p>MMAP / USERPTR / DMABUF không khác nhau ở tốc độ truyền mà ở <strong>ai sở hữu trang nhớ và
+      ai phải map nó cho DMA</strong>. Vẽ ra thì thấy ngay tại sao chỉ DMABUF cho zero-copy sang
+      GPU/encoder.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 400" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="So sánh ba mô hình bộ nhớ V4L2. MMAP: kernel gọi dma_alloc_attrs cấp trang, userspace mmap để nhìn thấy, camera DMA ghi trực tiếp, muốn đưa sang GPU phải copy. USERPTR: userspace malloc, kernel phải pin trang và dma_map_sgtable mỗi lần QBUF, tốn chi phí và dễ lỗi cache. DMABUF: một bên thứ ba như GPU hay encoder cấp phát và export ra file descriptor, V4L2 import fd đó, camera DMA ghi thẳng vào bộ nhớ mà GPU đọc được, không copy.">
+        <defs><marker id="m1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="m1d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="m1i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-i" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <text class="t" x="16" y="18" font-size="10">① V4L2_MEMORY_MMAP — kernel cấp phát</text>
+        <rect class="b b-gh" x="16" y="26" width="708" height="76" rx="4" fill="none"/>
+        <rect class="b" x="30" y="40" width="150" height="34" rx="3"/>
+        <text class="t" x="105" y="55" font-size="8" text-anchor="middle">userspace</text>
+        <text class="m" x="105" y="67" font-size="7" text-anchor="middle">mmap(offset từ QUERYBUF)</text>
+        <rect class="b b-d" x="290" y="40" width="170" height="34" rx="3"/>
+        <text class="t" x="375" y="55" font-size="8" text-anchor="middle">TRANG NHỚ (kernel cấp)</text>
+        <text class="m" x="375" y="67" font-size="7" text-anchor="middle">vb2_dc_alloc → dma_alloc_attrs :150</text>
+        <rect class="b" x="570" y="40" width="140" height="34" rx="3"/>
+        <text class="t" x="640" y="55" font-size="8" text-anchor="middle">Camera DMA</text>
+        <text class="m" x="640" y="67" font-size="7" text-anchor="middle">ghi bằng dma_addr</text>
+        <line class="f" x1="182" y1="57" x2="288" y2="57" marker-end="url(#m1)"/>
+        <text class="m" x="235" y="51" font-size="6.5" text-anchor="middle">chỉ MAP, không copy</text>
+        <line class="f f-d" x1="568" y1="57" x2="462" y2="57" marker-end="url(#m1d)"/>
+        <text class="m" x="30" y="92" font-size="7">Đơn giản nhất, luôn hoạt động. Nhược: muốn đưa frame sang GPU/encoder phải COPY hoặc re-import thủ công.</text>
+
+        <text class="t" x="16" y="126" font-size="10">② V4L2_MEMORY_USERPTR — userspace cấp phát</text>
+        <rect class="b b-gh" x="16" y="134" width="708" height="86" rx="4" fill="none"/>
+        <rect class="b" x="30" y="148" width="150" height="34" rx="3"/>
+        <text class="t" x="105" y="163" font-size="8" text-anchor="middle">userspace malloc()</text>
+        <text class="m" x="105" y="175" font-size="7" text-anchor="middle">trang thường, phân mảnh</text>
+        <rect class="b b-i" x="290" y="148" width="170" height="34" rx="3"/>
+        <text class="t" x="375" y="163" font-size="8" text-anchor="middle">kernel PIN + map mỗi QBUF</text>
+        <text class="m" x="375" y="175" font-size="7" text-anchor="middle">vb2_dc_get_userptr :456 → dma_map_sgtable :535</text>
+        <rect class="b" x="570" y="148" width="140" height="34" rx="3"/>
+        <text class="t" x="640" y="163" font-size="8" text-anchor="middle">Camera DMA</text>
+        <text class="m" x="640" y="175" font-size="7" text-anchor="middle">scatter-gather</text>
+        <line class="f" x1="182" y1="165" x2="288" y2="165" marker-end="url(#m1)"/>
+        <line class="f f-i" x1="462" y1="165" x2="568" y2="165" marker-end="url(#m1i)"/>
+        <text class="mi" x="30" y="198" font-size="7">Chi phí pin/unpin MỖI FRAME. Cần IOMMU hoặc SG-capable DMA. Dễ sai cache. Ít dùng trong sản phẩm.</text>
+        <text class="m" x="30" y="211" font-size="7">Rủi ro bảo mật: kernel phải kiểm tra kỹ con trỏ userspace.</text>
+
+        <text class="t" x="16" y="244" font-size="10">③ V4L2_MEMORY_DMABUF — bên thứ ba cấp phát, chia sẻ bằng fd</text>
+        <rect class="b b-gh" x="16" y="252" width="708" height="112" rx="4" fill="none"/>
+        <rect class="b b-d" x="30" y="266" width="160" height="44" rx="3"/>
+        <text class="t" x="110" y="282" font-size="8" text-anchor="middle">EXPORTER</text>
+        <text class="m" x="110" y="294" font-size="7" text-anchor="middle">GPU / DRM / encoder</text>
+        <text class="m" x="110" y="305" font-size="7" text-anchor="middle">cấp phát + export fd</text>
+
+        <rect class="b" x="250" y="266" width="120" height="44" rx="3"/>
+        <text class="t" x="310" y="282" font-size="8" text-anchor="middle">fd (số nguyên)</text>
+        <text class="m" x="310" y="294" font-size="7" text-anchor="middle">truyền qua</text>
+        <text class="m" x="310" y="305" font-size="7" text-anchor="middle">v4l2_buffer.m.fd</text>
+        <line class="f" x1="192" y1="288" x2="248" y2="288" marker-end="url(#m1)"/>
+
+        <rect class="b b-d" x="430" y="266" width="170" height="44" rx="3"/>
+        <text class="t" x="515" y="282" font-size="8" text-anchor="middle">V4L2 IMPORTER</text>
+        <text class="m" x="515" y="294" font-size="7" text-anchor="middle">vb2_dc_attach_dmabuf :656</text>
+        <text class="m" x="515" y="305" font-size="7" text-anchor="middle">vb2_dc_map_dmabuf :579</text>
+        <line class="f" x1="372" y1="288" x2="428" y2="288" marker-end="url(#m1)"/>
+
+        <rect class="b" x="632" y="266" width="78" height="44" rx="3"/>
+        <text class="t" x="671" y="288" font-size="8" text-anchor="middle">Camera</text>
+        <text class="m" x="671" y="300" font-size="7" text-anchor="middle">DMA</text>
+        <line class="f f-d" x1="630" y1="288" x2="604" y2="288" marker-end="url(#m1d)"/>
+
+        <path class="f f-d f-x" d="M671,312 C671,340 200,340 110,314" marker-end="url(#m1d)"/>
+        <text class="md" x="400" y="336" font-size="7.5" text-anchor="middle">CÙNG MỘT VÙNG NHỚ — GPU đọc thẳng, KHÔNG COPY</text>
+        <text class="m" x="30" y="358" font-size="7">Cache coherency do exporter lo qua dma_buf_begin/end_cpu_access. V4L2 chiều ngược lại: VIDIOC_EXPBUF export buffer MMAP thành fd.</text>
+
+        <text class="m" x="16" y="382" font-size="7.5">Chọn thế nào: chỉ đọc/lưu file → MMAP.  Pipeline sang GPU/encoder/display → DMABUF.  USERPTR chỉ khi buộc phải tái dùng buffer có sẵn của app.</text>
+        <text class="m" x="16" y="394" font-size="7.5">vb2_mem_ops (videobuf2-core.h:118) là interface chung — cả ba đi qua cùng một tập callback alloc/put/mmap/attach_dmabuf/map_dmabuf.</text>
+      </svg>
+      <figcaption>Khác biệt quyết định là mũi tên nét đứt ở mô hình ③: cùng một vùng nhớ vật lý
+        được hai thiết bị nhìn thấy. Ở ① và ② vùng nhớ chỉ thuộc về V4L2 nên mọi consumer khác
+        phải sao chép.</figcaption>
+    </figure>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th></th><th>MMAP</th><th>USERPTR</th><th>DMABUF</th></tr></thead>
+      <tbody>
+        <tr><td>Ai cấp phát</td><td>kernel (vb2)</td><td>userspace</td><td>driver khác (GPU/DRM/encoder)</td></tr>
+        <tr><td>Ai sở hữu</td><td>vb2_queue</td><td>process</td><td>exporter</td></tr>
+        <tr><td>Map cho CPU</td><td><code>mmap()</code> trên video fd</td><td>đã có sẵn</td><td><code>mmap()</code> trên dmabuf fd</td></tr>
+        <tr><td>Map cho DMA</td><td>một lần lúc alloc</td><td><strong>mỗi QBUF</strong></td><td>một lần lúc attach</td></tr>
+        <tr><td>Zero-copy sang consumer khác</td><td>không (trừ khi EXPBUF)</td><td>không</td><td><strong>có</strong></td></tr>
+        <tr><td>Yêu cầu phần cứng</td><td>không</td><td>SG-DMA hoặc IOMMU</td><td>không (nhưng cần exporter)</td></tr>
+        <tr><td>Bảo mật</td><td>tốt</td><td>rủi ro con trỏ user</td><td>tốt (fd có refcount)</td></tr>
+        <tr><td>v4l2-ctl</td><td><code>--stream-mmap</code></td><td><code>--stream-user</code></td><td><code>--stream-dmabuf</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <p class="phase">Phase 4 — Camera hardware · mục 13, 14, 16, 19, 20, 21</p>
+
+  <section id="fmt">
+    <h2><span class="n">08</span>Pixel format &amp; đàm phán format qua pipeline</h2>
+    <p class="srcline">roadmap mục 13, 14 · nguồn: uapi/linux/videodev2.h · v4l2-subdev.h:719</p>
+    <p>Hai không gian format khác nhau và <em>lẫn lộn chúng là bug kinh điển</em>:
+      <code>v4l2_pix_format</code> (trên video node, mô tả <strong>bộ nhớ</strong>) và
+      <code>v4l2_mbus_framefmt</code> (trên pad subdev, mô tả <strong>tín hiệu trên bus</strong>).
+      Một cái có <code>bytesperline</code>, cái kia không — vì tín hiệu MIPI không có khái niệm
+      stride.</p>
+
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Format</th><th>Plane</th><th>bpp</th><th>Bố cục bộ nhớ</th><th>Dùng ở đâu</th></tr></thead>
+      <tbody>
+        <tr><td><code>V4L2_PIX_FMT_YUYV</code></td><td>1</td><td>16</td><td>Y0 U0 Y1 V0 · packed, chroma 4:2:2 ngang</td><td>webcam UVC phổ biến nhất</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_UYVY</code></td><td>1</td><td>16</td><td>U0 Y0 V0 Y1 — chỉ khác thứ tự byte</td><td>nhiều bridge cũ</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_NV12</code></td><td>1 (semi-planar)</td><td>12</td><td>toàn bộ Y, rồi UV xen kẽ, chroma 4:2:0</td><td>encoder H.264/HEVC ưa thích</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_NV21</code></td><td>1</td><td>12</td><td>như NV12 nhưng VU</td><td>Android</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_YUV420</code></td><td>1 hoặc 3</td><td>12</td><td>Y, rồi U đủ, rồi V đủ (planar)</td><td>xử lý phần mềm</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_RGB565</code></td><td>1</td><td>16</td><td>RRRRRGGG GGGBBBBB</td><td>framebuffer nhúng</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_RGB24</code></td><td>1</td><td>24</td><td>R G B tuần tự</td><td>xử lý ảnh đơn giản</td></tr>
+        <tr><td><code>V4L2_PIX_FMT_SRGGB8/10/12</code></td><td>1</td><td>8/16/16</td><td><strong>Bayer RAW</strong> — mosaic R,G/G,B; 10/12-bit gói trong 16-bit</td><td>đầu ra thô của sensor → ISP</td></tr>
+      </tbody>
+    </table></div>
+
+    <p><strong>Công thức phải nhớ</strong>: <code>bytesperline ≥ width × bpp / 8</code> (có thể
+      lớn hơn do padding phần cứng), <code>sizeimage ≥ bytesperline × height</code> — với NV12
+      thì <code>sizeimage = bytesperline × height × 3/2</code>. Driver được phép
+      <em>tăng</em> hai giá trị này trong <code>S_FMT</code>; app <strong>phải đọc lại</strong>
+      giá trị driver trả về, không được giả định.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 300" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Đàm phán format qua pipeline: sensor source pad phát Bayer SRGGB10 1080p, CSI receiver sink pad phải khớp y hệt vì link không đổi được dữ liệu, CSI source pad giữ nguyên, ISP sink pad nhận Bayer và ISP source pad đổi sang YUYV, video node đặt format YUYV khớp với ISP source pad. Nguyên tắc: format do userspace đặt trên từng pad bằng VIDIOC_SUBDEV_S_FMT theo thứ tự từ sensor xuống, và hai đầu một link phải khớp nếu không STREAMON trả EPIPE.">
+        <defs><marker id="f1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="40" width="120" height="46" rx="4"/>
+        <text class="t" x="76" y="58" font-size="8.5" text-anchor="middle">Sensor</text>
+        <text class="m" x="76" y="70" font-size="7" text-anchor="middle">pad0 SRC</text>
+        <text class="md" x="76" y="81" font-size="7" text-anchor="middle">SRGGB10_1X10</text>
+
+        <rect class="b" x="196" y="40" width="150" height="46" rx="4"/>
+        <text class="t" x="271" y="58" font-size="8.5" text-anchor="middle">CSI-2 RX</text>
+        <text class="m" x="271" y="70" font-size="7" text-anchor="middle">pad0 SINK · pad1 SRC</text>
+        <text class="md" x="271" y="81" font-size="7" text-anchor="middle">SRGGB10 → SRGGB10</text>
+
+        <rect class="b" x="406" y="40" width="150" height="46" rx="4"/>
+        <text class="t" x="481" y="58" font-size="8.5" text-anchor="middle">ISP</text>
+        <text class="m" x="481" y="70" font-size="7" text-anchor="middle">pad0 SINK · pad1 SRC</text>
+        <text class="md" x="481" y="81" font-size="7" text-anchor="middle">SRGGB10 → YUYV8_2X8</text>
+
+        <rect class="b" x="616" y="40" width="108" height="46" rx="4"/>
+        <text class="t" x="670" y="58" font-size="8.5" text-anchor="middle">video node</text>
+        <text class="m" x="670" y="70" font-size="7" text-anchor="middle">/dev/video0</text>
+        <text class="md" x="670" y="81" font-size="7" text-anchor="middle">PIX_FMT_YUYV</text>
+
+        <line class="f f-d" x1="138" y1="63" x2="194" y2="63" marker-end="url(#f1)"/>
+        <line class="f f-d" x1="348" y1="63" x2="404" y2="63" marker-end="url(#f1)"/>
+        <line class="f f-d" x1="558" y1="63" x2="614" y2="63" marker-end="url(#f1)"/>
+        <text class="mi" x="166" y="34" font-size="7" text-anchor="middle">PHẢI KHỚP</text>
+        <text class="mi" x="376" y="34" font-size="7" text-anchor="middle">PHẢI KHỚP</text>
+        <text class="mi" x="586" y="34" font-size="7" text-anchor="middle">PHẢI KHỚP</text>
+        <text class="m" x="376" y="24" font-size="6.5" text-anchor="middle">link không biến đổi dữ liệu</text>
+
+        <text class="t" x="16" y="120" font-size="9.5">Thứ tự userspace phải làm — sai thứ tự là STREAMON trả −EPIPE</text>
+        <text class="m" x="16" y="140" font-size="8">① media-ctl -l  bật các link cần dùng   (MEDIA_IOC_SETUP_LINK)</text>
+        <text class="m" x="16" y="153" font-size="8">② media-ctl -V  đặt format TỪNG PAD, đi từ sensor xuôi xuống  (VIDIOC_SUBDEV_S_FMT)</text>
+        <text class="m" x="16" y="166" font-size="8">③ v4l2-ctl --set-fmt-video  đặt format video node, phải khớp pad nguồn cuối  (VIDIOC_S_FMT)</text>
+        <text class="m" x="16" y="179" font-size="8">④ VIDIOC_REQBUFS → QBUF ×N → STREAMON</text>
+
+        <text class="t" x="16" y="208" font-size="9.5">Vì sao TRY_FMT tồn tại</text>
+        <text class="m" x="16" y="226" font-size="8">S_FMT thay đổi state và sẽ bị từ chối khi đang stream. TRY_FMT chạy đúng cùng logic nắn tham số</text>
+        <text class="m" x="16" y="239" font-size="8">nhưng KHÔNG ghi state → app dùng để dò xem driver sẽ nắn width/height/pixelformat thành gì.</text>
+        <text class="m" x="16" y="252" font-size="8">Driver tốt cài chung một hàm: s_fmt gọi try_fmt rồi mới lưu.</text>
+
+        <text class="t" x="16" y="278" font-size="9.5">Trường colorspace</text>
+        <text class="m" x="16" y="294" font-size="8">colorspace · ycbcr_enc · quantization · xfer_func — sai bốn trường này = ảnh đúng hình nhưng SAI MÀU.</text>
+      </svg>
+      <figcaption>Format <strong>không tự lan truyền</strong> giữa các subdev trong V4L2 thuần:
+        userspace phải đặt trên từng pad. Nhiều driver <em>có</em> lan truyền một phần trong
+        <code>set_fmt</code> của mình, nhưng đó là hành vi riêng của driver, không phải quy tắc
+        framework.</figcaption>
+    </figure>
+  </section>
+
+  <p class="phase">Phase 5 — Trace source code · mục 21–28</p>
+
+  <section id="frame">
+    <h2><span class="n">09</span>Trace một frame — từ STREAMON tới DQBUF</h2>
+    <p class="srcline">roadmap mục 22, 23, 24, 25, 32 · nguồn: vb2-core.c · mcam-core.c</p>
+    <p>Đây là sơ đồ trung tâm của cả roadmap. Trục dọc là thời gian, hai làn là hai context.
+      Mọi tên hàm đều có thật.</p>
+
+    <figure>
+      <svg viewBox="0 0 740 560" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Trace một frame theo thời gian với hai làn context. Làn process: app gọi QBUF nhiều lần đưa buffer vào queued_list rồi ACTIVE qua buf_queue lập trình DMA; STREAMON gọi vb2_core_streamon rồi vb2_start_streaming rồi start_streaming của driver bật phần cứng và gọi s_stream của subdev; app gọi DQBUF, vb2_core_dqbuf gọi __vb2_wait_for_done_vb ngủ trên done_wq. Làn interrupt: phần cứng phát frame-done IRQ, ISR của driver clear IRQ status, xác định buffer nào xong, set timestamp và sequence, gọi vb2_buffer_done chuyển sang DONE và wake_up done_wq. Tiến trình thức dậy, buf_finish, fill_user_buffer, copy_to_user, trả về userspace.">
+        <defs><marker id="t1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="t1d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="t1i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-i" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="16" y="12" width="410" height="26" rx="4"/>
+        <text class="t" x="221" y="29" font-size="9.5" text-anchor="middle">PROCESS CONTEXT — ngủ được, giữ q-&gt;lock</text>
+        <rect class="b b-i" x="446" y="12" width="278" height="26" rx="4"/>
+        <text class="t" x="585" y="29" font-size="9.5" text-anchor="middle">INTERRUPT CONTEXT — atomic</text>
+        <line class="ll" x1="436" y1="44" x2="436" y2="548"/>
+
+        <text class="m" x="16" y="60" font-size="8">T1</text>
+        <rect class="b" x="46" y="48" width="380" height="42" rx="4"/>
+        <text class="t" x="56" y="64" font-size="8.5">ioctl(VIDIOC_QBUF) ×N</text>
+        <text class="m" x="56" y="76" font-size="7">vb2_ioctl_qbuf :1049 → vb2_core_qbuf :1607</text>
+        <text class="m" x="56" y="87" font-size="7">__buf_prepare :1372 → list_add_tail(queued_list) :1712 → state QUEUED</text>
+
+        <text class="m" x="16" y="108" font-size="8">T2</text>
+        <rect class="b" x="46" y="96" width="380" height="54" rx="4"/>
+        <text class="t" x="56" y="112" font-size="8.5">ioctl(VIDIOC_STREAMON)</text>
+        <text class="m" x="56" y="124" font-size="7">vb2_ioctl_streamon :1069 → vb2_core_streamon :2071</text>
+        <text class="m" x="56" y="135" font-size="7">kiểm num_buffers ≥ min_buffers_needed :2092 — KHÔNG ĐỦ thì chưa bật phần cứng</text>
+        <text class="m" x="56" y="146" font-size="7">→ vb2_start_streaming :1555</text>
+        <line class="f" x1="221" y1="90" x2="221" y2="94" marker-end="url(#t1)"/>
+
+        <text class="m" x="16" y="168" font-size="8">T3</text>
+        <rect class="b b-d" x="46" y="156" width="380" height="54" rx="4"/>
+        <text class="t" x="56" y="172" font-size="8.5">vb2 giao buffer cho driver</text>
+        <text class="m" x="56" y="184" font-size="7">for each queued: __enqueue_in_driver :1360 → vb2_ops-&gt;buf_queue()</text>
+        <text class="m" x="56" y="195" font-size="7">mcam_vb_buf_queue :1099 — list_add(&amp;cam-&gt;buffers) dưới spin_lock_irqsave</text>
+        <text class="m" x="56" y="206" font-size="7">state → ACTIVE, owned_by_drv_count++</text>
+        <line class="f" x1="221" y1="150" x2="221" y2="154" marker-end="url(#t1)"/>
+
+        <text class="m" x="16" y="228" font-size="8">T4</text>
+        <rect class="b b-d" x="46" y="216" width="380" height="54" rx="4"/>
+        <text class="t" x="56" y="232" font-size="8.5">call_qop(q, start_streaming) :1569</text>
+        <text class="m" x="56" y="244" font-size="7">mcam_vb_start_streaming :1144 → mcam_read_setup()</text>
+        <text class="m" x="56" y="255" font-size="7">ghi dma_addr vào thanh ghi, bật IRQ mask, v4l2_subdev_call(sd, video, s_stream, 1)</text>
+        <text class="m" x="56" y="266" font-size="7">→ sensor bắt đầu phát MIPI CSI-2</text>
+        <line class="f" x1="221" y1="210" x2="221" y2="214" marker-end="url(#t1)"/>
+
+        <text class="m" x="16" y="288" font-size="8">T5</text>
+        <rect class="b" x="46" y="276" width="380" height="54" rx="4"/>
+        <text class="t" x="56" y="292" font-size="8.5">ioctl(VIDIOC_DQBUF) — bắt đầu NGỦ</text>
+        <text class="m" x="56" y="304" font-size="7">vb2_core_dqbuf :1910 → __vb2_get_done_vb → __vb2_wait_for_done_vb :1767</text>
+        <text class="m" x="56" y="315" font-size="7">nhả q-&gt;lock qua wait_prepare, wait_event trên q-&gt;done_wq</text>
+        <text class="m" x="56" y="326" font-size="7">O_NONBLOCK → trả −EAGAIN ngay thay vì ngủ</text>
+        <line class="f" x1="221" y1="270" x2="221" y2="274" marker-end="url(#t1)"/>
+
+        <line class="rule-i" x1="46" y1="348" x2="724" y2="348"/>
+        <text class="mi" x="46" y="344" font-size="8">Sensor phơi sáng → CSI-2 truyền → DMA ghi RAM → FRAME DONE</text>
+
+        <text class="m" x="16" y="372" font-size="8">T6</text>
+        <rect class="b b-i" x="446" y="360" width="278" height="46" rx="4"/>
+        <text class="t" x="456" y="376" font-size="8.5">ISR phần cứng</text>
+        <text class="m" x="456" y="388" font-size="7">mccic_irq() mcam-core.c:1710</text>
+        <text class="m" x="456" y="399" font-size="7">ghi REG_IRQSTAT clear IRQ :1714, dò bit IRQ_EOF0+n</text>
+
+        <text class="m" x="16" y="424" font-size="8">T7</text>
+        <rect class="b b-i" x="446" y="412" width="278" height="58" rx="4"/>
+        <text class="t" x="456" y="428" font-size="8.5">mcam_buffer_done() :210</text>
+        <text class="m" x="456" y="440" font-size="7">vbuf-&gt;sequence = cam-&gt;buf_seq[frame]</text>
+        <text class="m" x="456" y="451" font-size="7">vb2_buf.timestamp = ktime_get_ns() :216</text>
+        <text class="m" x="456" y="462" font-size="7">vb2_set_plane_payload() → vb2_buffer_done(DONE) :218</text>
+        <line class="f f-i" x1="585" y1="406" x2="585" y2="410" marker-end="url(#t1i)"/>
+
+        <text class="m" x="16" y="490" font-size="8">T8</text>
+        <rect class="b b-i" x="446" y="478" width="278" height="46" rx="4"/>
+        <text class="t" x="456" y="494" font-size="8.5">vb2_buffer_done() vb2-core.c:1031</text>
+        <text class="m" x="456" y="506" font-size="7">spin_lock_irqsave(done_lock) → list_add_tail(done_list) :1060</text>
+        <text class="m" x="456" y="517" font-size="7">state = DONE · owned_by_drv_count−− · wake_up(&amp;q-&gt;done_wq) :1077</text>
+        <line class="f f-i" x1="585" y1="470" x2="585" y2="476" marker-end="url(#t1i)"/>
+
+        <path class="f f-i f-x" d="M446,500 C380,500 300,380 226,336" marker-end="url(#t1i)"/>
+        <text class="mi" x="300" y="470" font-size="7.5">ĐÁNH THỨC</text>
+
+        <text class="m" x="16" y="384" font-size="8">T9</text>
+        <rect class="b b-d" x="46" y="372" width="380" height="66" rx="4"/>
+        <text class="t" x="56" y="388" font-size="8.5">Tiến trình thức dậy — quay lại process context</text>
+        <text class="m" x="56" y="400" font-size="7">lấy lại q-&gt;lock (wait_finish), lấy vb khỏi done_list</text>
+        <text class="m" x="56" y="411" font-size="7">call_void_vb_qop(vb, buf_finish) :1932</text>
+        <text class="m" x="56" y="422" font-size="7">fill_user_buffer → điền v4l2_buffer: bytesused, sequence, timestamp, flags</text>
+        <text class="m" x="56" y="433" font-size="7">__vb2_dqbuf :1897 → state DEQUEUED · list_del(queued_entry) :1945</text>
+
+        <text class="m" x="16" y="460" font-size="8">T10</text>
+        <rect class="b" x="46" y="448" width="380" height="42" rx="4"/>
+        <text class="t" x="56" y="464" font-size="8.5">video_usercopy → copy_to_user</text>
+        <text class="m" x="56" y="476" font-size="7">ioctl trả 0, app đọc dữ liệu pixel qua con trỏ mmap đã có từ trước</text>
+        <text class="m" x="56" y="487" font-size="7">→ app xử lý → QBUF lại buffer đó → vòng lặp tiếp tục</text>
+        <line class="f" x1="221" y1="438" x2="221" y2="446" marker-end="url(#t1)"/>
+      </svg>
+      <figcaption>Điểm quan trọng nhất: <strong>frame data không bao giờ đi qua ioctl</strong>.
+        Dữ liệu pixel do DMA ghi thẳng vào trang mà app đã <code>mmap</code> từ T0;
+        <code>DQBUF</code> chỉ trả về <em>metadata</em> (index, bytesused, timestamp). Đó chính là
+        zero-copy của mô hình MMAP.</figcaption>
+    </figure>
+  </section>
+
+  <section id="ctx">
+    <h2><span class="n">10</span>Context &amp; locking — bảng dán tường</h2>
+    <p class="srcline">roadmap mục 26, 27 · nguồn: videobuf2-core.h:567 · v4l2-ioctl.c:2941</p>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Thao tác</th><th>Context</th><th>Ngủ?</th><th>Khóa đang giữ</th></tr></thead>
+      <tbody>
+        <tr><td><code>probe()</code></td><td>process (device core)</td><td>có</td><td>device lock</td></tr>
+        <tr><td>mọi <code>vidioc_*</code></td><td>process (syscall)</td><td>có</td><td><code>vdev-&gt;lock</code> hoặc <code>q-&gt;lock</code>, core tự lấy</td></tr>
+        <tr><td><code>queue_setup</code>, <code>buf_prepare</code></td><td>process</td><td>có</td><td><code>q-&gt;lock</code></td></tr>
+        <tr><td><code>buf_queue</code></td><td>process</td><td>có (nhưng driver thường lấy spinlock riêng)</td><td><code>q-&gt;lock</code> + driver spinlock</td></tr>
+        <tr><td><code>start/stop_streaming</code></td><td>process</td><td>có</td><td><code>q-&gt;lock</code></td></tr>
+        <tr><td>DQBUF đang chờ</td><td>process, <strong>đã nhả <code>q-&gt;lock</code></strong></td><td>đang ngủ</td><td>không giữ gì (nhờ <code>wait_prepare</code>)</td></tr>
+        <tr><td>ISR / <code>vb2_buffer_done</code></td><td><strong>hardirq</strong></td><td><strong>KHÔNG</strong></td><td><code>q-&gt;done_lock</code> (spinlock_irqsave)</td></tr>
+        <tr><td>subdev <code>s_stream</code></td><td>process</td><td>có (I2C ngủ được)</td><td>tùy driver</td></tr>
+      </tbody>
+    </table></div>
+    <p><strong>Deadlock kinh điển #1</strong>: driver tự lấy <code>q-&gt;lock</code> trong
+      <code>vidioc_*</code> — core đã giữ rồi. <strong>#2</strong>: quên cài
+      <code>wait_prepare</code>/<code>wait_finish</code> → DQBUF ngủ mà vẫn ôm
+      <code>q-&gt;lock</code> → QBUF từ thread khác treo vĩnh viễn. Dùng bản mặc định
+      <code>vb2_ops_wait_prepare</code> / <code>vb2_ops_wait_finish</code> như
+      <code>mcam_vb2_ops</code> <span class="src">mcam-core.c:1211-1212</span>.
+      <strong>#3</strong>: gọi hàm ngủ được (<code>i2c_transfer</code>, <code>msleep</code>) trong
+      ISR.</p>
+
+    <h3>Power management — mục 28</h3>
+    <p>Chuỗi chuẩn: <code>open()</code> → driver <code>pm_runtime_get_sync()</code> → runtime PM
+      resume của sensor bật regulator → bật clock → nhả reset GPIO → chờ <code>t_settle</code> →
+      ghi register khởi tạo. <code>STREAMON</code> mới gọi <code>s_stream(sd, 1)</code>.
+      Chiều ngược: <code>STREAMOFF</code> → <code>s_stream(sd, 0)</code> → <code>close()</code> →
+      <code>pm_runtime_put()</code> → autosuspend. Sai thứ tự regulator/clock/reset là nguyên
+      nhân số một khiến sensor không trả lời I2C.</p>
+  </section>
+
+  <p class="phase">Phase 6 — Debug thực tế · mục 29, 30, 31, 44</p>
+
+  <section id="debug">
+    <h2><span class="n">11</span>Cây quyết định: &ldquo;DQBUF treo vĩnh viễn&rdquo;</h2>
+    <p class="srcline">roadmap mục 44 · triệu chứng phổ biến nhất khi bring-up camera</p>
+
+    <figure>
+      <svg viewBox="0 0 740 470" role="img" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Cây quyết định debug khi DQBUF treo. Bước một kiểm tra interrupt có tăng không bằng cách đọc /proc/interrupts hai lần: nếu không tăng thì lỗi nằm ở phía sensor hoặc CSI, kiểm tra clock, power, I2C, s_stream, số lane và virtual channel; nếu có tăng thì bước hai kiểm tra ISR có gọi vb2_buffer_done không bằng ftrace, nếu không thì lỗi là điều kiện trong ISR sai hoặc buffer chưa được lập trình DMA; nếu có gọi thì bước ba kiểm tra buffer state bằng vb2 debug, nếu buffer ở ERROR thì lỗi DMA hoặc kích thước, nếu ở DONE mà app vẫn treo thì app đang chờ sai fd hoặc quên QBUF đủ buffer.">
+        <defs><marker id="d1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="d1i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-i" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="d1d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah-d" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+        <rect class="b" x="230" y="14" width="280" height="34" rx="4"/>
+        <text class="t" x="370" y="31" font-size="9.5" text-anchor="middle">DQBUF treo, không có frame</text>
+        <text class="m" x="370" y="43" font-size="7" text-anchor="middle">S_FMT ok · REQBUFS ok · STREAMON trả 0</text>
+
+        <rect class="b" x="230" y="64" width="280" height="40" rx="4"/>
+        <text class="t" x="370" y="80" font-size="8.5" text-anchor="middle">① IRQ có tăng không?</text>
+        <text class="m" x="370" y="93" font-size="7" text-anchor="middle">watch -n1 'grep camera /proc/interrupts'</text>
+        <line class="f" x1="370" y1="48" x2="370" y2="62" marker-end="url(#d1)"/>
+
+        <path class="f f-i" d="M280,104 C240,120 180,124 160,138" marker-end="url(#d1i)"/>
+        <text class="mi" x="200" y="122" font-size="7.5">KHÔNG tăng</text>
+        <path class="f f-d" d="M460,104 C500,120 560,124 580,138" marker-end="url(#d1d)"/>
+        <text class="md" x="545" y="122" font-size="7.5">CÓ tăng</text>
+
+        <rect class="b b-i" x="16" y="140" width="290" height="106" rx="4"/>
+        <text class="t" x="26" y="156" font-size="8.5">Lỗi ở phía SENSOR / CSI — chưa có dữ liệu vào</text>
+        <text class="m" x="26" y="170" font-size="7">□ sensor trả lời I2C?  i2cdetect -y &lt;bus&gt;</text>
+        <text class="m" x="26" y="182" font-size="7">□ regulator + clock bật?  /sys/kernel/debug/regulator, clk_summary</text>
+        <text class="m" x="26" y="194" font-size="7">□ reset GPIO đã nhả?  đo bằng oscilloscope nếu có</text>
+        <text class="m" x="26" y="206" font-size="7">□ s_stream(1) có được gọi?  ftrace function graph</text>
+        <text class="m" x="26" y="218" font-size="7">□ data-lanes trong DTS khớp phần cứng?</text>
+        <text class="m" x="26" y="230" font-size="7">□ CSI báo lỗi ECC/CRC?  dmesg | grep -i csi</text>
+        <text class="m" x="26" y="242" font-size="7">□ virtual channel / data-type đúng RAW10?</text>
+
+        <rect class="b b-d" x="424" y="140" width="300" height="52" rx="4"/>
+        <text class="t" x="434" y="156" font-size="8.5">② ISR có gọi vb2_buffer_done không?</text>
+        <text class="m" x="434" y="169" font-size="7">echo 1 &gt; /sys/kernel/debug/tracing/events/vb2/enable</text>
+        <text class="m" x="434" y="181" font-size="7">hoặc: trace-cmd record -p function_graph -g mccic_irq</text>
+
+        <path class="f f-i" d="M470,192 C440,208 400,214 380,228" marker-end="url(#d1i)"/>
+        <text class="mi" x="404" y="210" font-size="7.5">KHÔNG</text>
+        <path class="f f-d" d="M660,192 C670,214 668,228 664,240" marker-end="url(#d1d)"/>
+        <text class="md" x="686" y="216" font-size="7.5">CÓ</text>
+
+        <rect class="b b-i" x="330" y="230" width="270" height="76" rx="4"/>
+        <text class="t" x="340" y="246" font-size="8.5">IRQ tới nhưng không hoàn tất buffer</text>
+        <text class="m" x="340" y="260" font-size="7">□ ISR đọc sai bit status → điều kiện if không bao giờ đúng</text>
+        <text class="m" x="340" y="272" font-size="7">□ buffer chưa được ghi vào thanh ghi DMA (buf_queue không làm gì)</text>
+        <text class="m" x="340" y="284" font-size="7">□ chỉ có SOF, không có EOF → frame size cấu hình sai</text>
+        <text class="m" x="340" y="296" font-size="7">□ ISR trả IRQ_NONE → kernel disable IRQ sau vài lần</text>
+
+        <rect class="b b-d" x="614" y="248" width="110" height="52" rx="4"/>
+        <text class="t" x="669" y="264" font-size="8" text-anchor="middle">③ state buffer?</text>
+        <text class="m" x="669" y="277" font-size="7" text-anchor="middle">echo 0x3 &gt;</text>
+        <text class="m" x="669" y="288" font-size="7" text-anchor="middle">/sys/module/videobuf2_common/</text>
+        <text class="m" x="669" y="298" font-size="7" text-anchor="middle">parameters/debug</text>
+
+        <line class="ll" x1="16" y1="326" x2="724" y2="326"/>
+        <text class="t" x="16" y="344" font-size="9.5">Bộ lệnh chẩn đoán theo tầng — mục 29, 30, 31</text>
+
+        <text class="m" x="16" y="364" font-size="7.5">graph không complete →  media-ctl -p -d /dev/media0     (thiếu entity = async chưa bound)</text>
+        <text class="m" x="16" y="377" font-size="7.5">/dev/video0 không có   →  dmesg | grep -i v4l2 ; ls /sys/class/video4linux/</text>
+        <text class="m" x="16" y="390" font-size="7.5">link/format            →  media-ctl -l '"csi":1 -&gt; "isp":0[1]' ; media-ctl -V '"sensor":0 [fmt:SRGGB10/1920x1080]'</text>
+        <text class="m" x="16" y="403" font-size="7.5">liệt kê format          →  v4l2-ctl -d0 --list-formats-ext</text>
+        <text class="m" x="16" y="416" font-size="7.5">thử stream thật         →  v4l2-ctl -d0 --stream-mmap --stream-count=10 --stream-to=out.raw</text>
+        <text class="m" x="16" y="429" font-size="7.5">xem ioctl app gọi gì    →  strace -e trace=ioctl -f your_app</text>
+        <text class="m" x="16" y="442" font-size="7.5">bật log core V4L2       →  echo 0x1f &gt; /sys/class/video4linux/video0/dev_debug   (vfd-&gt;dev_debug, v4l2-ioctl.c:3022)</text>
+        <text class="m" x="16" y="455" font-size="7.5">controls                →  v4l2-ctl -d0 --list-ctrls ; --set-ctrl exposure=1000</text>
+        <text class="m" x="16" y="466" font-size="7">Lưu ý: dev_debug bỏ qua QBUF/DQBUF trừ khi bật thêm bit V4L2_DEV_DEBUG_STREAMING — v4l2-ioctl.c:3024.</text>
+      </svg>
+      <figcaption>Cây này chia không gian tìm kiếm làm ba bằng đúng hai câu hỏi nhị phân. Câu hỏi
+        ① tách &ldquo;phần cứng không phát dữ liệu&rdquo; khỏi &ldquo;phần mềm không thu&rdquo;
+        — đó là ranh giới đắt nhất trong debug camera.</figcaption>
+    </figure>
+  </section>
+
+  <p class="phase">Phase 7 — Advanced · mục 32–43, 45, 46</p>
+
+  <section id="adv">
+    <h2><span class="n">12</span>Truy ngược từ <code>/dev/video0</code> và các chủ đề nâng cao</h2>
+    <p class="srcline">roadmap mục 33–43</p>
+
+    <h3>Truy ngược driver sở hữu một video node — mục 33</h3>
+    <ol>
+      <li><code>ls -l /sys/class/video4linux/video0</code> → symlink chứa đường device.</li>
+      <li><code>cat /sys/class/video4linux/video0/name</code> → tên do driver đặt vào
+        <code>vdev-&gt;name</code>.</li>
+      <li><code>readlink -f /sys/class/video4linux/video0/device/driver</code> → tên module.</li>
+      <li><code>cat /sys/class/video4linux/video0/device/of_node/compatible</code> → chuỗi
+        compatible trong DT.</li>
+      <li>Grep chuỗi đó trong cây nguồn:
+        <code>grep -rn "compatible-string" drivers/media/</code> → tìm ra
+        <code>of_device_id</code> table → <code>probe()</code>.</li>
+      <li><code>media-ctl -p</code> để thấy entity nào nối vào video node đó → tên entity chính là
+        <code>sd-&gt;name</code> / <code>vdev-&gt;name</code> trong driver.</li>
+    </ol>
+
+    <h3>Zero-copy &amp; timestamp — mục 40, 41</h3>
+    <ul>
+      <li>Timestamp gán trong ISR: <code>vb2_buf.timestamp = ktime_get_ns()</code>
+        <span class="src">mcam-core.c:216</span> — <strong>monotonic</strong>, không phải
+        wall-clock. Cờ <code>V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC</code> báo cho app biết.</li>
+      <li>Đây là thời điểm <em>frame done</em>, không phải thời điểm bắt đầu phơi sáng — sai lệch
+        này quan trọng khi đồng bộ nhiều camera. Sensor cao cấp có
+        <code>V4L2_BUF_FLAG_TSTAMP_SRC_SOE</code> (start of exposure).</li>
+      <li><code>sequence</code> tăng đều; <strong>nhảy số = frame drop</strong> — cách phát hiện
+        drop rẻ nhất, không cần đo gì thêm.</li>
+      <li>Zero-copy thật sự chỉ có với DMABUF (mục 07): camera ghi vào buffer do encoder cấp,
+        encoder đọc trực tiếp, CPU không chạm byte nào.</li>
+    </ul>
+
+    <h3>Multi-camera &amp; hiệu năng — mục 42, 43</h3>
+    <ul>
+      <li>Mỗi sensor → một <code>v4l2_subdev</code> riêng, nhưng có thể <strong>chia sẻ</strong>
+        CSI receiver qua virtual channel khác nhau. Số <code>/dev/videoX</code> = số DMA context
+        phần cứng hỗ trợ, không phải số sensor.</li>
+      <li>Nút thắt cổ chai gần như luôn là <strong>băng thông bộ nhớ</strong>, không phải CPU:
+        1080p30 YUYV = 1920×1080×2×30 ≈ 124 MB/s <em>mỗi chiều</em>; ba camera + encoder đọc =
+        gần 750 MB/s.</li>
+      <li>Đo: <code>perf stat -e cache-misses</code>, đếm IRQ trong
+        <code>/proc/interrupts</code>, so <code>sequence</code> để đếm drop, và tăng
+        <code>REQBUFS count</code> (thường 4→8) nếu drop do userspace xử lý chậm.</li>
+      <li>Giảm tần suất IRQ: một số controller cho phép ngắt mỗi N frame hoặc dùng
+        buffer chaining — đổi latency lấy CPU.</li>
+    </ul>
+
+    <h3>GStreamer / FFmpeg — mục 38, 39</h3>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th></th><th>GStreamer <code>v4l2src</code></th><th>FFmpeg <code>libavdevice</code></th></tr></thead>
+      <tbody>
+        <tr><td>Dò khả năng</td><td>ENUM_FMT + ENUM_FRAMESIZES + ENUM_FRAMEINTERVALS → caps</td><td>ENUM_FMT → chọn theo <code>-pixel_format</code></td></tr>
+        <tr><td>Đặt format</td><td>S_FMT sau caps negotiation với element sau</td><td>S_FMT từ <code>-video_size</code>, <code>-framerate</code></td></tr>
+        <tr><td>Bộ nhớ</td><td>MMAP mặc định; <code>io-mode=dmabuf</code> cho zero-copy</td><td>MMAP (mặc định) hoặc read()</td></tr>
+        <tr><td>Buffer</td><td>GstBuffer bọc trực tiếp vb2 buffer, QBUF lại khi unref</td><td>copy vào AVPacket</td></tr>
+        <tr><td>Timestamp</td><td>dùng <code>v4l2_buffer.timestamp</code> làm PTS</td><td>chuyển sang time_base của AVStream</td></tr>
+      </tbody>
+    </table></div>
+    <p>Điểm khác biệt thực dụng: GStreamer giữ tham chiếu vb2 buffer đến khi element cuối
+      unref — nếu pipeline nghẽn, buffer không được QBUF lại và camera <strong>hết
+      buffer</strong>. FFmpeg copy ngay nên không bị, đổi lại tốn băng thông.</p>
+
+    <h3>Tự viết driver tối thiểu — mục 45</h3>
+    <p>Đường ngắn nhất, không cần phần cứng: đọc <code>drivers/media/test-drivers/vimc/</code>
+      trong chính cây này. <code>vimc-core.c</code> dựng media graph đầy đủ
+      (<code>media_create_pad_link</code> <span class="src">:139</span>,
+      <code>v4l2_device_register</code> <span class="src">:210</span>,
+      <code>media_device_register</code> <span class="src">:235</span>,
+      <code>v4l2_device_register_subdev_nodes</code> <span class="src">:243</span>), còn
+      <code>vimc-capture.c</code> là capture driver hoàn chỉnh với <code>vb2_ops</code> và
+      <code>v4l2_ioctl_ops</code> — bản mẫu chuẩn nhất để copy. Thứ tự thêm tính năng:
+      video_device + ioctl_ops → vb2_queue với kthread sinh frame giả → media entity + pad →
+      subdev → async notifier → DMA thật → IRQ thật.</p>
+  </section>
+
+  <section id="checklist">
+    <h2><span class="n">13</span>Tự kiểm tra — 12 câu phải trả lời được</h2>
+    <p class="srcline">roadmap mục 46 · nếu trả lời trôi chảy cả 12 câu thì đọc được driver thật</p>
+    <ol>
+      <li>Từ <code>ioctl(VIDIOC_S_FMT)</code> tới callback của driver đi qua đúng những hàm nào?</li>
+      <li><code>video_device</code> và <code>v4l2_device</code> khác nhau chỗ nào, cái nào tạo <code>/dev/videoX</code>?</li>
+      <li>Vì sao cần <code>v4l2_subdev</code> khi đã có <code>video_device</code>?</li>
+      <li>Media graph gồm những gì và userspace sửa nó bằng ioctl nào?</li>
+      <li>Async notifier giải quyết vấn đề gì; nếu <code>bound()</code> không được gọi thì nghi ngờ chỗ nào?</li>
+      <li>Kể đủ 7 trạng thái <code>vb2_buffer</code> và chủ thể kéo mỗi chuyển tiếp.</li>
+      <li><code>buf_queue</code> chạy trong context nào, được phép ngủ không?</li>
+      <li><code>vb2_buffer_done</code> chạy ở đâu, giữ khóa gì, vì sao không deadlock với DQBUF?</li>
+      <li>MMAP vs DMABUF khác nhau ở chỗ nào về quyền sở hữu bộ nhớ?</li>
+      <li>Dữ liệu pixel có đi qua ioctl không? Nếu không thì đi đường nào?</li>
+      <li><code>STREAMON</code> trả 0 nhưng phần cứng chưa chạy — khi nào điều đó xảy ra?</li>
+      <li>DQBUF treo: hai câu hỏi nhị phân đầu tiên bạn hỏi là gì?</li>
+    </ol>
+  </section>
+
+  <footer>
+    <b>Nguồn</b> — Kernel/K-S800/Src, linux 5.10.241<br>
+    drivers/media/v4l2-core/{v4l2-dev,v4l2-ioctl,v4l2-device,v4l2-async,v4l2-ctrls,v4l2-fwnode}.c<br>
+    drivers/media/common/videobuf2/{videobuf2-core,videobuf2-v4l2,videobuf2-dma-contig}.c<br>
+    drivers/media/mc/{mc-entity,mc-device}.c<br>
+    drivers/media/platform/marvell-ccic/mcam-core.c · drivers/media/test-drivers/vimc/<br>
+    include/media/{v4l2-dev,v4l2-device,v4l2-subdev,v4l2-async,v4l2-ctrls,videobuf2-core,media-entity,media-device}.h<br>
+    <br>
+    Mọi tên hàm, struct và số dòng đều lấy từ source thật trong repo — không suy đoán.<br>
+    Board S800 không build V4L2 (CONFIG_MEDIA_SUPPORT tắt); dùng vimc để thực hành.
+  </footer>
+
+</div>
+
+</body>
+</html>

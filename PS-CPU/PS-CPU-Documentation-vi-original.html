@@ -2356,8 +2356,56 @@ case IAP_PG_COMMAND:
 <p><strong>Hệ quả từ việc "không có RTOS":</strong> không có scheduler, không có task, không có mutex/semaphore, và không có context switch ở bất kỳ đâu trong firmware này. Mọi lệnh gọi hàm trong §4/§5 bên dưới đều chạy đến khi hoàn tất trên cùng một stack thread duy nhất của Cortex-M0, hoặc ở <code>Thread mode</code> (superloop) hoặc ở <code>Handler mode</code> (một ISR, chỉ có thể bị ngắt bởi một ISR có priority cao hơn — và firmware này không thiết lập priority khác biệt: mọi lệnh gọi <code>HAL_NVIC_SetPriority()</code> mà phiên này tìm thấy đều dùng <code>(x, 0, 0)</code>, ví dụ <code>main/Src/mx_init.c:509,512,515</code>, vùng <code>stm32f0xx_hal_msp.c:91</code> — nghĩa là <strong>mọi interrupt đều chia sẻ cùng một mức priority</strong>, nên việc lồng ISR theo priority không xảy ra; chỉ có tail-chaining).</p>
 <hr />
 <h2 id="s-docs-vi-02-architecture--2-s-ph-thu-c-module-module-dependency-graph">2. Sơ đồ phụ thuộc module (module dependency graph)</h2>
-<img src="../So_do_phu_thuoc_module.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
+<pre><code>                      ┌─────────────────────────────────────────────┐
+                      │   Hardware (STM32F031C6: I2C1, RTC, TIM3,    │
+                      │   IWDG, GPIO A/B/C/F, PWR, Flash, NVIC/EXTI) │
+                      └───────────────┬───────────────────────────────┘
+                                      │ register I/O
+                      ┌───────────────▼───────────────┐
+                      │  ISR layer                     │
+                      │  main/Src/stm32f0xx_it.c        │  iap/Src/stm32f0xx_it.c
+                      │  (8 handlers, §5)                │  (3 handlers, §5)
+                      └───────┬───────────┬─────────────┘
+                              │           │
+              ┌───────────────▼─┐    ┌────▼─────────────┐
+              │ HAL (ST Cube)    │    │ CMSIS-Driver       │
+              │ HAL_GPIO_EXTI_*  │    │ Driver_I2C0 (I2C)   │
+              │ HAL_TIM_IRQHandler│   │ Driver_Flash0 (IAP) │
+              │ HAL_I2C_EV/ER_*  │    │ km_i2c.c:28, entry.c:22
+              │ HAL_RTC_AlarmIRQ*│    └────┬───────────────┘
+              └───────┬──────────┘         │ ISR-context callback
+                      │ weak-callback       │ rx_comp() km_i2c.c:171 / km_i2c_iap.c:90
+        ┌─────────────▼─────────────┐       │
+        │ BSP                        │       │
+        │ BSP_GPIO_*, BSP_TIM_*,     │       │
+        │ BSP_WDT_*, BSP_PWR_*       │       │
+        │ common/Drivers/BSP/*.c     │       │
+        └──┬───────────┬─────────────┘       │
+           │           │                     │
+  ┌────────▼───┐  ┌────▼──────────┐   ┌──────▼─────────────┐
+  │ Driver      │  │ Driver         │   │ Protocol             │
+  │ km_it.c     │  │ km_alarm_wake.c│   │ km_i2c.c (Main)       │
+  │ (timers,    │  │ (RTC Alarm A)  │   │ km_i2c_iap.c (IAP)    │
+  │ debounce,   │  │ set_cycle_time │   └──────┬───────────────┘
+  │ pending-    │  │ @41            │          │
+  │ factor)     │  └───────┬────────┘          │ writes/reads
+  └──┬──────────┘          │                    │
+     │                     │ called from        │
+     │        ┌────────────▼────┐               │
+     │        │ Application       │◄─────────────┘ reads g_io_extend_memory[],
+     │        │ km_extend_io.c    │                 calls setEventRecord()
+     │        │ (power sequencing,│
+     │        │ 1540 lines)       │
+     │        └─────┬─────────────┘
+     │              │ Service
+     │        ┌──────▼────────────┐
+     │        │ km_ca72_status.c   │
+     │        │ (SoC status cache) │
+     │        └────────────────────┘
+     │
+     └──────────► Application entry: main/App/entry.c::main() (entry.c:45-147)
+                  iap/App/entry_iap.c::main() (entry_iap.c:40-79)
+</code></pre>
 <p>Các cạnh (edge) cụ thể, mỗi cạnh trả lời đủ bốn câu hỏi kèm trích dẫn:</p>
 <div class="scroll"><table>
 <thead>
@@ -2640,9 +2688,46 @@ case IAP_PG_COMMAND:
 <hr />
 <h2 id="s-docs-vi-02-architecture--4-quy-n-s-h-u-kh-i-t-o-tr-nh-t-boot-ch-nh-x-c">4. Quyền sở hữu khởi tạo (trình tự boot chính xác)</h2>
 <h3 id="s-docs-vi-02-architecture--image-main">Image Main</h3>
-<img src="../image_main.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
-
+<pre><code>Reset_Handler (startup_stm32f031x6.s)         [Startup]
+  -&gt; SystemInit()                              [Startup]
+  -&gt; main()                                     entry.c:45
+       __HAL_RCC_PWR_CLK_ENABLE()                entry.c:50            [HAL macro, direct]
+       MX_Init()                                 entry.c:52  -&gt; mx_init.c:81
+           HAL_Init()                             mx_init.c:87          [HAL]
+           SystemClock_Config()                   mx_init.c:90 -&gt; 113   [HAL: RCC/PLL/I2C1&amp;RTC clock src]
+           MX_GPIO_Init()                         mx_init.c:91 -&gt; 419   [HAL: all GPIO pin modes, EXTI priorities @509-516]
+           MX_I2C1_Init()                         mx_init.c:93 -&gt; 202   [HAL: I2C1 Timing=0x00200000, OwnAddress1=122, OwnAddress2=124]
+           hrtc.Instance = RTC; if(!INITS) {       mx_init.c:94-101
+               MX_RTC_Init(DEF_RTC_INIT)            mx_init.c:96 -&gt; 244  [HAL: RTC_HOURFORMAT_24, AsynchPrediv=127, SynchPrediv=255]
+               KM_RTC_SetDefaultTime()              mx_init.c:97 -&gt; 275  [direct register: 2017/12/05 08:30:00 default]
+           } else {
+               MX_RTC_Init(DEF_RTC_MSPINIT)          mx_init.c:100        [MSP-only re-init after STOP wake]
+           }
+           KM_RTC_Restore()                        mx_init.c:102 -&gt; 310  [direct register restore from RTC_BKP0R/1R, 10000-iter timeout loop]
+           KM_RTC_ALARM_Init()                     mx_init.c:104 -&gt; 352  [HAL: HAL_RTC_SetAlarm_IT, mx_init.c:374]
+           MX_TIM3_Init()                          mx_init.c:105 -&gt; 381  [HAL: Prescaler=0, Period=0, internal clock]
+           MX_IWDG_Init()                          mx_init.c:106 -&gt; 229  [HAL: Prescaler_256, Window=Reload=4095 -&gt; ~26.2s]
+       get_model()                                entry.c:54  -&gt; km_extend_io.c:1480  [reads MODEL_BIT0/1 GPIO once, caches]
+       g_checksum_value = checksum_calc()          entry.c:56  -&gt; km_i2c.c:771
+       GetVersionString()                          entry.c:60  -&gt; km_i2c.c:800
+       BSP_WDT_Start()                             entry.c:63           [BSP -&gt; HAL IWDG]
+       internal_sts_init()                         entry.c:64  -&gt; km_extend_io.c:366
+       km_it_init()                                entry.c:65  -&gt; km_it.c:364
+           init_ei_ref()                            km_it.c:365 -&gt; 72    [zeroes ei_ref[32]]
+           BSP_GPIO_Initialize(km_exti_callback)    km_it.c:367          [registers ISR-context GPIO callback]
+           BSP_TIM_Initialize(TIMER_3,km_tim_callback) km_it.c:368       [registers ISR-context 1ms callback]
+       BSP_TIM_Start(TIMER_3,1)                    entry.c:66           [starts the 1ms hardware tick]
+       adc_moni_5v_start_proc()                    entry.c:69           [dead — #if 0 body, km_adc.c:27-40]
+       io_extend_memory_write()                    entry.c:71  -&gt; km_extend_io.c:339  [seeds g_io_extend_memory[] from io_extend[14] initial GPIO levels]
+       BSP_GPIO_WritePin(_RESET,...RESET)          entry.c:74           [holds S800 in reset]
+       s800_power_on()                             entry.c:75  -&gt; km_extend_io.c:607  [begins power-on sequence]
+       i2c_recv_first()                            entry.c:77  -&gt; km_i2c.c:317
+           Driver_I2C0.Initialize(rx_comp)          km_i2c.c:338         [CMSIS-Driver: registers ISR callback rx_comp]
+           Driver_I2C0.Control(MANUAL_ACK_MODE,1)   km_i2c.c:340
+           Driver_I2C0.SlaveReceive(rx_buf,16)      km_i2c.c:342         [arms first I2C reception]
+       poweroff_timer_init()                       entry.c:80  -&gt; km_extend_io.c:1258 [zeroes 5 power-off-related timers]
+       while(1) { ... }                             entry.c:83           [see §5 — steady state begins here]
+</code></pre>
 <p><strong>Ai khởi tạo cái gì, mỗi ý một dòng:</strong>
 - <strong>Clock/RCC/PLL:</strong> <code>mx_init.c::SystemClock_Config()</code> (<code>113-159</code>), được <code>MX_Init()</code> gọi một lần — chủ sở hữu của <code>SystemCoreClock</code> sau đó là HAL (biến toàn cục <code>SystemCoreClock</code>, do HAL duy trì).
 - <strong>Chế độ chân GPIO:</strong> <code>mx_init.c::MX_GPIO_Init()</code> (<code>419-527</code>) — mọi chân trong <code>mxconstants.h</code> được thiết lập mode/pull/speed tại đây, một lần duy nhất, lúc boot. Không có hàm nào khác trong 24 file đọc trong phiên này cấu hình lại <em>mode</em> của một chân sau đó (chỉ mức tín hiệu, qua <code>BSP_GPIO_WritePin</code>).
@@ -2651,7 +2736,34 @@ case IAP_PG_COMMAND:
 - <strong>TIM3:</strong> <code>mx_init.c::MX_TIM3_Init()</code> cấu hình nó (<code>381-417</code>, <code>Prescaler=0, Period=0</code> — nghĩa là HAL để cho lớp BSP tự tính toán prescaler cho chu kỳ 1 ms thực tế, <span class="tag t-inf">[INFERRED]</span> từ các hằng số <code>TIM_PRESCALER=2000</code>/<code>TIM_PERIOD=2</code> trong <code>01_repository_map.md</code> §3.4 tại <code>BSP_STM32F03x_Nucleo.h:57-58</code>, chưa được xác minh lại đối chiếu thân hàm <code>.c</code> trong phiên này); <code>km_it.c::km_it_init()</code> (<code>367-368</code>) đăng ký <em>callback</em>, và <code>entry.c:66</code> mới là nơi thực sự <em>khởi động</em> việc đếm.
 - <strong>IWDG:</strong> <code>mx_init.c::MX_IWDG_Init()</code> cấu hình nó một lần (<code>229-243</code>); nó <strong>không bao giờ được cấu hình lại</strong> sau đó — chỉ được service (§5).</p>
 <h3 id="s-docs-vi-02-architecture--image-iap">Image IAP</h3>
-<img src="../Image_IAP.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
+<pre><code>Reset_Handler (startup_stm32f031x6.s)          [Startup — same file as Main, confirmed via .uvprojx]
+  -&gt; SystemInit()
+  -&gt; main()                                     entry_iap.c:40
+       MX_Init()                                 entry_iap.c:44  -&gt; iap/Src/mx_init.c:69
+           HAL_Init()                             (iap mx_init.c body — `[INFERRED]` structurally identical to Main's opening, not verified line-by-line this pass beyond the prototype list at iap/Src/mx_init.c:53-58)
+           SystemClock_Config()                   iap/Src/mx_init.c:97   [same RCC/PLL settings as Main per prototype match]
+           MX_GPIO_Init()                         iap/Src/mx_init.c:225  [narrower pin set — no RTC/TIM3/ADC pins]
+           MX_I2C1_Init()                         iap/Src/mx_init.c:143  [same Timing=0x00200000; NOTE OwnAddress1=124, not 122 — see §7]
+           MX_TIM3_Init()                         iap/Src/mx_init.c:185
+           MX_IWDG_Init()                         iap/Src/mx_init.c:170
+       g_checksum_value = checksum_calc()         entry_iap.c:47 -&gt; km_i2c_iap.c:490
+       GetVersionString()                         entry_iap.c:48 -&gt; km_i2c_iap.c:519
+       BSP_WDT_Start()                            entry_iap.c:51
+       km_it_init_iap()                           entry_iap.c:53 -&gt; km_extend_io_iap.c:78
+           BSP_GPIO_Initialize(km_exti_callback_iap) km_extend_io_iap.c:80  [only GPIO callback — no BSP_TIM_Initialize call found: IAP has no software-timer subsystem]
+       for(i&lt;48) VectorTable[i] = *(IAP_ADDRESS+i*4)  entry_iap.c:57-60      [copies Main's vector table (IAP_ADDRESS = MAIN_APPLICATION_ADDRESS+MAIN_APPLICATION_SIZE = 0x08005000, km_i2c_iap.h:120) into SRAM @0x20000000 — see §7 for the stale comment this resolves]
+       BSP_WDT_Refresh()                          entry_iap.c:63
+       __HAL_RCC_SYSCFG_CLK_ENABLE()               entry_iap.c:65
+       __HAL_SYSCFG_REMAPMEMORY_SRAM()             entry_iap.c:68          [remaps SRAM to 0x00000000 — required because Cortex-M0 has no VTOR]
+       i2c_recv_first()                            entry_iap.c:70 -&gt; km_i2c_iap.c:193
+           Driver_I2C0.Initialize(rx_comp)          km_i2c_iap.c:209
+           Driver_I2C0.Control(MANUAL_ACK_MODE,1)   km_i2c_iap.c:211
+           Driver_I2C0.SlaveReceive(rx_buf,1025)    km_i2c_iap.c:213
+           Driver_Flash0.Initialize(NULL)           km_i2c_iap.c:214       [Flash CMSIS-Driver init — Main never does this]
+           main_project_flash_erase()               km_i2c_iap.c:216 -&gt; 435  [erases the entire 20KB Main region BEFORE any I2C transaction has occurred]
+           g_iap_reg[...CHANGE_STATUS...] |= ...IAP  km_i2c_iap.c:218       [tells the main SoC &quot;I am now in IAP mode&quot; via the register map]
+       while(1) { i2c_recv_wait(); BSP_WDT_Refresh(); }  entry_iap.c:73-77
+</code></pre>
 <p><strong>Điều chỉnh so với <code>01_repository_map.md</code> §3.13:</strong> tài liệu đó đã đánh dấu chú thích trong <code>entry_iap.c</code>: <code>"mapped at the base of the application load address 0x08001600"</code> (dòng 56 trong file mà phiên này xác nhận) là có khả năng mâu thuẫn với địa chỉ base IAP đã xác nhận là <code>0x08005000</code>. Phiên này xác nhận <strong>code</strong>, chứ không chỉ chú thích: <code>IAP_ADDRESS</code> được <code>#define</code> tại <code>iap/Inc/km_i2c_iap.h:120</code> là <code>MAIN_APPLICATION_ADDRESS + MAIN_APPLICATION_SIZE</code> = <code>0x08000000 + 0x5000</code> = <strong><code>0x08005000</code></strong>, khớp chính xác với địa chỉ base ROM của IAP đã xác nhận. Con số <code>0x08001600</code> trong chú thích chỉ đơn giản là văn bản cũ/sai còn sót lại từ một phiên bản memory-map trước đó — macro mà nó mô tả là đúng. Đây là một lỗi tài liệu trong source của vendor, không phải lỗi chức năng.</p>
 <hr />
 <h2 id="s-docs-vi-02-architecture--5-quy-n-s-h-u-l-c-runtime-superloop-tr-ng-th-i-n-nh">5. Quyền sở hữu lúc runtime (superloop trạng thái ổn định)</h2>
@@ -3426,7 +3538,35 @@ A ⇒ B     A is one of several dispatch targets picked by a jump table / switch
 <h2 id="s-docs-vi-04-call-graph--2-c-c-lu-ng-th-c-thi-ch-nh-major-execution-paths">2. Các luồng thực thi chính (Major execution paths)</h2>
 <h3 id="s-docs-vi-04-call-graph--2-1-main-image-cold-boot-n-v-ng-l-p-superloop-u-ti-n">2.1 Main image — cold boot đến vòng lặp superloop đầu tiên</h3>
 <img src="../Flow_main_image.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
+<pre><code>ENTRY  Reset_Handler                    main/MDK-ARM/startup_stm32f031x6.s:131
+  → SystemInit()                        (CMSIS, default clock — not app clock)
+  → __main (ARM C lib: .data/.bss init)
+  → main()                              entry.c:46
+      → __HAL_RCC_PWR_CLK_ENABLE()
+      → MX_Init()                       mx_init.c:81
+          → HAL_Init()
+          → SystemClock_Config()        mx_init.c:113   (real app clock: PLL from HSI)
+          → MX_GPIO_Init()
+          → MX_I2C1_Init()              mx_init.c:202   (also called again later by i2c_sw_reset(), §2.8)
+          → MX_RTC_Init(...) / KM_RTC_Restore() / KM_RTC_ALARM_Init()
+          → MX_TIM3_Init()              (configures, does NOT start — §2.5 starts it)
+          → MX_IWDG_Init()
+      → get_model()                     km_extend_io.c:1480  (reads+caches 2 GPIO straps once)
+      → checksum_calc()                 km_i2c.c:771     (sums own flash image 0x08000000..+0x4FFE)
+      → GetVersionString()              km_i2c.c:800     (copies version bytes out of own flash into RAM)
+      → BSP_WDT_Start()                 → HAL_IWDG_Start()
+      → internal_sts_init()             km_extend_io.c:366
+      → km_it_init()                    km_it.c:364      ↝ registers km_exti_callback, km_tim_callback (§3)
+      → BSP_TIM_Start(TIMER_3, 1)       → arms the 1 ms tick (see 03_execution_model.md §4.3)
+      → adc_moni_5v_start_proc()        km_adc.c:27      [DEAD — body is #if 0]
+      → io_extend_memory_write()        km_extend_io.c:339 (seeds g_io_extend_memory[] from live GPIO)
+      → BSP_GPIO_WritePin(_RESET, RESET)
+      → s800_power_on()                 km_extend_io.c:607  (§2.9)
+      → i2c_recv_first()                km_i2c.c:317     ⇢ Driver_I2C0.Initialize(rx_comp) — arms I2C1 slave RX
+      → poweroff_timer_init()
+  → while(1) { … }                      entry.c:83        (§2.2, never returns)
+RETURN  — never (superloop is terminal; only jump2iap()/reset leave it)
+</code></pre>
 <p><strong>Ý nghĩa:</strong> toàn bộ đoạn trên chạy đơn luồng (single-threaded), interrupt chỉ
 được bật toàn cục từ thời điểm <code>HAL_Init()</code>/<code>MX_GPIO_Init()</code> bắt đầu bật các
 đường NVIC. Có hai thứ được tính toán <strong>trước</strong> khi loop bắt đầu và sau đó chỉ
@@ -3437,8 +3577,34 @@ chạy lại sau đó <em>duy nhất</em> bởi IAP image sau khi một lần c�
 hoàn tất (<code>km_i2c_iap.c:345-346</code>) — bản thân Main không bao giờ tính lại chúng
 sau khi boot.</p>
 <h3 id="s-docs-vi-04-call-graph--2-2-main-image-m-t-v-ng-l-p-superloop-steady-state">2.2 Main image — một vòng lặp superloop (steady state)</h3>
-<img src="../Main_image_mot_vong_lap_superloop.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
+<pre><code>ENTRY  while(1) body                    entry.c:83-144
+  → sb_reset_proc()                     km_extend_io.c:1231
+  → moni_24v_proc()                     km_extend_io.c:575
+  → BSP_WDT_Refresh()                   → HAL_IWDG_Refresh()   [feeds the ~26.2s watchdog]
+  → msw_on_proc(STATE_NORMAL)           km_extend_io.c:1149    (§2.9 — may call s800_power_off/on, BSP_PWR_enter_stopmode)
+  → power_monitor_proc(STATE_NORMAL)    km_extend_io.c:445
+  → sleep_status_rem_proc(model)        km_extend_io.c:1055  ⇒ jump table (§3.5) — READS get_ca72_status()
+  → mc_p_on_proc(model)                 km_extend_io.c:839   ⇒ jump table (§3.5)
+  → ir_p_on_proc()                      km_extend_io.c:862
+  → mc3_3von_moni_proc()                km_extend_io.c:425
+  → erp_sensor_proc()                   km_extend_io.c:687    (also reachable re-entrantly from io_extend_write(), §2.7)
+  → mc_oe_proc()                        km_extend_io.c:1072   (no-op stub, signal removed per its own comment)
+  → mc_pwr_en_proc()                    km_extend_io.c:1096
+  → adc_moni_5v_off_proc()              km_adc.c:54            [DEAD — body is #if 0]
+  → rst_usb_proc(STATE_NORMAL)          km_extend_io.c:711
+  → usb2_oe_proc()                      km_extend_io.c:1373
+  → ap_power_en_proc(STATE_NORMAL)      km_extend_io.c:658    WRITES set_ca72_status()  ← see hazard note below
+  → intr_pending_proc()                 km_extend_io.c:1416
+      → hreset_req_proc()               km_extend_io.c:489       [if HRESET_REQ pending bit set]
+      → ap_power_en_proc(STATE_INT)     km_extend_io.c:658       [if AP_PWR_EN pending bit set] → set_ca72_status(CA72_ON)
+  → anti_chattering_proc()              km_extend_io.c:1438
+      ⇢ info-&gt;intr_proc(STATE_INT)      km_extend_io.c:1460      indirect call (§3.6) → msw_on_proc / power_monitor_proc / (none)
+  → poweroff_timer_proc()               km_extend_io.c:1305
+  → backupwait_timer_proc()             km_extend_io.c:1350
+  → i2c_recv_wait()                     km_i2c.c:485           (§2.6/§2.7 — the I2C command dispatcher)
+  → sleep_mode()                        km_extend_io.c:1395    → BSP_PWR_enter_sleepmode() (conditional WFI)
+RETURN  — loops back to sb_reset_proc()
+</code></pre>
 <p><strong>Ý nghĩa — một hazard thứ tự có thật, không chỉ là một danh sách:</strong>
 <code>sleep_status_rem_proc()</code> chạy ở <strong>đầu</strong> vòng lặp và đọc <code>get_ca72_status()</code>
 (<code>km_extend_io.c:896,971</code>), nhưng những nơi duy nhất ghi status đó,
@@ -3455,7 +3621,18 @@ chỉ đọc từng hàm riêng lẻ một cách ngây thơ sẽ hoàn toàn b�
 là lý do phase này yêu cầu call graph phải được lần theo bằng tay, không phải
 được sinh tự động.</p>
 <h3 id="s-docs-vi-04-call-graph--2-3-exti-interrupt-arm-debounce-isr-context">2.3 EXTI interrupt → arm debounce (ISR context)</h3>
-<img src="../2.3.EXTI_Interrupt.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
+<pre><code>⚡ HRESET_REQ/AP_PWR_EN/POWER_MONITOR/MSW_ON/MONI_24V11 pin edge
+  → EXTIx_y_IRQHandler                  main/Src/stm32f0xx_it.c:145-184
+  → HAL_GPIO_EXTI_IRQHandler(pin)       (HAL: clears EXTI pending bit)
+  ⇢ HAL_GPIO_EXTI_Callback(pin)         BSP_GPIO_STM32F03x_Nucleo.c:70   [weak override]
+  ⇢ signal_event(pin, GPIO_EVENT_EXT_INTR)   — function pointer, registered §3.1
+      = km_exti_callback(pin, event)    km_it.c:247
+          ⇒ set_pending_factor_bit(...)         [_HRESET_REQ_Pin, AP_PWR_EN_Pin — deferred]
+          ⇒ start_anti_chattering(idx, level)   [POWER_MONITOR/MONI_24V11/MSW_ON — armed NOW]
+              → km_timer_set(timer_kind, decision_time, Start)
+          ⇒ (MSW_ON only, if stop_mode) SystemClock_Config2() + HAL_RTC_DeactivateAlarm()
+RETURN to interrupted context (main loop or another ISR body)
+</code></pre>
 <p><strong>Ý nghĩa:</strong> ISR này đưa ra một <em>quyết định</em> thực sự, không chỉ đơn thuần set
 một flag — hai trong số năm pin có việc xử lý được deferred sang main loop
 (<code>intr_pending_proc()</code>, §2.2) trong khi ba pin còn lại có timer debounce của
@@ -3464,8 +3641,16 @@ lại lần nữa. Nhánh <code>MSW_ON</code> còn có nghĩa là một lần re
 xảy ra bên trong một GPIO ISR — điều đáng biết trước khi giả định rằng các
 ISR ở đây "chỉ" nhanh và đồng nhất.</p>
 <h3 id="s-docs-vi-04-call-graph--2-4-tim3-interrupt-software-timebase-isr-context-ch-main">2.4 TIM3 interrupt → software timebase (ISR context, chỉ Main)</h3>
-<img src="../2.4. TIM3_Interrupt.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
+<pre><code>⚡ TIM3 update event (1 ms)
+  → TIM3_IRQHandler                     main/Src/stm32f0xx_it.c:189
+  → HAL_TIM_IRQHandler(&amp;htim3)
+  ⇢ HAL_TIM_PeriodElapsedCallback(htim) BSP_TIM_STM32F03x_Nucleo.c:72   [weak override]
+  ⇢ Resource[type].SignalHandler(type, TIM_EVENT_PERIOD_ELAPSED)  — function pointer, registered §3.2
+      = km_tim_callback(TIMER_3, event) km_it.c:312
+          → ui_EventCountTimer++
+          → for each g_km_timer[i]: decrement, mark End at 0
+RETURN
+</code></pre>
 <p><strong>Ý nghĩa:</strong> đây là nơi <strong>duy nhất</strong> <code>g_km_timer[]</code> bị decrement. Mọi
 "timer" trong firmware này — debounce, trình tự power-off, backup-wait,
 stopwatch sự kiện boot — thực chất chỉ là một mảng dùng chung, được đọc bởi
@@ -3474,8 +3659,19 @@ nhiều hàm main-loop (<code>km_timer_get_state()</code>) và chỉ được gh
 (§3, bảng shared-state). Không có timer phần cứng độc lập nào cho từng
 feature; tất cả đều multiplex lên trên đúng một mảng này.</p>
 <h3 id="s-docs-vi-04-call-graph--2-5-i2c1-interrupt-completion-flag-isr-context-main-iap">2.5 I2C1 interrupt → completion flag (ISR context, Main + IAP)</h3>
-<img src="../I2C1_interrupt.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
+<pre><code>⚡ I2C1 event/error
+  → I2C1_IRQHandler                     main/Src/stm32f0xx_it.c:203  (iap/Src/stm32f0xx_it.c:158, identical shape)
+  → HAL_I2C_EV_IRQHandler / HAL_I2C_ER_IRQHandler  (HAL, chosen by reading hi2c1.Instance-&gt;ISR directly)
+  ⇢ HAL_I2C_AddrCallback / SlaveRxCpltCallback / SlaveTxCpltCallback / ErrorCallback
+      I2C_stm32f0xx.c:767 / :747 / :736 / :649   [weak overrides]
+  → do_callback(hi2c, event)             I2C_stm32f0xx.c:692
+  ⇢ resource-&gt;Cb_event(event)            — function pointer, registered §3.3
+      = rx_comp(event)                   km_i2c.c:171  (Main) / km_i2c_iap.c:90 (IAP)
+          → Driver_I2C0.Control(ACK/NACK, ...)      ⇢ indirect, struct member (§3.4)
+          → i2c_info.read_comp = 1  |  i2c_info.write_comp = 1
+          → i2c_info.error_code |= ...
+RETURN
+</code></pre>
 <p><strong>Ý nghĩa:</strong> <code>rx_comp()</code> cố tình được thiết kế "nông" — ba lần ghi
 flag/field và một quyết định ACK/NACK, không gì khác. Đây là ranh giới cứng
 giữa "ISR context" và "mọi thứ còn lại" cho toàn bộ subsystem I2C: không có
@@ -3484,8 +3680,25 @@ xuống dưới cũng có thể nhầm <code>rx_comp</code> là "trình xử lý
 rằng nó chỉ là phần ba đầu tiên của pipeline — hai phần ba còn lại chạy sau đó
 0 đến ~vài ms trong main loop (§2.6).</p>
 <h3 id="s-docs-vi-04-call-graph--2-6-i2c-command-dispatch-main-loop-context-main-image-c-register">2.6 I2C command dispatch — main-loop context (Main image, đọc register)</h3>
-<img src="../2.6.IC2_command_dispath.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
+<pre><code>ENTRY  i2c_recv_wait()                  km_i2c.c:485      (called every iteration, entry.c:126)
+  → i2c_check_error()                   km_i2c.c:379      [HAL_NVIC_DisableIRQ(I2C1_IRQn) critical section, §5]
+      if timeout/error → i2c_sw_reset() km_i2c.c:356 → return   (§2.8)
+  if (!read_comp &amp;&amp; !write_comp) → return   [nothing to do this iteration]
+  switch(i2c_info.state):
+    case TYPE_State_Wait_Write, 1-byte xfer (a register READ request from the I2C master):
+      switch(second_addr):
+        RTC_* / B_REGISTER_*      → change_state(..., Driver_I2C0.SlaveTransmit, (uint8_t*)(RTC_BASE+addr), ...)   [km_i2c.c:553]
+        EXTEND_OUTPUT/INPUT/*STS* → io_extend_read(addr)          km_extend_io.c:192  → change_state(...)          [km_i2c.c:561]
+        EXTEND_CHECKSUM_COMMAND   → tx_data = g_checksum_value    → change_state(...)                              [km_i2c.c:575]
+        EXTEND_VERSION_COMMAND    → change_state(..., &amp;g_main_version[0], ...)                                     [km_i2c.c:580]
+        EXTEND_EVENT_COMMAND      → change_state(..., &amp;st_EventRecord[0], sizeof(...))                             [km_i2c.c:612]
+        default                   → tx_data = 0xffff (undefined-address sentinel)
+      ⇢ change_state(next_state, &amp;comp, Driver_I2C0.SlaveTransmit, buf, size, NULL, 0)   km_i2c.c:274  (§3.4)
+          → HAL_NVIC_DisableIRQ(I2C1_IRQn)
+          → (*transfer)(buf, size)        = Driver_I2C0.SlaveTransmit(buf,size)   ⇢ indirect, arms next HW transfer
+          → HAL_NVIC_EnableIRQ(I2C1_IRQn)
+RETURN — i2c_info.state now TYPE_State_Wait_Read, waiting for the master to clock the reply out (ISR will set read_comp)
+</code></pre>
 <p><strong>Ý nghĩa:</strong> mỗi lần "đọc register" mà I2C master thực hiện đều được trả lời
 bằng cách copy <strong>live application state</strong> vào một vùng scratch cấp module
 (<code>tx_data</code>, hoặc một con trỏ trực tiếp vào memory-mapped register của RTC,
@@ -3499,8 +3712,6 @@ từ IAP image sau khi cập nhật firmware, không phải từ chính Main) v�
 tắc có thể race — <span class="tag t-inf">[INFERRED]</span> không phải vấn đề thực tế vì Main không bao
 giờ ghi lại hai giá trị đó sau khi boot.</p>
 <h3 id="s-docs-vi-04-call-graph--2-7-i2c-command-dispatch-main-loop-context-main-image-ghi-register-c-c-l-nh-c-side-effect">2.7 I2C command dispatch — main-loop context (Main image, ghi register / các lệnh có side-effect)</h3>
-<img src="../2.7.I2C_comamnd_dispatch_main_loop_context.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
-
 <pre><code>ENTRY  i2c_recv_wait(), case Wait_Write, xfer_size &gt; 1 (a WRITE)   km_i2c.c:629
   switch(second_addr):
     RTC_*                        → direct pointer write to RTC_BASE+offset, RTC_WRITEPROTECT_DISABLE/ENABLE around it   [km_i2c.c:657-661]

@@ -250,8 +250,121 @@ pre em{color:var(--el0);font-style:normal;font-weight:600}
   <div class="sec-head"><span class="sec-num">MAP</span><h2>Sơ đồ tổng: cả vòng đời trên một trục</h2></div>
   <p class="sec-kicker">Toàn bộ 8 module nằm trên một đường thẳng. Mỗi cột là một chặng; mỗi mũi tên dọc là <strong>một lần vượt ranh giới đặc quyền</strong> — đi xuống bằng lệnh <code>svc</code> hoặc exception, đi lên bằng lệnh <code>eret</code>.</p>
 
-  <img src="../../Do_bang_trang_ARM64.png" alt="Activity Case Boot & khởi tạo phần cứng" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1140 330" role="img" aria-label="Sơ đồ khối vòng đời process: bảy chặng fork, execve, chạy, syscall, lập lịch, signal, exit-wait; mỗi chặng có một hộp ở EL0 và một hộp ở EL1, nối bằng mũi tên vượt ranh giới đặc quyền">
+    <defs><marker id="a1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
 
+    <text class="tl t0" x="6" y="46">EL0</text>
+    <text class="tl" x="6" y="60">USER</text>
+    <text class="tl t1" x="6" y="200">EL1</text>
+    <text class="tl" x="6" y="214">KERNEL</text>
+
+    <line class="ln dash rule" x1="88" y1="124" x2="1124" y2="124"/>
+    <text class="ts" x="1124" y="118" text-anchor="end">ranh giới đặc quyền</text>
+
+    <!-- stage 1 -->
+    <text class="ts" x="160" y="13" text-anchor="middle">01 · fork</text>
+    <rect class="bx0" x="92" y="24" width="136" height="60" rx="2"/>
+    <text class="tc" x="160" y="46" text-anchor="middle">shell (cha)</text>
+    <text class="ts" x="160" y="64" text-anchor="middle">pid = fork()</text>
+    <line class="ln" x1="160" y1="86" x2="160" y2="162" marker-end="url(#a1)"/>
+    <rect class="bxp" x="122" y="116" width="76" height="17" rx="2"/>
+    <text class="ts" x="160" y="128" text-anchor="middle">clone</text>
+    <rect class="bx1" x="92" y="164" width="136" height="88" rx="2"/>
+    <text class="ts" x="102" y="184">_do_fork</text>
+    <text class="ts" x="102" y="202">copy_process</text>
+    <text class="ts" x="102" y="220">copy_thread</text>
+    <text class="ts" x="102" y="240">wake_up_new_task</text>
+
+    <!-- stage 2 -->
+    <text class="ts" x="308" y="13" text-anchor="middle">02 · execve</text>
+    <rect class="bx0" x="240" y="24" width="136" height="60" rx="2"/>
+    <text class="tc" x="308" y="46" text-anchor="middle">con mới</text>
+    <text class="ts" x="308" y="64" text-anchor="middle">execve("/bin/x")</text>
+    <line class="ln" x1="308" y1="86" x2="308" y2="162" marker-end="url(#a1)"/>
+    <rect class="bxp" x="270" y="116" width="76" height="17" rx="2"/>
+    <text class="ts" x="308" y="128" text-anchor="middle">execve</text>
+    <rect class="bx1" x="240" y="164" width="136" height="88" rx="2"/>
+    <text class="ts" x="250" y="184">do_execve</text>
+    <text class="ts" x="250" y="202">load_elf_binary</text>
+    <text class="ts" x="250" y="220">setup_arg_pages</text>
+    <text class="ts" x="250" y="240">start_thread</text>
+
+    <!-- stage 3 -->
+    <text class="ts" x="456" y="13" text-anchor="middle">03 · chạy</text>
+    <rect class="bx0" x="388" y="24" width="136" height="60" rx="2"/>
+    <text class="tc" x="456" y="46" text-anchor="middle">chương trình chạy</text>
+    <text class="ts" x="456" y="64" text-anchor="middle">_start → main()</text>
+    <line class="ln0" x1="456" y1="86" x2="456" y2="106" marker-end="url(#a1)"/>
+    <text class="ts t0" x="456" y="121" text-anchor="middle">eret</text>
+    <rect class="bx1 dash" x="388" y="164" width="136" height="88" rx="2" style="fill:none"/>
+    <text class="ts" x="456" y="206" text-anchor="middle">nhân không chạy</text>
+    <text class="ts" x="456" y="224" text-anchor="middle">— chỉ MMU dịch VA —</text>
+
+    <!-- stage 4 -->
+    <text class="ts" x="604" y="13" text-anchor="middle">04 · syscall</text>
+    <rect class="bx0" x="536" y="24" width="136" height="60" rx="2"/>
+    <text class="tc" x="604" y="46" text-anchor="middle">svc #0 · hoặc IRQ</text>
+    <text class="ts" x="604" y="64" text-anchor="middle">w8 = số syscall</text>
+    <line class="ln" x1="604" y1="86" x2="604" y2="162" marker-end="url(#a1)"/>
+    <rect class="bxp" x="566" y="116" width="76" height="17" rx="2"/>
+    <text class="ts" x="604" y="128" text-anchor="middle">svc / IRQ</text>
+    <rect class="bx1" x="536" y="164" width="136" height="88" rx="2"/>
+    <text class="ts" x="546" y="184">vectors (entry.S)</text>
+    <text class="ts" x="546" y="202">kernel_entry → pt_regs</text>
+    <text class="ts" x="546" y="220">el0_svc_handler</text>
+    <text class="ts" x="546" y="240">sys_call_table[nr]</text>
+
+    <!-- stage 5 -->
+    <text class="ts" x="752" y="13" text-anchor="middle">05 · lập lịch</text>
+    <rect class="bx0 dash" x="684" y="24" width="136" height="60" rx="2" style="fill:none"/>
+    <text class="ts" x="752" y="50" text-anchor="middle">task bị treo</text>
+    <text class="ts" x="752" y="68" text-anchor="middle">CPU đi lo task khác</text>
+    <line class="ln dash" x1="752" y1="86" x2="752" y2="162"/>
+    <rect class="bxp" x="708" y="116" width="88" height="17" rx="2"/>
+    <text class="ts" x="752" y="128" text-anchor="middle">không ra EL0</text>
+    <rect class="bx1" x="684" y="164" width="136" height="88" rx="2"/>
+    <text class="ts" x="694" y="184">__schedule</text>
+    <text class="ts" x="694" y="202">switch_mm (ASID)</text>
+    <text class="ts" x="694" y="220">__switch_to</text>
+    <text class="ts" x="694" y="240">cpu_switch_to</text>
+
+    <!-- stage 6 -->
+    <text class="ts" x="900" y="13" text-anchor="middle">06 · signal</text>
+    <rect class="bx0" x="832" y="24" width="136" height="60" rx="2"/>
+    <text class="tc" x="900" y="46" text-anchor="middle">sa_handler</text>
+    <text class="ts" x="900" y="64" text-anchor="middle">chạy trên user stack</text>
+    <line class="ln0" x1="900" y1="162" x2="900" y2="88" marker-end="url(#a1)"/>
+    <rect class="bxp" x="862" y="116" width="76" height="17" rx="2"/>
+    <text class="ts" x="900" y="128" text-anchor="middle">sigframe</text>
+    <rect class="bx1" x="832" y="164" width="136" height="88" rx="2"/>
+    <text class="ts" x="842" y="184">ret_to_user</text>
+    <text class="ts" x="842" y="202">do_notify_resume</text>
+    <text class="ts" x="842" y="220">do_signal</text>
+    <text class="ts" x="842" y="240">setup_rt_frame</text>
+
+    <!-- stage 7 -->
+    <text class="ts" x="1048" y="13" text-anchor="middle">07 · kết thúc</text>
+    <rect class="bx0" x="980" y="24" width="136" height="60" rx="2"/>
+    <text class="tc" x="1048" y="46" text-anchor="middle">exit()</text>
+    <text class="ts" x="1048" y="64" text-anchor="middle">cha gọi wait()</text>
+    <line class="ln" x1="1048" y1="86" x2="1048" y2="162" marker-end="url(#a1)"/>
+    <rect class="bxp" x="1010" y="116" width="76" height="17" rx="2"/>
+    <text class="ts" x="1048" y="128" text-anchor="middle">exit_group</text>
+    <rect class="bx1" x="980" y="164" width="136" height="88" rx="2"/>
+    <text class="ts" x="990" y="184">do_exit</text>
+    <text class="ts" x="990" y="202">exit_notify → ZOMBIE</text>
+    <text class="ts" x="990" y="220">do_wait</text>
+    <text class="ts" x="990" y="240">release_task → free</text>
+
+    <line class="ln rule" x1="92" y1="286" x2="1110" y2="286" marker-end="url(#a1)"/>
+    <text class="ts" x="92" y="306">thời gian</text>
+    <text class="ts" x="1116" y="306" text-anchor="end">task_struct được giải phóng</text>
+  </svg>
+  </div>
+  <figcaption><b>Cả 8 module là một câu chuyện.</b> Hộp trên = mã chạy ở <span class="el0t">EL0 (user)</span>; hộp dưới = mã chạy ở <span class="el1t">EL1 (kernel)</span>. Chặng 03 không có hộp kernel vì lúc đó nhân hoàn toàn không chạy. Chặng 05 có đường đứt nét vì việc đổi task xảy ra hoàn toàn bên trong kernel, user không hề biết.</figcaption>
+  </figure>
 </section>
 
 <section id="gloss">
@@ -817,10 +930,123 @@ msr ttbr1_el1, &lt;swapper_pgd | ASID &lt;&lt; 48&gt;   <i>// đổi ASID (TCR_E
   <p class="sec-kicker"><code>getpid()</code> trên aarch64 không có đường tắt vDSO nên là syscall thật — đường đi sạch nhất để nhìn rõ cơ chế vượt ranh giới đặc quyền.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Đi xuống và đi lên là hai nửa <strong>đối xứng</strong> của cùng một cấu trúc: <code>pt_regs</code>. Nửa xuống <em>ghi</em> toàn bộ trạng thái user vào đó; nửa lên <em>đọc</em> ra và <code>eret</code>. Sửa <code>pt_regs</code> ở giữa = thay đổi thứ user sẽ thấy khi tỉnh lại.</p></div>
-  <img src="../../Process_00.png" alt="" style="max-width: 100%; height: auto;">
 
-    <img src="../../bang_vector_exception.png" alt="" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 480" role="img" aria-label="Đường đi của syscall getpid: cột trái là chiều đi xuống từ EL0 vào EL1 gồm phần cứng tự lưu và entry.S ghi pt_regs; cột giữa là struct pt_regs; cột phải là chiều đi lên đọc lại pt_regs và eret về EL0">
+    <defs><marker id="a6" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
 
+    <text class="tc t1" x="24" y="26">EL0 → EL1  ·  đi xuống</text>
+    <text class="tc t0" x="1056" y="26" text-anchor="end">EL1 → EL0  ·  đi lên</text>
+
+    <rect class="bx0" x="24" y="42" width="400" height="54" rx="2"/>
+    <text class="tm" x="38" y="62">EL0 — trước lệnh svc</text>
+    <text class="ts" x="38" y="80">PSTATE=EL0t · SP=SP_EL0 (user) · w8=172 · PC=&amp;svc</text>
+
+    <rect class="bx0" x="656" y="42" width="400" height="54" rx="2"/>
+    <text class="tm" x="670" y="62">EL0 — sau lệnh eret</text>
+    <text class="ts" x="670" y="80">PC=&amp;svc+4 · SP=SP_EL0 (user) · <tspan class="t0">x0 = 1234</tspan></text>
+
+    <line class="ln" x1="224" y1="98" x2="224" y2="114" marker-end="url(#a6)"/>
+    <text class="ts" x="232" y="111">svc #0</text>
+    <line class="ln" x1="856" y1="118" x2="856" y2="100" marker-end="url(#a6)"/>
+    <text class="ts" x="864" y="113">eret</text>
+
+    <rect class="bxh" x="24" y="118" width="400" height="100" rx="2"/>
+    <text class="tm th" x="38" y="137">PHẦN CỨNG tự làm — 1 chu kỳ, không lệnh nào chạy</text>
+    <text class="ts" x="38" y="156">SPSR_EL1 ← PSTATE của EL0</text>
+    <text class="ts" x="38" y="172">ELR_EL1  ← &amp;svc + 4</text>
+    <text class="ts" x="38" y="188">ESR_EL1  ← EC=0x15 (SVC64) · PSTATE → EL1h, mask DAIF</text>
+    <text class="ts" x="38" y="204">SP ← SP_EL1 · PC ← VBAR_EL1 + 0x400   <tspan class="t0">(SP_EL0 và x0–x30 KHÔNG đổi)</tspan></text>
+
+    <rect class="bxh" x="656" y="118" width="400" height="100" rx="2"/>
+    <text class="tm th" x="670" y="137">PHẦN CỨNG — lệnh eret</text>
+    <text class="ts" x="670" y="156">PSTATE ← SPSR_EL1  → quay về EL0t</text>
+    <text class="ts" x="670" y="172">PC     ← ELR_EL1   → lệnh ngay sau svc</text>
+    <text class="ts" x="670" y="188">SP đang dùng ← SP_EL0 (đã được khôi phục)</text>
+    <text class="ts" x="670" y="204">DAIF mở lại theo SPSR → IRQ chạy được</text>
+
+    <line class="ln" x1="224" y1="220" x2="224" y2="236" marker-end="url(#a6)"/>
+    <line class="ln" x1="856" y1="240" x2="856" y2="222" marker-end="url(#a6)"/>
+
+    <rect class="bx1" x="24" y="240" width="400" height="104" rx="2"/>
+    <text class="tm t1" x="38" y="259">entry.S — kernel_ventry + kernel_entry 0</text>
+    <text class="ts" x="38" y="278">sub sp, sp, #S_FRAME_SIZE      (khắc frame)</text>
+    <text class="ts" x="38" y="294">stp x0..x30 → pt_regs.regs[]</text>
+    <text class="ts" x="38" y="310">mrs x21, sp_el0 → pt_regs.sp   (SP user)</text>
+    <text class="ts" x="38" y="326">msr sp_el0, tsk → <tspan class="t1">SP_EL0 giờ = current</tspan></text>
+    <text class="ts" x="38" y="340">mrs elr/spsr → pt_regs.pc / .pstate</text>
+
+    <rect class="bx1" x="656" y="240" width="400" height="104" rx="2"/>
+    <text class="tm t1" x="670" y="259">entry.S — ret_to_user + kernel_exit 0</text>
+    <text class="ts" x="670" y="278">ldr flags; and #_TIF_WORK_MASK</text>
+    <text class="ts" x="670" y="294">  có việc → do_notify_resume (schedule / do_signal)</text>
+    <text class="ts" x="670" y="310">msr sp_el0 ← pt_regs.sp · msr elr_el1 ← pt_regs.pc</text>
+    <text class="ts" x="670" y="326">msr spsr_el1 ← pt_regs.pstate · ldp x0..x30</text>
+    <text class="ts" x="670" y="340">add sp, sp, #S_FRAME_SIZE      (bỏ frame)</text>
+
+    <line class="ln" x1="224" y1="346" x2="224" y2="362" marker-end="url(#a6)"/>
+    <line class="ln" x1="856" y1="366" x2="856" y2="348" marker-end="url(#a6)"/>
+
+    <rect class="bx1" x="24" y="366" width="400" height="72" rx="2"/>
+    <text class="tm t1" x="38" y="385">el0_sync → el0_svc → el0_svc_handler</text>
+    <text class="ts" x="38" y="403">đọc ESR_EL1, thấy EC=0x15 → đúng là syscall</text>
+    <text class="ts" x="38" y="419">orig_x0 = x0 · syscallno = 172 · bật lại IRQ</text>
+    <text class="ts" x="38" y="434">sys_call_table[172] = __arm64_sys_getpid</text>
+
+    <rect class="bx1" x="656" y="366" width="400" height="72" rx="2"/>
+    <text class="tm t1" x="670" y="385">sys_getpid() chạy</text>
+    <text class="ts" x="670" y="403">current = read_sysreg(sp_el0)</text>
+    <text class="ts" x="670" y="419">return task_tgid_vnr(current)  →  1234</text>
+    <text class="ts" x="670" y="434">regs-&gt;regs[0] = 1234</text>
+
+    <rect class="bxp" x="444" y="118" width="192" height="320" rx="2" stroke-width="1.8"/>
+    <text class="tm" x="540" y="142" text-anchor="middle">struct pt_regs</text>
+    <text class="ts" x="540" y="160" text-anchor="middle">ở ĐỈNH kernel stack</text>
+    <text class="ts" x="540" y="176" text-anchor="middle">≈ 320 byte</text>
+    <line class="rule" x1="456" y1="190" x2="624" y2="190"/>
+    <text class="ts" x="458" y="212">regs[0 … 30]</text>
+    <text class="ts" x="458" y="234">sp      ← SP_EL0</text>
+    <text class="ts" x="458" y="256">pc      ← ELR_EL1</text>
+    <text class="ts" x="458" y="278">pstate  ← SPSR_EL1</text>
+    <text class="ts" x="458" y="300">orig_x0</text>
+    <text class="ts" x="458" y="322">syscallno = 172</text>
+    <line class="rule" x1="456" y1="340" x2="624" y2="340"/>
+    <text class="ts" x="540" y="362" text-anchor="middle">sửa pt_regs ở đây</text>
+    <text class="ts" x="540" y="378" text-anchor="middle">= đổi nơi user tỉnh lại</text>
+    <text class="ts" x="540" y="400" text-anchor="middle">(signal · ptrace ·</text>
+    <text class="ts" x="540" y="416" text-anchor="middle">restart syscall)</text>
+
+    <line class="ln1" x1="428" y1="292" x2="440" y2="292" marker-end="url(#a6)"/>
+    <text class="ts t1" x="434" y="284">ghi</text>
+    <line class="ln1" x1="640" y1="292" x2="652" y2="292" marker-end="url(#a6)"/>
+    <text class="ts t1" x="644" y="284">đọc</text>
+  </svg>
+  </div>
+  <figcaption><b>Hai nửa đối xứng quanh <code>pt_regs</code>.</b> Phần cứng chỉ lo bốn thanh ghi hệ thống (SPSR, ELR, ESR, và đổi SP/PSTATE); toàn bộ 31 thanh ghi đa dụng là việc của assembly trong <code>entry.S</code>. Khác với lời gọi hàm C thông thường, khi thoát nhân khôi phục <em>đầy đủ</em> <code>x0–x30</code> — chỉ <code>x0</code> bị cố ý đổi thành giá trị trả về.</figcaption>
+  </figure>
+
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 130" role="img" aria-label="Bảng vector exception ARM64: mười sáu ô mỗi ô 0x80 byte, chia bốn nhóm; syscall từ EL0 64-bit rơi vào ô offset 0x400">
+    <text class="ts" x="24" y="18">VBAR_EL1 → bảng vector · 16 ô × 0x80 byte · phần cứng cộng offset theo nguồn exception</text>
+    <rect class="bx" x="24" y="30" width="248" height="52" rx="2"/>
+    <text class="ts" x="34" y="48">0x000 – 0x180</text>
+    <text class="ts" x="34" y="66">EL1t (không dùng)</text>
+    <rect class="bx" x="284" y="30" width="248" height="52" rx="2"/>
+    <text class="ts" x="294" y="48">0x200 – 0x380</text>
+    <text class="ts" x="294" y="66">EL1h — el1_sync · el1_irq · el1_error</text>
+    <rect class="bx0" x="544" y="30" width="248" height="52" rx="2" stroke-width="2"/>
+    <text class="ts t0" x="554" y="48">0x400 – 0x580  ◀ EL0 AArch64</text>
+    <text class="ts" x="554" y="66">el0_sync · el0_irq · el0_error</text>
+    <rect class="bx" x="804" y="30" width="252" height="52" rx="2"/>
+    <text class="ts" x="814" y="48">0x600 – 0x780</text>
+    <text class="ts" x="814" y="66">EL0 AArch32 (compat)</text>
+    <text class="ts t0" x="544" y="104">svc từ EL0 64-bit  →  VBAR_EL1 + 0x400  →  el0_sync  →  đọc ESR_EL1  →  rẽ nhánh</text>
+  </svg>
+  </div>
+  <figcaption><b>Một cửa vào duy nhất.</b> Mọi thứ — syscall, page fault, IRQ, lệnh không hợp lệ — đều đi qua bảng này. <code>ESR_EL1.EC</code> mới là thứ phân biệt chúng.</figcaption>
+  </figure>
 
   <div class="prose">
   <h3>Các thanh ghi hệ thống trên đường đi</h3>
@@ -853,8 +1079,64 @@ msr ttbr1_el1, &lt;swapper_pgd | ASID &lt;&lt; 48&gt;   <i>// đổi ASID (TCR_E
   <p class="sec-kicker">Câu hỏi kinh điển "vì sao <code>fork()</code> trả về hai giá trị khác nhau" có câu trả lời rất cụ thể: hai task đi ra khỏi nhân bằng <strong>hai đường code khác nhau</strong>, và <code>x0</code> của con đã được ghi sẵn bằng 0 từ lúc tạo.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Cha đi đường trả về syscall bình thường (<code>x0 = PID con</code>). Con đi đường <code>ret_from_fork</code> — vì <code>copy_thread()</code> đã đặt <code>cpu_context.pc = ret_from_fork</code> và <code>cpu_context.sp = childregs</code>, nên lần đầu bộ lập lịch chọn nó, CPU rơi đúng vào đó với <code>sp</code> trỏ sẵn vào <code>pt_regs</code> đã có <code>regs[0] = 0</code>.</p></div>
-  <img src="../../Process_fork.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 500" role="img" aria-label="Sơ đồ fork: một lệnh svc dẫn vào copy_process rồi tách làm hai lối về, lối cha trả về ngay với x0 bằng PID con, lối con đi qua ret_from_fork sau khi được scheduler chọn và trả về x0 bằng 0">
+    <defs><marker id="a7" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <rect class="bx0" x="380" y="20" width="320" height="54" rx="2"/>
+    <text class="tm" x="540" y="42" text-anchor="middle">EL0 — libc fork()</text>
+    <text class="ts" x="540" y="61" text-anchor="middle">mov x0,#SIGCHLD · mov w8,#220 · svc #0</text>
+    <text class="ts t0" x="712" y="42">AArch64 không có __NR_fork</text>
+    <text class="ts t0" x="712" y="58">→ thực chất là clone()</text>
+
+    <line class="ln" x1="540" y1="76" x2="540" y2="96" marker-end="url(#a7)"/>
+
+    <rect class="bx1" x="280" y="100" width="520" height="94" rx="2"/>
+    <text class="tm t1" x="540" y="122" text-anchor="middle">_do_fork(&amp;kernel_clone_args)</text>
+    <text class="ts" x="296" y="143">copy_process(): dup_task_struct → task_struct + kernel stack MỚI</text>
+    <text class="ts" x="296" y="159">              copy_mm → dup_mm → COW · copy_files / fs / sighand / signal</text>
+    <text class="ts" x="296" y="175">              copy_thread → *childregs = *cha ; childregs-&gt;regs[0] = 0</text>
+    <text class="ts" x="296" y="189">wake_up_new_task(p) → con vào runqueue, state = TASK_RUNNING</text>
+
+    <path class="ln" d="M420 196 L420 214 L260 214 L260 240" marker-end="url(#a7)"/>
+    <path class="ln" d="M660 196 L660 214 L820 214 L820 240" marker-end="url(#a7)"/>
+
+    <rect class="bx1" x="40" y="244" width="440" height="106" rx="2"/>
+    <text class="tm t1" x="56" y="265">LỐI CHA — trả về ngay</text>
+    <text class="ts" x="56" y="286">_do_fork trả nr = PID con</text>
+    <text class="ts" x="56" y="303">invoke_syscall: regs-&gt;regs[0] = nr</text>
+    <text class="ts" x="56" y="320">ret_to_user → kernel_exit 0 → eret</text>
+    <text class="ts" x="56" y="340">chạy trên kernel stack CỦA CHA, pt_regs gốc</text>
+
+    <rect class="bx1" x="600" y="244" width="440" height="106" rx="2"/>
+    <text class="tm t1" x="616" y="265">LỐI CON — sau khi scheduler chọn</text>
+    <text class="ts" x="616" y="286">context_switch → switch_mm (ASID mới) → cpu_switch_to</text>
+    <text class="ts" x="616" y="303">nạp cpu_context: sp = childregs · pc = ret_from_fork</text>
+    <text class="ts" x="616" y="320">ret_from_fork → schedule_tail → ret_to_user → eret</text>
+    <text class="ts" x="616" y="340">chạy trên kernel stack MỚI, pt_regs là bản sao</text>
+
+    <line class="ln0" x1="260" y1="352" x2="260" y2="372" marker-end="url(#a7)"/>
+    <line class="ln0" x1="820" y1="352" x2="820" y2="372" marker-end="url(#a7)"/>
+
+    <rect class="bx0" x="40" y="376" width="440" height="62" rx="2"/>
+    <text class="tm" x="56" y="397">EL0 — CHA</text>
+    <text class="ts" x="56" y="416" style="font-size:13px">x0 = 1234  (PID của con)</text>
+    <text class="ts" x="56" y="432">mm cũ · PTE vùng COW vừa bị khoá ghi</text>
+
+    <rect class="bx0" x="600" y="376" width="440" height="62" rx="2"/>
+    <text class="tm" x="616" y="397">EL0 — CON</text>
+    <text class="ts" x="616" y="416" style="font-size:13px">x0 = 0  (copy_thread đặt sẵn từ lúc tạo)</text>
+    <text class="ts" x="616" y="432">mm mới · PGD mới · ASID mới · PTE COW read-only</text>
+
+    <rect class="bxp" x="40" y="454" width="1000" height="38" rx="2"/>
+    <text class="ts" x="56" y="470"><tspan class="t1">GIỐNG NHAU</tspan>  pc trở về = &amp;svc+4  ·  sp user cùng địa chỉ ảo  ·  x1–x30  ·  pstate  ·  nội dung bộ nhớ (qua COW)</text>
+    <text class="ts" x="56" y="486"><tspan class="t0">KHÁC NHAU</tspan>  x0  ·  kernel stack  ·  mm_struct / PGD / ASID  ·  cpu_context  ·  đường code trong nhân</text>
+  </svg>
+  </div>
+  <figcaption><b>Con không "chạy tiếp từ lệnh sau <code>fork()</code>" ngay.</b> Nó phải chờ bộ lập lịch chọn, đi qua <code>ret_from_fork</code> để hoàn tất context switch (<code>schedule_tail</code>), rồi mới <code>eret</code> về đúng lệnh sau <code>svc</code>. Trong khi đó cha thường đã chạy tiếp từ lâu.</figcaption>
+  </figure>
 
   <p class="pre-lab">Hai dòng quyết định tất cả — arch/arm64/kernel/process.c</p>
   <pre>int copy_thread(unsigned long clone_flags, unsigned long stack_start,
@@ -925,9 +1207,100 @@ SYM_CODE_END(ret_from_fork)</pre>
   <p class="sec-kicker">~400 dòng, 12 hàm <code>copy_*</code>, và một quy tắc duy nhất lặp lại: <strong>có cờ → chia sẻ, không cờ → nhân bản</strong>.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Mỗi <code>copy_*</code> chỉ hỏi đúng một câu: "cờ này có bật không?" Bật thì tăng refcount và dùng chung con trỏ; không bật thì cấp cấu trúc mới rồi copy nội dung. Vài thứ không copy cũng không chia sẻ mà để <strong>lazy</strong> — con nhận <code>NULL</code>, chỉ cấp khi thực sự dùng.</p></div>
-  <img src="../../copy_process.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 520" role="img" aria-label="Bảng các bước copy trong copy_process: mỗi bước có hai lối, chia sẻ khi cờ clone tương ứng được bật, nhân bản khi không; dup_task_struct, copy_thread và alloc_pid thì luôn tạo mới">
+    <rect class="bxp" x="24" y="20" width="250" height="28" rx="2"/>
+    <rect class="bx1" x="282" y="20" width="380" height="28" rx="2"/>
+    <rect class="bx0" x="670" y="20" width="386" height="28" rx="2"/>
+    <text class="tm" x="38" y="39">bước trong copy_process</text>
+    <text class="tm t1" x="296" y="39">CHIA SẺ — chỉ tăng refcount</text>
+    <text class="tm t0" x="684" y="39">NHÂN BẢN hoặc LAZY</text>
 
+    <rect class="bxp" x="24" y="56" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="77">dup_task_struct</text>
+    <rect class="bx0" x="282" y="56" width="774" height="34" rx="2"/>
+    <text class="ts" x="296" y="77">LUÔN MỚI — task_struct từ slab + kernel stack 16 KB từ vmalloc + <tspan class="t0">*tsk = *orig</tspan></text>
+
+    <rect class="bxp" x="24" y="93" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="114">copy_creds</text>
+    <rect class="bx1" x="282" y="93" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="114">mặc định: get_cred() — chia sẻ, COW</text>
+    <rect class="bx0" x="670" y="93" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="114">CLONE_NEWUSER → cred + user_ns mới</text>
+
+    <rect class="bxp" x="24" y="130" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="151">copy_semundo</text>
+    <rect class="bx1" x="282" y="130" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="151">CLONE_SYSVSEM → undo_list-&gt;refcnt++</text>
+    <rect class="bx0" x="670" y="130" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="151">mặc định: NULL — <tspan class="t0">LAZY</tspan>, cấp khi gọi semop()</text>
+
+    <rect class="bxp" x="24" y="167" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="188">copy_files</text>
+    <rect class="bx1" x="282" y="167" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="188">CLONE_FILES → files-&gt;count++</text>
+    <rect class="bx0" x="670" y="167" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="188">dup_fd() — bảng mới, mỗi struct file refcount++</text>
+
+    <rect class="bxp" x="24" y="204" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="225">copy_fs</text>
+    <rect class="bx1" x="282" y="204" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="225">CLONE_FS → fs-&gt;users++</text>
+    <rect class="bx0" x="670" y="204" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="225">copy_fs_struct() — root / pwd / umask riêng</text>
+
+    <rect class="bxp" x="24" y="241" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="262">copy_sighand</text>
+    <rect class="bx1" x="282" y="241" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="262">CLONE_SIGHAND → sighand-&gt;count++</text>
+    <rect class="bx0" x="670" y="241" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="262">kmem_cache_alloc + memcpy action[64]</text>
+
+    <rect class="bxp" x="24" y="278" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="299">copy_signal</text>
+    <rect class="bx1" x="282" y="278" width="380" height="34" rx="2" stroke-width="2"/>
+    <text class="ts" x="296" y="299">CLONE_THREAD → return 0, dùng chung của leader</text>
+    <rect class="bx0" x="670" y="278" width="386" height="34" rx="2" stroke-width="2"/>
+    <text class="ts" x="684" y="299">signal_struct MỚI, copy rlim[] → <tspan class="t0">process mới</tspan></text>
+
+    <rect class="bxp" x="24" y="315" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="336">copy_mm</text>
+    <rect class="bx1" x="282" y="315" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="336">CLONE_VM → mmget(oldmm), mm_users++</text>
+    <rect class="bx0" x="670" y="315" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="336">dup_mm → dup_mmap → copy_page_range (COW)</text>
+
+    <rect class="bxp" x="24" y="352" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="373">copy_namespaces</text>
+    <rect class="bx1" x="282" y="352" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="373">mặc định: get_nsproxy() — chia sẻ cả 7 ns</text>
+    <rect class="bx0" x="670" y="352" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="373">CLONE_NEW* → create_new_namespaces()</text>
+
+    <rect class="bxp" x="24" y="389" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="410">copy_io</text>
+    <rect class="bx1" x="282" y="389" width="380" height="34" rx="2"/>
+    <text class="ts" x="296" y="410">CLONE_IO → get_io_context()</text>
+    <rect class="bx0" x="670" y="389" width="386" height="34" rx="2"/>
+    <text class="ts" x="684" y="410">mặc định: NULL — <tspan class="t0">LAZY</tspan>, cấp ở I/O đầu tiên</text>
+
+    <rect class="bxp" x="24" y="426" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="447">copy_thread</text>
+    <rect class="bx0" x="282" y="426" width="774" height="34" rx="2"/>
+    <text class="ts" x="296" y="447">LUÔN MỚI — pt_regs (bản sao của cha, regs[0]=0) + cpu_context (pc = ret_from_fork)</text>
+
+    <rect class="bxp" x="24" y="463" width="250" height="34" rx="2"/>
+    <text class="tm" x="38" y="484">alloc_pid</text>
+    <rect class="bx0" x="282" y="463" width="774" height="34" rx="2"/>
+    <text class="ts" x="296" y="484">LUÔN MỚI — struct pid, cấp số trong TỪNG cấp pid namespace</text>
+
+    <text class="ts" x="24" y="512">Thứ tự này không đổi được: đường tháo lỗi bad_fork_* đi ngược đúng dãy trên.</text>
+  </svg>
+  </div>
+  <figcaption><b>Hai cột là hai thế giới.</b> Bật đủ cờ ở cột trái → được một <em>thread</em>. Không bật cờ nào → được một <em>process</em>. Ba dòng chiếm cả hai cột là những thứ không bao giờ chia sẻ được: bộ mô tả, stack, ngữ cảnh thanh ghi, và danh tính PID.</figcaption>
+  </figure>
 
   <div class="prose">
   <h3>Giai đoạn 0: kiểm tra cờ trước khi cấp gì</h3>
@@ -1003,8 +1376,67 @@ attach_pid(p, PIDTYPE_PID);   <b>// từ giờ find_task_by_vpid() thấy con</b
   <p class="sec-kicker">Ba đối tượng, ba chỗ ở khác nhau — và một hiểu nhầm phổ biến từ sách cũ cần gỡ: trên ARM64, <code>thread_info</code> <strong>không</strong> nằm trên stack.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p><code>task_struct</code> nằm trong <strong>slab</strong>; kernel stack 16 KB nằm trong <strong>vmalloc</strong> (có guard page); <code>thread_info</code> nằm <strong>bên trong <code>task_struct</code></strong>. Nối chúng lại chỉ bằng con trỏ <code>task_struct.stack</code>. Nhờ tách rời, tràn stack không còn đè lên <code>task_struct</code> — nó rơi vào guard page và báo lỗi ngay.</p></div>
-  <img src="../../kernel_stack.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 400" role="img" aria-label="Bố trí kernel stack 16KB trong vmalloc: đỉnh là pt_regs, giữa là vùng chạy, đáy có STACK_END_MAGIC, dưới đáy là guard page không được map; bên phải giải thích phép tính địa chỉ và cách phát hiện tràn stack">
+    <defs><marker id="a8" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tc" x="24" y="22">Kernel stack — 16 KB trong vùng vmalloc</text>
+    <text class="ts" x="24" y="40">địa chỉ cao ở trên · stack mọc XUỐNG</text>
+
+    <line class="ln1" x1="42" y1="60" x2="42" y2="336" marker-end="url(#a8)"/>
+    <text class="ts t1" x="20" y="200" transform="rotate(-90 20 200)" text-anchor="middle">sp giảm dần</text>
+
+    <rect class="bx" x="60" y="54" width="270" height="26" rx="2"/>
+    <text class="ts" x="72" y="71">ĐỈNH = tsk-&gt;stack + THREAD_SIZE</text>
+    <text class="ts t1" x="322" y="71" text-anchor="end">SP_EL1 khi ở EL0</text>
+
+    <rect class="bx1" x="60" y="84" width="270" height="52" rx="2"/>
+    <text class="tm t1" x="72" y="104">struct pt_regs</text>
+    <text class="ts" x="72" y="122">x0–x30 · sp · pc · pstate  (≈ 320 B)</text>
+
+    <rect class="bx" x="60" y="140" width="270" height="130" rx="2"/>
+    <text class="ts" x="72" y="162">vùng chạy của nhân</text>
+    <text class="ts" x="72" y="184">el0_svc_common</text>
+    <text class="ts" x="72" y="202">  → sys_read</text>
+    <text class="ts" x="72" y="220">    → vfs_read</text>
+    <text class="ts" x="72" y="238">      → pipe_read</text>
+    <text class="ts" x="72" y="256">        → schedule …</text>
+
+    <rect class="bx0" x="60" y="274" width="270" height="30" rx="2"/>
+    <text class="ts" x="72" y="294">ĐÁY = tsk-&gt;stack · STACK_END_MAGIC</text>
+
+    <rect class="bxh" x="60" y="308" width="270" height="40" rx="2" stroke-dasharray="4 4"/>
+    <text class="ts th" x="72" y="326">guard page — KHÔNG được map</text>
+    <text class="ts th" x="72" y="342">chạm vào = translation fault</text>
+
+    <line class="rule" x1="368" y1="16" x2="368" y2="384" stroke-dasharray="4 4"/>
+
+    <rect class="bxp" x="396" y="40" width="660" height="86" rx="2"/>
+    <text class="tm" x="410" y="60">Phép tính địa chỉ mà cả nhân dùng</text>
+    <text class="ts" x="410" y="80">tsk-&gt;stack                 = ĐÁY (địa chỉ thấp nhất)</text>
+    <text class="ts" x="410" y="97">end_of_stack(tsk)          = tsk-&gt;stack  → nơi đặt magic</text>
+    <text class="ts" x="410" y="114">task_pt_regs(tsk)          = (pt_regs *)(tsk-&gt;stack + THREAD_SIZE) − 1</text>
+
+    <rect class="bxp" x="396" y="140" width="660" height="104" rx="2"/>
+    <text class="tm" x="410" y="160">Vì sao THREAD_ALIGN = 2 × THREAD_SIZE = 32 KB</text>
+    <text class="ts" x="410" y="180">Căn stack theo 32 KB ⇒ khi sp còn hợp lệ thì bit 14 = 0;</text>
+    <text class="ts" x="410" y="197">vừa tụt xuống guard page thì bit 14 lật thành 1.</text>
+    <text class="ts" x="410" y="219">kernel_ventry kiểm bằng ĐÚNG MỘT LỆNH:</text>
+    <text class="ts t0" x="410" y="236">tbnz x0, #THREAD_SHIFT, __bad_stack</text>
+
+    <rect class="bxp" x="396" y="258" width="660" height="90" rx="2"/>
+    <text class="tm" x="410" y="278">Cấp phát — alloc_thread_stack_node()</text>
+    <text class="ts" x="410" y="298">1. thử per-CPU cached_stacks[2] (stack của task vừa chết) → memset 0, dùng lại</text>
+    <text class="ts" x="410" y="315">2. trượt cache → __vmalloc_node_range(16 KB, align 32 KB, VMALLOC_START..END)</text>
+    <text class="ts" x="410" y="332">   ⇒ 16 KB địa chỉ ảo liền mạch, 4 trang vật lý RỜI NHAU, kèm guard page</text>
+
+    <text class="ts th" x="396" y="376">Không bật VMAP_STACK: alloc_pages_node(order 2) — 4 trang liền mạch, KHÔNG guard page ⇒ tràn stack đè âm thầm sang cấu trúc bên cạnh.</text>
+  </svg>
+  </div>
+  <figcaption><b>Guard page là lý do <code>VMAP_STACK</code> đáng bật.</b> Không có nó, một hàm đệ quy sâu trong nhân sẽ ghi đè lên bất cứ thứ gì nằm cạnh trong linear map — lỗi xuất hiện ở nơi hoàn toàn khác, rất khó truy.</figcaption>
+  </figure>
 
   <div class="prose">
   <h3>Ba đối tượng ở ba nơi</h3>
@@ -1069,7 +1501,93 @@ account_kernel_stack(tsk, 1);                  <i>// /proc/meminfo: KernelStack 
   <p class="sec-kicker">Nếu <code>fork()</code> phải copy toàn bộ bộ nhớ thì mọi shell sẽ chậm tới mức không dùng được. Mẹo: copy <em>bảng trang</em>, khoá ghi cả hai bên, rồi chờ.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p><code>copy_page_range()</code> <strong>không</strong> copy dữ liệu — nó nhân đôi PTE và gọi <code>ptep_set_wrprotect()</code> để hạ quyền ghi <strong>cả cha lẫn con</strong>. Trang thật chỉ nhân bản khi có bên ghi, qua <code>do_wp_page()</code>. Bên ghi <em>trước</em> phải copy; bên ghi <em>sau</em> — lúc đó chỉ còn nó map trang — được tái dùng tại chỗ.</p></div>
-  <img src="../../copy_on_write.png" alt="" style="max-width: 100%; height: auto;">
+
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 540" role="img" aria-label="Bốn trạng thái Copy-On-Write của một trang heap: trước fork, sau fork khi cả hai PTE bị khoá ghi, sau khi cha ghi thì cha được cấp trang mới, sau khi con ghi thì con tái dùng trang cũ không cần copy">
+    <defs><marker id="a9" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="150" y="20">BẢNG TRANG</text>
+    <text class="tl" x="560" y="20">TRANG VẬT LÝ</text>
+    <text class="tl" x="840" y="20">VIỆC NHÂN LÀM</text>
+
+    <text class="tc" x="24" y="44">a · TRƯỚC fork</text>
+    <rect class="bx0" x="150" y="54" width="360" height="36" rx="2"/>
+    <text class="ts" x="162" y="77">MM_cha  PTE(0xaaaa_1234_5000) → PFN 0x40100 · <tspan class="t0">RW</tspan></text>
+    <rect class="bx" x="560" y="54" width="250" height="36" rx="2"/>
+    <text class="ts" x="572" y="70">Phys 0x40100</text>
+    <text class="ts" x="572" y="85">refcount 1 · byte[0] = 0xAB</text>
+    <line class="ln" x1="514" y1="72" x2="556" y2="72" marker-end="url(#a9)"/>
+    <text class="ts" x="840" y="77">—</text>
+
+    <line class="rule" x1="24" y1="106" x2="1056" y2="106"/>
+
+    <text class="tc" x="24" y="130">b · SAU fork</text>
+    <text class="ts" x="24" y="148">copy_page_range</text>
+    <rect class="bx1" x="150" y="118" width="360" height="34" rx="2"/>
+    <text class="ts" x="162" y="139">MM_cha  → PFN 0x40100 · <tspan class="t1">RO</tspan>  (bị write-protect)</text>
+    <rect class="bx1" x="150" y="156" width="360" height="34" rx="2"/>
+    <text class="ts" x="162" y="177">MM_con  → PFN 0x40100 · <tspan class="t1">RO</tspan>  (PGD mới, PTE mới)</text>
+    <rect class="bx" x="560" y="118" width="250" height="72" rx="2"/>
+    <text class="ts" x="572" y="140">Phys 0x40100</text>
+    <text class="ts" x="572" y="158">refcount 2 · mapcount 2</text>
+    <text class="ts" x="572" y="176">byte[0] = 0xAB   (chưa copy!)</text>
+    <line class="ln1" x1="514" y1="135" x2="556" y2="145" marker-end="url(#a9)"/>
+    <line class="ln1" x1="514" y1="173" x2="556" y2="163" marker-end="url(#a9)"/>
+    <text class="ts" x="840" y="138">get_page + page_dup_rmap</text>
+    <text class="ts" x="840" y="156">ptep_set_wrprotect(cha)</text>
+    <text class="ts" x="840" y="174">pte_wrprotect(con)</text>
+    <text class="ts t0" x="840" y="192">flush_tlb_mm(MM_cha)</text>
+
+    <line class="rule" x1="24" y1="210" x2="1056" y2="210"/>
+
+    <text class="tc" x="24" y="234">c · CHA ghi 0xCD</text>
+    <text class="ts" x="24" y="252">page_count = 2</text>
+    <text class="ts t0" x="24" y="270">→ phải COPY</text>
+    <rect class="bx0" x="150" y="222" width="360" height="34" rx="2"/>
+    <text class="ts" x="162" y="243">MM_cha  → PFN <tspan class="t0">0x40222</tspan> · RW dirty</text>
+    <rect class="bx1" x="150" y="260" width="360" height="34" rx="2"/>
+    <text class="ts" x="162" y="281">MM_con  → PFN 0x40100 · RO   (KHÔNG đổi)</text>
+    <rect class="bx0" x="560" y="222" width="250" height="34" rx="2"/>
+    <text class="ts" x="572" y="243">Phys 0x40222 · rc 1 · <tspan class="t0">0xCD</tspan></text>
+    <rect class="bx" x="560" y="260" width="250" height="34" rx="2"/>
+    <text class="ts" x="572" y="281">Phys 0x40100 · rc 1 · 0xAB</text>
+    <line class="ln0" x1="514" y1="239" x2="556" y2="239" marker-end="url(#a9)"/>
+    <line class="ln1" x1="514" y1="277" x2="556" y2="277" marker-end="url(#a9)"/>
+    <text class="ts" x="840" y="238">do_wp_page → wp_page_copy()</text>
+    <text class="ts" x="840" y="256">alloc_page + cow_user_page (4 KB)</text>
+    <text class="ts" x="840" y="274">ptep_clear_flush_notify</text>
+    <text class="ts t0" x="840" y="292">flush_tlb_page(VA | ASID_cha)</text>
+
+    <line class="rule" x1="24" y1="310" x2="1056" y2="310"/>
+
+    <text class="tc" x="24" y="334">d · CON ghi 0xEF</text>
+    <text class="ts" x="24" y="352">page_count = 1</text>
+    <text class="ts t1" x="24" y="370">→ TÁI DÙNG</text>
+    <rect class="bx" x="150" y="322" width="360" height="34" rx="2"/>
+    <text class="ts" x="162" y="343">MM_cha  → PFN 0x40222 · RW   (không đổi)</text>
+    <rect class="bx1" x="150" y="360" width="360" height="34" rx="2"/>
+    <text class="ts" x="162" y="381">MM_con  → PFN 0x40100 · <tspan class="t1">RW dirty</tspan>  (sửa tại chỗ)</text>
+    <rect class="bx" x="560" y="322" width="250" height="34" rx="2"/>
+    <text class="ts" x="572" y="343">Phys 0x40222 · rc 1 · 0xCD</text>
+    <rect class="bx1" x="560" y="360" width="250" height="34" rx="2"/>
+    <text class="ts" x="572" y="381">Phys 0x40100 · rc 1 · <tspan class="t1">0xEF</tspan></text>
+    <line class="ln" x1="514" y1="339" x2="556" y2="339" marker-end="url(#a9)"/>
+    <line class="ln1" x1="514" y1="377" x2="556" y2="377" marker-end="url(#a9)"/>
+    <text class="ts" x="840" y="338">do_wp_page → wp_page_reuse()</text>
+    <text class="ts" x="840" y="356">ptep_set_access_flags — mở quyền ghi</text>
+    <text class="ts t1" x="840" y="374">KHÔNG alloc, KHÔNG memcpy</text>
+
+    <rect class="bxp" x="24" y="410" width="1032" height="112" rx="2"/>
+    <text class="tm" x="40" y="432">do_wp_page() quyết định thế nào</text>
+    <text class="ts" x="40" y="456">page = vm_normal_page(vma, addr, pte)</text>
+    <text class="ts" x="40" y="476">PageAnon(page) &amp;&amp; page_count == 1 &amp;&amp; page_mapcount == 1 &amp;&amp; !PageKsm</text>
+    <text class="ts t1" x="62" y="495">→ wp_page_reuse()    chỉ pte_mkwrite + pte_mkdirty tại chỗ</text>
+    <text class="ts t0" x="40" y="514">ngược lại → wp_page_copy()    cấp trang mới, copy 4 KB, đổi PTE, put_page(cũ)</text>
+  </svg>
+  </div>
+  <figcaption><b>Trang chỉ nhân bản đúng một lần.</b> Sau bước (c) chỉ còn con map trang <code>0x40100</code>, nên khi con ghi ở bước (d) nhân thấy <code>page_count == 1</code> và tái dùng ngay — tổng cộng một lần <code>memcpy</code> cho một trang, dù cả hai bên đều ghi.</figcaption>
+  </figure>
 
   <p class="pre-lab">Trọng tâm của copy_one_pte() — mm/memory.c</p>
   <pre>pte_t pte = *src_pte;                        <i>// PTE của CHA tại addr</i>
@@ -1128,8 +1646,77 @@ set_pte_at(dst_mm, addr, dst_pte, pte);      <i>// ghi PTE cho CON</i></pre>
   <p class="sec-kicker">Hàm này không "chạy" gì cả. Nó chỉ <em>dựng sẵn hai ảnh chụp thanh ghi</em> cho task con, rồi để scheduler và phần cứng làm nốt.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Hai dòng cuối làm nên tất cả: <code>cpu_context.pc = ret_from_fork</code> và <code>cpu_context.sp = childregs</code>. Nhờ vậy lần đầu bộ lập lịch chọn con, CPU rơi đúng vào <code>ret_from_fork</code> với <code>sp</code> đã trỏ sẵn vào frame <code>pt_regs</code>.</p></div>
-  <img src="../../copy_thread.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 470" role="img" aria-label="copy_thread dựng hai ảnh chụp thanh ghi cho con: pt_regs là bản sao của cha với x0 đặt bằng 0, dùng khi eret về EL0; cpu_context được memset rồi gán pc bằng ret_from_fork và sp bằng childregs, dùng khi cpu_switch_to chọn con lần đầu">
+    <defs><marker id="a10" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="24" y="18">NGUỒN</text>
+    <text class="tl" x="388" y="18">ẢNH CHỤP #1 — ngữ cảnh USER</text>
+    <text class="tl" x="728" y="18">ẢNH CHỤP #2 — ngữ cảnh KERNEL</text>
+
+    <rect class="bx0" x="24" y="30" width="296" height="186" rx="2"/>
+    <text class="tm" x="38" y="52">pt_regs CỦA CHA</text>
+    <text class="ts" x="38" y="68">(đỉnh kernel stack cha, lúc gọi svc)</text>
+    <text class="ts" x="38" y="92">x0     = SIGCHLD  (tham số clone)</text>
+    <text class="ts" x="38" y="110">x1..x18 = caller-saved hiện thời</text>
+    <text class="ts" x="38" y="128">x19..x28 = callee-saved của user</text>
+    <text class="ts" x="38" y="146">x29 fp · x30 lr = frame + về libc</text>
+    <text class="ts" x="38" y="164">sp     = SP_EL0 user</text>
+    <text class="ts" x="38" y="182">pc     = &amp;svc + 4</text>
+    <text class="ts" x="38" y="200">pstate = EL0t, DAIF theo user</text>
+
+    <line class="ln" x1="324" y1="110" x2="380" y2="90" marker-end="url(#a10)"/>
+    <line class="ln" x1="324" y1="140" x2="380" y2="160" marker-end="url(#a10)"/>
+    <text class="ts t1" x="330" y="128">copy_thread()</text>
+
+    <rect class="bx1" x="388" y="30" width="320" height="186" rx="2"/>
+    <text class="tm t1" x="402" y="52">pt_regs CỦA CON</text>
+    <text class="ts" x="402" y="68">*childregs = *current_pt_regs()</text>
+    <text class="ts t0" x="402" y="94">regs[0] = 0        ◀ ĐÈ LÊN bản copy</text>
+    <text class="ts" x="402" y="112">x1..x30  = y hệt cha</text>
+    <text class="ts" x="402" y="130">sp  = sp cha (fork) | stack mới (pthread)</text>
+    <text class="ts" x="402" y="148">pc  = &amp;svc + 4     (của cha)</text>
+    <text class="ts" x="402" y="166">pstate = EL0t      (của cha)</text>
+    <text class="ts" x="402" y="192">nằm ở ĐỈNH kernel stack 16 KB MỚI</text>
+    <text class="ts" x="402" y="208">task_pt_regs(p) = (pt_regs*)(stack+16K) − 1</text>
+
+    <rect class="bxp" x="728" y="30" width="328" height="186" rx="2"/>
+    <text class="tm" x="742" y="52">cpu_context CỦA CON</text>
+    <text class="ts" x="742" y="68">memset(&amp;p-&gt;thread.cpu_context, 0, ...)</text>
+    <text class="ts" x="742" y="94">x19..x28 = 0        (user task)</text>
+    <text class="ts" x="742" y="112">         = fn, arg  (kernel thread)</text>
+    <text class="ts" x="742" y="130">fp = 0</text>
+    <text class="ts t0" x="742" y="152">pc = ret_from_fork   ◀ điểm TỈNH DẬY</text>
+    <text class="ts t0" x="742" y="170">sp = childregs       ◀ trỏ vào frame ↖</text>
+    <text class="ts" x="742" y="196">TLS đi riêng: thread.uw.tp_value</text>
+    <text class="ts" x="742" y="212">  = read_sysreg(tpidr_el0) hoặc tls</text>
+
+    <line class="ln1" x1="548" y1="220" x2="548" y2="248" marker-end="url(#a10)"/>
+    <line class="ln0" x1="892" y1="220" x2="892" y2="248" marker-end="url(#a10)"/>
+
+    <rect class="bx1" x="388" y="252" width="320" height="88" rx="2"/>
+    <text class="tm t1" x="402" y="274">DÙNG KHI: eret về EL0</text>
+    <text class="ts" x="402" y="294">kernel_exit: ldp x0..x30 ← childregs</text>
+    <text class="ts" x="402" y="312">msr elr_el1 ← pc · msr spsr_el1 ← pstate</text>
+    <text class="ts" x="402" y="330">→ con chạy tiếp lệnh sau svc, x0 = 0</text>
+
+    <rect class="bxp" x="728" y="252" width="328" height="88" rx="2"/>
+    <text class="tm t0" x="742" y="274">DÙNG KHI: cpu_switch_to chọn con LẦN ĐẦU</text>
+    <text class="ts" x="742" y="294">ldp x19..x28, fp ← cpu_context</text>
+    <text class="ts" x="742" y="312">mov sp, x9 (= childregs) · ldr lr ← pc</text>
+    <text class="ts" x="742" y="330">ret → nhảy vào ret_from_fork</text>
+
+    <rect class="bx0" x="24" y="360" width="1032" height="96" rx="2"/>
+    <text class="tm t0" x="40" y="382">Bẫy dễ nhầm: CÓ HAI BỘ x19–x28 khác nhau</text>
+    <text class="ts" x="40" y="404">• Bộ trong <tspan class="t1">pt_regs</tspan>  = giá trị USER của cha, được khôi phục khi con eret về EL0. Con thấy y hệt cha.</text>
+    <text class="ts" x="40" y="424">• Bộ trong <tspan class="t0">cpu_context</tspan> = giá trị KERNEL dùng khi lập lịch. Với con mới fork nó gần như toàn 0 —</text>
+    <text class="ts" x="40" y="442">  chỉ x19 được ret_from_fork đọc (cbz x19) để phân biệt user task (0) với kernel thread (= fn).</text>
+  </svg>
+  </div>
+  <figcaption><b>Hai ảnh chụp, hai mục đích.</b> <code>pt_regs</code> trả lời "user sẽ tỉnh lại ở đâu, với thanh ghi gì". <code>cpu_context</code> trả lời "kernel sẽ bắt đầu chạy con ở đâu, trên stack nào". <code>copy_thread</code> điền cả hai rồi rút lui.</figcaption>
+  </figure>
 
   <p class="pre-lab">arch/arm64/kernel/process.c  (5.4: copy_thread_tls)</p>
   <pre>int copy_thread(unsigned long clone_flags, unsigned long stack_start,
@@ -1189,9 +1776,55 @@ set_pte_at(dst_mm, addr, dst_pte, pte);      <i>// ghi PTE cho CON</i></pre>
   <p class="sec-kicker">Vì sao con không nhảy thẳng vào lệnh sau <code>fork()</code>? Vì <code>context_switch()</code> không phải lời gọi hàm bình thường — nó "trả về" trong ngữ cảnh task khác.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Task đã chạy trước đó có sẵn địa chỉ trở về (nằm giữa <code>__switch_to()</code> của chính nó). Con <strong>chưa bao giờ chạy</strong> → không có địa chỉ đó. <code>copy_thread</code> cấy tay <code>cpu_context.pc = ret_from_fork</code>, và stub này phải gọi <code>schedule_tail()</code> bằng tay để hoàn tất phần context switch mà một task khác đã bắt đầu.</p></div>
-  <img src="../../cpu_switch_to.png" alt="" style="max-width: 100%; height: auto;">
 
-  
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 430" role="img" aria-label="Hai lối hạ cánh sau cpu_switch_to: task đã chạy trước trở về giữa __switch_to nên finish_task_switch chạy tự động; task mới fork rơi vào ret_from_fork và phải gọi schedule_tail bằng tay">
+    <defs><marker id="a11" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <rect class="bxp" x="330" y="20" width="420" height="52" rx="2"/>
+    <text class="tm" x="540" y="42" text-anchor="middle">cpu_switch_to:  mov sp, x9  ;  ret</text>
+    <text class="ts" x="540" y="60" text-anchor="middle">PC ← next-&gt;cpu_context.pc</text>
+
+    <path class="ln" d="M420 74 L420 96 L250 96 L250 122" marker-end="url(#a11)"/>
+    <path class="ln0" d="M660 74 L660 96 L830 96 L830 122" marker-end="url(#a11)"/>
+    <text class="ts" x="250" y="114" text-anchor="middle">next ĐÃ từng chạy</text>
+    <text class="ts t0" x="830" y="114" text-anchor="middle">next MỚI fork</text>
+
+    <rect class="bx1" x="40" y="126" width="420" height="76" rx="2"/>
+    <text class="ts" x="54" y="148">cpu_context.pc = "lệnh sau bl cpu_switch_to</text>
+    <text class="ts" x="54" y="166">trong __switch_to" — lưu ở lần next bị switch away</text>
+    <text class="ts" x="54" y="190">cpu_context.sp = giữa __switch_to frame trên stack next</text>
+
+    <rect class="bx0" x="620" y="126" width="420" height="76" rx="2"/>
+    <text class="ts" x="634" y="148">cpu_context.pc = ret_from_fork  — copy_thread CẤY TAY</text>
+    <text class="ts" x="634" y="166">cpu_context.sp = childregs — đỉnh kernel stack MỚI</text>
+    <text class="ts t0" x="634" y="190">stack con CHƯA CÓ frame context_switch nào</text>
+
+    <line class="ln1" x1="250" y1="206" x2="250" y2="228" marker-end="url(#a11)"/>
+    <line class="ln0" x1="830" y1="206" x2="830" y2="228" marker-end="url(#a11)"/>
+
+    <rect class="bx1" x="40" y="232" width="420" height="118" rx="2"/>
+    <text class="tm t1" x="54" y="254">LỐI A — trở về giữa __switch_to</text>
+    <text class="ts" x="54" y="276">__switch_to():  return last;</text>
+    <text class="ts" x="54" y="294">context_switch(): return finish_task_switch(prev);</text>
+    <text class="ts t1" x="54" y="314">↑ finish_task_switch chạy TỰ ĐỘNG</text>
+    <text class="ts" x="54" y="334">__schedule return → schedule return → chạy tiếp chỗ đã ngủ</text>
+
+    <rect class="bx0" x="620" y="232" width="420" height="118" rx="2"/>
+    <text class="tm t0" x="634" y="254">LỐI B — ret_from_fork (stub asm)</text>
+    <text class="ts" x="634" y="276">bl schedule_tail        ← PHẢI gọi BẰNG TAY</text>
+    <text class="ts" x="634" y="294">   (schedule_tail bọc finish_task_switch)</text>
+    <text class="ts" x="634" y="314">cbz x19, 1f   → user task: b ret_to_user</text>
+    <text class="ts" x="634" y="334">              → kernel thread: mov x0,x20 ; blr x19</text>
+
+    <rect class="bxp" x="40" y="362" width="1000" height="56" rx="2"/>
+    <text class="ts" x="56" y="384">Vì sao BẮT BUỘC: switch được task KHÁC khởi động, với rq-&gt;lock đang giữ và preempt_count = 2.</text>
+    <text class="ts" x="56" y="404">Ai đó phải nhả chúng TRONG ngữ cảnh con. Lối A được làm giùm; lối B không có frame nên phải gọi tay.</text>
+  </svg>
+  </div>
+  <figcaption><b>Đây là bất đối xứng cốt lõi của context switch.</b> Task A khởi động switch trong <code>__schedule()</code> của A, nhưng <code>finish_task_switch(prev=A)</code> lại chạy trong ngữ cảnh con. Task cũ có đường trở về tự nhiên; con thì không, nên cần stub.</figcaption>
+  </figure>
 
   <p class="pre-lab">arch/arm64/kernel/entry.S</p>
   <pre>SYM_CODE_START(ret_from_fork)
@@ -1256,9 +1889,78 @@ SYM_CODE_END(ret_from_fork)</pre>
   <p class="sec-kicker"><code>execve</code> không tạo process mới. Cùng <code>task_struct</code>, cùng PID, cùng kernel stack — chỉ thay <code>mm_struct</code> và ghi đè <code>pt_regs</code>.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Bản lề là <code>flush_old_exec()</code>. <strong>Trước</strong> nó, mọi lỗi trả <code>-errno</code> và chương trình cũ chạy tiếp bình thường. <strong>Sau</strong> nó, <code>mm</code> cũ đã bị <code>mmput</code> hủy — không lui được, lỗi ⇒ <code>SIGSEGV</code>. Đó là lý do POSIX nói "<code>execve</code> thành công thì không trả về".</p></div>
-  <img src="../../execve.png" alt="" style="max-width: 100%; height: auto;">
-  <img src="../../execve_system_call_code.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 520" role="img" aria-label="execve: cột trái liệt kê những gì bị thay thế gồm mm_struct, pt_regs, signal handler, FP TLS debug, fd O_CLOEXEC; cột phải liệt kê những gì giữ nguyên gồm PID, task_struct, kernel stack, files_struct, fs_struct, signal_struct, quan hệ cha con; ở giữa là điểm không quay lại flush_old_exec">
+    <defs><marker id="a12" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <rect class="bxp" x="290" y="16" width="500" height="60" rx="2" stroke-width="2"/>
+    <text class="tm t0" x="540" y="40" text-anchor="middle">══ ĐIỂM KHÔNG QUAY LẠI ══</text>
+    <text class="ts" x="540" y="60" text-anchor="middle">flush_old_exec() → de_thread() → exec_mmap() → mmput(mm_cũ)</text>
+
+    <path class="ln0" d="M400 80 L400 100 L250 100 L250 122" marker-end="url(#a12)"/>
+    <path class="ln1" d="M680 80 L680 100 L830 100 L830 122" marker-end="url(#a12)"/>
+
+    <text class="tc t0" x="24" y="118">◆ BỊ THAY THẾ</text>
+    <text class="tc t1" x="1056" y="118" text-anchor="end">● GIỮ NGUYÊN</text>
+
+    <rect class="bx0" x="24" y="126" width="500" height="66" rx="2"/>
+    <text class="tm" x="38" y="148">mm_struct</text>
+    <text class="ts" x="38" y="166">mm_alloc() mới · mm cũ mmput() → exit_mmap</text>
+    <text class="ts" x="38" y="184">pgd mới · ASID mới · .text .data .bss heap stack MỚI TINH</text>
+
+    <rect class="bx1" x="556" y="126" width="500" height="66" rx="2"/>
+    <text class="tm" x="570" y="148">PID · TGID</text>
+    <text class="ts" x="570" y="166">KHÔNG đổi — userspace thấy PID ổn định</text>
+    <text class="ts" x="570" y="184">(thread non-leader exec: de_thread hoán pid struct để nó thành leader)</text>
+
+    <rect class="bx0" x="24" y="198" width="500" height="52" rx="2"/>
+    <text class="tm" x="38" y="220">pt_regs (nội dung)</text>
+    <text class="ts" x="38" y="238">start_thread: memset + pc = elf_entry · sp = stack mới · pstate = EL0t</text>
+
+    <rect class="bx1" x="556" y="198" width="500" height="52" rx="2"/>
+    <text class="tm" x="570" y="220">task_struct</text>
+    <text class="ts" x="570" y="238">CÙNG object, cùng địa chỉ — execve không cấp task_struct mới</text>
+
+    <rect class="bx0" x="24" y="256" width="500" height="52" rx="2"/>
+    <text class="tm" x="38" y="278">Signal handlers</text>
+    <text class="ts" x="38" y="296">flush_signal_handlers: handler ≠ SIG_IGN → SIG_DFL · altstack xoá</text>
+
+    <rect class="bx1" x="556" y="256" width="500" height="52" rx="2"/>
+    <text class="tm" x="570" y="278">kernel stack</text>
+    <text class="ts" x="570" y="296">CÙNG 16 KB, cùng trang vật lý — chỉ pt_regs ở đỉnh bị ghi lại</text>
+
+    <rect class="bx0" x="24" y="314" width="500" height="52" rx="2"/>
+    <text class="tm" x="38" y="336">FP/SIMD · SVE · TLS · hw breakpoint</text>
+    <text class="ts" x="38" y="354">flush_thread() xoá sạch — TPIDR_EL0 = 0</text>
+
+    <rect class="bx1" x="556" y="314" width="500" height="52" rx="2"/>
+    <text class="tm" x="570" y="336">files_struct</text>
+    <text class="ts" x="570" y="354">CÙNG object · fd không O_CLOEXEC giữ nguyên + cùng offset → shell redirect</text>
+
+    <rect class="bx0" x="24" y="372" width="500" height="52" rx="2"/>
+    <text class="tm" x="38" y="394">fd có O_CLOEXEC · POSIX timers · pdeath_signal</text>
+    <text class="ts" x="38" y="412">do_close_on_exec() đóng · exit_itimers() hủy · xoá</text>
+
+    <rect class="bx1" x="556" y="372" width="500" height="52" rx="2"/>
+    <text class="tm" x="570" y="394">fs_struct (cwd · root · umask)</text>
+    <text class="ts" x="570" y="412">CÙNG object — chdir trước execve vẫn có hiệu lực</text>
+
+    <rect class="bx0" x="24" y="430" width="500" height="52" rx="2"/>
+    <text class="tm" x="38" y="452">Các thread KHÁC trong nhóm</text>
+    <text class="ts" x="38" y="470">de_thread() giết hết — chỉ thread gọi execve sống sót</text>
+
+    <rect class="bx1" x="556" y="430" width="500" height="52" rx="2"/>
+    <text class="tm" x="570" y="452">signal_struct · quan hệ cha/con · nsproxy · real_uid</text>
+    <text class="ts" x="570" y="470">CÙNG object · nr_threads → 1 · blocked mask thừa hưởng</text>
+
+    <rect class="bxp" x="24" y="490" width="1032" height="24" rx="2"/>
+    <text class="ts" x="40" y="506">credentials: GIỮ nếu file không setuid/setgid và LSM không đổi. Nếu setuid → commit_creds(bprm-&gt;cred) đổi euid/fsuid, nhưng real_uid LUÔN giữ.</text>
+  </svg>
+  </div>
+  <figcaption><b>Cột trái = "chương trình mới". Cột phải = "vẫn là process đó".</b> Chính vì cột phải mà shell redirect (<code>&gt; file</code>), <code>cd</code> trước khi chạy lệnh, và việc cha vẫn <code>wait()</code> được đứa con vừa <code>exec</code> — tất cả đều hoạt động.</figcaption>
+  </figure>
 
   <h3>Chuỗi gọi</h3>
   <pre>SYSCALL_DEFINE3(execve) → do_execve → do_execveat_common → __do_execve_file(bprm)
@@ -1299,8 +2001,64 @@ SYM_CODE_END(ret_from_fork)</pre>
   <p class="sec-kicker"><code>ELF_ET_DYN_BASE = 2 × TASK_SIZE_64 / 3</code> ≈ <code>0x0000_AAAA_AAAA_A000</code> — đó là lý do binary PIE trên ARM64 hay nằm quanh <code>0xaaaa…</code>.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p><code>load_bias</code> là <strong>một phép cộng</strong> áp cho mọi địa chỉ trong file. File nói <code>e_entry = 0x640</code> nghĩa là "cách đầu ảnh 0x640"; kernel chọn "đầu ảnh" nằm ở <code>load_bias</code>, nên entry thật = <code>load_bias + 0x640</code>. Ba nguồn ngẫu nhiên <strong>độc lập</strong> quyết định program, loader và stack nằm ở đâu.</p></div>
-  <img src="../../nap_alf.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 460" role="img" aria-label="Nạp ELF PIE: file trên đĩa với các PT_LOAD được cộng load_bias để ra địa chỉ ảo; ba nguồn ASLR độc lập cho program, loader và stack; layout stack ban đầu gồm argc argv envp auxv">
+    <defs><marker id="a13" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="24" y="18">FILE TRÊN ĐĨA</text>
+    <text class="tl" x="560" y="18">ĐỊA CHỈ ẢO SAU KHI MAP</text>
+
+    <rect class="bx" x="24" y="30" width="360" height="130" rx="2"/>
+    <text class="tm" x="38" y="52">/bin/program  —  ET_DYN (PIE)</text>
+    <text class="ts" x="38" y="72">ELF hdr: e_entry=0x640 · e_phoff=0x40 · e_phnum=9</text>
+    <text class="ts" x="38" y="92">PT_INTERP → "/lib/ld-linux-aarch64.so.1"</text>
+    <text class="ts" x="38" y="112">PT_LOAD#1  off 0x0    vaddr 0x0      R E</text>
+    <text class="ts" x="38" y="130">PT_LOAD#2  off 0xdb8  vaddr 0x10db8  R W  (filesz &lt; memsz → .bss)</text>
+    <text class="ts" x="38" y="150">PT_GNU_STACK  R W  (không E → stack không thực thi)</text>
+
+    <path class="ln0" d="M390 95 L470 95" marker-end="url(#a13)"/>
+    <text class="ts t0" x="396" y="86">+ load_bias</text>
+
+    <rect class="bx0" x="490" y="30" width="566" height="130" rx="2"/>
+    <text class="tm t0" x="504" y="52">load_bias = ELF_ET_DYN_BASE + arch_mmap_rnd() = 0xAAAA_AB3C_0000</text>
+    <text class="ts" x="504" y="74">0xAAAA_AB3C_0000   .text   R-X    ← elf_map(PT_LOAD#1)</text>
+    <text class="ts" x="504" y="92">0xAAAA_AB3C_D000   .data   RW-    ← elf_map(PT_LOAD#2)</text>
+    <text class="ts" x="504" y="110">0xAAAA_AB3C_E000   .bss    RW-    ← set_brk(): VMA ẩn danh zero-fill</text>
+    <text class="ts" x="504" y="128">0xAAAA_AB3D_x000   [heap]         ← arch_randomize_brk()</text>
+    <text class="ts t0" x="504" y="150">entry thật = 0x640 + load_bias = 0xAAAA_AB3C_0640</text>
+
+    <rect class="bxp" x="24" y="176" width="1032" height="86" rx="2"/>
+    <text class="tm" x="40" y="198">BA nguồn ngẫu nhiên ĐỘC LẬP</text>
+    <text class="ts" x="40" y="220">① arch_mmap_rnd() quanh ELF_ET_DYN_BASE  → vị trí PROGRAM  (MAP_FIXED)</text>
+    <text class="ts" x="40" y="238">② mmap_base rnd → vị trí ld.so + thư viện + [vdso]  (load_bias = 0, get_unmapped_area chọn)</text>
+    <text class="ts" x="40" y="256">③ randomize_stack_top(STACK_TOP) → đỉnh [stack]</text>
+    <text class="ts t0" x="620" y="220">Vì sao tách ①/②: lệnh "./ld.so ./program" phải chạy được —</text>
+    <text class="ts t0" x="620" y="238">ld.so (ET_DYN không INTERP) phải nạp XA program để không đè nhau.</text>
+
+    <text class="tl" x="24" y="290">STACK BAN ĐẦU — _start đọc từ [sp]</text>
+    <rect class="bx1" x="24" y="300" width="516" height="146" rx="2"/>
+    <text class="ts" x="38" y="322">[sp] →  argc = 2</text>
+    <text class="ts" x="38" y="340">        argv[0], argv[1], NULL</text>
+    <text class="ts" x="38" y="358">        envp[0], …, NULL</text>
+    <text class="ts" x="38" y="376">        ── auxv[] : cặp (type, value) ──</text>
+    <text class="ts" x="38" y="394">        …  AT_NULL, 0</text>
+    <text class="ts" x="38" y="412">        dữ liệu chuỗi argv/envp/platform</text>
+    <text class="ts" x="38" y="430">        16 byte AT_RANDOM   (đỉnh stack)</text>
+
+    <rect class="bx1" x="556" y="300" width="500" height="146" rx="2"/>
+    <text class="tm t1" x="570" y="322">auxv — kênh kernel → userspace</text>
+    <text class="ts" x="570" y="342">AT_PHDR  = load_bias + e_phoff   → ld.so tìm PT_DYNAMIC</text>
+    <text class="ts" x="570" y="360">AT_BASE  = interp_load_addr      → ld.so tự relocate</text>
+    <text class="ts" x="570" y="378">AT_ENTRY = load_bias + e_entry   → ld.so nhảy tới sau khi setup</text>
+    <text class="ts" x="570" y="396">AT_RANDOM = &amp;16 byte             → glibc seed stack canary</text>
+    <text class="ts" x="570" y="414">AT_SYSINFO_EHDR = [vdso]         → clock_gettime KHÔNG syscall</text>
+    <text class="ts" x="570" y="432">AT_HWCAP/HWCAP2                  → ifunc chọn memcpy tối ưu</text>
+  </svg>
+  </div>
+  <figcaption><b><code>_start</code> không nhận tham số qua thanh ghi — nó đọc stack.</b> <code>argc</code> tại <code>[sp]</code>, rồi <code>argv</code>, <code>envp</code>, <code>auxv</code> liền kề. Đó là toàn bộ giao diện giữa kernel và chương trình vừa được nạp.</figcaption>
+  </figure>
 
   <h3>Ba loại ELF, ba cách nạp</h3>
   <div class="tbl"><table>
@@ -1541,8 +2299,97 @@ se-&gt;vruntime = max_vruntime(se-&gt;vruntime, vruntime);</pre>
   <p class="sec-kicker">Một context switch là <strong>hai việc tách biệt</strong>: đổi không gian địa chỉ (<code>switch_mm</code>) và đổi thanh ghi + stack (<code>switch_to</code>).</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p><code>cpu_switch_to</code> là <strong>một lời gọi hàm C bình thường</strong>. Nó chỉ tuân AAPCS64 — lưu đúng những gì một hàm C phải giữ lại cho caller: <strong>13 giá trị</strong> (<code>x19</code>–<code>x28</code>, <code>fp</code>, <code>sp</code>, <code>lr</code>). Mọi thứ khác hoặc là caller-saved (đã spill vào stack, mà stack đi theo <code>sp</code>), hoặc do helper riêng lo, hoặc là việc của <code>switch_mm</code>.</p></div>
-  <img src="../../context_switch_tu_task_A-B.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 400" role="img" aria-label="Bốn giai đoạn context switch từ task A sang task B: A đang chạy, cpu_switch_to lưu cpu_context của A, khôi phục cpu_context của B, rồi ret để chạy như B; ba hàng thể hiện thanh ghi CPU, cpu_context và kernel stack">
+    <text class="tl" x="8" y="20">GIAI ĐOẠN</text>
+    <text class="ts" x="222" y="20" text-anchor="middle">① A đang chạy</text>
+    <text class="ts t0" x="462" y="20" text-anchor="middle">② LƯU A</text>
+    <text class="ts t1" x="702" y="20" text-anchor="middle">③ KHÔI PHỤC B</text>
+    <text class="ts" x="942" y="20" text-anchor="middle">④ ret → là B</text>
+
+    <text class="tl" x="8" y="76">CPU regs</text>
+    <text class="tl" x="8" y="180">cpu_context</text>
+    <text class="tl" x="8" y="266">kernel stack</text>
+
+    <rect class="bx" x="110" y="32" width="224" height="96" rx="2"/>
+    <text class="ts" x="120" y="52">x19..x28 = giá trị SỐNG của A</text>
+    <text class="ts" x="120" y="70">sp = kernel stack A</text>
+    <text class="ts" x="120" y="88">x0 = A (prev) · x1 = B (next)</text>
+    <text class="ts" x="120" y="106">lr = &amp;(sau bl cpu_switch_to)</text>
+    <text class="ts" x="120" y="122">trong __switch_to</text>
+
+    <rect class="bxp" x="350" y="32" width="224" height="96" rx="2"/>
+    <text class="ts" x="360" y="52">(không đổi)</text>
+    <text class="ts" x="360" y="76">cpu_switch_to chỉ ĐỌC</text>
+    <text class="ts" x="360" y="94">x19..x29, sp, lr rồi ghi</text>
+    <text class="ts" x="360" y="112">xuống A.cpu_context</text>
+
+    <rect class="bx1" x="590" y="32" width="224" height="96" rx="2"/>
+    <text class="ts" x="600" y="52">x19..x28 ← B.ctx</text>
+    <text class="ts" x="600" y="70">x29 ← B.ctx.fp</text>
+    <text class="ts" x="600" y="88">lr  ← B.ctx.pc</text>
+    <text class="ts t1" x="600" y="106">mov sp, x9  (stack B)</text>
+    <text class="ts t1" x="600" y="122">msr sp_el0, x1 (current=B)</text>
+
+    <rect class="bx" x="830" y="32" width="226" height="96" rx="2"/>
+    <text class="ts" x="840" y="52">x19..x28 = giá trị của B</text>
+    <text class="ts" x="840" y="70">sp = kernel stack B</text>
+    <text class="ts t0" x="840" y="90">x0 = Z  ◀ KHÔNG bị ghi!</text>
+    <text class="ts" x="840" y="106">= prev mà B truyền vào lần</text>
+    <text class="ts" x="840" y="122">B gọi cpu_switch_to trước đó</text>
+
+    <rect class="bx" x="110" y="140" width="224" height="80" rx="2"/>
+    <text class="ts" x="120" y="162">A.cpu_context:</text>
+    <text class="ts" x="120" y="182">&lt;giá trị cũ, sắp bị</text>
+    <text class="ts" x="120" y="200">ghi đè&gt;</text>
+
+    <rect class="bx0" x="350" y="140" width="224" height="80" rx="2" stroke-width="2"/>
+    <text class="ts" x="360" y="160">A.ctx.x19..x28 ← x19..x28</text>
+    <text class="ts" x="360" y="178">A.ctx.fp ← x29</text>
+    <text class="ts" x="360" y="196">A.ctx.sp ← sp</text>
+    <text class="ts t0" x="360" y="214">A.ctx.pc ← lr  ← điểm A về</text>
+
+    <rect class="bx1" x="590" y="140" width="224" height="80" rx="2" stroke-width="2"/>
+    <text class="ts" x="600" y="160">B.cpu_context (ĐỌC):</text>
+    <text class="ts" x="600" y="180">lưu ở lần B bị switch-out</text>
+    <text class="ts" x="600" y="198">TRƯỚC đó — hoặc do</text>
+    <text class="ts" x="600" y="214">copy_thread cấy (Module 08)</text>
+
+    <rect class="bx" x="830" y="140" width="226" height="80" rx="2"/>
+    <text class="ts" x="840" y="162">—</text>
+    <text class="ts" x="840" y="188">(B.ctx đã dùng xong,</text>
+    <text class="ts" x="840" y="206">sẽ ghi lại ở lần switch sau)</text>
+
+    <rect class="bx" x="110" y="232" width="224" height="72" rx="2"/>
+    <text class="ts" x="120" y="252">stack A:</text>
+    <text class="ts" x="120" y="270">| __schedule frame |</text>
+    <text class="ts" x="120" y="288">| __switch_to frame | ← sp</text>
+
+    <rect class="bx" x="350" y="232" width="224" height="72" rx="2"/>
+    <text class="ts" x="360" y="252">(không đổi)</text>
+    <text class="ts" x="360" y="276">frame chứa x0..x18 SỐNG</text>
+    <text class="ts" x="360" y="294">mà compiler đã spill</text>
+
+    <rect class="bx1" x="590" y="232" width="224" height="72" rx="2"/>
+    <text class="ts t1" x="600" y="256">mov sp, x9</text>
+    <text class="ts" x="600" y="276">→ chuyển sang</text>
+    <text class="ts" x="600" y="294">   kernel stack B</text>
+
+    <rect class="bx" x="830" y="232" width="226" height="72" rx="2"/>
+    <text class="ts" x="840" y="252">stack B:</text>
+    <text class="ts" x="840" y="270">| __schedule frame |</text>
+    <text class="ts" x="840" y="288">| __switch_to frame CỦA B | ← sp</text>
+
+    <rect class="bxp" x="110" y="318" width="946" height="66" rx="2"/>
+    <text class="ts" x="124" y="340">④ tiếp: pc = B.ctx.pc = "lệnh sau bl cpu_switch_to trong __switch_to CỦA B"</text>
+    <text class="ts" x="124" y="360">→ __switch_to: <tspan class="t0">return last</tspan> (last = x0 = Z) → context_switch: <tspan class="t0">return finish_task_switch(Z)</tspan> → dọn task Z</text>
+    <text class="ts" x="124" y="378">→ __schedule return → schedule return → B chạy tiếp đúng chỗ nó ngủ.  Đây là cơ chế tham số thứ ba `last`.</text>
+  </svg>
+  </div>
+  <figcaption><b>Caller-saved không mất.</b> Compiler biết <code>bl cpu_switch_to</code> là lời gọi nên đã spill mọi <code>x0</code>–<code>x18</code> còn sống vào <b>stack frame của <code>__switch_to</code></b> — mà stack đi theo <code>sp</code>. Khi A chạy lại và <code>sp</code> được khôi phục, chúng tự nạp về.</figcaption>
+  </figure>
 
   <h3>Ba lớp — ai làm gì</h3>
   <div class="tbl"><table>
@@ -1608,8 +2455,69 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <p class="sec-kicker">Đổi <em>thread</em> cùng process và đổi <em>process</em> khác <code>mm</code> là hai việc có chi phí cách nhau một bậc. Khác biệt nằm ở <code>switch_mm</code> — và ASID là thứ khiến nó không đắt như đáng lẽ phải thế.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Không có ASID, mỗi lần đổi <code>TTBR0_EL1</code> là <strong>một lần xoá sạch TLB</strong> — task mới khởi động với zero entry và phải đi bộ bảng trang cho từng địa chỉ. ASID gắn nhãn cho entry TLB, cho phép entry của nhiều process <strong>sống chung</strong> trong TLB, nên switch trở thành hai lệnh <code>msr</code> và không flush gì cả.</p></div>
-  <img src="../../khong_gian_dia_chi_ao_48_bit.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 434" role="img" aria-label="Hai nửa không gian địa chỉ ảo 48-bit ứng với TTBR0 và TTBR1, vị trí ASID trong TTBR1, chuỗi lệnh switch_mm từ task A sang task B, và tác dụng của ASID lên TLB">
+    <defs><marker id="a15" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">48-BIT VA — HAI NỬA, HAI TTBR</text>
+
+    <rect class="bx0" x="110" y="30" width="410" height="82" rx="2"/>
+    <text class="tc t0" x="126" y="52">TTBR0_EL1 — nửa USER</text>
+    <text class="ts" x="126" y="72">0x0000_0000_0000_0000 → 0x0000_FFFF_FFFF_FFFF</text>
+    <text class="ts" x="126" y="90">trỏ PGD của mm hiện tại · ĐỔI mỗi lần switch process</text>
+    <text class="ts" x="126" y="106">.text .data heap mmap thư viện stack vDSO</text>
+
+    <rect class="bx1" x="550" y="30" width="410" height="82" rx="2"/>
+    <text class="tc t1" x="566" y="52">TTBR1_EL1 — nửa KERNEL</text>
+    <text class="ts" x="566" y="72">0xFFFF_0000_0000_0000 → 0xFFFF_FFFF_FFFF_FFFF</text>
+    <text class="ts" x="566" y="90">trỏ swapper_pg_dir · GIỐNG NHAU ở mọi task</text>
+    <text class="ts" x="566" y="106">linear map · vmalloc · code nhân · kernel stack</text>
+
+    <rect class="bxp" x="110" y="122" width="850" height="48" rx="2"/>
+    <text class="ts" x="124" y="142">ASID 16-bit nằm ở bit [63:48] của <tspan class="t1">TTBR1_EL1</tspan> (TCR_EL1.A1 = 1, ARM64_TCR_ASID16) — KHÔNG phải TTBR0.</text>
+    <text class="ts" x="124" y="160">Vì đổi PGD và đổi ASID phải nguyên tử: ghi TTBR1 (ASID mới) trước, isb, rồi TTBR0 (PGD mới) — không có cửa sổ &quot;PGD mới + ASID cũ&quot;.</text>
+
+    <text class="tl" x="8" y="216">SWITCH A → B</text>
+
+    <rect class="bx" x="110" y="196" width="230" height="96" rx="2"/>
+    <text class="tc" x="126" y="218">Task A</text>
+    <text class="tm" x="126" y="240">mm_A · pgd = PGD_A</text>
+    <text class="tm t0" x="126" y="258">ASID = 10</text>
+    <text class="ts" x="126" y="276">TTBR0 = phys(PGD_A)</text>
+    <text class="ts" x="126" y="288">TTBR1 = swapper | (10 &lt;&lt; 48)</text>
+
+    <line class="ln" x1="346" y1="244" x2="404" y2="244" marker-end="url(#a15)"/>
+
+    <rect class="bxp" x="412" y="186" width="256" height="116" rx="2"/>
+    <text class="tc" x="426" y="206">switch_mm_irqs_off(A→B)</text>
+    <text class="ts" x="426" y="226">check_and_switch_context(mm_B):</text>
+    <text class="ts" x="426" y="242">  ASID còn hợp lệ ⇒ fast path, 0 lock</text>
+    <text class="ts" x="426" y="258">cpu_do_switch_mm(pgd_B, mm_B):</text>
+    <text class="ts t1" x="426" y="274">  msr ttbr1_el1, swapper|ASID_B ; isb</text>
+    <text class="ts t1" x="426" y="290">  msr ttbr0_el1, phys(PGD_B) ; isb</text>
+
+    <line class="ln" x1="674" y1="244" x2="732" y2="244" marker-end="url(#a15)"/>
+
+    <rect class="bx1" x="740" y="196" width="230" height="96" rx="2"/>
+    <text class="tc" x="756" y="218">Task B</text>
+    <text class="tm" x="756" y="240">mm_B · pgd = PGD_B</text>
+    <text class="tm t1" x="756" y="258">ASID = 11</text>
+    <text class="ts" x="756" y="276">TTBR0 = phys(PGD_B)</text>
+    <text class="ts" x="756" y="288">TTBR1 = swapper | (11 &lt;&lt; 48)</text>
+
+    <text class="tl" x="8" y="334">TLB</text>
+    <rect class="bxp" x="110" y="316" width="860" height="106" rx="2"/>
+    <text class="ts" x="124" y="338"><tspan class="t0">Không ASID:</tspan> mỗi lần ghi TTBR0 phải flush TOÀN BỘ TLB → task mới bắt đầu với 0 entry → hàng nghìn lần đi bộ bảng trang 4 mức.</text>
+    <text class="ts" x="124" y="358"><tspan class="t1">Có ASID:</tspan> mỗi entry TLB mang nhãn ASID. Entry của A (10) và của B (11) SỐNG CHUNG trong TLB — phần cứng chỉ dùng entry khớp ASID hiện tại.</text>
+    <text class="ts" x="124" y="378">→ switch KHÔNG cần flush; khi A quay lại, entry cũ của A vẫn còn nóng → chi phí MMU của một lần switch ≈ 2 lệnh msr + 2 isb.</text>
+    <text class="ts" x="124" y="398">Chỉ phải flush khi <tspan class="t0">ASID generation rollover</tspan>: 65536 mm đã dùng hết số → flush_context() cấp lại từ đầu + IPI báo mọi CPU (hiếm).</text>
+    <text class="ts" x="124" y="416">Switch giữa hai <tspan class="t1">thread cùng process</tspan>: next-&gt;mm == prev-&gt;mm → context_switch bỏ qua switch_mm hoàn toàn → 0 chi phí MMU, TLB giữ nguyên 100%.</text>
+  </svg>
+  </div>
+  <figcaption><b>ASID nằm ở TTBR1, không phải TTBR0.</b> Nghe ngược đời vì ASID mô tả không gian <i>user</i>. Lý do thuần kỹ thuật: kernel muốn cập nhật ASID và PGD thành hai lệnh có thứ tự xác định; đặt ASID cạnh PGD trong cùng một thanh ghi sẽ khiến mọi lần đổi ASID kéo theo đổi PGD.</figcaption>
+  </figure>
 
   <h3>Fast path và slow path của <code>check_and_switch_context()</code></h3>
   <div class="tbl"><table>
@@ -1646,8 +2554,91 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <p class="sec-kicker">Process A đang chạy ở EL0. IRQ nổ. Scheduler chọn B. Câu hỏi <em>"CPU <code>eret</code> về đâu"</em> là chỗ nhiều người mắc kẹt — và câu trả lời làm sáng tỏ toàn bộ mô hình.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>CPU <code>eret</code> về <strong>userspace của B</strong>. Không mâu thuẫn gì: mỗi task có <code>pt_regs</code> riêng trên kernel stack riêng, và <code>eret</code> luôn đọc <code>pt_regs</code> ở đỉnh kernel stack của <em>task đang chạy</em>. <code>pt_regs</code> của A bị đóng băng nguyên vẹn, đợi tới lượt A.</p></div>
-  <img src="../../IRQ_EL0_to_context_switch.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 452" role="img" aria-label="Chuỗi năm bước từ IRQ ở EL0 tới context switch, và hai kernel stack song song cho thấy pt_regs của A bị đóng băng trong khi eret dùng pt_regs của B">
+    <defs><marker id="a16" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <rect class="bx0" x="20" y="26" width="176" height="56" rx="2"/>
+    <text class="tc t0" x="32" y="46">① A chạy ở EL0</text>
+    <text class="ts" x="32" y="64">PC = lệnh user của A</text>
+    <text class="ts" x="32" y="78">SP_EL0 = stack user A</text>
+    <line class="ln0" x1="200" y1="54" x2="222" y2="54" marker-end="url(#a16)"/>
+
+    <rect class="bx1" x="228" y="26" width="188" height="56" rx="2"/>
+    <text class="tc t1" x="240" y="46">② IRQ → el0_irq</text>
+    <text class="ts" x="240" y="64">kernel_entry lưu pt_regs A</text>
+    <text class="ts" x="240" y="78">SP_EL0 ← current (A)</text>
+    <line class="ln1" x1="420" y1="54" x2="442" y2="54" marker-end="url(#a16)"/>
+
+    <rect class="bx1" x="448" y="26" width="196" height="56" rx="2"/>
+    <text class="tc t1" x="460" y="46">③ irq_handler</text>
+    <text class="ts" x="460" y="64">đổi sang IRQ stack · gic_handle_irq</text>
+    <text class="ts" x="460" y="78">tick → set TIF_NEED_RESCHED</text>
+    <line class="ln1" x1="648" y1="54" x2="670" y2="54" marker-end="url(#a16)"/>
+
+    <rect class="bx1" x="676" y="26" width="188" height="56" rx="2"/>
+    <text class="tc t1" x="688" y="46">④ ret_to_user</text>
+    <text class="ts" x="688" y="64">thấy cờ → work_pending</text>
+    <text class="ts" x="688" y="78">do_notify_resume → schedule()</text>
+    <line class="ln1" x1="868" y1="54" x2="890" y2="54" marker-end="url(#a16)"/>
+
+    <rect class="bxp" x="896" y="26" width="164" height="56" rx="2"/>
+    <text class="tc" x="908" y="46">⑤ context_switch</text>
+    <text class="ts" x="908" y="64">cpu_switch_to(A, B)</text>
+    <text class="ts" x="908" y="78">sp ← stack B · sp_el0 ← B</text>
+
+    <text class="tl" x="8" y="126">KERNEL STACK</text>
+
+    <rect class="bx" x="110" y="112" width="290" height="212" rx="2"/>
+    <text class="tc" x="124" y="132">Kernel stack của A — 16 KB</text>
+    <rect class="bx0" x="124" y="142" width="262" height="62" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="134" y="160">pt_regs của A</text>
+    <text class="ts" x="134" y="176">pc = lệnh user A bị ngắt</text>
+    <text class="ts" x="134" y="190">sp = SP_EL0 của A · x0..x30 của A</text>
+    <text class="ts" x="134" y="228">| el0_irq frame |</text>
+    <text class="ts" x="134" y="246">| ret_to_user frame |</text>
+    <text class="ts" x="134" y="264">| do_notify_resume frame |</text>
+    <text class="ts" x="134" y="282">| __schedule frame |  ← A.ctx.sp</text>
+    <text class="ts t0" x="134" y="310">ĐÓNG BĂNG — không ai đụng tới</text>
+
+    <line class="ln" x1="406" y1="212" x2="472" y2="212" marker-end="url(#a16)"/>
+    <text class="ts" x="410" y="200">cpu_switch_to</text>
+    <text class="ts" x="410" y="232">mov sp, x9</text>
+    <text class="ts" x="410" y="246">msr sp_el0, B</text>
+
+    <rect class="bx1" x="482" y="112" width="290" height="212" rx="2"/>
+    <text class="tc" x="496" y="132">Kernel stack của B — 16 KB</text>
+    <rect class="bx0" x="496" y="142" width="262" height="62" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="506" y="160">pt_regs của B</text>
+    <text class="ts" x="506" y="176">pc = lệnh user B bị ngắt LẦN TRƯỚC</text>
+    <text class="ts" x="506" y="190">sp = SP_EL0 của B · x0..x30 của B</text>
+    <text class="ts" x="506" y="228">| ... frame của B ... |</text>
+    <text class="ts" x="506" y="246">| __schedule frame |  ← sp GIỜ</text>
+    <text class="ts t1" x="506" y="274">B tiếp tục từ đúng chỗ nó ngủ:</text>
+    <text class="ts" x="506" y="292">__schedule return → ret_to_user CỦA B</text>
+    <text class="ts" x="506" y="310">→ kernel_exit 0</text>
+
+    <line class="ln0" x1="778" y1="212" x2="820" y2="212" marker-end="url(#a16)"/>
+
+    <rect class="bxp" x="828" y="146" width="232" height="132" rx="2"/>
+    <text class="tc" x="842" y="168">eret</text>
+    <text class="ts" x="842" y="190">ELR_EL1  ← pt_regs_B.pc</text>
+    <text class="ts" x="842" y="208">SPSR_EL1 ← pt_regs_B.pstate</text>
+    <text class="ts" x="842" y="226">SP_EL0   ← pt_regs_B.sp</text>
+    <text class="ts" x="842" y="244">x0..x30  ← pt_regs_B</text>
+    <text class="ts t0" x="842" y="268">→ EL0 CỦA B, không phải A</text>
+
+    <rect class="bxp" x="110" y="338" width="950" height="102" rx="2"/>
+    <text class="ts" x="124" y="360">Nhìn từ phía A: A không hề &quot;biết&quot; mình đã bị ngắt. Khi scheduler chọn A lại, <tspan class="tm">cpu_switch_to</tspan> nạp sp về stack A, A tiếp tục từ trong <tspan class="tm">__schedule</tspan>,</text>
+    <text class="ts" x="124" y="378">đi tiếp qua <tspan class="tm">do_notify_resume</tspan> → <tspan class="tm">ret_to_user</tspan> → <tspan class="tm">kernel_exit</tspan>, rồi <tspan class="tm">eret</tspan> bằng <tspan class="t0">pt_regs của chính mình</tspan> — về đúng lệnh user đã bị ngắt.</text>
+    <text class="ts" x="124" y="402">Với A, toàn bộ khoảng thời gian B chạy chỉ là một lệnh chạy hơi lâu. Đó chính là định nghĩa của &quot;đa nhiệm trong suốt&quot;.</text>
+    <text class="ts" x="124" y="426">IRQ từ EL0 <tspan class="t1">luôn</tspan> là điểm preempt (chắc chắn đi qua ret_to_user). IRQ từ EL1 chỉ preempt khi CONFIG_PREEMPT bật <tspan class="tm">và</tspan> preempt_count == 0.</text>
+  </svg>
+  </div>
+  <figcaption><b>Đường đi của một tick.</b> <code>gic_handle_irq</code> → <code>irq_enter</code> → handler timer → <code>scheduler_tick()</code> → <code>task_tick_fair</code> → <code>check_preempt_tick</code> → <code>resched_curr()</code>. <code>resched_curr</code> <b>không</b> gọi <code>schedule()</code> — nó chỉ đặt <code>TIF_NEED_RESCHED</code>. Việc nhường CPU xảy ra sau, ở nơi an toàn.</figcaption>
+  </figure>
 
   <h3>IRQ stack — vì sao ngắt không chạy trên kernel stack của task</h3>
   <div class="prose">
@@ -1678,8 +2669,65 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <p class="sec-kicker">Handler tín hiệu là code <em>user</em>. Kernel không thể "gọi" nó. Thay vào đó nó <strong>dựng một khung stack giả trên stack user</strong> rồi <code>eret</code> vào handler như thể chương trình vừa gọi hàm đó.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p><code>kill()</code> <strong>không</strong> chạy handler. Nó chỉ nối một <code>sigqueue</code> vào hàng đợi và bật <code>TIF_SIGPENDING</code>. Handler chỉ chạy khi <em>task đích</em> tự đi qua <code>ret_to_user</code> của nó — nên tín hiệu gửi cho một task đang ngủ sâu trong <code>TASK_UNINTERRUPTIBLE</code> sẽ nằm đó chờ.</p></div>
-  <img src="../../vong_doi_1_tin_hieu_trong_linux.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 448" role="img" aria-label="Ba giai đoạn của một tín hiệu: kill chỉ đặt cờ, do_signal dựng rt_sigframe trên stack user và sửa pt_regs, rt_sigreturn khôi phục lại pt_regs từ frame">
+    <defs><marker id="a17" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">① GỬI — chỉ đặt cờ</text>
+    <rect class="bxp" x="110" y="26" width="950" height="58" rx="2"/>
+    <text class="ts" x="124" y="46">kill(pid, SIGINT) → __send_signal(): cấp <tspan class="tm">struct sigqueue</tspan>, nối vào <tspan class="tm">signal-&gt;shared_pending</tspan> (gửi cả thread group) hoặc <tspan class="tm">task-&gt;pending</tspan> (tgkill),</text>
+    <text class="ts" x="124" y="64">rồi <tspan class="tm">set_tsk_thread_flag(t, TIF_SIGPENDING)</tspan> + <tspan class="tm">signal_wake_up()</tspan> (đánh thức nếu đang TASK_INTERRUPTIBLE).</text>
+    <text class="ts t0" x="124" y="80">Tới đây kernel KHÔNG chạy gì của handler. Việc giao tín hiệu là trách nhiệm của chính task đích, ở ret_to_user của nó.</text>
+
+    <text class="tl" x="8" y="122">② GIAO — do_signal()</text>
+
+    <rect class="bx0" x="110" y="112" width="360" height="248" rx="2"/>
+    <text class="tc t0" x="124" y="134">STACK USER (địa chỉ cao ↓ thấp)</text>
+    <rect class="bxp" x="124" y="144" width="332" height="38" rx="2"/>
+    <text class="ts" x="134" y="162">khung hàm user đang chạy khi bị ngắt</text>
+    <text class="ts" x="134" y="176">──────────── SP cũ (pt_regs-&gt;sp) ────────────</text>
+
+    <rect class="bx0" x="124" y="190" width="332" height="158" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="134" y="208">struct rt_sigframe   ◀ SP MỚI</text>
+    <text class="ts" x="134" y="226">struct siginfo info — si_signo, si_code, si_addr…</text>
+    <text class="ts" x="134" y="244">struct ucontext uc {</text>
+    <text class="ts" x="134" y="260">   uc_stack        — sigaltstack đang dùng</text>
+    <text class="ts" x="134" y="276">   uc_sigmask      — mask CŨ, để sigreturn trả lại</text>
+    <text class="ts t1" x="134" y="292">   struct sigcontext {</text>
+    <text class="ts t1" x="134" y="308">      fault_address ; regs[31] ; sp ; pc ; pstate</text>
+    <text class="ts" x="134" y="322">      __reserved[4096] — FPSIMD / SVE / PAC records</text>
+    <text class="ts t1" x="134" y="338">   }  ◀ BẢN SAO NGUYÊN VẸN của pt_regs</text>
+
+    <line class="ln0" x1="476" y1="180" x2="530" y2="180" marker-end="url(#a17)"/>
+
+    <rect class="bx1" x="540" y="112" width="520" height="132" rx="2"/>
+    <text class="tc t1" x="554" y="134">pt_regs SAU setup_return() — bị sửa tại chỗ</text>
+    <text class="ts" x="554" y="156">pc       = ka-&gt;sa.sa_handler          ◀ eret sẽ nhảy thẳng vào handler</text>
+    <text class="ts" x="554" y="174">sp       = địa chỉ frame vừa dựng     ◀ handler chạy trên frame đó</text>
+    <text class="ts" x="554" y="192">regs[0]  = signo                      ◀ tham số thứ nhất của handler</text>
+    <text class="ts" x="554" y="210">regs[1]  = &amp;frame-&gt;info · regs[2] = &amp;frame-&gt;uc   (nếu SA_SIGINFO)</text>
+    <text class="ts t0" x="554" y="228">regs[30] = vDSO __kernel_rt_sigreturn  ◀ &quot;địa chỉ trở về&quot; giả</text>
+
+    <line class="ln" x1="800" y1="250" x2="800" y2="276" marker-end="url(#a17)"/>
+
+    <text class="tl" x="490" y="288">③ TRỞ VỀ</text>
+    <rect class="bxp" x="540" y="264" width="520" height="122" rx="2"/>
+    <text class="ts" x="554" y="286">handler chạy xong → <tspan class="tm">ret</tspan> → nhảy tới lr = trampoline trong vDSO:</text>
+    <text class="ts t1" x="554" y="304">   mov x8, #__NR_rt_sigreturn (139) ; svc #0</text>
+    <text class="ts" x="554" y="322">→ sys_rt_sigreturn → restore_sigframe(regs, frame):</text>
+    <text class="ts" x="554" y="338">   GHI ĐÈ pt_regs bằng sigcontext trong frame</text>
+    <text class="ts t0" x="554" y="354">   valid_user_regs(): ép pstate về EL0t — chặn user tự nâng mình lên EL1</text>
+    <text class="ts" x="554" y="370">   khôi phục uc_sigmask → ret_to_user → eret → về ĐÚNG lệnh bị ngắt</text>
+
+    <rect class="bxp" x="110" y="398" width="950" height="42" rx="2"/>
+    <text class="ts" x="124" y="418">Vì sao frame nằm trên <tspan class="t0">stack USER</tspan>: handler là code EL0, chạy với SP_EL0 — kernel không được để dữ liệu trên kernel stack cho user đọc/ghi.</text>
+    <text class="ts" x="124" y="434">Cũng vì thế <tspan class="tm">sigaltstack()</tspan> tồn tại: nếu stack user đã hỏng (SIGSEGV do tràn stack), frame phải đặt lên một vùng dự phòng thì handler mới chạy nổi.</text>
+  </svg>
+  </div>
+  <figcaption><b>Cả chuyến đi là một cú lừa có kiểm soát.</b> Từ góc nhìn chương trình user, nó chỉ thấy "đang chạy thì bỗng nhiên ở trong handler, rồi handler return và mọi thứ như cũ". Toàn bộ ảo giác đó do <code>rt_sigframe</code> + hai lần sửa <code>pt_regs</code> tạo ra.</figcaption>
+  </figure>
 
   <h3><code>sighand_struct</code> và <code>signal_struct</code> — hai thứ hay bị lẫn</h3>
   <div class="tbl"><table>
@@ -1714,7 +2762,6 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <p class="sec-kicker">Một task chết theo hai nhịp tách biệt: nhịp đầu giải phóng <strong>tài nguyên</strong> và <strong>kernel stack</strong>; nhịp hai — chỉ khi cha đã <code>wait()</code> — mới xoá nốt <code>task_struct</code> và trả PID.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p><code>do_exit()</code> không thể tự giải phóng kernel stack của mình — nó đang <em>đứng trên</em> stack đó. Nên nó đặt <code>TASK_DEAD</code> rồi gọi <code>__schedule()</code> lần cuối; <strong>task kế tiếp</strong> nhìn thấy <code>prev-&gt;state == TASK_DEAD</code> trong <code>finish_task_switch()</code> và dọn hộ.</p></div>
-  <img src="../../do_exit.png" alt="" style="max-width: 100%; height: auto;">
 
   <figure>
   <div class="fig-box">
@@ -1833,7 +2880,97 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <div class="sec-head"><span class="sec-num">18</span><h2><code style="font-size:.82em">wait()</code> và zombie — khép vòng đời</h2></div>
   <p class="sec-kicker">Từ <code>fork</code> tới lúc <code>task_struct</code> thật sự biến mất, một task đi qua sáu chặng. Nhìn chúng cạnh nhau, ba trạng thái "chết" hết chồng chéo.</p>
 
-  <img src="../../vong_doi_cua_mot_task_trong_linux.png" alt="" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 424" role="img" aria-label="Vòng đời sáu chặng của một task với ba lane song song: giá trị task->state, giá trị task->exit_state, và bộ nhớ được cấp hay giải phóng ở từng chặng">
+    <defs><marker id="a19" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">CHẶNG</text>
+    <rect class="bx" x="110" y="28" width="146" height="48" rx="2"/>
+    <text class="tc" x="122" y="48">fork()</text>
+    <text class="ts" x="122" y="66">copy_process</text>
+    <line class="ln" x1="260" y1="52" x2="276" y2="52" marker-end="url(#a19)"/>
+
+    <rect class="bx1" x="282" y="28" width="146" height="48" rx="2"/>
+    <text class="tc t1" x="294" y="48">RUNNING</text>
+    <text class="ts" x="294" y="66">user + kernel</text>
+    <line class="ln" x1="432" y1="52" x2="448" y2="52" marker-end="url(#a19)"/>
+
+    <rect class="bx0" x="454" y="28" width="146" height="48" rx="2"/>
+    <text class="tc t0" x="466" y="48">exit()</text>
+    <text class="ts" x="466" y="66">do_exit tháo dỡ</text>
+    <line class="ln0" x1="604" y1="52" x2="620" y2="52" marker-end="url(#a19)"/>
+
+    <rect class="bx0" x="626" y="28" width="146" height="48" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="638" y="48">ZOMBIE</text>
+    <text class="ts" x="638" y="66">chờ cha wait()</text>
+    <line class="ln1" x1="776" y1="52" x2="792" y2="52" marker-end="url(#a19)"/>
+
+    <rect class="bx1" x="798" y="28" width="120" height="48" rx="2"/>
+    <text class="tc t1" x="810" y="48">wait()</text>
+    <text class="ts" x="810" y="66">wait_task_zombie</text>
+    <line class="ln" x1="922" y1="52" x2="938" y2="52" marker-end="url(#a19)"/>
+
+    <rect class="bxp" x="944" y="28" width="116" height="48" rx="2"/>
+    <text class="tc" x="956" y="48">FREED</text>
+    <text class="ts" x="956" y="66">PID tái dùng</text>
+
+    <line class="rule" x1="110" y1="92" x2="1060" y2="92"/>
+    <text class="tl" x="8" y="118">task-&gt;state</text>
+    <text class="ts" x="122" y="118">TASK_NEW</text>
+    <text class="ts t1" x="294" y="118">TASK_RUNNING /</text>
+    <text class="ts t1" x="294" y="132">INTERRUPTIBLE …</text>
+    <text class="ts" x="466" y="118">TASK_RUNNING</text>
+    <text class="ts t0" x="466" y="132">→ TASK_DEAD (chớp)</text>
+    <text class="ts" x="638" y="118">— (không còn nghĩa;</text>
+    <text class="ts" x="638" y="132">task không lập lịch nữa)</text>
+    <text class="ts" x="810" y="118">—</text>
+    <text class="ts" x="956" y="118">—</text>
+
+    <line class="rule" x1="110" y1="146" x2="1060" y2="146"/>
+    <text class="tl" x="8" y="172">task-&gt;exit_state</text>
+    <text class="ts" x="122" y="172">0</text>
+    <text class="ts" x="294" y="172">0</text>
+    <text class="ts t0" x="466" y="172">→ EXIT_ZOMBIE</text>
+    <text class="ts" x="466" y="186">(trong exit_notify)</text>
+    <text class="ts t0" x="638" y="172">EXIT_ZOMBIE</text>
+    <text class="ts" x="638" y="186">(kéo dài bao lâu tuỳ cha)</text>
+    <text class="ts t1" x="810" y="172">→ EXIT_DEAD</text>
+    <text class="ts" x="810" y="186">cmpxchg</text>
+    <text class="ts" x="956" y="172">—</text>
+
+    <line class="rule" x1="110" y1="200" x2="1060" y2="200"/>
+    <text class="tl" x="8" y="226">BỘ NHỚ</text>
+    <text class="ts" x="122" y="226">cấp task_struct</text>
+    <text class="ts" x="122" y="240">+ kstack 16 KB</text>
+    <text class="ts" x="122" y="254">+ mm (COW)</text>
+    <text class="ts" x="294" y="226">—</text>
+    <text class="ts t0" x="466" y="226">mm freed (exit_mm)</text>
+    <text class="ts" x="466" y="240">files/fs nhả</text>
+    <text class="ts t0" x="466" y="254">kstack freed ở</text>
+    <text class="ts t0" x="466" y="268">finish_task_switch</text>
+    <text class="ts" x="466" y="282">của task KẾ TIẾP</text>
+    <text class="ts t0" x="638" y="226">chỉ còn task_struct</text>
+    <text class="ts" x="638" y="240">(~2 KB) + struct pid</text>
+    <text class="ts" x="638" y="254">giữ exit_code, rusage</text>
+    <text class="ts t1" x="810" y="226">release_task:</text>
+    <text class="ts" x="810" y="240">__exit_signal</text>
+    <text class="ts" x="810" y="254">__unhash_process</text>
+    <text class="ts" x="810" y="268">detach_pid</text>
+    <text class="ts" x="956" y="226">put_task_struct</text>
+    <text class="ts" x="956" y="240">cuối → RCU grace</text>
+    <text class="ts" x="956" y="254">→ free thật</text>
+
+    <rect class="bxp" x="110" y="300" width="950" height="112" rx="2"/>
+    <text class="tc" x="124" y="322">do_wait() — cha ngủ ở đâu và được đánh thức thế nào</text>
+    <text class="ts" x="124" y="344">wait4/waitpid → kernel_wait4 → do_wait(wait_opts): add_wait_queue(&amp;current-&gt;signal-&gt;wait_chldexit, &amp;wo.child_wait)</text>
+    <text class="ts t1" x="124" y="362">   wo.child_wait.func = child_wait_callback  ◀ wake có MỤC TIÊU: chỉ đánh thức cha nào đang chờ đúng đứa con vừa chết (tránh thundering herd)</text>
+    <text class="ts" x="124" y="380">→ do_wait_thread → wait_consider_task(child) cho từng con → wait_task_zombie(child) nếu exit_state == EXIT_ZOMBIE</text>
+    <text class="ts t0" x="124" y="398">wait_task_zombie: cmpxchg(&amp;p-&gt;exit_state, EXIT_ZOMBIE, EXIT_DEAD) → cộng utime/stime của con vào parent-&gt;signal-&gt;cutime/cstime → release_task(p)</text>
+  </svg>
+  </div>
+  <figcaption><b>Vì sao cần <code>cmpxchg</code>.</b> Nhiều thread của cha có thể cùng gọi <code>waitpid</code> trên cùng một con. <code>cmpxchg(EXIT_ZOMBIE → EXIT_DEAD)</code> chỉ thành công đúng một lần — kẻ thắng gọi <code>release_task</code>, những kẻ còn lại thấy trạng thái đã đổi và bỏ qua.</figcaption>
+  </figure>
 
   <h3>Các biến thể của <code>wait</code></h3>
   <div class="tbl"><table>
@@ -1860,7 +2997,6 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <p class="sec-kicker">Nhân Linux không có <code>struct process</code>. Chỉ có <code>task_struct</code>. Cái ta gọi là "process" chỉ là <strong>một tập <code>task_struct</code> cùng <code>tgid</code>, chia sẻ đúng những object nhất định</strong>.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>"Process" và "thread" không phải hai loại đối tượng — chúng là <strong>hai điểm trên một dải liên tục</strong> do <code>clone()</code> flags quyết định. <code>fork()</code> ở một đầu (không chia sẻ gì), <code>pthread_create()</code> ở đầu kia (chia sẻ gần hết). Giữa hai đầu là mọi tổ hợp bạn muốn.</p></div>
-  <img src="../../mot_thread_group.png" alt="" style="max-width: 100%; height: auto;">
 
   <figure>
   <div class="fig-box">
@@ -1990,8 +3126,86 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
 <section id="m20">
   <div class="sec-head"><span class="sec-num">20</span><h2>PID / TGID — một đối tượng, nhiều con số</h2></div>
   <p class="sec-kicker">Thuật ngữ nhân và thuật ngữ userspace <strong>lệch nhau</strong>: <code>task-&gt;pid</code> của nhân chính là TID của user; <code>task-&gt;tgid</code> của nhân mới là PID của user. Và một <code>struct pid</code> có thể mang nhiều con số cùng lúc.</p>
-  <img src="../../task_pid_ptr.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 442" role="img" aria-label="Sơ đồ trên cho thấy task_struct trỏ tới struct pid qua thread_pid và qua signal->pids[TGID], sơ đồ dưới cho thấy một struct pid mang hai con số trong hai pid namespace">
+    <defs><marker id="a21" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">task_pid_ptr(task, type) — HAI ĐƯỜNG RẼ</text>
+
+    <rect class="bx0" x="20" y="28" width="216" height="72" rx="2"/>
+    <text class="tc t0" x="32" y="48">task_struct LEADER</text>
+    <text class="tm" x="32" y="68">pid = 200 · tgid = 200</text>
+    <text class="ts" x="32" y="86">thread_pid ─────▶</text>
+    <text class="ts" x="140" y="86">signal ──▶</text>
+
+    <rect class="bx" x="20" y="112" width="216" height="72" rx="2"/>
+    <text class="tc" x="32" y="132">task_struct thread #2</text>
+    <text class="tm" x="32" y="152">pid = 201 · tgid = 200</text>
+    <text class="ts" x="32" y="170">thread_pid ─────▶</text>
+    <text class="ts" x="140" y="170">signal ──▶</text>
+
+    <line class="ln1" x1="240" y1="94" x2="336" y2="106" marker-end="url(#a21)"/>
+    <line class="ln1" x1="240" y1="164" x2="336" y2="130" marker-end="url(#a21)"/>
+
+    <rect class="bx1" x="342" y="82" width="266" height="82" rx="2"/>
+    <text class="tc t1" x="354" y="102">signal_struct — CHUNG cả nhóm</text>
+    <text class="ts" x="354" y="120">pids[PIDTYPE_PID]  (không dùng)</text>
+    <text class="ts t0" x="354" y="136">pids[PIDTYPE_TGID] ──────────▶</text>
+    <text class="ts" x="354" y="152">pids[PIDTYPE_PGID] · pids[PIDTYPE_SID]</text>
+
+    <line class="ln0" x1="240" y1="80" x2="700" y2="60" marker-end="url(#a21)"/>
+    <line class="ln0" x1="612" y1="132" x2="700" y2="82" marker-end="url(#a21)"/>
+    <line class="ln" x1="240" y1="176" x2="700" y2="150" marker-end="url(#a21)"/>
+
+    <rect class="bxp" x="706" y="28" width="354" height="76" rx="2"/>
+    <text class="tc" x="718" y="48">struct pid #200</text>
+    <text class="ts" x="718" y="66">tasks[PIDTYPE_PID]  → { leader }</text>
+    <text class="ts t0" x="718" y="82">tasks[PIDTYPE_TGID] → { leader, #2, #3 }  ◀ MỌI thread</text>
+    <text class="ts" x="718" y="98">numbers[0] = { nr = 200, ns = init_pid_ns }</text>
+
+    <rect class="bxp" x="706" y="118" width="354" height="60" rx="2"/>
+    <text class="tc" x="718" y="138">struct pid #201</text>
+    <text class="ts" x="718" y="156">tasks[PIDTYPE_PID] → { thread #2 }</text>
+    <text class="ts" x="718" y="172">numbers[0] = { nr = 201, ns = init_pid_ns }</text>
+
+    <rect class="bxp" x="20" y="194" width="1040" height="72" rx="2"/>
+    <text class="tm t0" x="34" y="216">getpid() = task_tgid_vnr(current) → task_pid_ptr(…, PIDTYPE_TGID) = &amp;current-&gt;signal-&gt;pids[TGID] → CHUNG → 200 ở MỌI thread</text>
+    <text class="tm t1" x="34" y="238">gettid() = task_pid_vnr(current)  → task_pid_ptr(…, PIDTYPE_PID)  = &amp;current-&gt;thread_pid       → RIÊNG → 200 / 201 / 202</text>
+    <text class="ts" x="34" y="258">copy_process khi CLONE_THREAD: alloc_pid() cấp struct pid MỚI cho TID và attach_pid(PIDTYPE_PID), nhưng CỐ Ý không đụng signal-&gt;pids[TGID] — nó vẫn trỏ struct pid của leader.</text>
+
+    <text class="tl" x="8" y="298">MỘT struct pid — NHIỀU CON SỐ (pid namespace)</text>
+
+    <rect class="bx1" x="20" y="306" width="222" height="52" rx="2"/>
+    <text class="tc t1" x="32" y="326">init_pid_ns · level = 0</text>
+    <text class="ts" x="32" y="344">idr: 1→init, …, 5000 → pid X</text>
+
+    <rect class="bx0" x="20" y="368" width="222" height="52" rx="2"/>
+    <text class="tc t0" x="32" y="388">container_pid_ns · level = 1</text>
+    <text class="ts" x="32" y="406">idr: 1 → pid X · child_reaper = init container</text>
+
+    <line class="ln1" x1="246" y1="332" x2="292" y2="346" marker-end="url(#a21)"/>
+    <line class="ln0" x1="246" y1="394" x2="292" y2="380" marker-end="url(#a21)"/>
+
+    <rect class="bxp" x="298" y="306" width="330" height="114" rx="2"/>
+    <text class="tc" x="310" y="326">struct pid X · level = 1</text>
+    <text class="ts" x="310" y="348">numbers[0] = { nr = 5000, ns = init_pid_ns }</text>
+    <text class="ts" x="310" y="366">numbers[1] = { nr = 1,    ns = container_pid_ns }</text>
+    <text class="ts t0" x="310" y="390">CÙNG MỘT object — HAI con số.</text>
+    <text class="ts" x="310" y="408">struct upid = cặp (số, namespace).</text>
+
+    <rect class="bxp" x="644" y="306" width="416" height="114" rx="2"/>
+    <text class="tc" x="656" y="326">pid_nr_ns(pid, ns)</text>
+    <text class="tm" x="656" y="348">if (ns-&gt;level &lt;= pid-&gt;level)</text>
+    <text class="tm" x="656" y="364">     return pid-&gt;numbers[ns-&gt;level].nr;</text>
+    <text class="tm" x="656" y="380">else return 0;</text>
+    <text class="ts t1" x="656" y="402">→ host thấy 5000 · trong container thấy 1 · tiến trình trong</text>
+    <text class="ts t1" x="656" y="416">   container KHÔNG thấy số của host (bất đối xứng có chủ ý).</text>
+  </svg>
+  </div>
+  <figcaption><b><code>struct pid</code> là <i>đối tượng định danh</i>, <code>pid_t</code> chỉ là <i>con số</i>.</b> Tách bạch này cho phép hai thứ: (a) namespace — cùng một tiến trình mang số khác nhau tuỳ người nhìn; (b) an toàn tái sử dụng — giữ tham chiếu tới <code>struct pid</code> thì không bao giờ trỏ nhầm tiến trình khác khi số bị cấp lại.</figcaption>
+  </figure>
 
   <h3>Bốn <code>PIDTYPE_*</code></h3>
   <div class="tbl"><table>
@@ -2016,8 +3230,73 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
 <section id="m21">
   <div class="sec-head"><span class="sec-num">21</span><h2>Cây process — và chuyện mồ côi</h2></div>
   <p class="sec-kicker">Cây process là cây các <strong>thread-group leader</strong>. Khi một nút chết, con của nó không bao giờ bị bỏ rơi — nhân luôn tìm được người nhận nuôi.</p>
-  <img src="../../cay_process.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 408" role="img" aria-label="Cây process init bash program child1 child2, giải thích năm trường quan hệ trên task_struct, và trình tự chọn reaper khi cha chết trước con">
+    <defs><marker id="a22" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">CÂY — CHỈ GỒM LEADER</text>
+
+    <rect class="bx1" x="46" y="28" width="160" height="40" rx="2"/>
+    <text class="tc t1" x="58" y="53">init · PID 1</text>
+    <line class="ln" x1="126" y1="70" x2="126" y2="92" marker-end="url(#a22)"/>
+    <text class="ts" x="132" y="86">children</text>
+
+    <rect class="bx" x="46" y="96" width="160" height="40" rx="2"/>
+    <text class="tc" x="58" y="121">bash · PID 100</text>
+    <line class="ln" x1="126" y1="138" x2="126" y2="160" marker-end="url(#a22)"/>
+
+    <rect class="bx" x="46" y="164" width="160" height="40" rx="2"/>
+    <text class="tc" x="58" y="189">program · PID 200</text>
+    <line class="ln" x1="110" y1="206" x2="86" y2="228" marker-end="url(#a22)"/>
+    <line class="ln" x1="150" y1="206" x2="196" y2="228" marker-end="url(#a22)"/>
+
+    <rect class="bx" x="20" y="232" width="128" height="40" rx="2"/>
+    <text class="tc" x="30" y="257">child1 · 201</text>
+    <rect class="bx" x="160" y="232" width="128" height="40" rx="2"/>
+    <text class="tc" x="170" y="257">child2 · 202</text>
+    <line class="ln dash" x1="150" y1="252" x2="158" y2="252"/>
+    <text class="ts" x="60" y="290">sibling ⇄ sibling — hai nút trong program-&gt;children</text>
+
+    <rect class="bxp" x="316" y="28" width="316" height="244" rx="2"/>
+    <text class="tc" x="328" y="48">Năm trường quan hệ trên task_struct</text>
+    <text class="tm t1" x="328" y="72">real_parent</text>
+    <text class="ts" x="328" y="88">task đã fork() ra nó. Chỉ đổi khi reparent.</text>
+    <text class="tm t0" x="328" y="112">parent</text>
+    <text class="ts" x="328" y="128">cha HIỆU LỰC: nhận SIGCHLD, làm wait().</text>
+    <text class="ts" x="328" y="142">= real_parent TRỪ KHI bị ptrace → = tracer.</text>
+    <text class="tm" x="328" y="166">children</text>
+    <text class="ts" x="328" y="182">đầu danh sách con.</text>
+    <text class="tm" x="328" y="204">sibling</text>
+    <text class="ts" x="328" y="220">nút của task này trong parent-&gt;children.</text>
+    <text class="tm" x="328" y="242">ptraced / ptrace_entry</text>
+    <text class="ts" x="328" y="258">danh sách tracee — lớp phủ của debugger.</text>
+
+    <rect class="bx0" x="646" y="28" width="414" height="244" rx="2"/>
+    <text class="tc t0" x="658" y="48">bash chết trước program → forget_original_parent()</text>
+    <text class="ts" x="658" y="72">① find_child_reaper(): mặc định = pid_ns-&gt;child_reaper (init).</text>
+    <text class="ts" x="658" y="88">   Nếu chính father LÀ init của ns → zap_pid_ns_processes()</text>
+    <text class="ts" x="658" y="102">   → SIGKILL cả namespace (container kết thúc).</text>
+    <text class="ts" x="658" y="124">② find_new_reaper() — thử theo thứ tự ưu tiên:</text>
+    <text class="ts t1" x="658" y="140">   a. thread khác cùng nhóm của bash còn sống</text>
+    <text class="ts t1" x="658" y="156">   b. subreaper tổ tiên gần nhất (PR_SET_CHILD_SUBREAPER)</text>
+    <text class="ts" x="658" y="170">      — cơ chế systemd --user, tmux dùng để nhận nuôi cháu</text>
+    <text class="ts t1" x="658" y="186">   c. child_reaper của pid_ns = init (PID 1)</text>
+    <text class="ts" x="658" y="208">③ mỗi con: t-&gt;real_parent = reaper; nếu !t-&gt;ptrace thì</text>
+    <text class="ts" x="658" y="222">   t-&gt;parent = reaper; nếu t-&gt;pdeath_signal → gửi NGAY.</text>
+    <text class="ts" x="658" y="244">④ list_splice_tail_init(&amp;bash-&gt;children, &amp;reaper-&gt;children)</text>
+    <text class="ts t0" x="658" y="260">   ◀ dời CẢ danh sách trong O(1). program vẫn CHẠY, getppid()=1.</text>
+
+    <rect class="bxp" x="20" y="292" width="1040" height="102" rx="2"/>
+    <text class="tc" x="34" y="314">ptrace là lớp phủ, KHÔNG phải đổi cây</text>
+    <text class="ts" x="34" y="336">gdb (PID 300) PTRACE_ATTACH child1:  <tspan class="t0">child1-&gt;parent = gdb</tspan> (đổi)  ·  <tspan class="t1">child1-&gt;real_parent = program</tspan> (GIỮ NGUYÊN)  ·  child1-&gt;ptrace_entry vào gdb-&gt;ptraced</text>
+    <text class="ts" x="34" y="356">→ SIGCHLD khi child1 dừng đi tới GDB, không tới program. program-&gt;wait(child1) bị block (trừ khi dùng __WALL).</text>
+    <text class="ts" x="34" y="376">__ptrace_unlink() khi detach: child1-&gt;parent = child1-&gt;real_parent — trả lại nguyên trạng. Nếu gdb chết trước, exit_ptrace() detach mọi tracee.</text>
+  </svg>
+  </div>
+  <figcaption><b>Thread không nằm trong cây.</b> <code>copy_process</code> chỉ <code>list_add(&amp;p-&gt;sibling, &amp;p-&gt;real_parent-&gt;children)</code> khi <code>thread_group_leader(p)</code>. Thread nằm trong <code>signal-&gt;thread_head</code>. Còn <code>for_each_process()</code> duyệt <code>init_task.tasks</code> — một danh sách phẳng toàn cục, hoàn toàn tách khỏi cây.</figcaption>
+  </figure>
 
   <div class="gotcha"><span class="lab">Điểm dễ nhầm</span><ul>
     <li><strong>Mồ côi không chết.</strong> Nó chỉ đổi cha. <code>getppid()</code> trả 1 và chương trình chạy tiếp bình thường — đó chính là cách một daemon "tự tách" (double-fork).</li>
@@ -2154,8 +3433,86 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <p class="sec-kicker"><code>vfork</code> = <code>clone(CLONE_VM | CLONE_VFORK | SIGCHLD)</code>. Không copy page table nào cả — đổi lại, cha bị <strong>đóng băng</strong> cho tới khi con <code>execve</code> hoặc <code>_exit</code>.</p>
 
   <div class="thesis"><span class="lab">Ý chính</span><p>Cha bị block vì con đang chạy trên <strong>chính address space và chính khung stack của cha</strong>. Nếu cả hai chạy song song, chúng sẽ giẫm lên stack của nhau. Nhân ép tuần tự bằng một <code>struct completion</code> đặt trên kernel stack của cha.</p></div>
-  <img src="../../vfork.png" alt="" style="max-width: 100%; height: auto;">
 
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 400" role="img" aria-label="Trục thời gian vfork với lane cha bị đóng băng trong wait_for_completion và lane con chạy trước rồi execve hoặc exit gọi complete_vfork_done đánh thức cha">
+    <defs><marker id="a24" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">THỜI GIAN →</text>
+    <text class="tl" x="8" y="76">CHA</text>
+    <text class="tl" x="8" y="240">CON</text>
+
+    <rect class="bx" x="70" y="42" width="170" height="60" rx="2"/>
+    <text class="tc" x="82" y="62">vfork()</text>
+    <text class="ts" x="82" y="80">kernel_clone(CLONE_VM |</text>
+    <text class="ts" x="82" y="94">CLONE_VFORK | SIGCHLD)</text>
+    <line class="ln" x1="244" y1="72" x2="262" y2="72" marker-end="url(#a24)"/>
+
+    <rect class="bxp" x="268" y="42" width="210" height="60" rx="2"/>
+    <text class="ts" x="280" y="62">copy_mm: CLONE_VM →</text>
+    <text class="ts t0" x="280" y="78">mmget(mm) ⇒ mm_users = 2</text>
+    <text class="ts" x="280" y="94">p-&gt;vfork_done = &amp;vfork (kstack cha)</text>
+    <line class="ln" x1="482" y1="72" x2="500" y2="72" marker-end="url(#a24)"/>
+
+    <rect class="bx0" x="506" y="42" width="372" height="60" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="520" y="64">CHA ĐÓNG BĂNG</text>
+    <text class="ts" x="520" y="82">wait_for_completion_killable(&amp;vfork)</text>
+    <text class="ts" x="520" y="96">— chỉ SIGKILL cắt được, tín hiệu thường KHÔNG</text>
+
+    <rect class="bx1" x="898" y="42" width="162" height="60" rx="2"/>
+    <text class="tc t1" x="910" y="62">cha thức</text>
+    <text class="ts" x="910" y="80">ptrace_event(VFORK_DONE)</text>
+    <text class="ts" x="910" y="94">put_task_struct · return pid</text>
+
+    <line class="ln0" x1="373" y1="106" x2="373" y2="164" marker-end="url(#a24)"/>
+    <text class="ts" x="380" y="140">wake_up_new_task(con)</text>
+
+    <rect class="bx1" x="268" y="168" width="210" height="76" rx="2"/>
+    <text class="tc t1" x="280" y="188">CON chạy TRƯỚC</text>
+    <text class="ts" x="280" y="208">trên CHUNG mm_struct</text>
+    <text class="ts" x="280" y="224">trên CHUNG khung stack</text>
+    <text class="ts" x="280" y="238">(newsp = 0 → sp giữ của cha)</text>
+    <line class="ln1" x1="482" y1="206" x2="500" y2="206" marker-end="url(#a24)"/>
+
+    <rect class="bx0" x="506" y="150" width="240" height="52" rx="2"/>
+    <text class="tc t0" x="518" y="170">execve()</text>
+    <text class="ts" x="518" y="188">exec_mmap: mm MỚI → exec_mm_release(mm cũ)</text>
+
+    <rect class="bx0" x="506" y="212" width="240" height="52" rx="2"/>
+    <text class="tc t0" x="518" y="232">hoặc _exit()</text>
+    <text class="ts" x="518" y="250">do_exit → exit_mm → exit_mm_release</text>
+
+    <line class="ln0" x1="750" y1="176" x2="768" y2="196" marker-end="url(#a24)"/>
+    <line class="ln0" x1="750" y1="238" x2="768" y2="218" marker-end="url(#a24)"/>
+
+    <rect class="bxp" x="774" y="174" width="286" height="66" rx="2"/>
+    <text class="tc" x="786" y="194">mm_release(tsk, mm)</text>
+    <text class="ts" x="786" y="212">deactivate_mm — arm64: no-op · clear_child_tid</text>
+    <text class="ts t1" x="786" y="230">if (tsk-&gt;vfork_done) complete_vfork_done() ▶ ĐÁNH THỨC CHA</text>
+
+    <line class="ln1" x1="917" y1="170" x2="917" y2="108" marker-end="url(#a24)"/>
+
+    <text class="tl" x="8" y="300">CON ĐƯỢC LÀM GÌ</text>
+
+    <rect class="bx0" x="70" y="286" width="480" height="102" rx="2"/>
+    <text class="tc t0" x="84" y="306">CHỈ hai lối thoát hợp lệ</text>
+    <text class="ts" x="84" y="326">_exit() — KHÔNG phải exit(): exit() chạy atexit + flush stdio → bẩn heap chung</text>
+    <text class="ts" x="84" y="344">execve() — thay toàn bộ mm, cắt đứt chia sẻ ngay tại exec_mmap</text>
+    <text class="ts" x="84" y="364">Ngoài ra chỉ được đổi thanh ghi và gọi syscall không đụng bộ nhớ tiến trình:</text>
+    <text class="ts" x="84" y="380">dup2, close, open, chdir, setuid, signal… — đúng những gì cần giữa fork và exec.</text>
+
+    <rect class="bx1" x="580" y="286" width="480" height="102" rx="2"/>
+    <text class="tc t1" x="594" y="306">VÌ SAO CẤM return / ghi biến</text>
+    <text class="ts" x="594" y="326">Con được trao CHÍNH khung stack (SP) mà cha đang đứng khi gọi vfork().</text>
+    <text class="ts" x="594" y="344">Con return khỏi hàm đó → pop / ghi đè khung stack của cha → khi cha thức,</text>
+    <text class="ts" x="594" y="358">địa chỉ trở về đã là rác → crash không thể debug.</text>
+    <text class="ts" x="594" y="376">Con ghi biến → cha thấy (chung RAM). malloc / printf → bẩn heap và libc.</text>
+    <text class="ts t0" x="594" y="392">POSIX: mọi hành vi khác là UNDEFINED. → posix_spawn() sinh ra để bọc an toàn.</text>
+  </svg>
+  </div>
+  <figcaption><b><code>struct completion</code> chứ không phải waitqueue thô.</b> Nếu con <code>complete()</code> <i>trước</i> khi cha kịp vào <code>wait_for_completion</code>, biến <code>done</code> đã bằng 1 nên cha không ngủ và trả về ngay. Waitqueue thô sẽ đánh mất wakeup đó. <code>vfork_done</code> nằm trên kernel stack của cha — hợp lệ vì cha đang kẹt trong <code>kernel_clone</code>.</figcaption>
+  </figure>
 
   <h3><code>fork</code> và <code>vfork</code> cạnh nhau</h3>
   <div class="tbl"><table>
@@ -2186,9 +3543,90 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <div class="sec-head"><span class="sec-num">24</span><h2>Credentials — danh tính là một object bất biến</h2></div>
   <p class="sec-kicker">Mọi quyết định "được phép hay không" của nhân đọc từ <code>struct cred</code>. Không dòng code nào được sửa nó tại chỗ — muốn đổi quyền thì tạo object mới rồi đổi con trỏ.</p>
 
-  <img src="../../co_che_quan_li_quyen.png" alt="" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 424" role="img" aria-label="task_struct có hai con trỏ real_cred và cred cùng trỏ một struct cred, nội dung struct cred, ý nghĩa bốn UID, và chu trình ba bước prepare_creds sửa commit_creds">
+    <defs><marker id="a25" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
 
-  
+    <text class="tl" x="8" y="20">HAI CON TRỎ — MỘT OBJECT BẤT BIẾN</text>
+
+    <rect class="bx" x="20" y="28" width="256" height="92" rx="2"/>
+    <text class="tc" x="32" y="48">task_struct</text>
+    <text class="tm t1" x="32" y="70">const struct cred __rcu *real_cred;</text>
+    <text class="ts" x="32" y="84">&quot;objective&quot; — task này THUỘC VỀ ai</text>
+    <text class="tm t0" x="32" y="104">const struct cred __rcu *cred;</text>
+    <text class="ts" x="32" y="116">&quot;subjective&quot; — đang HÀNH ĐỘNG với tư cách ai</text>
+
+    <line class="ln1" x1="280" y1="66" x2="322" y2="60" marker-end="url(#a25)"/>
+    <line class="ln0" x1="280" y1="104" x2="322" y2="86" marker-end="url(#a25)"/>
+
+    <rect class="bx1" x="328" y="28" width="316" height="182" rx="2"/>
+    <text class="tc t1" x="340" y="48">struct cred — BẤT BIẾN sau commit</text>
+    <text class="ts" x="340" y="70">usage — refcount</text>
+    <text class="ts t0" x="340" y="88">uid · suid · euid · fsuid    (kuid_t)</text>
+    <text class="ts t0" x="340" y="104">gid · sgid · egid · fsgid    (kgid_t)</text>
+    <text class="ts" x="340" y="124">cap_permitted / cap_effective / cap_inheritable</text>
+    <text class="ts" x="340" y="140">cap_bset (trần, chỉ giảm) / cap_ambient</text>
+    <text class="ts" x="340" y="158">securebits</text>
+    <text class="ts" x="340" y="174">session_keyring · process_keyring · thread_keyring</text>
+    <text class="ts" x="340" y="190">user (user_struct) · user_ns · group_info</text>
+    <text class="ts" x="340" y="204">security — nhãn LSM (SELinux / AppArmor)</text>
+
+    <rect class="bxp" x="660" y="28" width="400" height="182" rx="2"/>
+    <text class="tc" x="672" y="48">Bốn UID — mỗi cái một việc</text>
+    <text class="ts" x="672" y="70"><tspan class="tm">uid</tspan>   real   — ai thật sự chạy · getuid() · RLIMIT_NPROC</text>
+    <text class="ts t0" x="672" y="90"><tspan class="tm">euid</tspan>  effect — MỌI kiểm tra quyền dùng cái này</text>
+    <text class="ts" x="672" y="110"><tspan class="tm">suid</tspan>  saved  — bản cất của euid TRƯỚC khi hạ quyền</text>
+    <text class="ts" x="672" y="124">                → cho phép lấy lại bằng seteuid()</text>
+    <text class="ts" x="672" y="144"><tspan class="tm">fsuid</tspan>        — VFS dùng; gần như luôn bằng euid</text>
+    <line class="rule" x1="672" y1="156" x2="1046" y2="156"/>
+    <text class="ts" x="672" y="174">kuid_t vs uid_t: uid_t là con số user thấy TRONG một user_ns;</text>
+    <text class="ts" x="672" y="188">kuid_t là khoá toàn cục sau make_kuid(ns, uid). So sánh quyền</text>
+    <text class="ts t0" x="672" y="202">LUÔN dùng uid_eq() trên kuid_t — nếu không, uid 0 trong container = root thật.</text>
+
+    <text class="tl" x="8" y="246">ĐỔI QUYỀN — BA BƯỚC, KHÔNG BAO GIỜ SỬA TẠI CHỖ</text>
+
+    <rect class="bx1" x="20" y="254" width="250" height="98" rx="2"/>
+    <text class="tc t1" x="32" y="274">① prepare_creds()</text>
+    <text class="ts" x="32" y="294">kmem_cache_alloc(cred_jar)</text>
+    <text class="ts" x="32" y="310">memcpy(new, current-&gt;cred, sizeof)</text>
+    <text class="ts" x="32" y="326">usage = 1 · get_group_info / get_uid /</text>
+    <text class="ts" x="32" y="340">get_user_ns / key_get · LSM clone nhãn</text>
+    <line class="ln" x1="274" y1="302" x2="292" y2="302" marker-end="url(#a25)"/>
+
+    <rect class="bxp" x="298" y="254" width="250" height="98" rx="2"/>
+    <text class="tc" x="310" y="274">② sửa BẢN COPY</text>
+    <text class="ts" x="310" y="294">new-&gt;euid = new-&gt;fsuid = kuid;</text>
+    <text class="ts" x="310" y="310">điều chỉnh cap_* nếu cần</text>
+    <text class="ts" x="310" y="326">security_task_fix_setuid() — LSM có quyền veto</text>
+    <text class="ts t0" x="310" y="344">lỗi → abort_creds(new): task KHÔNG bị đụng</text>
+    <line class="ln0" x1="552" y1="302" x2="570" y2="302" marker-end="url(#a25)"/>
+
+    <rect class="bx0" x="576" y="254" width="290" height="98" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="588" y="274">③ commit_creds(new)</text>
+    <text class="ts" x="588" y="294">nếu euid/egid/fsuid/caps đổi: set_dumpable(),</text>
+    <text class="ts" x="588" y="308">pdeath_signal = 0, smp_wmb()</text>
+    <text class="tm t0" x="588" y="326">rcu_assign_pointer(task-&gt;real_cred, new)</text>
+    <text class="tm t0" x="588" y="340">rcu_assign_pointer(task-&gt;cred, new)</text>
+    <text class="ts" x="588" y="350">put_cred(old) × 2</text>
+
+    <rect class="bxp" x="872" y="254" width="188" height="98" rx="2"/>
+    <text class="tc" x="884" y="274">Vì sao bất biến</text>
+    <text class="ts" x="884" y="294">Reader (kill, ptrace, /proc)</text>
+    <text class="ts" x="884" y="308">chạy lock-free bằng RCU:</text>
+    <text class="ts" x="884" y="322">con trỏ hoặc trỏ cred cũ</text>
+    <text class="ts" x="884" y="336">hoàn chỉnh, hoặc cred mới</text>
+    <text class="ts" x="884" y="348">hoàn chỉnh — không nửa vời.</text>
+
+    <rect class="bxp" x="20" y="364" width="1040" height="52" rx="2"/>
+    <text class="ts" x="34" y="384"><tspan class="t1">fork process</tspan> → copy_creds: prepare_creds() ⇒ cred RIÊNG, giá trị = cha  ·  <tspan class="t1">fork thread (CLONE_THREAD)</tspan> → get_cred() ⇒ CHIA SẺ cùng object</text>
+    <text class="ts" x="34" y="400"><tspan class="t0">execve suid</tspan> → bprm_fill_uid: bprm-&gt;cred-&gt;euid = inode-&gt;i_uid ; commit ở install_exec_creds ; secureexec = 1 → AT_SECURE → glibc bỏ LD_PRELOAD</text>
+    <text class="ts" x="34" y="414"><tspan class="t0">setuid(u)</tspan> khi là root → ghi CẢ suid ⇒ hạ quyền VĨNH VIỄN  ·  khi không root → chỉ đổi euid/fsuid, và chỉ khi u == uid hoặc u == suid</text>
+  </svg>
+  </div>
+  <figcaption><b><code>real_cred</code> và <code>cred</code> thường trỏ cùng một object.</b> Chúng chỉ tách khi nhân "mượn danh tính": <code>override_creds(new)</code> đổi <code>cred</code> mà giữ <code>real_cred</code> — dùng bởi nfsd (phục vụ theo danh tính client), overlayfs, io_uring worker, và <code>access(2)</code> (kiểm tra bằng <i>real</i> uid).</figcaption>
+  </figure>
+
   <div class="gotcha"><span class="lab">Điểm dễ nhầm</span><ul>
     <li><strong>Kiểm tra quyền dùng <code>euid</code>, không phải <code>uid</code>.</strong> <code>uid</code> chỉ để lấy lại quyền và kế toán.</li>
     <li><strong><code>commit_creds()</code> chỉ đổi được cred của <code>current</code>.</strong> Không có API đổi cred tiến trình khác — mọi thay đổi quyền đều tự nguyện, phát từ syscall của chính task đó.</li>
@@ -2203,8 +3641,82 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
 <section id="m25">
   <div class="sec-head"><span class="sec-num">25</span><h2>File descriptor — ba tầng, ba mức chia sẻ</h2></div>
   <p class="sec-kicker">Vì sao cha và con sau <code>fork()</code> ghi xen kẽ vào cùng file mà <strong>không đè nhau</strong>, còn hai lần <code>open()</code> độc lập thì có? Câu trả lời nằm ở tầng giữa.</p>
-  <img src="../../duong_di_cua_1_file_fd.png" alt="" style="max-width: 100%; height: auto;">
-  
+
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 400" role="img" aria-label="Chuỗi từ task_struct qua files_struct fdtable struct file tới inode, và ví dụ fork trong đó hai bảng fd riêng cùng trỏ một struct file nên chia sẻ f_pos">
+    <defs><marker id="a26" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">BA TẦNG</text>
+
+    <rect class="bx" x="20" y="28" width="130" height="54" rx="2"/>
+    <text class="tc" x="30" y="48">task_struct</text>
+    <text class="tm" x="30" y="68">*files</text>
+    <line class="ln" x1="154" y1="54" x2="172" y2="54" marker-end="url(#a26)"/>
+
+    <rect class="bx1" x="178" y="28" width="238" height="108" rx="2"/>
+    <text class="tc t1" x="190" y="48">files_struct</text>
+    <text class="ts" x="190" y="68">atomic_t count — số task chia sẻ bảng này</text>
+    <text class="ts" x="190" y="84">fdt (RCU) → fdtable</text>
+    <text class="ts" x="190" y="100">fdtab — bảng NHỎ nhúng sẵn</text>
+    <text class="ts" x="190" y="116">fd_array[64] · open_fds_init · next_fd</text>
+    <text class="ts" x="190" y="130">file_lock (spinlock)</text>
+    <line class="ln1" x1="420" y1="80" x2="438" y2="80" marker-end="url(#a26)"/>
+
+    <rect class="bx1" x="444" y="28" width="238" height="108" rx="2"/>
+    <text class="tc t1" x="456" y="48">fdtable</text>
+    <text class="ts" x="456" y="68">max_fds</text>
+    <text class="ts t0" x="456" y="84">struct file __rcu **fd  ◀ MẢNG con trỏ</text>
+    <text class="ts" x="456" y="98">   &quot;fd&quot; chính là CHỈ SỐ vào mảng này</text>
+    <text class="ts" x="456" y="114">open_fds — bitmap fd đang dùng</text>
+    <text class="ts" x="456" y="130">close_on_exec — bitmap O_CLOEXEC</text>
+    <line class="ln0" x1="686" y1="80" x2="704" y2="80" marker-end="url(#a26)"/>
+
+    <rect class="bx0" x="710" y="28" width="350" height="108" rx="2"/>
+    <text class="tc t0" x="722" y="48">struct file — &quot;open file description&quot;</text>
+    <text class="ts" x="722" y="68">atomic_long_t f_count — refcount</text>
+    <text class="ts t0" x="722" y="84">loff_t f_pos          ◀ CON TRỎ ĐỌC/GHI</text>
+    <text class="ts" x="722" y="98">struct mutex f_pos_lock</text>
+    <text class="ts" x="722" y="114">f_flags (O_APPEND…) · f_mode · f_cred</text>
+    <text class="ts" x="722" y="130">f_path {mnt,dentry} · f_inode · f_op · f_mapping</text>
+
+    <line class="ln" x1="885" y1="140" x2="885" y2="158" marker-end="url(#a26)"/>
+
+    <rect class="bxp" x="710" y="162" width="350" height="60" rx="2"/>
+    <text class="tc" x="722" y="182">struct inode — MỘT object cho MỘT file thật</text>
+    <text class="ts" x="722" y="200">i_mode · i_uid · i_size · i_rwsem · i_op · i_fop</text>
+    <text class="ts" x="722" y="216">i_mapping → page cache  ·  → struct super_block</text>
+
+    <text class="tl" x="8" y="264">fork(): COPY MẢNG fd, CHIA SẺ struct file ⇒ CHUNG f_pos</text>
+
+    <rect class="bx" x="40" y="252" width="200" height="48" rx="2"/>
+    <text class="tc" x="52" y="272">CHA — fdt_cha-&gt;fd[3]</text>
+    <text class="ts" x="52" y="290">mảng RIÊNG (dup_fd cấp mới)</text>
+
+    <rect class="bx" x="40" y="316" width="200" height="48" rx="2"/>
+    <text class="tc" x="52" y="336">CON — fdt_con-&gt;fd[3]</text>
+    <text class="ts" x="52" y="354">mảng RIÊNG, nhưng ô [3] trỏ…</text>
+
+    <line class="ln0" x1="244" y1="276" x2="288" y2="296" marker-end="url(#a26)"/>
+    <line class="ln0" x1="244" y1="340" x2="288" y2="320" marker-end="url(#a26)"/>
+
+    <rect class="bx0" x="294" y="278" width="226" height="60" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="306" y="298">…MỘT struct file duy nhất</text>
+    <text class="ts" x="306" y="316">f_count = 2 (get_file() trong dup_fd)</text>
+    <text class="ts t0" x="306" y="332">f_pos — DÙNG CHUNG</text>
+
+    <rect class="bxp" x="546" y="252" width="514" height="126" rx="2"/>
+    <text class="tc" x="558" y="272">Hệ quả — cha và con ghi nối tiếp, không đè</text>
+    <text class="tm" x="558" y="294">cha: write(3, &quot;AAAA&quot;, 4) → pos = f_pos (0); ghi; f_pos = 4</text>
+    <text class="tm" x="558" y="310">con: write(3, &quot;BBBB&quot;, 4) → pos = f_pos (4); ghi; f_pos = 8</text>
+    <text class="ts t1" x="558" y="330">→ file trên đĩa: &quot;AAAABBBB&quot;</text>
+    <text class="ts" x="558" y="350">Nếu KHÔNG fork mà mỗi bên tự open(&quot;/log&quot;): HAI struct file,</text>
+    <text class="ts t0" x="558" y="364">f_pos độc lập → cả hai ghi từ offset 0 → &quot;BBBB&quot; đè &quot;AAAA&quot;.</text>
+    <text class="ts" x="558" y="376">O_APPEND: mỗi write khoá i_rwsem, đặt f_pos = i_size rồi mới ghi → an toàn kể cả khi không chia sẻ.</text>
+  </svg>
+  </div>
+  <figcaption><b>Ba mức chia sẻ độc lập nhau.</b> <code>CLONE_FILES</code> chia sẻ <i>bảng</i> (thread thấy fd của nhau ngay); <code>fork</code> chia sẻ <i>struct file</i> (chung offset nhưng bảng riêng); hai lần <code>open</code> chỉ chia sẻ <i>inode</i> (chung nội dung file, offset riêng).</figcaption>
+  </figure>
 
   <h3><code>execve</code> và close-on-exec</h3>
   <div class="prose">
@@ -2223,9 +3735,66 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
 <section id="m26">
   <div class="sec-head"><span class="sec-num">26</span><h2><code style="font-size:.82em">current</code> trên ARM64 — một lệnh, không chạm bộ nhớ</h2></div>
   <p class="sec-kicker">Linux "chiếm dụng" thanh ghi <code>SP_EL0</code> — vốn vô dụng khi CPU đang ở EL1 — để giữ con trỏ <code>task_struct</code> hiện tại. Kết quả: <code>current</code> rẻ hơn mọi cách khác.</p>
-  <img src="../../SP_ELF0_va_current.png" alt="" style="max-width: 100%; height: auto;">
 
-  
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 412" role="img" aria-label="SP_EL0 đổi vai theo exception level, đoạn kernel_entry nạp lại current từ per-CPU __entry_task, và ba giá trị thay đổi khi context switch">
+    <defs><marker id="a27" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">SP_EL0 ĐỔI VAI THEO EXCEPTION LEVEL</text>
+
+    <rect class="bx0" x="40" y="28" width="400" height="82" rx="2"/>
+    <text class="tc t0" x="54" y="50">Đang chạy ở EL0 (user)</text>
+    <text class="ts" x="54" y="70">Bit SPSel chọn SP_EL0 làm stack pointer THẬT</text>
+    <text class="ts t0" x="54" y="88">→ SP_EL0 = con trỏ stack USER</text>
+    <text class="ts" x="54" y="104">→ khái niệm &quot;current&quot; không tồn tại ở đây</text>
+
+    <line class="ln1" x1="446" y1="52" x2="614" y2="52" marker-end="url(#a27)"/>
+    <text class="ts t1" x="470" y="44">exception: svc / irq / abort</text>
+    <line class="ln0" x1="614" y1="94" x2="446" y2="94" marker-end="url(#a27)"/>
+    <text class="ts t0" x="500" y="110">eret</text>
+
+    <rect class="bx1" x="620" y="28" width="420" height="82" rx="2"/>
+    <text class="tc t1" x="634" y="50">Đang chạy ở EL1 (kernel)</text>
+    <text class="ts" x="634" y="70">Linux chọn SP_EL1 làm stack pointer → SP_EL0 RẢNH</text>
+    <text class="ts t1" x="634" y="88">→ SP_EL0 = (struct task_struct *) current</text>
+    <text class="ts" x="634" y="104">→ current = mrs Xd, sp_el0 — MỘT lệnh, 0 truy cập RAM</text>
+
+    <rect class="bxp" x="40" y="126" width="1000" height="96" rx="2"/>
+    <text class="tc" x="54" y="146">kernel_entry — vào kernel từ EL0 phải NẠP LẠI current (SP_EL0 lúc đó vẫn đang là stack user)</text>
+    <text class="tm" x="54" y="170">mrs  x21, sp_el0                     <tspan class="ts">// x21 = SP USER — cất để nhét vào pt_regs-&gt;sp</tspan></text>
+    <text class="tm" x="54" y="188">ldr_this_cpu tsk, __entry_task, x20  <tspan class="ts">// per-CPU var, cập nhật mỗi lần context switch</tspan></text>
+    <text class="tm t1" x="54" y="206">msr  sp_el0, tsk                     <tspan class="ts">// ◀ TỪ ĐÂY current trỏ đúng task</tspan></text>
+    <text class="ts" x="54" y="218">Vào kernel từ EL1 (IRQ lồng trong kernel): SP_EL0 ĐÃ là current → chỉ get_current_task tsk (mrs), không nạp lại.</text>
+
+    <text class="tl" x="8" y="262">CONTEXT SWITCH — BA GIÁ TRỊ ĐỔI</text>
+
+    <rect class="bx1" x="40" y="248" width="310" height="104" rx="2"/>
+    <text class="tc t1" x="54" y="268">① __entry_task (per-CPU)</text>
+    <text class="tm" x="54" y="290">entry_task_switch(next):</text>
+    <text class="tm" x="54" y="306">  __this_cpu_write(__entry_task, next)</text>
+    <text class="ts" x="54" y="326">trong __switch_to (C)</text>
+    <text class="ts" x="54" y="342">→ dùng cho lần CPU này vào kernel từ EL0 kế</text>
+
+    <rect class="bxp" x="366" y="248" width="310" height="104" rx="2"/>
+    <text class="tc" x="380" y="268">② SP_EL1 — kernel stack</text>
+    <text class="tm" x="380" y="290">cpu_switch_to:  mov sp, x9</text>
+    <text class="ts" x="380" y="312">x9 = next-&gt;thread.cpu_context.sp</text>
+    <text class="ts" x="380" y="332">→ đổi sang kernel stack của next</text>
+
+    <rect class="bx0" x="692" y="248" width="348" height="104" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="706" y="268">③ SP_EL0 — CHÍNH LÀ current</text>
+    <text class="tm t0" x="706" y="290">cpu_switch_to:  msr sp_el0, x1</text>
+    <text class="ts" x="706" y="312">x1 = next (con trỏ task_struct)</text>
+    <text class="ts t0" x="706" y="332">→ sau lệnh này, mọi current trên CPU này trả về next</text>
+
+    <rect class="bxp" x="40" y="364" width="1000" height="42" rx="2"/>
+    <text class="ts" x="54" y="384">current_thread_info() = ((struct thread_info *)current) — vì struct thread_info là FIELD ĐẦU TIÊN của task_struct (CONFIG_THREAD_INFO_IN_TASK trên arm64). Chỉ ép kiểu, không cộng offset.</text>
+    <text class="ts t0" x="54" y="400">Trước 4.14 (và các arch generic): thread_info nằm ở ĐÁY kernel stack, current = *(SP &amp; ~(THREAD_SIZE−1)) — tràn stack sẽ phá current. ARM64 5.4 đã bỏ hẳn cách đó.</text>
+  </svg>
+  </div>
+  <figcaption><b>Vì sao dùng <code>asm("mrs …")</code> thô thay <code>read_sysreg()</code>.</b> <code>read_sysreg</code> có <code>volatile</code>, buộc đọc lại mỗi lần. Bản thô cho phép trình biên dịch giữ <code>current</code> trong một thanh ghi suốt cả hàm — <code>current</code> không đổi giữa hai điểm schedule.</figcaption>
+  </figure>
 
   <div class="gotcha"><span class="lab">Điểm dễ nhầm</span><ul>
     <li><strong><code>current</code> không phải biến.</strong> Nó là <em>nội dung một thanh ghi CPU</em>. Vì mỗi CPU có bộ <code>SP_EL0</code> riêng, <code>current</code> tự nhiên là per-CPU — không cần khoá, không cần biến toàn cục.</li>
@@ -2240,9 +3809,70 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <div class="sec-head"><span class="sec-num">27</span><h2><code style="font-size:.82em">pt_regs</code> — ảnh chụp tại ranh giới</h2></div>
   <p class="sec-kicker"><code>pt_regs</code> không phải "toàn bộ ngữ cảnh CPU của task". Nó là <strong>ảnh chụp trạng thái user tại đúng khoảnh khắc vượt ranh giới EL0↔EL1</strong> — và nó luôn nằm ở một chỗ cố định.</p>
 
-  <img src="../../pt_regs_trong_linux.png" alt="" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 412" role="img" aria-label="Vị trí pt_regs ở đỉnh kernel stack, bố cục các trường của struct pt_regs, và tương phản giữa cách fork và execve viết vào pt_regs">
+    <defs><marker id="a28" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
 
- 
+    <text class="tl" x="8" y="20">VỊ TRÍ — LUÔN Ở ĐỈNH KERNEL STACK</text>
+
+    <rect class="bx" x="20" y="28" width="248" height="252" rx="2"/>
+    <text class="ts" x="32" y="46">CAO = THREAD_SIZE + task_stack_page(p)</text>
+    <rect class="bx0" x="32" y="54" width="224" height="82" rx="2" stroke-width="2"/>
+    <text class="tc t0" x="42" y="74">pt_regs</text>
+    <text class="ts" x="42" y="92">S_FRAME_SIZE byte, căn 16 B</text>
+    <text class="tm" x="42" y="112">task_pt_regs(p) =</text>
+    <text class="tm" x="42" y="128">  (struct pt_regs *)CAO − 1</text>
+    <text class="ts" x="42" y="160">| el0_svc frame |</text>
+    <text class="ts" x="42" y="178">| do_el0_svc frame |</text>
+    <text class="ts" x="42" y="196">| sys_xxx frame |   ← sp</text>
+    <text class="ts" x="42" y="214">        ⋮  (mọc XUỐNG)</text>
+    <text class="ts" x="32" y="248">THẤP = task_stack_page(p)</text>
+    <text class="ts" x="32" y="266">(+ guard page nếu VMAP_STACK)</text>
+
+    <rect class="bx1" x="284" y="28" width="330" height="252" rx="2"/>
+    <text class="tc t1" x="296" y="48">struct pt_regs — arch/arm64/include/asm/ptrace.h</text>
+    <text class="tm" x="296" y="72">union {</text>
+    <text class="tm t0" x="296" y="88">  struct user_pt_regs user_regs;  <tspan class="ts">◀ uapi</tspan></text>
+    <text class="tm" x="296" y="104">  struct {</text>
+    <text class="tm" x="296" y="120">    u64 regs[31];   <tspan class="ts">// x0..x30</tspan></text>
+    <text class="tm" x="296" y="136">    u64 sp;         <tspan class="ts">// SP_EL0 của user</tspan></text>
+    <text class="tm" x="296" y="152">    u64 pc;         <tspan class="ts">// ← ELR_EL1</tspan></text>
+    <text class="tm" x="296" y="168">    u64 pstate;     <tspan class="ts">// ← SPSR_EL1</tspan></text>
+    <text class="tm" x="296" y="184">  };</text>
+    <text class="tm" x="296" y="200">};</text>
+    <text class="tm" x="296" y="220">u64 orig_x0;     <tspan class="ts">// x0 GỐC — restart syscall</tspan></text>
+    <text class="tm" x="296" y="236">s32 syscallno;   <tspan class="ts">// hoặc NO_SYSCALL (−1)</tspan></text>
+    <text class="tm" x="296" y="252">u64 orig_addr_limit; pmr_save; stackframe[2];</text>
+    <text class="ts t0" x="296" y="272">phần sau orig_x0 = NỘI BỘ kernel, không lộ ra userspace</text>
+
+    <rect class="bx" x="630" y="28" width="430" height="118" rx="2"/>
+    <text class="tc" x="642" y="48">fork con — copy_thread()</text>
+    <text class="tm" x="642" y="70">*childregs = *current_pt_regs();   <tspan class="ts">◀ COPY nguyên</tspan></text>
+    <text class="tm t1" x="642" y="88">childregs-&gt;regs[0] = 0;            <tspan class="ts">◀ con thấy fork() = 0</tspan></text>
+    <text class="tm" x="642" y="106">if (stack_start) childregs-&gt;sp = stack_start;</text>
+    <text class="ts" x="642" y="124">pc / pstate GIỮ NGUYÊN của cha</text>
+    <text class="ts t1" x="642" y="140">→ con eret về ĐÚNG lệnh sau svc, chỉ khác x0</text>
+
+    <rect class="bx0" x="630" y="158" width="430" height="122" rx="2"/>
+    <text class="tc t0" x="642" y="178">execve — start_thread()</text>
+    <text class="tm t0" x="642" y="200">memset(regs, 0, sizeof(*regs));   <tspan class="ts">◀ XOÁ SẠCH</tspan></text>
+    <text class="tm" x="642" y="218">forget_syscall(regs);             <tspan class="ts">// syscallno = NO_SYSCALL</tspan></text>
+    <text class="tm" x="642" y="236">regs-&gt;pstate = PSR_MODE_EL0t;</text>
+    <text class="tm" x="642" y="254">regs-&gt;pc = elf_entry (+ load_bias);</text>
+    <text class="tm" x="642" y="272">regs-&gt;sp = đỉnh stack user mới;   <tspan class="ts">◀ x0..x30 = 0</tspan></text>
+
+    <rect class="bxp" x="20" y="294" width="1040" height="110" rx="2"/>
+    <text class="tc" x="34" y="314">Năm tình huống — pt_regs chụp cái gì</text>
+    <text class="ts" x="34" y="336"><tspan class="tm">svc (syscall) từ EL0</tspan>       → pc = lệnh user NGAY SAU svc · sp = SP user · syscallno = số thật (el0_svc ghi từ w8)</text>
+    <text class="ts" x="34" y="354"><tspan class="tm">IRQ khi đang ở EL0</tspan>         → pc = lệnh user bị ngắt · sp = SP user · syscallno = NO_SYSCALL</text>
+    <text class="ts" x="34" y="372"><tspan class="tm">page fault / undef từ EL0</tspan>  → pc = lệnh gây fault · sp = SP user · syscallno = NO_SYSCALL</text>
+    <text class="ts t0" x="34" y="390"><tspan class="tm">lời gọi hàm nội bộ kernel</tspan>  → KHÔNG tạo pt_regs nào — không có svc, không đổi EL</text>
+    <text class="ts" x="34" y="402"><tspan class="tm">IRQ / fault khi đang ở EL1</tspan> → pc = lệnh KERNEL bị ngắt · sp = SP_EL1 trước đó · stackframe được NỐI để unwinder đi tiếp qua khung này</text>
+  </svg>
+  </div>
+  <figcaption><b><code>orig_x0</code> tồn tại vì syscall có thể phải chạy lại.</b> Khi một syscall đang ngủ bị tín hiệu cắt, nó trả <code>-ERESTARTSYS</code>; kernel khôi phục <code>regs[0] = orig_x0</code> và lùi <code>pc</code> về lệnh <code>svc</code> để chạy lại từ đầu. Không có bản gốc thì tham số thứ nhất đã bị giá trị trả về ghi đè mất.</figcaption>
+  </figure>
 
   <div class="gotcha"><span class="lab">Điểm dễ nhầm</span><ul>
     <li><strong><code>pt_regs</code> ≠ <code>cpu_context</code>.</strong> <code>pt_regs</code> giữ trạng thái <em>user</em> ở đỉnh kernel stack; <code>cpu_context</code> (13 giá trị trong <code>task-&gt;thread</code>) giữ trạng thái <em>kernel</em> giữa hai lần context switch. Hai thứ hoàn toàn khác nhau.</li>
@@ -2257,9 +3887,81 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
   <div class="sec-head"><span class="sec-num">28</span><h2>Return to user — cánh cửa cuối trước <code style="font-size:.82em">eret</code></h2></div>
   <p class="sec-kicker">Cờ được <em>đặt</em> ở bất cứ đâu — trong IRQ handler, trong syscall của task khác, trong <code>wake_up</code>. Nhưng chúng chỉ được <em>xử lý</em> ở đúng một nơi: ngay trước khi kernel trả điều khiển cho userspace.</p>
 
-  <img src="../../ret_to_user.png" alt="" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 404" role="img" aria-label="Bốn đường vào ret_to_user, vòng lặp do_notify_resume xử lý từng loại việc treo, kernel_exit nạp ELR SPSR SP_EL0 rồi eret, và ngữ nghĩa của eret">
+    <defs><marker id="a29" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
 
-  
+    <text class="tl" x="8" y="20">MỌI ĐƯỜNG RA EL0 HỘI TỤ</text>
+
+    <rect class="bx" x="20" y="28" width="150" height="30" rx="2"/>
+    <text class="tm" x="30" y="48">el0_svc</text>
+    <rect class="bx" x="20" y="62" width="150" height="30" rx="2"/>
+    <text class="tm" x="30" y="82">el0_irq</text>
+    <rect class="bx" x="20" y="96" width="150" height="30" rx="2"/>
+    <text class="tm" x="30" y="116">el0_sync (fault…)</text>
+    <rect class="bx" x="20" y="130" width="150" height="30" rx="2"/>
+    <text class="tm" x="30" y="150">ret_from_fork</text>
+
+    <line class="ln" x1="174" y1="43" x2="204" y2="80" marker-end="url(#a29)"/>
+    <line class="ln" x1="174" y1="77" x2="204" y2="88" marker-end="url(#a29)"/>
+    <line class="ln" x1="174" y1="111" x2="204" y2="96" marker-end="url(#a29)"/>
+    <line class="ln" x1="174" y1="145" x2="204" y2="104" marker-end="url(#a29)"/>
+
+    <rect class="bx1" x="210" y="28" width="272" height="164" rx="2"/>
+    <text class="tc t1" x="222" y="48">ret_to_user</text>
+    <text class="tm" x="222" y="70">disable_daif</text>
+    <text class="tm" x="222" y="86">ldr  x19, [tsk, #TSK_TI_FLAGS]</text>
+    <text class="tm" x="222" y="102">and  x2, x19, #_TIF_WORK_MASK</text>
+    <text class="tm t0" x="222" y="118">cbnz x2, work_pending</text>
+    <text class="ts" x="222" y="140">_TIF_WORK_MASK =</text>
+    <text class="ts" x="222" y="154">  NEED_RESCHED | SIGPENDING | NOTIFY_RESUME</text>
+    <text class="ts" x="222" y="168">  | FOREIGN_FPSTATE | UPROBE | FSCHECK</text>
+    <text class="ts" x="222" y="182">  | MTE_ASYNC_FAULT | NOTIFY_SIGNAL</text>
+
+    <line class="ln0" x1="486" y1="90" x2="510" y2="90" marker-end="url(#a29)"/>
+
+    <rect class="bx0" x="516" y="28" width="330" height="164" rx="2"/>
+    <text class="tc t0" x="528" y="48">do_notify_resume(regs, flags) — VÒNG LẶP</text>
+    <text class="tm" x="528" y="70">do {</text>
+    <text class="ts" x="528" y="88">  NEED_RESCHED    → schedule()</text>
+    <text class="ts" x="528" y="104">  UPROBE          → uprobe_notify_resume()</text>
+    <text class="ts" x="528" y="120">  SIGPENDING      → do_signal(regs)   [Module 16]</text>
+    <text class="ts" x="528" y="136">  NOTIFY_RESUME   → tracehook_notify_resume()</text>
+    <text class="ts" x="528" y="150">                    task_work_run: fput trễ, ptrace stop</text>
+    <text class="ts" x="528" y="166">  FOREIGN_FPSTATE → fpsimd_restore_current_state()</text>
+    <text class="tm" x="528" y="184">} while (flags &amp; _TIF_WORK_MASK);</text>
+
+    <path class="ln0 dash" d="M 681 196 L 681 210 L 346 210 L 346 196" marker-end="url(#a29)"/>
+    <text class="ts t0" x="420" y="224">lặp vì xử lý một việc có thể sinh việc khác</text>
+
+    <line class="ln1" x1="348" y1="196" x2="348" y2="196"/>
+    <line class="ln1" x1="482" y1="150" x2="482" y2="150"/>
+
+    <rect class="bxp" x="862" y="28" width="198" height="164" rx="2"/>
+    <text class="tc" x="874" y="48">kernel_exit 0</text>
+    <text class="tm" x="874" y="72">msr elr_el1,  regs-&gt;pc</text>
+    <text class="tm" x="874" y="90">msr spsr_el1, regs-&gt;pstate</text>
+    <text class="tm" x="874" y="108">msr sp_el0,   regs-&gt;sp</text>
+    <text class="tm" x="874" y="126">ldp x0..x30</text>
+    <text class="tm" x="874" y="144">add sp, #S_FRAME_SIZE</text>
+    <text class="tm t0" x="874" y="166">eret</text>
+    <text class="ts" x="874" y="182">(+ ptrauth_keys_install_user)</text>
+
+    <text class="tl" x="8" y="256">eret — PHẦN CỨNG LÀM GÌ</text>
+    <rect class="bx1" x="20" y="242" width="1040" height="70" rx="2"/>
+    <text class="ts" x="34" y="264">① PSTATE ← SPSR_EL1. Field <tspan class="tm">M[3:0]</tspan> chọn EL ĐÍCH và dùng SP nào: <tspan class="tm">0b0000 = EL0t</tspan> (về user, dùng SP_EL0) · <tspan class="tm">0b0101 = EL1h</tspan> (ở lại kernel, dùng SP_EL1).</text>
+    <text class="ts" x="34" y="282">   Đồng thời khôi phục NZCV, mặt nạ DAIF, bit SS (single-step), nRW (AArch64 hay AArch32).</text>
+    <text class="ts" x="34" y="300">② PC ← ELR_EL1. ⇒ <tspan class="t0">CÙNG một lệnh eret, đích do SPSR_EL1 quyết định</tspan> — kernel_exit 1 (IRQ lồng trong kernel) dùng chính lệnh này để quay lại EL1.</text>
+
+    <rect class="bxp" x="20" y="324" width="1040" height="72" rx="2"/>
+    <text class="tc" x="34" y="344">Quy tắc lớn</text>
+    <text class="ts" x="34" y="364">Cờ (SIGPENDING, NEED_RESCHED, NOTIFY_RESUME) được ĐẶT bất cứ lúc nào. Nhưng chỉ được XỬ LÝ tại ret_to_user — nơi an toàn: không giữ khoá, không trong atomic, sắp rời kernel.</text>
+    <text class="ts" x="34" y="384">Vào kernel từ EL1 → kernel_exit 1, KHÔNG kiểm signal / notify-resume (task chưa sắp về user); chỉ preempt nếu CONFIG_PREEMPT bật VÀ preempt_count == 0.</text>
+  </svg>
+  </div>
+  <figcaption><b><code>_TIF_NOTIFY_RESUME</code> là chỗ nhiều thứ "hoãn lại" được thanh toán.</b> <code>task_work_run()</code> chạy ở đây: phần cuối của <code>fput</code> (đóng file cuối cùng), ptrace-stop, dọn <code>io_uring</code>, keyring GC. Đó là lý do <code>close()</code> trả về nhanh nhưng công việc thật có thể xảy ra muộn hơn một chút.</figcaption>
+  </figure>
 
   <div class="gotcha"><span class="lab">Điểm dễ nhầm</span><ul>
     <li><strong><code>do_notify_resume</code> chạy nhiều vòng, không phải một lần.</strong> Điều kiện thoát là <code>flags &amp; _TIF_WORK_MASK == 0</code>.</li>
@@ -2273,9 +3975,71 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
 <section id="m29">
   <div class="sec-head"><span class="sec-num">29</span><h2><code style="font-size:.82em">fork</code> + <code style="font-size:.82em">execve</code> — shell chạy một lệnh</h2></div>
   <p class="sec-kicker">Unix tách làm hai syscall để con có một <strong>cửa sổ</strong>: sau <code>fork</code>, trước <code>exec</code>, nó vẫn mang <code>mm</code>/fd/cwd của shell và có thể chuẩn bị mọi thứ — redirect, đóng fd, hạ quyền — rồi mới nạp chương trình.</p>
-  <img src="../../mot_trang_heap_cua_bash.png" alt="" style="max-width: 100%; height: auto;">
 
-  
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 420" role="img" aria-label="Trang heap của bash qua bốn thời điểm trước fork sau fork con execve và ls đang chạy, kèm bảng pt_regs qua các mốc">
+    <defs><marker id="a30" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
+
+    <text class="tl" x="8" y="20">MỘT TRANG HEAP CỦA BASH — QUA BỐN THỜI ĐIỂM</text>
+
+    <rect class="bx" x="20" y="28" width="242" height="146" rx="2"/>
+    <text class="tc" x="32" y="48">① Trước fork</text>
+    <text class="ts" x="32" y="70">bash: mm_A</text>
+    <text class="ts" x="32" y="88">pte_A(H) → PFN P, RW</text>
+    <text class="ts" x="32" y="106">page P: _mapcount = 1</text>
+    <text class="ts" x="32" y="130">TTBR0 = phys(PGD_A)</text>
+    <text class="ts" x="32" y="146">ASID = 10</text>
+    <line class="ln" x1="266" y1="100" x2="284" y2="100" marker-end="url(#a30)"/>
+
+    <rect class="bx0" x="290" y="28" width="242" height="146" rx="2"/>
+    <text class="tc t0" x="302" y="48">② Sau fork, chưa ai ghi</text>
+    <text class="ts" x="302" y="70">pte_A(H) → P, RO, COW</text>
+    <text class="ts" x="302" y="88">pte_B(H) → P, RO, COW</text>
+    <text class="ts t0" x="302" y="106">CÙNG một physical page</text>
+    <text class="ts" x="302" y="124">page P: _mapcount = 2</text>
+    <text class="ts" x="302" y="142">con: PGD_B · ASID = 11</text>
+    <text class="ts t0" x="302" y="164">0 byte dữ liệu được copy</text>
+    <line class="ln0" x1="536" y1="100" x2="554" y2="100" marker-end="url(#a30)"/>
+
+    <rect class="bx1" x="560" y="28" width="242" height="146" rx="2"/>
+    <text class="tc t1" x="572" y="48">③ Con execve → exec_mmap</text>
+    <text class="ts" x="572" y="70">current-&gt;mm = mm_C (MỚI, rỗng)</text>
+    <text class="ts" x="572" y="88">mmput(mm_B): mọi VMA gỡ,</text>
+    <text class="ts" x="572" y="102">pte_B(H) buông</text>
+    <text class="ts t1" x="572" y="122">page P: _mapcount = 1 (chỉ bash)</text>
+    <text class="ts" x="572" y="140">mm_B freed — nó chỉ sống</text>
+    <text class="ts" x="572" y="154">vài chục micro giây</text>
+    <text class="ts" x="572" y="168">ASID 11 nay gắn mm_C</text>
+    <line class="ln1" x1="806" y1="100" x2="824" y2="100" marker-end="url(#a30)"/>
+
+    <rect class="bxp" x="830" y="28" width="230" height="146" rx="2"/>
+    <text class="tc" x="842" y="48">④ /bin/ls đang chạy</text>
+    <text class="ts" x="842" y="70">mm_C: .text của ld.so</text>
+    <text class="ts" x="842" y="84">      @ load_bias (ASLR)</text>
+    <text class="ts" x="842" y="102">      .text/.data của /bin/ls</text>
+    <text class="ts" x="842" y="118">      heap rỗng · stack mới</text>
+    <text class="ts" x="842" y="132">      (argc/argv/envp/auxv)</text>
+    <text class="ts" x="842" y="154">.text = ánh xạ FILE → chung</text>
+    <text class="ts" x="842" y="168">page cache toàn hệ thống</text>
+
+    <rect class="bx0" x="20" y="188" width="1040" height="62" rx="2"/>
+    <text class="tc t0" x="34" y="208">BASH KHÔNG TỐN MỘT LẦN COPY TRANG NÀO cho lần fork này</text>
+    <text class="ts" x="34" y="228">Vì con execve() trước khi ghi vào bất kỳ trang COW nào. Nếu con có ghi một trang trước execve → do_wp_page → wp_page_copy cấp PFN P′ riêng cho con,</text>
+    <text class="ts" x="34" y="244">và page P quay về _mapcount = 1. Đó là lý do &quot;fork + exec&quot; rẻ, dù fork() trên lý thuyết là &quot;nhân đôi cả tiến trình&quot;.</text>
+
+    <text class="tl" x="8" y="286">pt_regs QUA CÁC MỐC</text>
+    <rect class="bxp" x="20" y="272" width="1040" height="134" rx="2"/>
+    <text class="tm" x="34" y="294">bash tại svc của fork():  x8 = 220 · x0..x4 = clone args · ELR_EL1 = &amp;lệnh sau svc · SP_EL0 = stack bash</text>
+    <text class="tm t1" x="34" y="316">con sau copy_thread():    = COPY của bash, chỉ regs[0] = 0  → con eret: cùng pc, cùng sp (trang stack là COW), x0 = 0</text>
+    <text class="tm" x="34" y="338">con tại svc của execve(): x8 = 221 · x0 = path · x1 = argv · x2 = envp</text>
+    <text class="tm t0" x="34" y="360">sau start_thread():       memset 0 · pc = e_entry của ld.so + load_bias · sp = đỉnh stack user mới · pstate = PSR_MODE_EL0t</text>
+    <text class="tm" x="34" y="382">sau eret:                 EL0 · PC = _start của ld.so · SP = stack mới → ld.so nạp libc → _start của ls → main(argc, argv, envp)</text>
+    <text class="ts" x="34" y="400">Lưu ý: cùng một vùng nhớ ở đỉnh kernel stack của con lần lượt đóng ba vai — childregs (copy từ bash), rồi pt_regs của svc execve, rồi bị start_thread memset sạch.</text>
+  </svg>
+  </div>
+  <figcaption><b><code>mm_B</code> là object có tuổi thọ ngắn nhất trong toàn bộ câu chuyện.</b> Sinh ra ở <code>dup_mm()</code>, chết ở <code>exec_mmap()</code>. Toàn bộ công sức <code>copy_page_range</code> nhân đôi bốn mức bảng trang bị vứt đi vài chục micro giây sau — chính là cái mà <code>vfork()</code> (Module 23) và <code>posix_spawn</code> muốn tránh.</figcaption>
+  </figure>
 
   <h3>Thay và giữ qua <code>execve</code></h3>
   <div class="tbl"><table>
@@ -2317,9 +4081,100 @@ ldr  lr,       [x8]             <i>// lr ← next-&gt;cpu_context.pc</i>
     return 0;
 }</pre>
 
-<img src="../../vong_doi_cua_1_tien_trinh.png" alt="" style="max-width: 100%; height: auto;">
+  <figure>
+  <div class="fig-box">
+  <svg class="d" viewBox="0 0 1080 414" role="img" aria-label="Năm giai đoạn của vòng đời với ba lane song song theo dõi task_struct và PID, mm và page table, kernel stack và pt_regs">
+    <defs><marker id="a31" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z"/></marker></defs>
 
-  
+    <rect class="bx1" x="20" y="26" width="200" height="46" rx="2"/>
+    <text class="tc t1" x="32" y="46">① bash execve chương trình</text>
+    <text class="ts" x="32" y="64">ELF loader → main()</text>
+    <line class="ln" x1="224" y1="49" x2="240" y2="49" marker-end="url(#a31)"/>
+
+    <rect class="bx" x="230" y="26" width="200" height="46" rx="2"/>
+    <text class="tc" x="242" y="46">② fork()</text>
+    <text class="ts" x="242" y="64">copy_process + COW</text>
+    <line class="ln" x1="434" y1="49" x2="450" y2="49" marker-end="url(#a31)"/>
+
+    <rect class="bx0" x="440" y="26" width="200" height="46" rx="2"/>
+    <text class="tc t0" x="452" y="46">③ con lần đầu chạy</text>
+    <text class="ts" x="452" y="64">ret_from_fork → eret EL0</text>
+    <line class="ln0" x1="644" y1="49" x2="660" y2="49" marker-end="url(#a31)"/>
+
+    <rect class="bx1" x="650" y="26" width="200" height="46" rx="2"/>
+    <text class="tc t1" x="662" y="46">④ con execve</text>
+    <text class="ts" x="662" y="64">/bin/program</text>
+    <line class="ln1" x1="854" y1="49" x2="870" y2="49" marker-end="url(#a31)"/>
+
+    <rect class="bxp" x="860" y="26" width="200" height="46" rx="2"/>
+    <text class="tc" x="872" y="46">⑤ exit + wait</text>
+    <text class="ts" x="872" y="64">zombie → reap</text>
+
+    <line class="rule" x1="20" y1="84" x2="1060" y2="84"/>
+    <text class="tl" x="8" y="104">task_struct / PID</text>
+    <text class="ts" x="32" y="122">task_struct của bash-con</text>
+    <text class="ts" x="32" y="136">được TÁI SỬ DỤNG</text>
+    <text class="ts" x="32" y="150">PID giữ nguyên</text>
+    <text class="ts t0" x="242" y="122">dup_task_struct → task_struct</text>
+    <text class="ts t0" x="242" y="136">MỚI + kstack 16 KB mới</text>
+    <text class="ts" x="242" y="150">alloc_pid → PID 101</text>
+    <text class="ts" x="452" y="122">msr sp_el0, con</text>
+    <text class="ts" x="452" y="136">→ current = con</text>
+    <text class="ts" x="452" y="150">PID 101</text>
+    <text class="ts t1" x="662" y="122">task_struct GIỮ NGUYÊN</text>
+    <text class="ts t1" x="662" y="136">PID 101 GIỮ</text>
+    <text class="ts" x="662" y="150">chỉ nội dung field đổi</text>
+    <text class="ts" x="872" y="122">EXIT_ZOMBIE giữ vỏ</text>
+    <text class="ts" x="872" y="136">release_task → free</text>
+    <text class="ts t0" x="872" y="150">PID 101 tái dùng</text>
+
+    <line class="rule" x1="20" y1="164" x2="1060" y2="164"/>
+    <text class="tl" x="8" y="184">mm / page table</text>
+    <text class="ts" x="32" y="202">mm mới cho chương trình</text>
+    <text class="ts" x="32" y="216">PT_LOAD map · ASLR</text>
+    <text class="ts" x="32" y="230">TTBR0 = PGD_A · ASID 10</text>
+    <text class="ts t0" x="242" y="202">dup_mm → mm_B</text>
+    <text class="ts" x="242" y="216">copy_page_range: mọi PTE</text>
+    <text class="ts" x="242" y="230">ghi-được → RO hai phía</text>
+    <text class="ts t0" x="242" y="244">page _mapcount = 2 (COW)</text>
+    <text class="ts" x="452" y="202">check_and_switch_context</text>
+    <text class="ts" x="452" y="216">ASID 11 · TTBR0 = PGD_B</text>
+    <text class="ts" x="452" y="230">chưa ghi trang COW nào</text>
+    <text class="ts t1" x="662" y="202">exec_mmap: mm_C MỚI</text>
+    <text class="ts" x="662" y="216">mmput(mm_B) → _mapcount = 1</text>
+    <text class="ts" x="662" y="230">mm_B sống ~vài chục µs</text>
+    <text class="ts" x="872" y="202">exit_mm → mmput(mm_C)</text>
+    <text class="ts" x="872" y="216">VMA, page table, trang</text>
+    <text class="ts" x="872" y="230">anonymous — giải phóng hết</text>
+
+    <line class="rule" x1="20" y1="258" x2="1060" y2="258"/>
+    <text class="tl" x="8" y="278">kernel stack / pt_regs</text>
+    <text class="ts" x="32" y="296">pt_regs ở đỉnh kstack</text>
+    <text class="ts" x="32" y="310">start_thread: memset,</text>
+    <text class="ts" x="32" y="324">pc/sp/pstate → eret EL0</text>
+    <text class="ts t0" x="242" y="296">kstack CON mới: childregs</text>
+    <text class="ts" x="242" y="310">= copy pt_regs cha, regs[0]=0</text>
+    <text class="ts" x="242" y="324">ctx.pc = ret_from_fork</text>
+    <text class="ts" x="242" y="338">ctx.sp = &amp;childregs</text>
+    <text class="ts t0" x="452" y="296">cpu_switch_to: mov sp, x9</text>
+    <text class="ts" x="452" y="310">ret → ret_from_fork</text>
+    <text class="ts" x="452" y="324">→ schedule_tail → cbz x19</text>
+    <text class="ts" x="452" y="338">→ ret_to_user → eret, x0 = 0</text>
+    <text class="ts t1" x="662" y="296">svc execve ghi ĐÈ vùng</text>
+    <text class="ts" x="662" y="310">childregs cũ (cùng địa chỉ)</text>
+    <text class="ts" x="662" y="324">start_thread memset lại</text>
+    <text class="ts t0" x="872" y="296">do_exit chạy TRÊN kstack này</text>
+    <text class="ts" x="872" y="310">TASK_DEAD → __schedule</text>
+    <text class="ts" x="872" y="324">task KẾ TIẾP giải phóng kstack</text>
+    <text class="ts" x="872" y="338">ở finish_task_switch</text>
+
+    <rect class="bxp" x="20" y="356" width="1040" height="50" rx="2"/>
+    <text class="ts" x="34" y="376">Ba nghịch lý nhỏ mà toàn bộ tài liệu này giải thích: (a) con &quot;quay về&quot; một lệnh nó chưa từng chạy — vì <tspan class="tm">pt_regs</tspan> được copy;</text>
+    <text class="ts" x="34" y="394">(b) task chết không tự dọn được stack của mình — vì nó đang đứng trên đó; (c) CPU eret về userspace của một tiến trình khác — vì mỗi task có <tspan class="tm">pt_regs</tspan> riêng.</text>
+  </svg>
+  </div>
+  <figcaption><b>Đọc theo cột, không theo hàng.</b> Mỗi cột là một khoảnh khắc; ba ô chồng lên nhau cho biết trạng thái của ba hệ thống con tại chính khoảnh khắc đó. Chuyển động thú vị nhất nằm ở cột ④ — nơi <code>task_struct</code> đứng yên trong khi <code>mm</code> bị thay toàn bộ.</figcaption>
+  </figure>
 
   <h3>Mười tám transition — file · function · hiệu ứng</h3>
   <div class="tbl"><table>

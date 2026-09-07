@@ -1447,33 +1447,410 @@ input:focus-visible {
 <h2 class="part" id="so-do">Phần I — Sơ đồ cơ chế</h2>
 <p class="note-intro">Sáu sơ đồ dưới đây vẽ những cơ chế mà đọc văn xuôi phải tự ráp lại: ai nói chuyện với ai bằng kênh gì, ai thả reset ai, gói tin rẽ nhánh ở đâu, và ranh giới giữa hai lớp quản lý nguồn. Toàn văn chi tiết nằm ở Phần II.</p>
 <figure>
-<img src="../LPPP_5_kenh_giao_tie.png" alt="" style="max-width: 100%; height: auto;">
+<svg viewBox="0 0 880 590" role="img" aria-label="Sơ đồ R4/LPPP ở trung tâm với năm kênh giao tiếp có nhãn tới AP806/A72, Iris SB0, Cortex-M3 và PS-CPU">
+<defs>
+  <marker id="d1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+  </marker>
+</defs>
 
+<!-- R4 -->
+<rect x="40" y="250" width="212" height="96" rx="6" fill="none" stroke="currentColor" stroke-width="2"/>
+<text x="146" y="278" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">Cortex-R4 · SCP</text>
+<text x="146" y="298" text-anchor="middle" font-size="12" fill="currentColor">LPPP — FreeRTOS + lwIPv6</text>
+<text x="146" y="318" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">die: Quartz 88PA6220</text>
+<text x="146" y="334" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">XIP từ QSPI CS1 0xF8000000</text>
+
+<!-- AP806 -->
+<rect x="556" y="52" width="292" height="108" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="702" y="78" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">Cortex-A72 ×4 (2 cluster)</text>
+<text x="702" y="99" text-anchor="middle" font-size="11.5" fill="currentColor">ATF BL31 → U-Boot → Linux 5.10</text>
+<text x="702" y="119" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">die: AP806 · mất điện khi Sleep2/ErP</text>
+<text x="702" y="139" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">DDR giữ nội dung bằng self-refresh</text>
+
+<!-- Iris -->
+<rect x="556" y="212" width="292" height="92" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="702" y="238" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">Iris SB0 (companion die)</text>
+<text x="702" y="259" text-anchor="middle" font-size="11.5" fill="currentColor">GMAC (GbE) · USB2 device · PCIe · ICU</text>
+<text x="702" y="281" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">còn điện khi ngủ → proxy hoạt động</text>
+
+<!-- M3 -->
+<rect x="556" y="352" width="292" height="76" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="702" y="377" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">Cortex-M3 — Machine Control</text>
+<text x="702" y="397" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">die: Quartz · motor/sensor/engine</text>
+<text x="702" y="415" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">firmware KHÔNG có trong repo</text>
+
+<!-- PS-CPU -->
+<rect x="556" y="468" width="292" height="82" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="702" y="493" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">PS-CPU — STM32F031C6</text>
+<text x="702" y="513" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">chip riêng trên bo nguồn · Cortex-M0</text>
+<text x="702" y="531" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">RTC pin nuôi · LUÔN sống</text>
+
+<!-- M4 note -->
+<rect x="40" y="378" width="212" height="42" rx="5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 4" opacity=".45"/>
+<text x="146" y="396" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".55">Cortex-M4 (PMU µC) — GIỮ TẮT</text>
+<text x="146" y="411" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">libpmu_r4.a chạy trên chính R4</text>
+
+<!-- A1 SCPI -->
+<polyline points="252,268 306,268 306,106 552,106" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d1a)" marker-start="url(#d1a)"/>
+<text x="430" y="82" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">SCPI / PSCI · lệnh 0x02–0x8C</text>
+<text x="430" y="96" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">MHU 0xE8009800 + shmem 0x7FFF0000</text>
+
+<!-- A2 net-proxy -->
+<polyline points="252,288 306,288 306,148 552,148" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d1a)" marker-start="url(#d1a)"/>
+<text x="430" y="176" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">net-proxy + MSG_CMD_*</text>
+<text x="430" y="190" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">IPC0 0xE8008000/100 · HCI FIFO 0xE8200800</text>
+
+<!-- A3 MoChi -->
+<polyline points="252,306 306,306 306,258 552,258" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d1a)" marker-start="url(#d1a)"/>
+<text x="430" y="322" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">MoChi MCIx2 / MCIx4</text>
+<text x="430" y="336" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">GMAC RX: R4 poll mỗi 10 ms</text>
+
+<!-- A4 M3 -->
+<polyline points="252,326 352,326 352,390 552,390" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d1a)" marker-start="url(#d1a)"/>
+<text x="452" y="366" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">đổi mc_qsclk · MC_WDT SPI 93</text>
+<text x="452" y="380" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">D-SRAM1 0xC057F000 + pulse doorbell</text>
+
+<!-- A5 PS-CPU -->
+<polyline points="252,342 380,342 380,506 552,506" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d1a)" marker-start="url(#d1a)"/>
+<text x="466" y="482" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">I²C1 slave 0x3E</text>
+<text x="466" y="496" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">0x68 power-state · 0x6C REM · 0xC0 event</text>
+</svg>
 <figcaption><b>R4 là trung tâm điều phối, không phải thiết bị ngoại vi.</b> Năm kênh hoàn toàn khác nhau về cơ chế: MHU+shared-memory cho SCPI/PSCI, doorbell IPC0 + ring buffer trong SRAM cho dữ liệu mạng, MoChi cho die-to-die, cửa sổ 32 byte D-SRAM1 + xung cho M3, I²C cho bo nguồn. Không có kênh nào dùng chung — mỗi cái có ISR, giao thức và bảo vệ riêng.</figcaption>
 </figure>
 <figure>
-<img src="../LPPP_Cold_Boot_Flow.png" alt="" style="max-width: 100%; height: auto;">
+<svg viewBox="0 0 860 640" role="img" aria-label="Sơ đồ swimlane cold boot cho thấy R4 thả reset A72 hai lần: lần một để BLE train DDR, lần hai để chạy ATF">
+<defs>
+  <marker id="d2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+  </marker>
+  <marker id="d2acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="#b4341c"/>
+  </marker>
+</defs>
 
+<text x="350" y="24" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">R4 / LPPP  (Cortex-R4)</text>
+<text x="695" y="24" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">A72 / AP806</text>
+<line x1="510" y1="34" x2="510" y2="620" stroke="currentColor" stroke-width="1" stroke-dasharray="3 5" opacity=".3"/>
+
+<rect x="230" y="38" width="240" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".7"/>
+<text x="350" y="57" text-anchor="middle" font-size="11.5" fill="currentColor">mask ROM nạp mvri.bin từ QSPI CS1</text>
+<line x1="350" y1="68" x2="350" y2="80" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+
+<rect x="230" y="82" width="240" height="46" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="101" text-anchor="middle" font-size="11.5" fill="currentColor">main(): cpu_init/MPU, pad, UART10,</text>
+<text x="350" y="117" text-anchor="middle" font-size="11.5" fill="currentColor">pmu_phase(baseline), AVS, GIC, GPIO</text>
+<line x1="350" y1="128" x2="350" y2="140" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+
+<rect x="230" y="142" width="240" height="46" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="161" text-anchor="middle" font-size="11.5" fill="currentColor">early_board_init: QSPI, chip-select,</text>
+<text x="350" y="177" text-anchor="middle" font-size="11.5" fill="currentColor">cửa sổ A2 (DDR→0x0), pidi_init</text>
+<line x1="350" y1="188" x2="350" y2="200" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+
+<rect x="230" y="202" width="240" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="221" text-anchor="middle" font-size="11.5" fill="currentColor">SysApi_InitApplModules → scheduler</text>
+<line x1="350" y1="232" x2="350" y2="244" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+
+<rect x="230" y="246" width="240" height="46" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="265" text-anchor="middle" font-size="11.5" fill="currentColor">init_thread: LPPP_KM_Init,</text>
+<text x="350" y="281" text-anchor="middle" font-size="11.5" fill="currentColor">pmu_phase(ap_link_up / system_up)</text>
+<line x1="350" y1="292" x2="350" y2="304" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+
+<rect x="230" y="306" width="240" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="325" text-anchor="middle" font-size="11.5" fill="currentColor">init_ddr(false) — nạp ảnh BLE</text>
+
+<rect x="560" y="306" width="270" height="46" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="695" y="325" text-anchor="middle" font-size="11.5" fill="currentColor">BLE train LPDDR4</text>
+<text x="695" y="341" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">(atf/ble/mv_lpddr4_apn806.c)</text>
+
+<line x1="470" y1="321" x2="556" y2="321" stroke="#b4341c" stroke-width="1.8" marker-end="url(#d2acc)"/>
+<text x="513" y="313" text-anchor="middle" font-size="10.5" font-weight="600" fill="#b4341c">thả reset ①</text>
+
+<polyline points="695,352 695,376 350,376 350,390" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+<text x="522" y="370" text-anchor="middle" font-size="11" fill="currentColor">BOOT_SYNC_DDR_READY (0xE82460B0)</text>
+
+<rect x="230" y="392" width="240" height="46" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="411" text-anchor="middle" font-size="11.5" fill="currentColor">copy_run_atf</text>
+<text x="350" y="427" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">*0x7FFFFFF0 = 0  (cờ cold)</text>
+
+<line x1="470" y1="415" x2="556" y2="415" stroke="#b4341c" stroke-width="1.8" marker-end="url(#d2acc)"/>
+<text x="513" y="407" text-anchor="middle" font-size="10.5" font-weight="600" fill="#b4341c">thả reset ②</text>
+
+<rect x="560" y="398" width="270" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="695" y="417" text-anchor="middle" font-size="11.5" fill="currentColor">ATF  BL1 → BL2 → BL31</text>
+<rect x="560" y="442" width="270" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="695" y="461" text-anchor="middle" font-size="11.5" fill="currentColor">U-Boot: bspi_boot (kernel + DTB)</text>
+<rect x="560" y="486" width="270" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="695" y="505" text-anchor="middle" font-size="11.5" fill="currentColor">Linux 5.10 · probe mvri_fw / arm_scpi</text>
+<line x1="695" y1="428" x2="695" y2="440" stroke="currentColor" stroke-width="1.4" marker-end="url(#d2a)"/>
+<line x1="695" y1="472" x2="695" y2="484" stroke="currentColor" stroke-width="1.4" marker-end="url(#d2a)"/>
+
+<line x1="350" y1="438" x2="350" y2="460" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+<rect x="230" y="462" width="240" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="350" y="481" text-anchor="middle" font-size="11.5" fill="currentColor">LPPP_QoS: Init / MoChi / UL / AP</text>
+<line x1="350" y1="492" x2="350" y2="534" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+
+<polyline points="620,516 620,556 470,556" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#d2a)"/>
+<text x="545" y="548" text-anchor="middle" font-size="11" fill="currentColor">HOSTCMD_HELLO</text>
+
+<rect x="230" y="536" width="240" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="2"/>
+<text x="350" y="554" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">RedirectTraffic = true</text>
+<text x="350" y="570" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">→ NORMAL: forward hết gói lên Linux</text>
+</svg>
 <figcaption><b>R4 thả reset A72 hai lần, vì hai mục đích khác nhau.</b> Lần ① chỉ để A72 chạy BLE train LPDDR4 rồi quay lại WFI — R4 chờ bit <code>BOOT_SYNC_DDR_READY</code> trên thanh ghi scratch. Lần ② mới là boot thật (ATF). Cờ warmboot ghi 0 ở lần ② phân biệt cold với resume.</figcaption>
 </figure>
 <figure>
-<img src="../Power_State_Machine.png" alt="" style="max-width: 100%; height: auto;">
+<svg viewBox="0 0 860 400" role="img" aria-label="Máy trạng thái năm trạng thái nguồn với các transition TR, nhánh Sleep2 hay ErP quyết định bởi g_wolMode">
+<defs>
+  <marker id="d5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+  </marker>
+  <marker id="d5d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor" opacity=".4"/>
+  </marker>
+</defs>
 
+<rect x="34" y="168" width="132" height="58" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="100" y="194" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">POWEROFF</text>
+<text x="100" y="211" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".65">0</text>
+
+<rect x="248" y="168" width="132" height="58" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="314" y="190" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">NORMAL</text>
+<text x="314" y="207" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".65">A72 chạy · DDR active</text>
+
+<rect x="462" y="168" width="132" height="58" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="528" y="190" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">SLEEP1</text>
+<text x="528" y="207" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".65">DDR active</text>
+
+<rect x="684" y="70" width="146" height="58" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="757" y="92" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">SLEEP2</text>
+<text x="757" y="109" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".65">A72 off · DDR self-refresh</text>
+
+<rect x="684" y="266" width="146" height="58" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="757" y="288" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">ErP</text>
+<text x="757" y="305" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".65">= Sleep2 + WoL HW armed</text>
+
+<line x1="166" y1="188" x2="244" y2="188" stroke="currentColor" stroke-width="1.6" marker-end="url(#d5a)"/>
+<text x="205" y="180" text-anchor="middle" font-size="10.5" fill="currentColor">TR0</text>
+<text x="205" y="167" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">PWR_SW_ON</text>
+
+<line x1="244" y1="214" x2="170" y2="214" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 4" opacity=".45" marker-end="url(#d5d)"/>
+<text x="205" y="232" text-anchor="middle" font-size="10" fill="currentColor" opacity=".5">TR1 — dead</text>
+
+<line x1="380" y1="184" x2="458" y2="184" stroke="currentColor" stroke-width="1.6" marker-end="url(#d5a)"/>
+<text x="419" y="176" text-anchor="middle" font-size="10.5" fill="currentColor">TR3</text>
+<line x1="458" y1="212" x2="384" y2="212" stroke="currentColor" stroke-width="1.6" marker-end="url(#d5a)"/>
+<text x="419" y="231" text-anchor="middle" font-size="10" fill="currentColor" opacity=".8">TR4 + QoS_SetupUL</text>
+
+<line x1="594" y1="182" x2="680" y2="122" stroke="currentColor" stroke-width="1.6" marker-end="url(#d5a)"/>
+<text x="640" y="146" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">TR5</text>
+<text x="646" y="134" text-anchor="middle" font-size="10" fill="currentColor" opacity=".75">g_wolMode == 0</text>
+
+<line x1="594" y1="212" x2="680" y2="274" stroke="currentColor" stroke-width="1.6" marker-end="url(#d5a)"/>
+<text x="640" y="248" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">TR6</text>
+<text x="646" y="262" text-anchor="middle" font-size="10" fill="currentColor" opacity=".75">g_wolMode ≠ 0</text>
+
+<polyline points="680,84 560,84 560,164" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#d5a)"/>
+<polyline points="680,310 560,310 560,232" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#d5a)"/>
+<text x="560" y="76" text-anchor="middle" font-size="10.5" fill="currentColor">TR8</text>
+<text x="560" y="326" text-anchor="middle" font-size="10.5" fill="currentColor">TR10</text>
+
+<text x="757" y="352" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">TR8 / TR10 → B014.TO_SLEEP1</text>
+<text x="757" y="366" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">+ QoS_SetupMoChi + SetupAP</text>
+
+<text x="100" y="262" text-anchor="middle" font-size="10" fill="currentColor" opacity=".5">TR7 / TR9 (→OFF) cũng dead:</text>
+<text x="100" y="276" text-anchor="middle" font-size="10" fill="currentColor" opacity=".5">không có producer PWR_SW_OFF</text>
+</svg>
 <figcaption><b>Sleep2 và ErP là cùng một trạng thái silicon; khác biệt duy nhất là WoL phần cứng có được nạp pattern hay không.</b> Lựa chọn tự động theo <code>g_wolMode</code> (Linux ghi qua ethtool → <code>MSG_CMD_SYSTEM_SET_WOL</code>). TR8/TR10 phải nạp lại QoS MoChi+AP vì các domain đó vừa mất điện; TR4 (Sleep1→Normal) chỉ cần QoS UL.</figcaption>
 </figure>
 <figure>
-  <img src="../LPPP_Power_Off_Flow.png" alt="" style="max-width: 100%; height: auto;">
+<svg viewBox="0 0 880 470" role="img" aria-label="power_cpu là điểm nối giữa lớp Marvell làm việc silicon và lớp KM làm bookkeeping, sau khi ghi cờ warmboot">
+<defs>
+  <marker id="d4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+  </marker>
+</defs>
 
+<rect x="26" y="58" width="204" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+<text x="128" y="83" text-anchor="middle" font-size="11.5" fill="currentColor">Linux: PSCI CPU_OFF / suspend</text>
+<line x1="128" y1="98" x2="128" y2="116" stroke="currentColor" stroke-width="1.5" marker-end="url(#d4a)"/>
+<rect x="26" y="118" width="204" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+<text x="128" y="143" text-anchor="middle" font-size="11.5" fill="currentColor">ATF BL31: a8k_pwr_domain_off</text>
+<line x1="128" y1="158" x2="128" y2="176" stroke="currentColor" stroke-width="1.5" marker-end="url(#d4a)"/>
+<rect x="26" y="178" width="204" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+<text x="128" y="203" text-anchor="middle" font-size="11.5" fill="currentColor">scpi_set_css_power_state(off)</text>
+
+<polyline points="230,198 276,198 276,222 322,222" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d4a)"/>
+<text x="278" y="190" text-anchor="middle" font-size="10.5" fill="currentColor">MHU ch = core+1 · không chờ trả lời</text>
+
+<rect x="326" y="178" width="236" height="98" rx="6" fill="none" stroke="#b4341c" stroke-width="2.2"/>
+<text x="444" y="202" text-anchor="middle" font-size="13" font-weight="700" fill="#b4341c">power_cpu(cpuid, 3)</text>
+<text x="444" y="221" text-anchor="middle" font-size="10.5" fill="currentColor">chờ WFI → ISO → PWR_DN → PRCR reset</text>
+<line x1="340" y1="231" x2="548" y2="231" stroke="currentColor" stroke-width="1" opacity=".3"/>
+<text x="444" y="247" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">khi ALL_CPU_OFF:</text>
+<text x="444" y="263" text-anchor="middle" font-size="10.5" font-weight="600" fill="#b4341c">*0x7FFFFFF0 = 0x7FFFFFF0 (warm)</text>
+
+<polyline points="562,206 616,206 616,110 652,110" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d4a)"/>
+<text x="638" y="98" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">pmu_phase(pmu_suspend)</text>
+
+<rect x="656" y="52" width="200" height="146" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="756" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">Lớp Marvell — silicon</text>
+<text x="668" y="94" font-size="10.5" fill="currentColor">• driver .suspend() —</text>
+<text x="676" y="108" font-size="10.5" fill="currentColor" opacity=".8">lpp_usbd_open arm wake-USB</text>
+<text x="668" y="127" font-size="10.5" fill="currentColor">• mc_save_state →</text>
+<text x="676" y="141" font-size="10.5" fill="currentColor" opacity=".8">drain + DDR self-refresh</text>
+<text x="668" y="160" font-size="10.5" fill="currentColor">• ap_link_down · PI → D3</text>
+<text x="668" y="178" font-size="10.5" fill="currentColor">• MC_PLL / ND_PLL → D2</text>
+
+<polyline points="562,250 616,250 616,344 652,344" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d4a)"/>
+<text x="636" y="336" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">xQueueSend(gst_MsgQHandle_PowerCtrl)</text>
+
+<rect x="656" y="290" width="200" height="126" rx="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="756" y="310" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">Lớp KM — ma trận TR</text>
+<text x="668" y="332" font-size="10.5" fill="currentColor">• g_wolMode ? GO_TO_ERP</text>
+<text x="676" y="346" font-size="10.5" fill="currentColor" opacity=".8">: GO_TO_S2</text>
+<text x="668" y="365" font-size="10.5" fill="currentColor">• LPPP_TR5_TR6</text>
+<text x="668" y="383" font-size="10.5" fill="currentColor">• B014.TO_SLEEP2_OR_ErP</text>
+<text x="668" y="401" font-size="10.5" fill="currentColor">• ap_sd = AP_STATUS_NO_BOOT</text>
+
+<text x="444" y="436" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">Resume đi ngược: power_cpu(0,0) → B014.BEGIN_PHASE6 → pmu_phase(pmu_resume)</text>
+<text x="444" y="452" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">→ init_ddr(warm) + mc_restore_state → WAKEUP_S1 → TR8/TR10 → RVBAR = WARM_BOOT_ADDR</text>
+</svg>
 <figcaption><b><code>power_cpu()</code> là bản lề: nó tắt lõi A72 rồi rẽ nhánh vào hai hệ thống hoàn toàn tách biệt.</b> Lớp Marvell làm việc silicon (DDR, PLL, power domain); lớp KM chỉ ghi sổ (breadcrumb flash, QoS, trạng thái AP). Các hàm TR của KM rất mỏng — phần nặng nằm ở <code>pmu_infrastructure_suspend</code>. Đáng chú ý: <code>power_cpu</code> được định nghĩa trong <code>ApplicationMrvl/Test/app_scpi.c</code> — thư mục “Test” <b>vẫn được build vào firmware production</b>.</figcaption>
 </figure>
 <figure>
-  <img src="../LPPP_duong_di_goi_tin_khi_host_ngu.png" alt="" style="max-width: 100%; height: auto;">
+<svg viewBox="0 0 880 620" role="img" aria-label="Đường đi một gói khi host ngủ, rẽ thành ba kết cục: trả lời offline, nuốt im lặng, hoặc đánh thức host">
+<defs>
+  <marker id="d3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+  </marker>
+  <marker id="d3acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="#b4341c"/>
+  </marker>
+</defs>
 
+<rect x="40" y="36" width="182" height="42" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="131" y="55" text-anchor="middle" font-size="12" font-weight="600" fill="currentColor">GMAC RX (Iris)</text>
+<text x="131" y="70" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".7">poll tick 10 ms · task ETH_I</text>
+<line x1="131" y1="78" x2="131" y2="96" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3a)"/>
+
+<polygon points="131,98 210,138 131,178 52,138" fill="none" stroke="currentColor" stroke-width="1.7"/>
+<text x="131" y="134" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">Redirect</text>
+<text x="131" y="149" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">Traffic ?</text>
+
+<line x1="210" y1="138" x2="316" y2="138" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3a)"/>
+<text x="263" y="130" text-anchor="middle" font-size="10.5" fill="currentColor">true</text>
+<rect x="320" y="116" width="206" height="44" rx="5" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".65"/>
+<text x="423" y="135" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">HCI FIFO up_packets → Linux</text>
+<text x="423" y="150" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".6">(host thức — LPPP không proxy)</text>
+
+<line x1="131" y1="178" x2="131" y2="204" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3a)"/>
+<text x="152" y="196" font-size="10.5" fill="currentColor">false — host ngủ</text>
+
+<rect x="40" y="206" width="182" height="44" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="131" y="225" text-anchor="middle" font-size="11.5" fill="currentColor">SysFilter STAGE_1 (raw)</text>
+<text x="131" y="240" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".7">magic packet · SLP · catch-unknown</text>
+<line x1="131" y1="250" x2="131" y2="268" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3a)"/>
+
+<rect x="40" y="270" width="182" height="44" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="131" y="289" text-anchor="middle" font-size="11.5" fill="currentColor">lwIP: ethernet_input</text>
+<text x="131" y="304" text-anchor="middle" font-size="11.5" fill="currentColor">→ ip4_input / ip6_input</text>
+<line x1="131" y1="314" x2="131" y2="332" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3a)"/>
+
+<rect x="40" y="334" width="182" height="52" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+<text x="131" y="353" text-anchor="middle" font-size="11.5" fill="currentColor">SysFilter STAGE_2</text>
+<text x="131" y="369" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".75">khớp dst_port → callback FFL[6]/[7]</text>
+
+<line x1="222" y1="360" x2="298" y2="360" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3a)"/>
+<rect x="302" y="330" width="212" height="60" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="408" y="350" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">proxy</text>
+<text x="408" y="366" text-anchor="middle" font-size="10.5" fill="currentColor">LLMNR 5355 · NBNS 137 · SNMP 161</text>
+<text x="408" y="381" text-anchor="middle" font-size="10.5" fill="currentColor">mDNS 5353 · SSDP/WSD/SLP</text>
+
+<polyline points="514,344 560,344 560,112 604,112" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d3a)"/>
+<rect x="608" y="82" width="248" height="60" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="732" y="102" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">① Trả lời offline</text>
+<text x="732" y="118" text-anchor="middle" font-size="10.5" fill="currentColor">appSendUdpPacket → GMAC TX</text>
+<text x="732" y="133" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".7">ActionFlags DISCARD · host ngủ tiếp</text>
+
+<polyline points="514,360 582,360 582,262 604,262" fill="none" stroke="currentColor" stroke-width="1.6" marker-end="url(#d3a)"/>
+<rect x="608" y="234" width="248" height="56" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<text x="732" y="254" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">② Nuốt im lặng</text>
+<text x="732" y="270" text-anchor="middle" font-size="10.5" fill="currentColor">tên/OID không khớp → không gửi gì</text>
+<text x="732" y="284" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".7">DISCARD · host ngủ tiếp</text>
+
+<polyline points="514,376 560,376 560,436 604,436" fill="none" stroke="#b4341c" stroke-width="2" marker-end="url(#d3acc)"/>
+<rect x="608" y="404" width="248" height="64" rx="5" fill="none" stroke="#b4341c" stroke-width="2.2"/>
+<text x="732" y="424" text-anchor="middle" font-size="12" font-weight="700" fill="#b4341c">③ Đánh thức host</text>
+<text x="732" y="440" text-anchor="middle" font-size="10.5" fill="currentColor">forward gói → HCI FIFO up_packets</text>
+<text x="732" y="455" text-anchor="middle" font-size="10.5" fill="currentColor">+ SYS_EVENT_WAKE_SYSTEM</text>
+
+<line x1="732" y1="468" x2="732" y2="500" stroke="#b4341c" stroke-width="2" marker-end="url(#d3acc)"/>
+<rect x="608" y="502" width="248" height="46" rx="5" fill="none" stroke="#b4341c" stroke-width="2.2"/>
+<text x="732" y="521" text-anchor="middle" font-size="11.5" font-weight="600" fill="#b4341c">power_cpu(0, 0) → A72 thức</text>
+<text x="732" y="537" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".75">lệnh in · SNMP2 job · magic packet</text>
+
+<text x="131" y="440" font-size="10.5" fill="currentColor" opacity=".7">Kết quả do</text>
+<text x="131" y="455" font-size="10.5" fill="currentColor" opacity=".7">ActionFlags TĨNH</text>
+<text x="131" y="470" font-size="10.5" fill="currentColor" opacity=".7">của filter quyết định,</text>
+<text x="131" y="485" font-size="10.5" fill="currentColor" opacity=".7">không phải callback.</text>
+</svg>
 <figcaption><b>Callback của proxy chỉ quyết định “filter có khớp không”; <code>ActionFlags</code> tĩnh mới quyết định gói đi đâu.</b> Đây là chỗ dễ đọc nhầm nhất trong SysFilter: <code>SysFilter_Execute_Filter</code> gọi callback, nếu callback trả <code>SYS_TRUE</code> thì filter coi như khớp, rồi áp <code>FOR_APP_LAYER / FORWARD / WAKE_SYSTEM / DISCARD</code> đã khai báo sẵn trong bảng. SNMP là ngoại lệ — nó tự gọi <code>WAKE_AND_RETURN</code> bên trong thay vì dựa vào cờ.</figcaption>
 </figure>
 <figure>
-  <img src="../LPPP_LCM_SRAM_layout.png" alt="" style="max-width: 100%; height: auto;">
+<svg viewBox="0 0 860 290" role="img" aria-label="Bố trí 80KB LCM SRAM thành ba vùng và cấu trúc ba ring buffer của HCI FIFO">
+<defs>
+  <marker id="d6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+  </marker>
+</defs>
 
+<rect x="46" y="76" width="94" height="50" fill="none" stroke="currentColor" stroke-width="1.8"/>
+<rect x="140" y="76" width="176" height="50" fill="none" stroke="currentColor" stroke-width="2.4"/>
+<rect x="316" y="76" width="500" height="50" fill="none" stroke="currentColor" stroke-width="1.8"/>
+
+<text x="93" y="98" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">USB2 qhead</text>
+<text x="93" y="112" text-anchor="middle" font-size="10" fill="currentColor" opacity=".75">2 KB</text>
+<text x="228" y="98" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">HCI FIFO (ComFifo)</text>
+<text x="228" y="112" text-anchor="middle" font-size="10" fill="currentColor" opacity=".75">0x1880 = 6272 B</text>
+<text x="566" y="98" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">GMAC descriptor + pbuf pool</text>
+<text x="566" y="112" text-anchor="middle" font-size="10" fill="currentColor" opacity=".75">.netbufsec + .bufpools · ~72 KB</text>
+
+<text x="93" y="66" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">.usbd2_qh_sec</text>
+<text x="228" y="66" text-anchor="middle" font-size="10" fill="currentColor" opacity=".7">.fifosec</text>
+
+<line x1="46" y1="130" x2="46" y2="142" stroke="currentColor" stroke-width="1"/>
+<line x1="140" y1="130" x2="140" y2="142" stroke="currentColor" stroke-width="1"/>
+<line x1="316" y1="130" x2="316" y2="142" stroke="currentColor" stroke-width="1"/>
+<line x1="816" y1="130" x2="816" y2="142" stroke="currentColor" stroke-width="1"/>
+<text x="46" y="156" text-anchor="middle" font-size="10" font-family="monospace" fill="currentColor">0xE8200000</text>
+<text x="140" y="156" text-anchor="middle" font-size="10" font-family="monospace" fill="currentColor">0xE8200800</text>
+<text x="316" y="156" text-anchor="middle" font-size="10" font-family="monospace" fill="currentColor">0xE8202080</text>
+<text x="816" y="156" text-anchor="middle" font-size="10" font-family="monospace" fill="currentColor">+80 KB</text>
+
+<text x="431" y="40" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">LCM SRAM — MPU region 4: NOCACHE (linker .ld và Linux DTS phải khớp từng byte)</text>
+
+<polyline points="228,142 228,178 340,178" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#d6a)"/>
+
+<rect x="344" y="176" width="472" height="24" rx="3" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".7"/>
+<text x="356" y="192" font-size="10.5" font-family="monospace" fill="currentColor">status = ON · status_ext = 0xFEDCCDEF</text>
+<text x="700" y="192" font-size="10" fill="currentColor" opacity=".7">← Linux nhận diện FIFO hợp lệ</text>
+
+<rect x="344" y="206" width="472" height="22" rx="3" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<text x="356" y="221" font-size="10.5" font-family="monospace" fill="currentColor">up_data</text>
+<line x1="440" y1="217" x2="486" y2="217" stroke="currentColor" stroke-width="1.3" marker-end="url(#d6a)"/>
+<text x="560" y="221" font-size="10.5" fill="currentColor">result · event · status · wake (R4 → Linux)</text>
+
+<rect x="344" y="232" width="472" height="22" rx="3" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<text x="356" y="247" font-size="10.5" font-family="monospace" fill="currentColor">up_packets</text>
+<line x1="440" y1="243" x2="486" y2="243" stroke="currentColor" stroke-width="1.3" marker-end="url(#d6a)"/>
+<text x="560" y="247" font-size="10.5" fill="currentColor">gói Ethernet forward (R4 → Linux)</text>
+
+<rect x="344" y="258" width="472" height="22" rx="3" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<text x="356" y="273" font-size="10.5" font-family="monospace" fill="currentColor">down_data</text>
+<line x1="486" y1="269" x2="440" y2="269" stroke="currentColor" stroke-width="1.3" marker-end="url(#d6a)"/>
+<text x="560" y="273" font-size="10.5" fill="currentColor">HELLO/GOODBYE + MSG_CMD_* (Linux → R4)</text>
+</svg>
 <figcaption><b>Ba ring buffer trong một struct chia sẻ, không có khoá — đồng bộ hoàn toàn bằng cặp con trỏ read/write.</b> Comment trong DTS Linux ghi rõ địa chỉ và kích thước “phải khớp <code>.fifosec</code> trong linker script của R4” — một ràng buộc build-time xuyên hai codebase. Mỗi bản tin bọc trong <code>FifoDgram{DgramLen, PayloadLen, Id}</code> căn 8 byte.</figcaption>
 </figure>
 <h2 class="part" id="toanvan">Phần II — Toàn văn ghi chú</h2>
@@ -1499,13 +1876,29 @@ input:focus-visible {
 <p>Nắm phần cứng R4 không với tới: relay, nguồn động cơ, <code>SB_PWR_EN</code>, <code>MC_PWR_EN</code>, <code>MSW_ON</code>,<br><code>_RESET</code>, <code>SLEEP_STATUS_REM</code>, bộ ghi log sự kiện boot. Sống ngay khi có điện AC.</p>
 <hr>
 <h4 id="2-ai-làm-chủ-ai-chuỗi-sở-hữu-nguồn-khi-boot">2 · Ai làm chủ ai — chuỗi sở hữu nguồn khi boot</h4>
-  <img src="../LPPP_chuoi_so_huu_nguon_khi_boot.png" alt="" style="max-width: 100%; height: auto;">
+<pre><code>① Điện AC ─► PS-CPU (M0) sống dậy trước tiên
+              └─ chờ ổn định, kéo SB_PWR_EN ─► cấp nguồn die Quartz
+                                                  │
+② BootROM (trong Quartz) chạy trên R4
+     └─ đọc QSPI CS1 0xF8000000, kiểm checksum mvri.bin ─► nạp/chạy R4 (LPPP)
+                                                  │
+③ LPPP main() (R4, bare-metal → FreeRTOS)
+     ├─ pmu_phase(pmu_baseline)    dựng PLL, clock die Quartz
+     ├─ pmu_phase(pmu_ap_link_up)  bật NGUỒN AP806 (qua I2C0 ─► PS-CPU) + MoChi link
+     ├─ pmu_phase(pmu_system_up)   bật power domain còn lại
+     └─ board_init ─► copy_run_atf(0xF4000000)
+            memcpy ảnh ATF từ QSPI ─► DDR
+            RVBAR_0/1 = load_addr&gt;&gt;16 ; WARMBOOT_FLAG(0x7FFFFFF0) = 0
+            start_ap806(true): AP806_CCU_B_PRCR_0 = 0x10001  ─► ★ A72 THOÁT RESET ★
+                                                  │
+④ A72: ATF BL1 ─► BL2 ─► BL31 ─► U-Boot ─► Linux 5.10.241 ─► driver load
+     └─ Linux gửi SCPI 0x02 (bắt tay) + DRIVER_HELLO qua HCI FIFO
+                                                  │
+   ⇒ R4 và A72 chạy SONG SONG, hai OS trên hai die.</code></pre>
 <p><strong>Nghịch lý phụ thuộc vòng:</strong> A72 chỉ boot được nếu R4 bật nguồn cho nó; R4 chỉ chạy nếu<br>PS-CPU cấp nguồn Quartz. PS-CPU là gốc. _(FACT: <code>plat_pm.c</code>, <code>copy_run_atf.md</code>, <code>CONTEXT_INDEX.md</code>.)_</p>
 <hr>
 <h4 id="3-các-kênh-giao-tiếp-liên-lõi">3 · Các kênh giao tiếp liên lõi</h4>
 <h5 id="3-1-a72-r4-kênh-1-mhu-doorbell-scpi-shared-memory">3.1 · A72 ↔ R4 — kênh #1: MHU doorbell + SCPI shared memory</h5>
-  <img src="../LPPP_3.1. MHU doorbell.png" alt="" style="max-width: 100%; height: auto;">
-
 <div class="tw"><table><thead><tr><th style="text-align:left">Thành phần</th><th style="text-align:left">Giá trị</th><th style="text-align:left">Nguồn</th></tr></thead><tbody><tr><td style="text-align:left">MHU base</td><td style="text-align:left"><code>0xE8009800</code></td><td style="text-align:left">LPPP <code>regAddrs.h</code>; <strong>ATF</strong> <code>atf_s800/plat/marvell/a8k/quartz/mhu.c:38 MHU_BASE 0xe8009800</code></td></tr><tr><td style="text-align:left">Shared mem base</td><td style="text-align:left"><code>0x7FFF0000</code></td><td style="text-align:left"><strong>ATF</strong> <code>plat/marvell/a8k/common/include/platform_def.h:118</code> — comment: <em>"match scp-shmem in linux dtb"</em></td></tr><tr><td style="text-align:left">Warmboot flag</td><td style="text-align:left"><code>0x7FFF0000 + 0xFFF0 = 0x7FFFFFF0</code></td><td style="text-align:left"><code>platform_def.h:119</code></td></tr><tr><td style="text-align:left">Layout kênh</td><td style="text-align:left">5 kênh; <code>SCP→AP</code> tại <code>2n×128</code>, <code>AP→SCP</code> tại <code>(2n+1)×128</code></td><td style="text-align:left"><strong>ATF</strong> <code>quartz/scpi.c:44-46</code> ↔ LPPP <code>scpi_api.h</code> — <strong>KHỚP CHÍNH XÁC</strong></td></tr><tr><td style="text-align:left">Header</td><td style="text-align:left"><code>scpi_cmd_t</code> 64-bit: <code>id:7, set:1, sender:8, size:9, reserved:7, status:32</code></td><td style="text-align:left"><strong>ATF</strong> <code>quartz/scpi.h:38-50</code></td></tr></tbody></table></div>
 <p><strong>MHU chỉ truyền chuông</strong> (<code>mhu.c</code>: <code>CPU_INTR_S_SET</code>, <code>SCP_INTR_S_CLEAR</code>, <code>CPU_INTR_S_STAT</code>).<br>Dữ liệu ở shared mem. 4 hằng số này là <em>"hợp đồng bằng comment"</em> giữa ATF ↔ LPPP ↔ Linux DTB —<br>không có kiểm tra runtime.</p>
 <p><strong>Ai dùng kênh này:</strong></p>
@@ -1546,8 +1939,36 @@ input:focus-visible {
 <p><code>HRESET_REQn</code> là <strong>cùng một sợi dây</strong>, cả ATF lẫn R4 đều kéo được (<code>CONTEXT_INDEX.md:39</code>).</p>
 <hr>
 <h4 id="4-sơ-đồ-tổng">4 · Sơ đồ tổng</h4>
-  <img src="../LPPP_so_do_tong.png" alt="" style="max-width: 100%; height: auto;">
+<pre><code>                    ┌───────────────────────────────────────────────────────┐
+   Điện AC ────────►│ PS-CPU  (STM32F031C6, Cortex-M0)   bo nguồn — chip RỜI │
+                    │  super-loop bare-metal · I²C slave 0x3E                │
+                    └───┬──────────────────────────────┬────────────────────┘
+              SB_PWR_EN │ _RESET (dây vật lý)          │ I²C (2 kênh độc lập)
+                        ▼                              ├──────────────┐
+        ╔═══════════════════════════ DIE QUARTZ (SB) ══╪══════════════╪═══════╗
+        ║  ┌──────────────┐   MC_LPP_IRQ0/1   ┌────────▼────┐         │       ║
+        ║  │ Cortex-M3    │◄─────────────────►│ Cortex-R4   │         │       ║
+        ║  │ Machine Ctrl │   reg chung, CDMA │  = SCP/LPPP │         │       ║
+        ║  │ (fw ngoài    │   LCM 0xEE02FE00  │  FreeRTOS   │         │       ║
+        ║  │  repo)       │                   └──┬───┬──────┘         │       ║
+        ║  └──────────────┘   ┌──────────────┐  │   │                │       ║
+        ║  ┌──────────────┐   │ Cortex-M4    │  │   │ MoChi x2 ──► IRIS SB0  ║
+        ║  │ PMU domains  │◄─►│ PMU µC       │  │   │             (GbE/USB/  ║
+        ║  │ libpmu_r4.a  │   └──────────────┘  │   │              PCIe+ICU) ║
+        ╚═══════════════════════════════════════╪═══╪═══════════════════════╝
+                       MHU 0xE8009800 (chuông)  │   │ MoChi x4
+              SCPI shmem 0x7FFF0000 (5 kênh)    │   │ HCI FIFO 0xE8200800 (SRAM)
+                       WARMBOOT 0x7FFFFFF0       │   │ DDR dùng chung
+        ╔═══════════════════════════════════════▼═══▼═══ DIE AP806 (NB) ═════╗
+        ║  4× Cortex-A72 (2 cluster)   ATF v1.3 (BL1→BL31) + Linux 5.10.241  ║
+        ║   • ATF plat_pm.c ─► scpi_set_css_power_state() ─► SCPI 0x03/0x05  ║
+        ║   • Linux arm_scpi.c + km_scpi.c ─► ~28 lệnh SCPI                  ║
+        ║   • Linux net-proxy driver ◄─► HCI FIFO                           ║
+        ║   • MoChi x2 ─► IRIS NB0 / NB1                                     ║
+        ╚═══════════════════════════════════════════════════════════════════╝
 
+   Reset A72: ATF PADWRAP+0x220C=0x04  ‖  LPPP GPIO66(BANK C)=0   ── cùng dây HRESET_REQn</code></pre>
+<hr>
 <h4 id="5-tóm-tắt-theo-format-skill">5 · Tóm tắt (theo format skill)</h4>
 <p><strong>1. Tồn tại để làm gì:</strong> Máy bizhub S800 là hệ <strong>đa xử lý bất đối xứng</strong>: một die Quartz (R4<br>điều khiển nguồn/mạng + M3 điều khiển engine + M4 PMU), một die AP806 (4×A72 chạy Linux làm ứng<br>dụng), một chip M0 rời (PS-CPU) làm gốc nguồn, và 0–3 die Iris làm I/O. R4 là "SCP" — bộ não<br>always-on điều phối toàn bộ.</p>
 <p><strong>2. Bảng kênh liên lõi:</strong></p>
@@ -1574,8 +1995,41 @@ input:focus-visible {
 <section class="note" id="t0-3_ban_do_dia_chi_toan_soc"><div class="note-head"><h3>T0.3 — Bản đồ địa chỉ vật lý toàn SoC (nhìn từ Cortex-R4 / LPPP)</h3><span class="path">Overview/T0.3_Ban_do_dia_chi_toan_SoC.md</span></div><blockquote><p>Nguồn chính: <code>lppp_s800/Hal/quartz/asic/a0/include/regAddrs.h</code> (828 dòng, "Generated using RegBuild 1.6.3"),<br><code>cortex_r4_mpu_config.c</code>, <code>linker_common/memory_map.ld</code>, <code>ApplicationKM/LPPP_QoS.h</code>, <code>LPPP_Flash.h</code>,<br><code>ApplicationMrvl/Test/scpi_api.h</code>, <code>Hal/quartz/asic/build/ap806.c</code>.<br>Mọi giá trị có <code>file:line</code>. Đây là <strong>không gian địa chỉ 32-bit của R4</strong> (trừ mục 6 — 64-bit MoChi).</p></blockquote>
 <hr>
 <h4 id="1-bản-đồ-tổng-6-vùng-lớn">1 · Bản đồ tổng — 6 vùng lớn</h4>
-  <img src="../LPPP_AP806_32_bit_address_map.png" alt="" style="max-width: 100%; height: auto;">
-
+<pre><code>0x00000000 ┌──────────────────────────────────────────────────────────┐  MPU rgn 0
+           │  DDR (RAM của AP806, map từ 0 qua cửa sổ A2 primary)      │  4GB NOCACHE
+           │  • ap806.c:45  DDR_START = 0x00000                        │  (nền + bắt NULL-ptr)
+           │  • R4 memcpy ảnh ATF vào đây (copy_run_atf)               │
+0x7FFF0000 │  ── SCPI shared memory (64KB cuối cửa sổ DDR) ───────────│
+           │     scpi_api.h:72  PLAT_CSS_SCP_COM_SHARED_MEM_BASE      │
+           │     5 kênh × 256B (2n = SCP→AP, 2n+1 = AP→SCP)           │
+0x7FFFFFF0 │     scpi_api.h:73  PLAT_WARMBOOT_FLAG_BASE (+0xFFF0)     │
+0x80000000 ├──────────────────────────────────────────────────────────┤
+           │  (chưa dùng trong không gian 32-bit)                     │
+0xC0000000 ├──────────────────────────────────────────────────────────┤  MPU rgn 1
+           │  MAPPED IO — toàn bộ thanh ghi ngoại vi                   │  1GB DEVICE
+           │  0xC0000000  UL (uplink) + QoS                           │  (mpu_config.c:44-49)
+           │  0xC0400000  PI (Power Island: GPU/LCD/JPEG) + QoS       │
+           │  0xC0042008  UL PIO — iris_detection()                   │
+           │  0xC05A0000  MCix4 / PIDI QoS remapping                  │
+           │  0xC057B014  PIDI die-to-die SAR0/1                      │
+           │  0xC057D000  PI MCIX4 config reg access                  │
+           │  0xCC000000  MoChi controller windows (xem mục 5)        │
+           │  0xCE000000  AP806 config (nhìn từ Quartz) (xem mục 4)   │
+           │  0xD0000000  Iris SB0 register window                    │
+           │  0xE8000000  APB peripheral block (xem mục 3)            │
+           │  0xEE02FE00  LCM shadow của M3 (CDMA cross-boundary)     │
+0xF0000000 ├──────────────────────────────────────────────────────────┤
+           │  0xF0000000  AP806_BASE — không gian native của AP806    │
+           │              (Quartz truy cập qua alias 0xCE000000)      │
+0xF4000000 ├──────────────────────────────────────────────────────────┤  (rơi vào rgn 0
+           │  BSPI_CS0_ADDR — QSPI CS0 XIP: ATF/U-Boot/romfs/user     │   NOCACHE — đúng,
+           │  regAddrs.h:133  "This is where ATF/u-boot start"        │   R4 chỉ đọc DATA
+           │  cờ mất điện 0xF4377007/0xF4378007 · B014 0xF43FF01C     │   ở đây)
+0xF8000000 ├──────────────────────────────────────────────────────────┤  MPU rgn 3
+           │  BSPI_CS1_ADDR — QSPI CS1 XIP: firmware R4 (mvri.bin)    │  128MB RO+CACHE
+           │  regAddrs.h:134 · linker "rom": ORIGIN 0xF8000000,       │  (ROCACHE)
+           │  LENGTH 128M − 0x10000                                   │
+0xFFFFFFFF └──────────────────────────────────────────────────────────┘</code></pre>
 <p><strong>⚠ R4 KHÔNG có RAM tuyến tính lớn.</strong> Nó <strong>XIP thẳng từ QSPI</strong> (<code>0xF8000000</code>) và dùng<br><strong>256KB LCM SRAM</strong> (<code>0xE8200000</code>) làm toàn bộ vùng đọc-ghi. "DDR" ở <code>0x0</code> là RAM của <strong>AP806</strong>,<br>R4 chỉ chạm tới lúc nạp ATF và tính CRC32 qua sleep.</p>
 <hr>
 <h4 id="2-mpu-5-vùng-bảng-đầy-đủ-cortex_r4_mpu_config-c31-72">2 · MPU 5 vùng — bảng đầy đủ (<code>cortex_r4_mpu_config.c:31-72</code>)</h4>
@@ -1681,8 +2135,21 @@ ResetEntry2:
 <p><code>IRQ</code> và <code>SWI</code> <strong>không</strong> đi vào dumpfault — chúng vào FreeRTOS (§5).</p>
 <hr>
 <h4 id="2-reset_handler-7-bước-hal_init_gnu-asm52-138">2 · <code>Reset_Handler</code> — 7 bước (<code>hal_init_gnu.asm:52-138</code>)</h4>
-  <img src="../LPPP_Reset_Handler.png" alt="" style="max-width: 100%; height: auto;">
-
+<pre><code>① Disable_interrupts        MRS/ORR/MSR cpsr  ← set I_Bit|F_Bit (0xC0), tắt IRQ+FIQ
+② disable_caches            SCTLR: clear bit12 (I-cache), bit2 (D-cache); DSB/ISB
+③ disable_MPU               SCTLR: clear bit0; DSB/ISB
+④ _wait_for_bist_repair     poll [0xE8240808] &amp; 1 == 0   ← chờ BIST/repair SRAM xong
+                            (0xE8240808 = PMU_CONFIG vùng, bit "bist repair done")
+⑤ EnableIRQsAndInterruptStacks
+       lần lượt vào FIQ→IRQ→UND→ABT→SVC mode (mỗi mode I_Bit|F_Bit vẫn set),
+       nạp SP = __PSTACK_&lt;mode&gt;_TOP__
+       kết thúc: ở lại SVC mode, ngắt vẫn TẮT
+⑥ [MPU sớm — xem §3]   +   fix bug cache Quartz:
+       ldr r4,=0xe8273000 ; ldr r0,[r4] ; bic r0,#0x100000 ; str r0,[r4]
+       ← "turn off crit word first in bspi, avoids a bug in quartz where
+          the caches can't be turned on"  (BSPI reg, clear bit 20)
+⑦ enable_caches            SCTLR: set bit12+bit2; invalidate I+D cache; ISB
+   b continue_in_2nd_stage</code></pre>
 <p><strong>Chi tiết đáng chú ý:</strong></p>
 <ul>
 <li><strong>④ BIST wait</strong> đọc <code>0xE8240808</code> (trong dải PMU <code>0xE8240000</code>). Nếu bit 0 chưa về 0 (SRAM self-repair chưa xong) thì spin. Không timeout — nhưng đây là phần cứng, luôn kết thúc.</li>
@@ -1760,14 +2227,50 @@ update_qspi:
 <p>Section <code>.stack</code> nằm <strong>sau <code>.bss</code></strong> trong LCM (không phải địa chỉ thấp cố định) → SP trỏ vào<br>LCM. LCM có điện + truy cập được từ reset, và <code>.stack</code> là <code>NOLOAD</code> nên chỉ cần gán SP.<br>Sau khi scheduler chạy, task dùng stack riêng (cấp từ heap SYSTEM), <strong>không</strong> dùng SVC stack —<br>SVC stack chỉ còn dùng cho phần lõi kernel/exception.</p>
 <hr>
 <h4 id="8-sơ-đồ-tổng">8 · Sơ đồ tổng</h4>
-  <img src="../LPPP_boot_Flow.png" alt="" style="max-width: 100%; height: auto;">
+<pre><code>BootROM (kiểm checksum mvri.bin @ QSPI CS1) ──► R4 chạy từ 0xF8000000
+   │
+ExceptionTable[0] : LDR PC, ResetAddr
+   ▼
+Reset_Handler (hal_init_gnu.asm):
+   ① tắt IRQ/FIQ   ② tắt I/D-cache   ③ tắt MPU
+   ④ chờ BIST repair SRAM (poll 0xE8240808)
+   ⑤ set SP cho FIQ/IRQ/UND/ABT/SVC ; ở lại SVC, ngắt vẫn tắt
+   ⑥ MPU sớm 4-vùng (từ mpu_table) + enable MPU ; clear BSPI crit-word bit20
+   ⑦ bật lại I/D-cache ; invalidate
+   ▼ b continue_in_2nd_stage
+continue_in_2nd_stage (hal_2nd_init_gnu.asm):
+   • stackfill 0xA5A5A5A5 các exception stack
+   • BL main   (argc=0, argv=NULL)
+   ▼
+main() [C] :
+   hal_main_initialize_sections()   ← chép .data flash→LCM, xoá .bss  (T... đã có note)
+   hwConfigInit() ; cpu_init() → cpu_initialize_mpu()  ← MPU 5-vùng bản C GHI ĐÈ bản asm
+   ... (7 giai đoạn boot — Flow LPPP.md)
+   AppInit_Initialize() → vTaskStartScheduler()   (không return)
+   while(1)
 
+── Sau khi scheduler chạy ──
+IRQ  (vector +0x18) → IrqHandler_second_stage → portSAVE_CONTEXT → irq_handler (GIC) → portRESTORE
+SWI  (vector +0x08) → SwiHandler_second_stage → portSAVE_CONTEXT → vTaskSwitchContext → portRESTORE
+FAULT (undef/prefetch/abort/fiq/unused) → r12 = mã → DumpFaultRegisters → ResetEntry2: B . (treo)</code></pre>
 <hr>
 <h4 id="9-tóm-tắt-theo-format-skill">9 · Tóm tắt (theo format skill)</h4>
 <p><strong>1. Tồn tại để làm gì:</strong> <code>.reset</code> là 2 file asm (<code>hal_vectors</code> + <code>hal_init</code>) ở offset 0 của ảnh<br>firmware, đưa R4 từ trạng thái sau reset (cache/MPU/ngắt đều tắt) tới điểm gọi được <code>main()</code> C:<br>dựng SP cho 5 chế độ ARM, chờ SRAM BIST, bật MPU tạm + cache, tô stack, <code>BL main</code>. Fault ở giai<br>đoạn này = treo vô hạn tại <code>ResetEntry2</code>, chỉ <code>r12</code> cho biết loại.</p>
 <p><strong>2. Call flow:</strong></p>
-  <img src="../LPPP_bootflow_exception.png" alt="" style="max-width: 100%; height: auto;">
+<pre><code>Reset_Handler [hal_init_gnu.asm:52]
+├─ Disable_interrupts / disable_caches / disable_MPU
+├─ _wait_for_bist_repair          [poll 0xE8240808]
+├─ EnableIRQsAndInterruptStacks   [SP cho FIQ/IRQ/UND/ABT/SVC; ở lại SVC, ngắt tắt]
+├─ MPU sớm (nếu .ifdef MPU_SETUP_AND_ENABLE — likely CHẠY)  [mpu_table 4 vùng]
+├─ clear BSPI crit-word bit20     [0xE8273000] — workaround bug cache Quartz
+├─ enable_caches
+└─ b continue_in_2nd_stage        [hal_2nd_init_gnu.asm:91]
+   ├─ stackfill_exceptions        [0xA5A5A5A5 → __stack_start__..__stack_end__]
+   └─ InvokeMain: BL main         [→ C, argc=0]
 
+Fault path:  &lt;handler&gt; MOV r12,#0xeN  →  DumpFaultRegisters  →  ResetEntry2: B .   (treo)
+Runtime IRQ: vector+0x18 → IrqHandler_second_stage → irq_handler (GIC)
+Runtime SWI: vector+0x08 → SwiHandler_second_stage → vTaskSwitchContext</code></pre>
 <p><strong>3. File đã tham chiếu:</strong></p>
 <ul>
 <li><code>Hal/quartz/asic/build/hal_vectors_gnu.asm:27-77</code></li>
@@ -2390,8 +2893,24 @@ uint32_t hwGetUncachedRamSize(void)  { return 0x0; }   /// revisit when tlb can 
 <h5 id="1-1-tên-lppp-theo-góc-nhìn-ap-dễ-nhầm">1.1 · Tên LPPP theo góc nhìn AP — dễ nhầm</h5>
 <p><code>AppMhuTest.md</code> đã ghi: <code>INPUT_PORT = 1</code> (block 1 = <code>SCPI_TX_*</code> = "AP transmit" = AP→SCP),<br><code>OUTPUT_PORT = 0</code> (block 0 = <code>SCPI_RX_*</code> = "AP receive" = SCP→AP).</p>
 <h5 id="1-2-handshake-đầy-đủ-1-lệnh-scpi">1.2 · Handshake đầy đủ (1 lệnh SCPI)</h5>
-  <img src="../LPPP_SCPI_Communication Flow.png" alt="" style="max-width: 100%; height: auto;">
-
+<pre><code>AP (Linux/ATF)                          R4 (LPPP)
+──────────────                          ─────────
+ghi lệnh vào shared mem +0x(2n+1)×128
+CPU_INTR_S_SET |= (1&lt;&lt;ch)  ────rung────►  ngắt INTNUM_MHU_tx0 (SPI 170) → mhu_handler
+  (LPPP: SCPI_TX_INT_SET, +0x10)            get_MHU_status(INPUT_PORT=1) đọc +0x0C (SCPI_TX_INT_STATUS)
+                                            → duyệt bit, invalidate cache, memcpy header
+                                            clear_MHU(INPUT_PORT=1, 1&lt;&lt;bit) ghi +0x14 (SCPI_TX_INT_CLEAR)  ← ACK "tao lấy rồi"
+                                            xQueueSendFromISR(got_msg_qhandle)
+                                          ─────────────────────────────────
+                                          AppMhuTest: process_scpi_cmd()
+                                            ghi response vào shared mem +0x(2n)×128
+                                            cpu_dcache_writeback_region(header_dest, 256)
+   ◄──────rung────  write_MHU(OUTPUT_PORT=0, 1&lt;&lt;ch) ghi +0x04 (SCPI_RX_INT_SET)
+đọc CPU_INTR... thực ra AP đọc                do { get_MHU_status(OUTPUT_PORT=0) đọc +0x00 }
+SCP_INTR_S_STAT (+0x00) thấy bell             while (i &amp; (1&lt;&lt;ch))   ← ⚠ BUSY-WAIT KHÔNG TIMEOUT
+đọc response từ shared mem
+SCP_INTR_S_CLEAR |= (1&lt;&lt;ch)  ──────────►      vòng busy-wait thoát khi AP xoá bit +0x00
+  (+0x08)                                     → quay lại xQueueReceive</code></pre>
 <h5 id="1-3-phía-atf-dùng-mhu-thế-nào-mhu-c63-113">1.3 · Phía ATF dùng MHU thế nào (<code>mhu.c:63-113</code>)</h5>
 <pre class="lang-c"><code>mhu_secure_message_start(slot)  → while (CPU_INTR_S_STAT &amp; (1&lt;&lt;slot));   // chờ lệnh trước xong
 mhu_secure_message_send(slot)   → CPU_INTR_S_SET = 1&lt;&lt;slot;             // gửi

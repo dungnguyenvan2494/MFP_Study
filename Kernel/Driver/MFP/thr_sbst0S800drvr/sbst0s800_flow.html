@@ -1,0 +1,725 @@
+<title>thr_sbst0S800drvr</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --bg:       #0B0F14;
+    --surface:  #141B24;
+    --card:     #1A2535;
+    --border:   #243347;
+    --blue:     #2F7FC1;
+    --blue-dim: #1E4E7A;
+    --green:    #3DBA6F;
+    --green-dim:#1D5A37;
+    --amber:    #E0A83B;
+    --amber-dim:#6B4D14;
+    --red:      #C95252;
+    --red-dim:  #5A2020;
+    --slate:    #8899AA;
+    --text:     #C8D8E8;
+    --text-dim: #566878;
+    --mono:     'JetBrains Mono', 'Fira Mono', monospace;
+    --sans:     'Inter', system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:       #EEF2F7;
+      --surface:  #FFFFFF;
+      --card:     #F0F4FA;
+      --border:   #C8D4E4;
+      --blue:     #1A5FA0;
+      --blue-dim: #D0E4F5;
+      --green:    #1E7A46;
+      --green-dim:#D0F0E0;
+      --amber:    #8C6010;
+      --amber-dim:#FFF0C8;
+      --red:      #A02828;
+      --red-dim:  #FAD8D8;
+      --slate:    #5A6E82;
+      --text:     #1A2535;
+      --text-dim: #8899AA;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:       #0B0F14;
+    --surface:  #141B24;
+    --card:     #1A2535;
+    --border:   #243347;
+    --blue:     #2F7FC1;
+    --blue-dim: #1E4E7A;
+    --green:    #3DBA6F;
+    --green-dim:#1D5A37;
+    --amber:    #E0A83B;
+    --amber-dim:#6B4D14;
+    --red:      #C95252;
+    --red-dim:  #5A2020;
+    --slate:    #8899AA;
+    --text:     #C8D8E8;
+    --text-dim: #566878;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px 20px 40px;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    max-width: 1120px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+  }
+  .page-title {
+    font-family: var(--mono);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: -0.02em;
+  }
+  .page-sub {
+    font-size: 0.8rem;
+    color: var(--slate);
+    padding-bottom: 2px;
+  }
+  .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: var(--slate);
+    font-family: var(--mono);
+  }
+  .legend-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Swimlane wrapper ── */
+  .diagram {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 160px 1fr 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .lane-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--slate);
+  }
+  .lane-header.phase { background: var(--bg); color: var(--text-dim); }
+  .lane-header.kern  { background: var(--blue-dim); color: var(--blue); }
+  .lane-header.hw    { background: var(--green-dim); color: var(--green); }
+  .lane-header.us    { background: var(--amber-dim); color: var(--amber); }
+
+  /* ── Phase rows ── */
+  .phase-label {
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 6px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    row-span: 1;
+  }
+
+  .cell {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 14px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cell:last-child { border-right: none; }
+  .cell.hw   { background: color-mix(in srgb, var(--surface) 92%, var(--green)); }
+  .cell.us   { background: color-mix(in srgb, var(--surface) 92%, var(--amber)); }
+
+  /* ── Node (function box) ── */
+  .node {
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.45;
+    position: relative;
+    border-left: 3px solid transparent;
+  }
+  .node.blue  { background: var(--blue-dim);  border-color: var(--blue);  color: var(--text); }
+  .node.green { background: var(--green-dim); border-color: var(--green); color: var(--text); }
+  .node.amber { background: var(--amber-dim); border-color: var(--amber); color: var(--text); }
+  .node.red   { background: var(--red-dim);   border-color: var(--red);   color: var(--text); }
+  .node.stub  { background: var(--card);      border-color: var(--border); color: var(--text-dim); }
+  .node.kern  { background: var(--card);      border-color: var(--blue);  color: var(--text); }
+
+  .node-name { display: block; }
+  .node-note {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--slate);
+    margin-top: 2px;
+    font-family: var(--sans);
+    font-weight: 400;
+  }
+
+  /* ── Arrow ── */
+  .arrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    font-family: var(--mono);
+    padding-left: 4px;
+  }
+  .arrow::before { content: '↓'; font-size: 0.9rem; color: var(--border); flex-shrink: 0; }
+  .arrow.right::before { content: '→'; }
+  .arrow.blue::before  { color: var(--blue); }
+  .arrow.green::before { color: var(--green); }
+  .arrow.amber::before { color: var(--amber); }
+  .arrow.red::before   { color: var(--red); }
+
+  /* ── Ioctl table ── */
+  .ioctl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+  }
+  .ioctl-table th {
+    text-align: left;
+    color: var(--slate);
+    font-weight: 600;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--sans);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.62rem;
+  }
+  .ioctl-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    line-height: 1.4;
+  }
+  .ioctl-table tr:last-child td { border-bottom: none; }
+  .ioctl-table .cmd { color: var(--amber); }
+  .ioctl-table .fn  { color: var(--blue); }
+  .ioctl-table .note { color: var(--slate); font-family: var(--sans); font-size: 0.65rem; }
+  .ioctl-num {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    display: inline-block;
+    min-width: 38px;
+  }
+
+  /* ── Interrupt section ── */
+  .irq-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .irq-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--green);
+    font-family: var(--sans);
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--green-dim);
+    margin-bottom: 2px;
+  }
+
+  /* ── Full-width section (cross-lane) ── */
+  .full-row {
+    grid-column: 1 / -1;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .full-row .tag {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-size: 0.65rem;
+    color: var(--slate);
+    font-family: var(--sans);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* flags / badge row */
+  .flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 4px;
+  }
+  .flag {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--slate);
+  }
+  .flag.on { border-color: var(--blue); color: var(--blue); }
+  .flag.cond { border-color: var(--amber); color: var(--amber); }
+
+  .section-note {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    font-family: var(--sans);
+    line-height: 1.5;
+  }
+  .kv { display: flex; flex-direction: column; gap: 4px; }
+  .kv-row { display: flex; gap: 8px; align-items: baseline; }
+  .kv-k { font-family: var(--mono); font-size: 0.68rem; color: var(--blue); min-width: 120px; }
+  .kv-v { font-family: var(--sans); font-size: 0.68rem; color: var(--text-dim); }
+
+  /* bottom meta */
+  .meta {
+    max-width: 1120px;
+    margin: 16px auto 0;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  .meta-item {
+    display: flex;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .meta-item span:first-child { color: var(--slate); }
+</style>
+
+<!-- ═══════════ PAGE HEADER ═══════════ -->
+<header class="page-header">
+  <div>
+    <div class="page-title">thr_sbst0S800drvr</div>
+    <div class="page-sub">Kernel driver flow — S800 MFP ASIC (Dev0109 / ASIC777)</div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Kernel / driver</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Userspace / ioctl</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Hardware / IRQ</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Exit / cleanup</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--border)"></div>Stub (no-op)</div>
+  </div>
+</header>
+
+<!-- ═══════════ DIAGRAM GRID ═══════════ -->
+<div class="diagram">
+
+  <!-- ── Column headers ── -->
+  <div class="lane-header phase">Phase</div>
+  <div class="lane-header us">Userspace / ioctl</div>
+  <div class="lane-header kern">Kernel Driver Core</div>
+  <div class="lane-header hw">Hardware / IRQ</div>
+
+  <!-- ════════ ROW: INIT ════════ -->
+  <div class="phase-label">Init</div>
+
+  <!-- Userspace -->
+  <div class="cell us">
+    <div class="section-note">Module loaded by kernel at boot or <code style="font-family:var(--mono);font-size:0.68rem">insmod</code>.</div>
+    <div class="section-note" style="margin-top:4px">Device node appears at:</div>
+    <div class="node amber" style="margin-top:4px">
+      <span class="node-name">/dev/sbst0S800drvr</span>
+      <span class="node-note">created via device_create() on ps_MfpClass</span>
+    </div>
+    <div class="flags">
+      <div class="flag on">MODULE_LICENSE: GPL</div>
+      <div class="flag cond">CONFIG_CSRC_ASIC777_16750</div>
+      <div class="flag cond">CONFIG_KM_SELECTIVE_SUSPEND</div>
+    </div>
+  </div>
+
+  <!-- Kernel core -->
+  <div class="cell">
+    <div class="node blue">
+      <span class="node-name">THRL_Dev0109Drvr_install()</span>
+      <span class="node-note">__init entry point — module_init()</span>
+    </div>
+    <div class="arrow blue">alloc_chrdev_region()</div>
+    <div class="node kern">
+      <span class="node-name">cdev_init() + cdev_add()</span>
+      <span class="node-note">registers file_operations: open, release, ioctl, read, write, poll</span>
+    </div>
+    <div class="arrow blue">device_create(ps_MfpClass, …, "sbst0S800drvr")</div>
+    <div class="node blue">
+      <span class="node-name">proc_mkdir("sbst0S800drvr")</span>
+      <span class="node-note">procfs entry for debug info / interrupt counters</span>
+    </div>
+    <div class="arrow blue">THRF_Dev0109Bios_init()</div>
+    <div class="node kern">
+      <span class="node-name">THRL_Dev0102_Int()</span>
+      <span class="node-note">ASIC22 / Dev0102 device setup</span>
+    </div>
+    <div class="arrow blue">of_find_compatible_node("mc,tod_req")</div>
+    <div class="node blue">
+      <span class="node-name">request_irq(ui_modirq, _THRF_TOD_Interrupt, IRQF_SHARED)</span>
+      <span class="node-note">registers TOD interrupt from device-tree node</span>
+    </div>
+    <div class="arrow blue">request_irq(ui_irq, THRL_SysDev0109Int_1, IRQF_SHARED)</div>
+    <div class="node kern">
+      <span class="node-name">b_IntTODInitializingFlg = False</span>
+      <span class="node-note">unlocks TOD interrupt handling after first registration</span>
+    </div>
+  </div>
+
+  <!-- Hardware -->
+  <div class="cell hw">
+    <div class="kv" style="margin-top:4px">
+      <div class="kv-row"><span class="kv-k">UART I16750_0</span><span class="kv-v">GIC int #43</span></div>
+      <div class="kv-row"><span class="kv-k">UART I16750_1</span><span class="kv-v">GIC int #44</span></div>
+      <div class="kv-row"><span class="kv-k">TOD IRQ</span><span class="kv-v">from DT "mc,tod_req"</span></div>
+      <div class="kv-row"><span class="kv-k">DEV0109 HW IRQ</span><span class="kv-v">THRF_get_Dev0109_IRQNo()</span></div>
+    </div>
+    <div class="section-note" style="margin-top:8px; color:var(--green)">Two IRQs registered at init: TOD line + ASIC HW line.</div>
+  </div>
+
+  <!-- ════════ ROW: FILE OPS ════════ -->
+  <div class="phase-label">File ops</div>
+
+  <div class="cell us">
+    <div class="section-note">Application calls standard POSIX file syscalls on the device node.</div>
+    <div class="flags" style="margin-top:8px">
+      <div class="flag">open()</div>
+      <div class="flag">close()</div>
+      <div class="flag">read()</div>
+      <div class="flag">write()</div>
+      <div class="flag">poll()</div>
+      <div class="flag on">ioctl() ← main API</div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="node stub">
+      <span class="node-name">THRL_Dev0109Drvr_open()</span>
+      <span class="node-note">stub — returns 0</span>
+    </div>
+    <div class="node stub">
+      <span class="node-name">THRL_Dev0109Drvr_close()</span>
+      <span class="node-note">stub — returns 0</span>
+    </div>
+    <div class="node stub">
+      <span class="node-name">THRL_Dev0109drvr_read()</span>
+      <span class="node-note">stub — returns 0</span>
+    </div>
+    <div class="node stub">
+      <span class="node-name">THRL_Dev0109drvr_write()</span>
+      <span class="node-note">stub — returns 0</span>
+    </div>
+    <div class="node stub">
+      <span class="node-name">THRL_Dev0109drvr_select()</span>
+      <span class="node-note">stub — returns 0 (poll)</span>
+    </div>
+  </div>
+
+  <div class="cell hw">
+    <div class="section-note" style="color:var(--text-dim)">No hardware interaction from stub file ops. All device control goes through ioctl.</div>
+  </div>
+
+  <!-- ════════ ROW: IOCTL ════════ -->
+  <div class="phase-label">ioctl</div>
+
+  <div class="cell us">
+    <div class="node amber">
+      <span class="node-name">ThrAsic777DrvrIf.cpp</span>
+      <span class="node-note">userspace wrapper — calls ioctl() on /dev/sbst00777drvr (mapped to this driver)</span>
+    </div>
+    <div class="arrow amber">THRL_Drvrif_EnableTODInterrupt_Asic777()</div>
+    <div class="arrow amber">THRL_Drvrif_DisableTODInterrupt_Asic777()</div>
+    <div class="arrow amber">THRL_Drvrif_CheckEnableTODInterrupt_Asic777()</div>
+    <div class="arrow amber">THRL_Drvrif_McCpuIf_ReceiveFromProcess_Asic777()</div>
+    <div class="arrow amber">THRL_Asic777Drvr_ReqDbgPrintReg()</div>
+  </div>
+
+  <div class="cell">
+    <div class="node blue">
+      <span class="node-name">THRL_Dev0109Drvr_ioctl()</span>
+      <span class="node-note">unlocked_ioctl dispatch — validates cmd ≥ THRD_DEV0109_MIN_COMMAND</span>
+    </div>
+    <div style="margin-top:4px; overflow-x:auto">
+      <table class="ioctl-table">
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>Code</th>
+            <th>Handler</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="cmd">ENABLE_TODINTERRUPT</td>
+            <td class="note"><span class="ioctl-num">10001</span></td>
+            <td class="fn">THRF_EnableTODInterrupt_Dev0109()<br><span class="note">→ enable_irq(ui_modirq)</span></td>
+          </tr>
+          <tr>
+            <td class="cmd">DISABLE_TODINTERRUPT</td>
+            <td class="note"><span class="ioctl-num">10002</span></td>
+            <td class="fn">THRF_DisableTODInterrupt_Dev0109()<br><span class="note">→ disable_irq(ui_modirq)</span></td>
+          </tr>
+          <tr>
+            <td class="cmd">CHECK_TODINTERRUPT</td>
+            <td class="note"><span class="ioctl-num">10003</span></td>
+            <td class="fn">THRF_CheckEnableTODInterrupt_Dev0109()<br><span class="note">→ copy_to_user(b_IntTODFlg)</span></td>
+          </tr>
+          <tr>
+            <td class="cmd">MCCPUIF_RECEIVE</td>
+            <td class="note"><span class="ioctl-num">10004</span></td>
+            <td class="fn">mccpuif_receive_from_process()<br><span class="note">→ McCPU I/F data path</span></td>
+          </tr>
+          <tr>
+            <td class="cmd">DBG_PRINT_REG</td>
+            <td class="note"><span class="ioctl-num">90001</span></td>
+            <td class="fn">THRL_Dev0109Drvr_DbgPrintReg()<br><span class="note">→ copy_from_user → dump regs</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cell hw">
+    <div class="irq-block">
+      <div class="irq-label">Enable path</div>
+      <div class="node green">
+        <span class="node-name">enable_irq(ui_modirq)</span>
+        <span class="node-note">sets b_IntTODFlg = True</span>
+      </div>
+    </div>
+    <div class="irq-block" style="margin-top:10px">
+      <div class="irq-label">Disable path</div>
+      <div class="node green">
+        <span class="node-name">disable_irq(ui_modirq)</span>
+        <span class="node-note">sets b_IntTODFlg = False</span>
+      </div>
+    </div>
+    <div class="irq-block" style="margin-top:10px">
+      <div class="irq-label">McCPU I/F</div>
+      <div class="node green">
+        <span class="node-name">mccpuif.c</span>
+        <span class="node-note">data transfer from main CPU process</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ ROW: IRQ ════════ -->
+  <div class="phase-label">IRQ</div>
+
+  <div class="cell us">
+    <div class="section-note">Hardware signals arrive asynchronously. Two independent IRQ lines are handled.</div>
+  </div>
+
+  <div class="cell">
+    <div class="irq-block">
+      <div class="irq-label">TOD interrupt (mc,tod_req DT node)</div>
+      <div class="node green">
+        <span class="node-name">_THRF_TOD_Interrupt()</span>
+        <span class="node-note">top-half: checks irq == ui_modirq</span>
+      </div>
+      <div class="arrow green">THRF_TOD_Interrupt_Dev0109()</div>
+      <div class="node green">
+        <span class="node-name">disable_irq_nosync(ui_modirq)</span>
+        <span class="node-note">b_IntTODFlg = False</span>
+      </div>
+      <div class="arrow green">THRF_CbBitPort_Out_Long(IREQ_DEV0201_OUT, 1)</div>
+      <div class="node green">
+        <span class="node-name">THRF_SetIreqEn_Dev0109()</span>
+        <span class="node-note">writes X_IREQEN reg — X_IREQBIN stop (0x02)</span>
+      </div>
+      <div class="arrow green">int_sendMessageDrv(TID_ReqProcHigh, TM_REQ_intTOD)</div>
+      <div class="node blue">
+        <span class="node-name">→ Process thread wakeup</span>
+        <span class="node-note">RTSIG sent to userspace thread TID_ReqProcHigh</span>
+      </div>
+    </div>
+
+    <div class="irq-block" style="margin-top:14px">
+      <div class="irq-label">DEV0109 HW interrupt</div>
+      <div class="node green">
+        <span class="node-name">THRL_SysDev0109Int_1()</span>
+        <span class="node-note">gets BIOS instance via THRL_ThreadBios_getAsic_1()</span>
+      </div>
+      <div class="arrow green">THRL_BIOS_Dev0109_getInterrupt()</div>
+      <div class="node green">
+        <span class="node-name">ps_AsicInt->pfc_InterruptAsic(ps_AsicInt)</span>
+        <span class="node-note">function pointer dispatch to BIOS interrupt handler</span>
+      </div>
+      <div class="node stub" style="margin-top:4px">
+        <span class="node-name">return IRQ_HANDLED</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cell hw">
+    <div class="irq-block">
+      <div class="irq-label">TOD signal source</div>
+      <div class="node green">
+        <span class="node-name">ASIC TOD hardware</span>
+        <span class="node-note">Time-Of-Day timer fires → GIC → kernel</span>
+      </div>
+    </div>
+    <div class="irq-block" style="margin-top:10px">
+      <div class="irq-label">IREQ register (BaseAddr 4)</div>
+      <div class="node green">
+        <span class="node-name">X_IREQEN[1:0]</span>
+        <span class="node-note">[0] X_IREQAIN allow<br>[1] X_IREQBIN stop on H→L</span>
+      </div>
+    </div>
+    <div class="irq-block" style="margin-top:10px">
+      <div class="irq-label">DEV0109 ASIC line</div>
+      <div class="node green">
+        <span class="node-name">ASIC HW interrupt</span>
+        <span class="node-note">dispatched via BIOS function pointer</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ ROW: POWER MGMT ════════ -->
+  <div class="phase-label">PM</div>
+
+  <div class="cell us">
+    <div class="section-note">Power state controlled via sysfs <code style="font-family:var(--mono);font-size:0.68rem">/sys/…/power/level</code></div>
+    <div class="flags" style="margin-top:8px">
+      <div class="flag cond">#ifdef CONFIG_KM_SELECTIVE_SUSPEND</div>
+    </div>
+    <div class="section-note" style="margin-top:8px">States: <code style="font-family:var(--mono);font-size:0.68rem">SUSPEND_ON</code> / <code style="font-family:var(--mono);font-size:0.68rem">SUSPEND_L1</code> / <code style="font-family:var(--mono);font-size:0.68rem">SUSPEND_L2</code></div>
+  </div>
+
+  <div class="cell">
+    <div class="irq-block">
+      <div class="irq-label">Suspend path</div>
+      <div class="node blue">
+        <span class="node-name">THRL_Dev0109DrvrSuspend(sc_Status)</span>
+      </div>
+      <div class="arrow blue">disable_irq(Dev0109_IRQNo)</div>
+      <div class="node kern">
+        <span class="node-name">THRF_Dev0102_Device_Suspend()</span>
+        <span class="node-note">b_Dev0109_suspend = True</span>
+      </div>
+      <div class="node stub" style="margin-top:2px">
+        <span class="node-name">platform_data → selective_suspend_state = L1/L2</span>
+      </div>
+    </div>
+    <div class="irq-block" style="margin-top:12px">
+      <div class="irq-label">Resume path (incl. Warp!! resume)</div>
+      <div class="node blue">
+        <span class="node-name">THRL_Dev0109DrvrResume(sc_Status)</span>
+      </div>
+      <div class="arrow blue">THRL_Dev0109IntConfReg() → THRL_BIOS_Dev0109_init()</div>
+      <div class="node kern">
+        <span class="node-name">THRF_Dev0102_Device_Resume()</span>
+        <span class="node-note">b_Dev0109_suspend = False</span>
+      </div>
+      <div class="arrow blue">enable_irq(Dev0109_IRQNo)</div>
+    </div>
+  </div>
+
+  <div class="cell hw">
+    <div class="irq-block">
+      <div class="irq-label">Warp!! (deep sleep)</div>
+      <div class="node green">
+        <span class="node-name">pm_device_down</span>
+        <span class="node-note">WARP_STATE_SUSPEND / WARP_STATE_RESUME checked in both paths</span>
+      </div>
+    </div>
+    <div class="section-note" style="margin-top:10px; color:var(--text-dim)">On Warp!! resume, state forced to <code style="font-family:var(--mono);font-size:0.68rem">SUSPEND_ON</code> regardless of requested level.</div>
+  </div>
+
+  <!-- ════════ ROW: EXIT ════════ -->
+  <div class="phase-label">Exit</div>
+
+  <div class="cell us">
+    <div class="section-note">Module removed via <code style="font-family:var(--mono);font-size:0.68rem">rmmod</code> or system shutdown.</div>
+  </div>
+
+  <div class="cell">
+    <div class="node red">
+      <span class="node-name">THRL_Dev0109Drvr_uninstall()</span>
+      <span class="node-note">__exit — module_exit()</span>
+    </div>
+    <div class="arrow red">THRL_Dev0109Drvr_Uninit() — no-op for S800</div>
+    <div class="node red">
+      <span class="node-name">THRL_Destroy_FreeContainer()</span>
+    </div>
+    <div class="arrow red">THRL_Dev0109drvr_DestroyDevt()</div>
+    <div class="node red">
+      <span class="node-name">device_destroy(ps_MfpClass, ul_Dev0109_Devt)</span>
+    </div>
+    <div class="arrow red">cdev_del() → unregister_chrdev_region()</div>
+    <div class="node red">
+      <span class="node-name">kfree(ps_Dev0109Device->platform_data)</span>
+      <span class="node-note">selective suspend attrs removed (if CONFIG_KM_SELECTIVE_SUSPEND)</span>
+    </div>
+  </div>
+
+  <div class="cell hw">
+    <div class="section-note" style="color:var(--text-dim)">IRQs freed implicitly. No explicit <code style="font-family:var(--mono);font-size:0.68rem">free_irq()</code> call present in exit path — relies on module teardown.</div>
+  </div>
+
+</div><!-- .diagram -->
+
+<!-- ── Meta strip ── -->
+<div class="meta">
+  <div class="meta-item"><span>file</span><span>Kernel/K-S800/Src/drivers/mfp/thr_sbst0S800drvr/thr_sbst0S800drvr.c</span></div>
+  <div class="meta-item"><span>version</span><span>1.0 (2016/11/29)</span></div>
+  <div class="meta-item"><span>device</span><span>sbst0S800drvr → /dev/sbst0S800drvr</span></div>
+  <div class="meta-item"><span>license</span><span>GPL</span></div>
+  <div class="meta-item"><span>platform</span><span>S800 SoC / ASIC777 / ap806 GIC</span></div>
+</div>

@@ -1,0 +1,531 @@
+<title>Dev0109 ASIC Deep Dive</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --bg:       #0B0F14;
+    --surface:  #141B24;
+    --card:     #1A2535;
+    --card2:    #101823;
+    --border:   #243347;
+    --blue:     #2F7FC1;
+    --blue-dim: #1E4E7A;
+    --green:    #3DBA6F;
+    --green-dim:#1D5A37;
+    --amber:    #E0A83B;
+    --amber-dim:#6B4D14;
+    --red:      #C95252;
+    --red-dim:  #5A2020;
+    --purple:   #9B7FD4;
+    --purple-dim:#4A3A70;
+    --slate:    #8899AA;
+    --text:     #C8D8E8;
+    --text-dim: #566878;
+    --mono:     'JetBrains Mono', 'Fira Mono', monospace;
+    --sans:     'Inter', system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:#EEF2F7; --surface:#FFFFFF; --card:#F0F4FA; --card2:#E6ECF5; --border:#C8D4E4;
+      --blue:#1A5FA0; --blue-dim:#D0E4F5; --green:#1E7A46; --green-dim:#D0F0E0;
+      --amber:#8C6010; --amber-dim:#FFF0C8; --red:#A02828; --red-dim:#FAD8D8;
+      --purple:#6B4FA0; --purple-dim:#E8DFF7;
+      --slate:#5A6E82; --text:#1A2535; --text-dim:#8899AA;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0B0F14; --surface:#141B24; --card:#1A2535; --card2:#101823; --border:#243347;
+    --blue:#2F7FC1; --blue-dim:#1E4E7A; --green:#3DBA6F; --green-dim:#1D5A37;
+    --amber:#E0A83B; --amber-dim:#6B4D14; --red:#C95252; --red-dim:#5A2020;
+    --purple:#9B7FD4; --purple-dim:#4A3A70;
+    --slate:#8899AA; --text:#C8D8E8; --text-dim:#566878;
+  }
+
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:14px}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+
+  /* header */
+  .hero{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:32px}
+  .eyebrow{font-family:var(--mono);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--blue);margin-bottom:6px}
+  h1{font-family:var(--mono);font-size:1.5rem;font-weight:600;letter-spacing:-0.02em;text-wrap:balance}
+  .hero p{color:var(--text-dim);font-size:0.85rem;margin-top:8px;max-width:640px;line-height:1.6}
+
+  /* section nav */
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 40px}
+  .toc a{font-family:var(--mono);font-size:0.68rem;color:var(--slate);text-decoration:none;background:var(--card);border:1px solid var(--border);border-radius:4px;padding:5px 10px}
+  .toc a:hover{color:var(--blue);border-color:var(--blue)}
+
+  section{margin-bottom:52px}
+  .sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:10px}
+  .sec-num{font-family:var(--mono);font-size:0.9rem;color:var(--text-dim);font-weight:600}
+  .sec-title{font-family:var(--sans);font-size:1.15rem;font-weight:700}
+  .sec-sub{color:var(--text-dim);font-size:0.8rem;margin:10px 0 20px;line-height:1.65;max-width:760px}
+  .sec-sub code{font-family:var(--mono);font-size:0.78rem;color:var(--blue);background:var(--card);padding:1px 5px;border-radius:3px}
+
+  figure{margin:0 0 18px}
+  figure svg{max-width:100%;height:auto;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+  figcaption{font-size:0.72rem;color:var(--text-dim);margin-top:8px;line-height:1.5;font-family:var(--sans)}
+  figcaption b{color:var(--text)}
+
+  .svgtext{font-family:var(--mono)}
+  .svglabel{font-family:var(--sans)}
+
+  /* fact grid */
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:18px}
+  .fact{background:var(--surface);padding:14px 16px}
+  .fact-k{font-family:var(--mono);font-size:0.68rem;color:var(--blue);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
+  .fact-v{font-size:0.78rem;color:var(--text);line-height:1.55}
+  .fact-v code{font-family:var(--mono);font-size:0.72rem;color:var(--amber)}
+
+  /* source citation */
+  .src{font-family:var(--mono);font-size:0.64rem;color:var(--text-dim);margin-top:4px}
+  .src::before{content:"↳ "}
+
+  footer{border-top:1px solid var(--border);padding-top:16px;margin-top:20px;font-family:var(--mono);font-size:0.68rem;color:var(--text-dim);display:flex;gap:20px;flex-wrap:wrap}
+</style>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Reverse-engineered from source · Kernel/K-S800</div>
+    <h1>Dev0109 (ASIC777) — kiến trúc chi tiết</h1>
+    <p>Đào sâu 8 tầng: quan hệ ASIC, pipeline DMA ảnh, cây interrupt, AXI arbiter, UART 16750, và state machine power management — dựng từ struct thật trong <code style="font-family:var(--mono)">thr_sbst0S800Bios.h</code> (2677 dòng) và các file liên quan.</p>
+  </div>
+
+  <div class="toc">
+    <a href="#l1">1. Quan hệ ASIC</a>
+    <a href="#l2">2. Pipeline DMA</a>
+    <a href="#l3">3. Cây Interrupt</a>
+    <a href="#l4">4. AXI & Memory</a>
+    <a href="#l5">5. UART 16750</a>
+    <a href="#l6">6. Power Management</a>
+  </div>
+
+  <!-- ═══════════ LAYER 1 ═══════════ -->
+  <section id="l1">
+    <div class="sec-head"><span class="sec-num">01</span><span class="sec-title">Quan hệ Dev0109 ↔ Dev0102</span></div>
+    <p class="sec-sub">Một kernel module (<code>sbst0S800drvr.ko</code>) điều khiển <b style="color:var(--text)">hai ASIC khác nhau</b> qua cùng một device node. Dev0109 (bí danh ASIC777) là chip xử lý ảnh chính; Dev0102 (ASIC22) là chip phụ trợ, được "kế thừa" từ driver đời trước.</p>
+
+    <figure>
+      <svg viewBox="0 0 1100 380" role="img" aria-label="Sơ đồ quan hệ giữa userspace, kernel driver, Dev0109 và Dev0102">
+        <defs>
+          <marker id="a1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="currentColor"/></marker>
+        </defs>
+        <!-- userspace -->
+        <rect x="30" y="30" width="220" height="60" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <text x="140" y="55" text-anchor="middle" class="svgtext" font-size="12" fill="currentColor">ThrAsic777DrvrIf.cpp</text>
+        <text x="140" y="72" text-anchor="middle" class="svglabel" font-size="10" fill="var(--slate)">userspace ioctl caller</text>
+
+        <line x1="140" y1="90" x2="140" y2="140" stroke="currentColor" stroke-width="1.5" marker-end="url(#a1)"/>
+        <text x="150" y="118" class="svglabel" font-size="9.5" fill="var(--slate)">open+ioctl(/dev/sbst0S800drvr)</text>
+
+        <!-- kernel driver box -->
+        <rect x="30" y="140" width="1040" height="90" rx="6" fill="var(--blue-dim)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="50" y="165" class="svgtext" font-size="12" font-weight="600" fill="currentColor">thr_sbst0S800drvr.c — one cdev, one ioctl dispatcher</text>
+        <text x="50" y="185" class="svglabel" font-size="9.5" fill="var(--slate)">THRL_Dev0109Drvr_ioctl() switches on command ID, but calls into TWO separate BIOS layers depending on target ASIC</text>
+
+        <rect x="50" y="198" width="480" height="24" rx="4" fill="var(--card)" stroke="var(--border)"/>
+        <text x="60" y="214" class="svgtext" font-size="10" fill="currentColor">thr_sbst0S800Bios.c  →  THRS_BIOS_Dev0109*</text>
+        <rect x="550" y="198" width="480" height="24" rx="4" fill="var(--card)" stroke="var(--border)"/>
+        <text x="560" y="214" class="svgtext" font-size="10" fill="currentColor">thr_sbst00022Bios.c  →  THRS_BIOS_Dev0102*</text>
+
+        <!-- two branches -->
+        <line x1="280" y1="230" x2="280" y2="270" stroke="var(--green)" stroke-width="1.5" marker-end="url(#a1)"/>
+        <line x1="800" y1="230" x2="800" y2="270" stroke="var(--purple)" stroke-width="1.5" marker-end="url(#a1)"/>
+
+        <!-- Dev0109 box -->
+        <rect x="60" y="270" width="440" height="90" rx="6" fill="var(--green-dim)" stroke="var(--green)" stroke-width="1.5"/>
+        <text x="80" y="295" class="svgtext" font-size="12" font-weight="600" fill="currentColor">Dev0109 = "ASIC777"</text>
+        <text x="80" y="313" class="svglabel" font-size="9.5" fill="var(--slate)">Main image-processing ASIC</text>
+        <text x="80" y="329" class="svglabel" font-size="9.5" fill="var(--slate)">59 DMA channels · TOD IRQ · own IRQ line (Dev0109_IRQNo)</text>
+        <text x="80" y="345" class="svglabel" font-size="9.5" fill="var(--slate)">registered as THRE_AsicUID_Asic_1</text>
+
+        <!-- Dev0102 box -->
+        <rect x="580" y="270" width="440" height="90" rx="6" fill="var(--purple-dim)" stroke="var(--purple)" stroke-width="1.5"/>
+        <text x="600" y="295" class="svgtext" font-size="12" font-weight="600" fill="currentColor">Dev0102 = "ASIC22"</text>
+        <text x="600" y="313" class="svglabel" font-size="9.5" fill="var(--slate)">Companion / I-O controller chip</text>
+        <text x="600" y="329" class="svglabel" font-size="9.5" fill="var(--slate)">fixed IRQ = 85 (THRD_Dev0102_IRQNo) · tasklet-based ISR</text>
+        <text x="600" y="345" class="svglabel" font-size="9.5" fill="var(--slate)">code literally ported from the older "Asic22drvr" module</text>
+      </svg>
+      <figcaption><b>Vì sao gộp chung driver:</b> comment trong <code style="font-family:var(--mono)">thr_sbst0S800drvr.h</code> ghi rõ <code style="font-family:var(--mono)">// Asic22drv から移植</code> (ported from Asic22drv) — khi S800 SoC ra đời, đội phát triển sáp nhập driver ASIC22 cũ vào driver S800 mới thay vì viết lại, để tái dùng code đã kiểm chứng.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><div class="fact-k">Device node</div><div class="fact-v">Một node duy nhất <code>/dev/sbst0S800drvr</code> cho cả 2 ASIC — phân biệt bằng ioctl command range (Dev0109: 10000+, Dev0102: 99999)</div></div>
+      <div class="fact"><div class="fact-k">IRQ line</div><div class="fact-v">Dev0109 dùng <code>THRF_get_Dev0109_IRQNo()</code> (dynamic, từ device tree); Dev0102 hard-code <code>THRD_Dev0102_IRQNo = 85</code></div></div>
+      <div class="fact"><div class="fact-k">Softc struct</div><div class="fact-v"><code>THRS_Dev0102DRVR_SOFTC</code> chứa <code>tasklet_struct</code> — Dev0102 dùng bottom-half tasklet, Dev0109 xử lý thẳng trong hard-IRQ context</div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════ LAYER 2 ═══════════ -->
+  <section id="l2">
+    <div class="sec-head"><span class="sec-num">02</span><span class="sec-title">Pipeline DMA — 59 kênh, 6 nhóm chức năng</span></div>
+    <p class="sec-sub">Header định nghĩa DMA00→DMA56 + DMA990/991. Nhóm theo <code>_MAX</code> macro và số lượng address register (In/Out/Delay/Compress) trong struct — suy ra được vai trò thật của từng cụm.</p>
+
+    <figure>
+      <svg viewBox="0 0 1140 300" role="img" aria-label="Pipeline DMA từ scanner đến printer qua 6 cụm chức năng">
+        <defs>
+          <marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="currentColor"/></marker>
+        </defs>
+
+        <!-- flow row -->
+        <!-- ExtInput -->
+        <rect x="20" y="90" width="150" height="80" rx="6" fill="var(--card)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="95" y="112" text-anchor="middle" class="svgtext" font-size="11" font-weight="600" fill="currentColor">DMA20–21</text>
+        <text x="95" y="128" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">ExpInput</text>
+        <text x="95" y="142" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">(ngoại vi/scanner</text>
+        <text x="95" y="154" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">vào ASIC)</text>
+
+        <line x1="170" y1="130" x2="215" y2="130" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- FUNC0202 -->
+        <rect x="215" y="90" width="150" height="80" rx="6" fill="var(--card)" stroke="var(--green)" stroke-width="1.5"/>
+        <text x="290" y="112" text-anchor="middle" class="svgtext" font-size="11" font-weight="600" fill="currentColor">DMA11–12</text>
+        <text x="290" y="128" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">FUNC0202</text>
+        <text x="290" y="142" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">128 in + 128 out</text>
+        <text x="290" y="154" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">address regs</text>
+
+        <line x1="365" y1="130" x2="410" y2="130" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- Core DMA22 -->
+        <rect x="410" y="70" width="170" height="120" rx="6" fill="var(--amber-dim)" stroke="var(--amber)" stroke-width="2"/>
+        <text x="495" y="94" text-anchor="middle" class="svgtext" font-size="12" font-weight="700" fill="currentColor">DMA22</text>
+        <text x="495" y="112" text-anchor="middle" class="svglabel" font-size="9.5" fill="var(--slate)">Core image engine</text>
+        <text x="495" y="128" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">3 in + 20 out + 3 delay</text>
+        <text x="495" y="144" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">FUNC0401 color convert</text>
+        <text x="495" y="160" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">(YMCK↔RGB, xem §8)</text>
+        <text x="495" y="176" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">Adr regs: 20 in/24 out (DMA02)</text>
+
+        <line x1="580" y1="130" x2="625" y2="130" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- Band DMA27 -->
+        <rect x="625" y="90" width="150" height="80" rx="6" fill="var(--card)" stroke="var(--purple)" stroke-width="1.5"/>
+        <text x="700" y="112" text-anchor="middle" class="svgtext" font-size="11" font-weight="600" fill="currentColor">DMA27</text>
+        <text x="700" y="128" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">Band transfer</text>
+        <text x="700" y="142" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">9 in + 9 out</text>
+        <text x="700" y="154" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">(scale/rotate buffer)</text>
+
+        <line x1="775" y1="130" x2="820" y2="130" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- FORM0102 -->
+        <rect x="820" y="70" width="170" height="120" rx="6" fill="var(--card)" stroke="var(--red)" stroke-width="1.5"/>
+        <text x="905" y="94" text-anchor="middle" class="svgtext" font-size="12" font-weight="700" fill="currentColor">DMA32–56</text>
+        <text x="905" y="112" text-anchor="middle" class="svglabel" font-size="9.5" fill="var(--slate)">FORM0102</text>
+        <text x="905" y="128" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">25 kênh — ghép trang</text>
+        <text x="905" y="144" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">+ nén JBIG (Fax)</text>
+        <text x="905" y="160" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">24 in / 48 compress</text>
+        <text x="905" y="176" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">address regs</text>
+
+        <line x1="990" y1="130" x2="1030" y2="130" stroke="currentColor" stroke-width="1.5" marker-end="url(#a2)"/>
+        <text x="1085" y="125" text-anchor="middle" class="svgtext" font-size="11" fill="currentColor">Printer</text>
+        <text x="1085" y="140" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">engine</text>
+
+        <!-- Memory clear side branch -->
+        <rect x="410" y="220" width="170" height="60" rx="6" fill="none" stroke="var(--slate)" stroke-width="1.2" stroke-dasharray="3,3"/>
+        <text x="495" y="243" text-anchor="middle" class="svgtext" font-size="11" fill="var(--slate)">DMA06–07</text>
+        <text x="495" y="260" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">Memory Clear (§7)</text>
+        <text x="495" y="273" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">independent, on-demand</text>
+        <line x1="495" y1="190" x2="495" y2="220" stroke="var(--slate)" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#a2)"/>
+        <text x="600" y="215" class="svglabel" font-size="9" fill="var(--slate)">shares SDRAM region, not in main flow</text>
+      </svg>
+      <figcaption><b>Cách suy luận:</b> mỗi cụm DMA có số lượng <code style="font-family:var(--mono)">AddressInNUM</code>/<code style="font-family:var(--mono)">AddressOutNUM</code> khác nhau trong struct — DMA22 vừa có cả In (3), Out (20), <b style="color:var(--text)">và</b> Delay (3) nên chắc chắn là chặng xử lý trung tâm; DMA27 đối xứng In=Out=9 nên là buffer chuyển tiếp (băng ảnh); DMA32–56 có "Compress" register (48 kênh) khớp với comment gốc "FORM0102 DMA (Faxを含む)".</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><div class="fact-k"><code>THRD_BIOS_Dev0109DMA07_MAX = 2</code></div><div class="fact-v">"MemClear DMA" — DMA06~DMA07, xoá vùng nhớ ảnh trước khi dùng lại</div></div>
+      <div class="fact"><div class="fact-k"><code>THRD_BIOS_Dev0109DMA32_MAX = 25</code></div><div class="fact-v">"FORM0102 DMA (Faxを含む)" — DMA32~56, ghép trang in + nén JBIG cho Fax</div></div>
+      <div class="fact"><div class="fact-k"><code>THRD_BIOS_Dev0109DMA11_MAX = 2</code></div><div class="fact-v">"FUNC0202 DMA" — DMA11~12, mỗi hướng có 128 address register (rất lớn — có thể multi-plane)</div></div>
+      <div class="fact"><div class="fact-k"><code>THRD_BIOS_Dev0109DMA20_MAX = 2</code></div><div class="fact-v">"ExpInput DMA" — DMA20~21, nhận dữ liệu ảnh từ nguồn ngoài (scanner/network)</div></div>
+    </div>
+  </section>
+
+  <!-- ═══════════ LAYER 3 ═══════════ -->
+  <section id="l3">
+    <div class="sec-head"><span class="sec-num">03</span><span class="sec-title">Cây Interrupt — Confirm / Mask / Dispatch</span></div>
+    <p class="sec-sub">Mỗi nhóm sự kiện có <b style="color:var(--text)">một cặp thanh ghi song song</b>: thanh ghi Confirm (báo hiệu đã xảy ra) và thanh ghi Mask (cho phép/chặn báo). Đây là pattern chuẩn của ASIC embedded — không phải Linux IRQ line riêng cho từng loại, mà multiplex qua 2 IRQ vật lý rồi driver tự đọc thanh ghi để biết nguyên nhân.</p>
+
+    <figure>
+      <svg viewBox="0 0 1140 420" role="img" aria-label="Cây interrupt từ hardware confirm/mask register đến kernel dispatch">
+        <defs>
+          <marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="currentColor"/></marker>
+        </defs>
+
+        <!-- HW event sources -->
+        <text x="20" y="24" class="svgtext" font-size="11" font-weight="600" fill="var(--slate)">HARDWARE EVENT GROUPS (confirm reg → mask reg pairs)</text>
+
+        <g font-size="9.5">
+          <rect x="20" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--green)"/>
+          <text x="85" y="58" text-anchor="middle" class="svgtext" fill="currentColor">IntDon*DMA0/1</text>
+          <text x="85" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">DMA Done</text>
+
+          <rect x="165" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--green)"/>
+          <text x="230" y="58" text-anchor="middle" class="svgtext" fill="currentColor">IntBandI/ODMA0/1</text>
+          <text x="230" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">Band transfer done</text>
+
+          <rect x="310" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--red)"/>
+          <text x="375" y="58" text-anchor="middle" class="svgtext" fill="currentColor">IntErrDMA0/1</text>
+          <text x="375" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">DMA error</text>
+
+          <rect x="455" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--red)"/>
+          <text x="520" y="58" text-anchor="middle" class="svgtext" fill="currentColor">IntErrExB0–5</text>
+          <text x="520" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">External bus error</text>
+
+          <rect x="600" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--amber)"/>
+          <text x="665" y="58" text-anchor="middle" class="svgtext" fill="currentColor">IntDeb0/1/2</text>
+          <text x="665" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">Debug/edge-case (~46 bit)</text>
+
+          <rect x="745" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--purple)"/>
+          <text x="810" y="58" text-anchor="middle" class="svgtext" fill="currentColor">IntDmxI/ODMA0-2</text>
+          <text x="810" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">Timing-slip warning</text>
+
+          <rect x="890" y="40" width="130" height="46" rx="4" fill="var(--card)" stroke="var(--blue)"/>
+          <text x="955" y="58" text-anchor="middle" class="svgtext" fill="currentColor">INT_PCD0–8</text>
+          <text x="955" y="72" text-anchor="middle" class="svglabel" fill="var(--slate)">PC-delay (page counter)</text>
+        </g>
+
+        <!-- funnel to mask -->
+        <g stroke="currentColor" stroke-width="1" opacity="0.5">
+          <line x1="85" y1="86" x2="500" y2="130"/>
+          <line x1="230" y1="86" x2="500" y2="130"/>
+          <line x1="375" y1="86" x2="500" y2="130"/>
+          <line x1="520" y1="86" x2="500" y2="130"/>
+          <line x1="665" y1="86" x2="500" y2="130"/>
+          <line x1="810" y1="86" x2="500" y2="130"/>
+          <line x1="955" y1="86" x2="500" y2="130"/>
+        </g>
+
+        <rect x="330" y="130" width="340" height="40" rx="5" fill="var(--card2)" stroke="currentColor" stroke-width="1.2"/>
+        <text x="500" y="155" text-anchor="middle" class="svgtext" font-size="11" fill="currentColor">Msk*  (mask register — mirrors every confirm reg above)</text>
+
+        <line x1="500" y1="170" x2="500" y2="210" stroke="currentColor" stroke-width="1.5" marker-end="url(#a3)"/>
+        <text x="512" y="195" class="svglabel" font-size="9" fill="var(--slate)">if unmasked → asserts</text>
+
+        <!-- GIC / physical IRQ lines -->
+        <rect x="280" y="210" width="180" height="46" rx="5" fill="var(--green-dim)" stroke="var(--green)" stroke-width="1.5"/>
+        <text x="370" y="228" text-anchor="middle" class="svgtext" font-size="10.5" fill="currentColor">DEV0109 HW IRQ</text>
+        <text x="370" y="243" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">THRF_get_Dev0109_IRQNo()</text>
+
+        <rect x="540" y="210" width="180" height="46" rx="5" fill="var(--blue-dim)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="630" y="228" text-anchor="middle" class="svgtext" font-size="10.5" fill="currentColor">TOD IRQ</text>
+        <text x="630" y="243" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">DT node "mc,tod_req"</text>
+
+        <line x1="370" y1="256" x2="370" y2="296" stroke="currentColor" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="630" y1="256" x2="630" y2="296" stroke="currentColor" stroke-width="1.5" marker-end="url(#a3)"/>
+
+        <!-- kernel handlers -->
+        <rect x="220" y="296" width="300" height="60" rx="5" fill="var(--surface)" stroke="var(--green)" stroke-width="1.5"/>
+        <text x="370" y="318" text-anchor="middle" class="svgtext" font-size="10.5" fill="currentColor">THRL_SysDev0109Int_1()</text>
+        <text x="370" y="334" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">→ pfc_InterruptAsic() function pointer</text>
+        <text x="370" y="348" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">(driver never decodes bits itself here)</text>
+
+        <rect x="500" y="296" width="300" height="60" rx="5" fill="var(--surface)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="650" y="318" text-anchor="middle" class="svgtext" font-size="10.5" fill="currentColor">_THRF_TOD_Interrupt()</text>
+        <text x="650" y="334" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">→ disable_irq_nosync + IREQ_OUT</text>
+        <text x="650" y="348" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">→ RTSIG to userspace thread</text>
+
+        <line x1="370" y1="356" x2="370" y2="395" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3,3"/>
+        <line x1="650" y1="356" x2="650" y2="395" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3,3"/>
+        <text x="20" y="410" class="svglabel" font-size="9" fill="var(--text-dim)">Ghi chú: 2 IRQ vật lý này ĐỘC LẬP — TOD interrupt không đi qua các thanh ghi confirm/mask ở trên, nó có đường riêng từ Device-Tree.</text>
+      </svg>
+      <figcaption><b>Insight quan trọng:</b> <code style="font-family:var(--mono)">THRL_SysDev0109Int_1()</code> KHÔNG tự đọc từng bit confirm — nó gọi <code style="font-family:var(--mono)">pfc_InterruptAsic()</code>, một function pointer lấy từ BIOS instance. Việc decode 46+ interrupt bit được đẩy xuống tầng BIOS (<code style="font-family:var(--mono)">thr_sbst0S800Bios.c</code>), giữ cho driver .c gọn — đúng kiểu tách "cơ chế" (mechanism, ở driver) khỏi "chính sách" (policy, ở BIOS).</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════ LAYER 4 ═══════════ -->
+  <section id="l4">
+    <div class="sec-head"><span class="sec-num">04</span><span class="sec-title">AXI Arbiter & Memory Fabric</span></div>
+    <p class="sec-sub">4 arbiter độc lập, mỗi arbiter có tới 12 <i>master priority register</i> và 24 <i>port-connect register</i>. Đây là lớp phân xử tranh chấp bus giữa các DMA engine và CPU khi cùng truy cập SDRAM.</p>
+
+    <figure>
+      <svg viewBox="0 0 1100 260" role="img" aria-label="AXI arbiter fabric giữa DMA engines, CPU và SDRAM">
+        <defs>
+          <marker id="a4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="currentColor"/></marker>
+        </defs>
+
+        <!-- masters -->
+        <g font-size="9.5">
+          <rect x="20" y="20" width="120" height="34" rx="4" fill="var(--card)" stroke="var(--green)"/>
+          <text x="80" y="41" text-anchor="middle" class="svgtext" fill="currentColor">DMA engines ×59</text>
+
+          <rect x="20" y="70" width="120" height="34" rx="4" fill="var(--card)" stroke="var(--blue)"/>
+          <text x="80" y="91" text-anchor="middle" class="svgtext" fill="currentColor">CPU (Debug)</text>
+
+          <rect x="20" y="120" width="120" height="34" rx="4" fill="var(--card)" stroke="var(--purple)"/>
+          <text x="80" y="141" text-anchor="middle" class="svgtext" fill="currentColor">External bus</text>
+        </g>
+
+        <line x1="140" y1="37" x2="220" y2="90" stroke="currentColor" stroke-width="1.2" marker-end="url(#a4)"/>
+        <line x1="140" y1="87" x2="220" y2="105" stroke="currentColor" stroke-width="1.2" marker-end="url(#a4)"/>
+        <line x1="140" y1="137" x2="220" y2="120" stroke="currentColor" stroke-width="1.2" marker-end="url(#a4)"/>
+
+        <!-- arbiter fabric -->
+        <rect x="220" y="60" width="260" height="100" rx="6" fill="var(--amber-dim)" stroke="var(--amber)" stroke-width="1.5"/>
+        <text x="350" y="82" text-anchor="middle" class="svgtext" font-size="11" font-weight="700" fill="currentColor">4× Arbiter (Abt0–3)</text>
+        <text x="350" y="100" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">ModeAbt: arbitration mode</text>
+        <text x="350" y="115" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">MPri0–11Abt: 12 master priority</text>
+        <text x="350" y="130" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">MPort0–23Abt: port routing</text>
+        <text x="350" y="145" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">MOD_HL_REQABT: hi/lo priority split</text>
+
+        <line x1="480" y1="110" x2="560" y2="110" stroke="currentColor" stroke-width="1.5" marker-end="url(#a4)"/>
+        <text x="490" y="102" class="svglabel" font-size="9" fill="var(--slate)">arbitrated</text>
+
+        <!-- UL2AXI bridge -->
+        <rect x="560" y="70" width="150" height="80" rx="6" fill="var(--card)" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="635" y="92" text-anchor="middle" class="svgtext" font-size="11" font-weight="600" fill="currentColor">UL2AXI bridge</text>
+        <text x="635" y="108" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">Mode0/1/2_U2A</text>
+        <text x="635" y="122" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">"User Logic" → AXI</text>
+        <text x="635" y="136" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">protocol translation</text>
+
+        <line x1="710" y1="110" x2="790" y2="110" stroke="currentColor" stroke-width="1.5" marker-end="url(#a4)"/>
+
+        <!-- byte swap -->
+        <rect x="790" y="70" width="150" height="80" rx="6" fill="var(--card)" stroke="var(--purple)" stroke-width="1.5"/>
+        <text x="865" y="92" text-anchor="middle" class="svgtext" font-size="11" font-weight="600" fill="currentColor">Byte-swap unit</text>
+        <text x="865" y="108" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">Swp_Byte32/64/128</text>
+        <text x="865" y="122" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">S00/S01/S10/S11</text>
+        <text x="865" y="136" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">endian-fix theo CPU</text>
+
+        <line x1="940" y1="110" x2="1000" y2="110" stroke="currentColor" stroke-width="1.5" marker-end="url(#a4)"/>
+
+        <rect x="1000" y="85" width="80" height="50" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.5"/>
+        <text x="1040" y="115" text-anchor="middle" class="svgtext" font-size="11" fill="currentColor">SDRAM</text>
+
+        <text x="220" y="200" class="svglabel" font-size="9" fill="var(--text-dim)">pul_ModeRst: software reset toàn bộ main counter</text>
+        <text x="220" y="215" class="svglabel" font-size="9" fill="var(--text-dim)">pul_Debug: chức năng debug riêng cho fabric này</text>
+        <text x="220" y="230" class="svglabel" font-size="9" fill="var(--text-dim)">pul_SftRst: soft-reset toàn ASIC (khác reset arbiter)</text>
+      </svg>
+      <figcaption><b>Vì sao cần byte-swap unit riêng:</b> comment gốc "値はCPUに依存する" (giá trị phụ thuộc CPU) trên các thanh ghi Swp_Byte*S00/S01 cho biết ASIC hỗ trợ cả big-endian và little-endian CPU host — driver phải set swap pattern đúng theo CPU đang chạy (ARM ở đây), nếu không dữ liệu ảnh sẽ bị đảo byte.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════ LAYER 5 ═══════════ -->
+  <section id="l5">
+    <div class="sec-head"><span class="sec-num">05</span><span class="sec-title">UART 16750 — Register init sequence</span></div>
+    <p class="sec-sub">2 kênh UART tích hợp (<code>uart00</code>, <code>uart01</code>), điều khiển qua 5 thanh ghi chuẩn 8250/16550-family. Giá trị khởi tạo trong header giải mã trực tiếp thành cấu hình đường truyền thật.</p>
+
+    <figure>
+      <svg viewBox="0 0 1080 220" role="img" aria-label="Chuỗi khởi tạo thanh ghi UART 16750 và ý nghĩa từng giá trị">
+        <defs>
+          <marker id="a5" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="currentColor"/></marker>
+        </defs>
+
+        <g font-size="10">
+          <!-- LCR -->
+          <rect x="20" y="20" width="190" height="76" rx="5" fill="var(--card)" stroke="var(--blue)" stroke-width="1.3"/>
+          <text x="115" y="38" text-anchor="middle" class="svgtext" font-weight="600" fill="currentColor">LCR = 0x1B</text>
+          <text x="115" y="54" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">0001 1011</text>
+          <text x="115" y="68" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">8 bit · stop 1B (1.5/2)</text>
+          <text x="115" y="82" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">parity ODD, enabled</text>
+
+          <!-- DLR/DMR -->
+          <rect x="230" y="20" width="190" height="76" rx="5" fill="var(--card)" stroke="var(--blue)" stroke-width="1.3"/>
+          <text x="325" y="38" text-anchor="middle" class="svgtext" font-weight="600" fill="currentColor">DLR=0x06 DMR=0x00</text>
+          <text x="325" y="54" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">divisor latch = 6</text>
+          <text x="325" y="68" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">baud = clk / (16×6)</text>
+          <text x="325" y="82" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">ghi khi LCR.DivLatch=1</text>
+
+          <!-- FCR -->
+          <rect x="440" y="20" width="190" height="76" rx="5" fill="var(--amber-dim)" stroke="var(--amber)" stroke-width="1.5"/>
+          <text x="535" y="38" text-anchor="middle" class="svgtext" font-weight="600" fill="currentColor">FCR = 0x87</text>
+          <text x="535" y="54" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">1000 0111</text>
+          <text x="535" y="68" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">FIFO on + reset Tx/Rx</text>
+          <text x="535" y="82" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">Rx trigger @ 8 byte</text>
+
+          <!-- IER -->
+          <rect x="650" y="20" width="190" height="76" rx="5" fill="var(--card)" stroke="var(--green)" stroke-width="1.3"/>
+          <text x="745" y="38" text-anchor="middle" class="svgtext" font-weight="600" fill="currentColor">IER_RX = 0x05</text>
+          <text x="745" y="54" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">bit0 RX data avail</text>
+          <text x="745" y="68" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">bit2 RX line status</text>
+          <text x="745" y="82" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">TX interrupt riêng: 0x02</text>
+
+          <!-- FIFO size -->
+          <rect x="860" y="20" width="200" height="76" rx="5" fill="var(--green-dim)" stroke="var(--green)" stroke-width="1.5"/>
+          <text x="960" y="38" text-anchor="middle" class="svgtext" font-weight="600" fill="currentColor">FIFO = 16 byte</text>
+          <text x="960" y="54" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">THRD_..._TX/RX_FIFO_SIZE</text>
+          <text x="960" y="70" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">⚠ định nghĩa=16, dù chip</text>
+          <text x="960" y="84" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">16750 hỗ trợ tới 64 byte</text>
+        </g>
+
+        <line x1="210" y1="58" x2="230" y2="58" stroke="currentColor" stroke-width="1.3" marker-end="url(#a5)"/>
+        <line x1="420" y1="58" x2="440" y2="58" stroke="currentColor" stroke-width="1.3" marker-end="url(#a5)"/>
+        <line x1="630" y1="58" x2="650" y2="58" stroke="currentColor" stroke-width="1.3" marker-end="url(#a5)"/>
+        <line x1="840" y1="58" x2="860" y2="58" stroke="currentColor" stroke-width="1.3" marker-end="url(#a5)"/>
+
+        <text x="20" y="130" class="svglabel" font-size="9.5" fill="var(--text-dim)">Thứ tự khởi tạo thực tế: LCR (mở DivLatch) → DLR/DMR (baud) → LCR (đóng DivLatch, set format) → FCR (bật FIFO) → IER (bật ngắt RX)</text>
+        <text x="20" y="150" class="svglabel" font-size="9.5" fill="var(--text-dim)">LSR_TXEMPTY=0x40 dùng để poll trước khi ghi byte tiếp; LSR_RX=0x01 báo có data chờ đọc; RTS_ON=0x02 điều khiển flow control phần cứng</text>
+        <text x="20" y="175" class="svglabel" font-size="9.5" fill="var(--red)">Ghi chú kỹ thuật: define THRD_DEV0109_UART_TX/RX_FIFO_SIZE = 16 mâu thuẫn với tên "16750" (chip thật có FIFO 64-byte) — có thể driver cố tình dùng compatibility mode 16-byte để tương thích ngược với code viết cho UART 16550 đời trước.</text>
+      </svg>
+      <figcaption>Toàn bộ giá trị lấy trực tiếp từ <code style="font-family:var(--mono)">#define</code> trong <code style="font-family:var(--mono)">thr_sbst0S800Bios.h</code> dòng 234–247 — không suy đoán, chỉ decode bit.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════ LAYER 6 ═══════════ -->
+  <section id="l6">
+    <div class="sec-head"><span class="sec-num">06</span><span class="sec-title">Power Management — State Machine</span></div>
+    <p class="sec-sub">4 trạng thái selective-suspend, cộng nhánh đặc biệt "Warp!!" (deep-sleep của toàn hệ thống, không riêng gì Dev0109) đè lên logic bình thường.</p>
+
+    <figure>
+      <svg viewBox="0 0 1000 300" role="img" aria-label="State machine power management với 4 trạng thái và nhánh Warp deep sleep">
+        <defs>
+          <marker id="a6" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="currentColor"/></marker>
+        </defs>
+
+        <!-- states -->
+        <circle cx="150" cy="80" r="55" fill="var(--green-dim)" stroke="var(--green)" stroke-width="2"/>
+        <text x="150" y="76" text-anchor="middle" class="svgtext" font-size="11" font-weight="700" fill="currentColor">SUSPEND_ON</text>
+        <text x="150" y="92" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">IRQ enabled</text>
+        <text x="150" y="104" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">(hoạt động bình thường)</text>
+
+        <circle cx="420" cy="80" r="55" fill="var(--amber-dim)" stroke="var(--amber)" stroke-width="2"/>
+        <text x="420" y="76" text-anchor="middle" class="svgtext" font-size="11" font-weight="700" fill="currentColor">SUSPEND_L1</text>
+        <text x="420" y="92" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">IRQ disabled</text>
+        <text x="420" y="104" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">light sleep</text>
+
+        <circle cx="690" cy="80" r="55" fill="var(--red-dim)" stroke="var(--red)" stroke-width="2"/>
+        <text x="690" y="76" text-anchor="middle" class="svgtext" font-size="11" font-weight="700" fill="currentColor">SUSPEND_L2</text>
+        <text x="690" y="92" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">IRQ disabled</text>
+        <text x="690" y="104" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">deep sleep</text>
+
+        <circle cx="905" cy="200" r="45" fill="var(--card)" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <text x="905" y="196" text-anchor="middle" class="svgtext" font-size="10" fill="currentColor">SUSPEND_NONE</text>
+        <text x="905" y="212" text-anchor="middle" class="svglabel" font-size="8.5" fill="var(--slate)">error/invalid</text>
+
+        <!-- transitions via sysfs -->
+        <path d="M 205 80 L 365 80" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a6)"/>
+        <text x="285" y="72" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">set_level()</text>
+
+        <path d="M 475 80 L 635 80" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#a6)"/>
+        <text x="555" y="72" text-anchor="middle" class="svglabel" font-size="9" fill="var(--slate)">set_level()</text>
+
+        <path d="M 365 100 Q 285 140 205 100" fill="none" stroke="var(--green)" stroke-width="1.5" marker-end="url(#a6)"/>
+        <text x="285" y="150" text-anchor="middle" class="svglabel" font-size="9" fill="var(--green)">Resume() → SUSPEND_ON</text>
+
+        <path d="M 635 100 Q 555 140 475 100" fill="none" stroke="var(--green)" stroke-width="1.5" marker-end="url(#a6)"/>
+        <text x="555" y="150" text-anchor="middle" class="svglabel" font-size="9" fill="var(--green)">Resume() → SUSPEND_ON</text>
+
+        <!-- Warp override -->
+        <rect x="60" y="230" width="820" height="55" rx="6" fill="none" stroke="var(--purple)" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <text x="80" y="252" class="svgtext" font-size="10.5" font-weight="600" fill="var(--purple)">Warp!! deep-sleep override</text>
+        <text x="80" y="270" class="svglabel" font-size="9" fill="var(--slate)">pm_device_down == WARP_STATE_RESUME  →  force state = SUSPEND_ON, bất kể L1/L2 trước đó</text>
+
+        <path d="M 690 135 L 470 230" fill="none" stroke="var(--purple)" stroke-width="1.3" stroke-dasharray="3,3" marker-end="url(#a6)"/>
+        <path d="M 420 135 L 470 230" fill="none" stroke="var(--purple)" stroke-width="1.3" stroke-dasharray="3,3" marker-end="url(#a6)"/>
+        <path d="M 470 230 L 205 100" fill="none" stroke="var(--purple)" stroke-width="1.3" stroke-dasharray="3,3" marker-end="url(#a6)"/>
+      </svg>
+      <figcaption><b>Đường vào/ra:</b> chuyển trạng thái qua sysfs <code style="font-family:var(--mono)">echo &lt;state&gt; &gt; /sys/.../power/level</code> → <code style="font-family:var(--mono)">set_level()</code> → gọi thẳng <code style="font-family:var(--mono)">THRL_Dev0109DrvrSuspend/Resume()</code> (không qua callback PM chuẩn của kernel — comment gốc giải thích: "DEV0109はコールバックではなく、関数を直接コールする").</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><div class="fact-k">Vì sao không dùng PM callback chuẩn</div><div class="fact-v">Code cũ port từ driver khác, giữ nguyên lời gọi hàm trực tiếp thay vì implement <code>.suspend/.resume</code> trong <code>device_driver</code> — nợ kỹ thuật lịch sử</div></div>
+      <div class="fact"><div class="fact-k">2 cờ suspend riêng biệt</div><div class="fact-v"><code>b_Dev0109_suspend</code> (chung) và <code>b_Dev0109_suspend_ForSIC</code> (dành riêng cho mạch âm thanh IC — CQ.515629) vì getDev0109Suspend() không phục hồi đúng lúc cho audio path</div></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>file gốc: Kernel/K-S800/Src/drivers/mfp/thr_sbst0S800drvr/*</span>
+    <span>Bios.h: 2677 dòng · Bios.c: 1.2 MB</span>
+    <span>7 file .o build thành sbst0S800drvr.ko</span>
+  </footer>
+</div>

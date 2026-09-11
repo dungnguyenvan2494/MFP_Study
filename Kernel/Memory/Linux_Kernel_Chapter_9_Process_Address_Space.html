@@ -1,0 +1,1813 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linux Kernel Chapter 9 — Process Address Space</title>
+<style>
+:root{
+  --bg:#f4f5f7; --bg-panel:#ffffff; --bg-sunken:#eceef1; --bg-code:#0f172a;
+  --text:#1a1f2b; --text-dim:#5b6472; --border:#d7dbe1;
+  --c-arch:#1d5fb4; --c-arch-bg:#e8f0fc;
+  --c-alloc:#166a3d; --c-alloc-bg:#e6f5ec;
+  --c-warn:#a5560c; --c-warn-bg:#fdf0e2;
+  --c-pt:#6b31b0; --c-pt-bg:#f2e9fb;
+  --c-fail:#b3261e; --c-fail-bg:#fbe8e7;
+  --c-src:#4a5361; --c-src-bg:#eceef1;
+  --link:#1d5fb4;
+  --code-text:#d6e2ff;
+  --code-keyword:#ff9d5c; --code-string:#9ece6a; --code-comment:#6b7280; --code-fn:#7dd3fc; --code-num:#f6c177;
+  --shadow:0 1px 3px rgba(20,20,30,.08);
+  --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,Menlo,monospace;
+  --sans:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color-scheme: light;
+}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme: dark){
+    --bg:#14161c; --bg-panel:#1b1e26; --bg-sunken:#111318; --border:#2c3038;
+    --text:#e7e9ee; --text-dim:#9aa2b1;
+    --c-arch:#7db4f5; --c-arch-bg:#152030;
+    --c-alloc:#7cd6a0; --c-alloc-bg:#132419;
+    --c-warn:#e3a25c; --c-warn-bg:#2a1e10;
+    --c-pt:#c69bf0; --c-pt-bg:#221733;
+    --c-fail:#f28b82; --c-fail-bg:#2a1414;
+    --c-src:#a7afbd; --c-src-bg:#1e222b;
+    --link:#7db4f5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161c; --bg-panel:#1b1e26; --bg-sunken:#111318; --border:#2c3038;
+  --text:#e7e9ee; --text-dim:#9aa2b1;
+  --c-arch:#7db4f5; --c-arch-bg:#152030;
+  --c-alloc:#7cd6a0; --c-alloc-bg:#132419;
+  --c-warn:#e3a25c; --c-warn-bg:#2a1e10;
+  --c-pt:#c69bf0; --c-pt-bg:#221733;
+  --c-fail:#f28b82; --c-fail-bg:#2a1414;
+  --c-src:#a7afbd; --c-src-bg:#1e222b;
+  --link:#7db4f5;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.7}
+body{padding-bottom:4rem}
+a{color:var(--link)}
+h1,h2,h3,h4{font-family:var(--sans);line-height:1.25;scroll-margin-top:5.2rem}
+code,pre,kbd{font-family:var(--mono)}
+code.sym{background:var(--bg-sunken);border:1px solid var(--border);border-radius:4px;padding:.05em .35em;font-size:.9em;white-space:nowrap}
+
+header.top{position:sticky;top:0;z-index:40;background:var(--bg-panel);border-bottom:1px solid var(--border);box-shadow:var(--shadow)}
+.top-inner{max-width:1440px;margin:0 auto;padding:.7rem 1.2rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;margin-right:auto;min-width:260px}
+.brand h1{font-size:1.05rem;margin:0;font-weight:700;letter-spacing:.2px}
+.brand .sub{font-size:.78rem;color:var(--text-dim);margin-top:.1rem}
+.meta-pills{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.35rem}
+.pill{font-size:.68rem;padding:.15em .55em;border-radius:99px;border:1px solid var(--border);color:var(--text-dim);background:var(--bg-sunken);white-space:nowrap}
+.top-controls{display:flex;align-items:center;gap:.5rem}
+#searchbox{position:relative}
+#searchInput{width:230px;padding:.45rem .7rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-sunken);color:var(--text);font-size:.85rem}
+#searchInput:focus{outline:2px solid var(--c-arch);outline-offset:1px}
+#searchResults{position:absolute;top:110%;left:0;width:340px;max-height:60vh;overflow:auto;background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:none;z-index:60}
+#searchResults.show{display:block}
+#searchResults .res{padding:.5rem .7rem;border-bottom:1px solid var(--border);cursor:pointer;font-size:.82rem}
+#searchResults .res:hover{background:var(--bg-sunken)}
+#searchResults .res .path{color:var(--text-dim);font-size:.72rem}
+#searchResults .empty{padding:.6rem .7rem;color:var(--text-dim);font-size:.8rem}
+.iconbtn{border:1px solid var(--border);background:var(--bg-sunken);color:var(--text);border-radius:8px;padding:.45rem .6rem;cursor:pointer;font-size:.85rem;line-height:1}
+.iconbtn:hover{border-color:var(--c-arch)}
+.iconbtn.active{border-color:var(--c-arch);color:var(--c-arch);background:var(--c-arch-bg)}
+#menuToggle{display:none}
+.progress-track{height:3px;background:var(--bg-sunken)}
+.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--c-arch),var(--c-alloc));transition:width .08s linear}
+
+.layout{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:280px 1fr;gap:0;align-items:start}
+aside.sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--border);padding:1rem .8rem 3rem;background:var(--bg-panel)}
+aside.sidebar h5{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:1.1rem 0 .35rem;padding-left:.4rem}
+aside.sidebar h5:first-child{margin-top:0}
+aside.sidebar a{display:block;padding:.3rem .5rem;border-radius:6px;color:var(--text);text-decoration:none;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+aside.sidebar a:hover{background:var(--bg-sunken)}
+aside.sidebar a.active{background:var(--c-arch-bg);color:var(--c-arch);font-weight:600}
+main.content{padding:1.6rem 2.6rem 6rem;min-width:0;max-width:1160px}
+.progress-label{font-size:.7rem;color:var(--text-dim);padding:.3rem .5rem}
+
+section.topic{padding-top:2.6rem;margin-top:-1.4rem;border-top:1px dashed transparent}
+section.topic:first-of-type{padding-top:0}
+.topic h2{font-size:1.6rem;display:flex;align-items:center;gap:.6rem;margin-bottom:.15rem}
+.topic .topic-badges{display:flex;gap:.35rem;flex-wrap:wrap;margin:.25rem 0 1.1rem}
+.badge{font-size:.66rem;font-weight:700;letter-spacing:.03em;padding:.15em .5em;border-radius:5px;text-transform:uppercase}
+.badge.arch{color:var(--c-arch);background:var(--c-arch-bg)}
+.badge.alloc{color:var(--c-alloc);background:var(--c-alloc-bg)}
+.badge.warn{color:var(--c-warn);background:var(--c-warn-bg)}
+.badge.pt{color:var(--c-pt);background:var(--c-pt-bg)}
+.badge.fail{color:var(--c-fail);background:var(--c-fail-bg)}
+.badge.src{color:var(--c-src);background:var(--c-src-bg)}
+h3{font-size:1.2rem;margin-top:2rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
+h4{font-size:1.02rem;margin-top:1.4rem;color:var(--text)}
+p{color:var(--text)}
+.lead{font-size:1.02rem;color:var(--text-dim);max-width:80ch}
+ul,ol{padding-left:1.3rem}
+li{margin:.25rem 0}
+
+.callout{border-left:4px solid var(--c-arch);background:var(--c-arch-bg);border-radius:6px;padding:.8rem 1rem;margin:1rem 0;font-size:.92rem}
+.callout.warn{border-color:var(--c-warn);background:var(--c-warn-bg)}
+.callout.fail{border-color:var(--c-fail);background:var(--c-fail-bg)}
+.callout.alloc{border-color:var(--c-alloc);background:var(--c-alloc-bg)}
+.callout.pt{border-color:var(--c-pt);background:var(--c-pt-bg)}
+.callout b.label{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;opacity:.85}
+
+.twrap{overflow-x:auto;margin:1rem 0;border:1px solid var(--border);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.85rem;min-width:560px}
+th,td{padding:.55rem .7rem;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--bg-sunken);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);position:sticky;top:0}
+tr:hover td{background:var(--bg-sunken)}
+tr:last-child td{border-bottom:none}
+td code, th code{font-size:.85em}
+
+.codebox{background:var(--bg-code);border-radius:8px;margin:1rem 0;overflow:hidden;border:1px solid #000;box-shadow:var(--shadow)}
+.codebox .cb-head{display:flex;align-items:center;justify-content:space-between;padding:.4rem .8rem;background:#0b1220;border-bottom:1px solid #000;color:#9aa5b8;font-size:.72rem}
+.codebox .cb-path{font-family:var(--mono)}
+.codebox .cb-copy{background:transparent;border:1px solid #33415580;color:#c7d2e0;border-radius:5px;padding:.2rem .55em;font-size:.68rem;cursor:pointer}
+.codebox .cb-copy:hover{border-color:#5b7fd6;color:#fff}
+.codebox pre{margin:0;padding:.85rem 1rem;overflow-x:auto;color:var(--code-text);font-size:.82rem;line-height:1.6}
+.codebox pre .kw{color:var(--code-keyword)}
+.codebox pre .st{color:var(--code-string)}
+.codebox pre .cm{color:var(--code-comment);font-style:italic}
+.codebox pre .fn{color:var(--code-fn)}
+.codebox pre .nu{color:var(--code-num)}
+.codebox pre .ty{color:#c792ea}
+
+.diagram{background:var(--bg-sunken);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;margin:1rem 0}
+.diagram pre{margin:0;font-size:.8rem;line-height:1.5;color:var(--text)}
+.diagram.arch pre{color:var(--c-arch)}
+.diagram .cap{font-size:.74rem;color:var(--text-dim);margin-top:.5rem;border-top:1px dashed var(--border);padding-top:.4rem}
+
+.flow{border-left:3px solid var(--border);margin:1rem 0 1rem .3rem;padding-left:1rem}
+.flow .step{position:relative;margin-bottom:.65rem;font-size:.88rem}
+.flow .step::before{content:"";position:absolute;left:-1.32rem;top:.35rem;width:9px;height:9px;border-radius:50%;background:var(--c-arch)}
+
+.chain{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin:1rem 0;font-size:.82rem}
+.chain .cnode{border:1px solid var(--border);background:var(--bg-panel);border-radius:8px;padding:.45rem .75rem;font-family:var(--mono);box-shadow:var(--shadow);cursor:default}
+.chain .cnode:hover{border-color:var(--c-arch);color:var(--c-arch)}
+.chain .carrow{color:var(--text-dim)}
+
+details.func{border:1px solid var(--border);border-radius:8px;margin:.9rem 0;background:var(--bg-panel)}
+details.func>summary{cursor:pointer;padding:.6rem .9rem;font-size:.9rem;font-weight:600;list-style:revert}
+details.func[open]>summary{border-bottom:1px solid var(--border)}
+details.func .fbody{padding:.8rem 1rem}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:.3rem .8rem;font-size:.84rem;margin:.4rem 0}
+.kv b{color:var(--text-dim);font-weight:600}
+
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.9rem;margin:1rem 0}
+.ccard{border:1px solid var(--border);border-radius:10px;background:var(--bg-panel);box-shadow:var(--shadow);overflow:hidden}
+.ccard .cch{padding:.6rem .9rem;font-weight:700;background:var(--c-arch-bg);color:var(--c-arch);font-size:.92rem}
+.ccard .ccb{padding:.7rem .9rem;font-size:.83rem}
+.ccard ul{margin:.3rem 0;padding-left:1.1rem}
+
+.qa{border:1px solid var(--border);border-radius:8px;margin:.8rem 0;overflow:hidden}
+.qa .q{padding:.7rem .9rem;font-weight:600;cursor:pointer;background:var(--bg-panel);display:flex;justify-content:space-between;gap:1rem;font-size:.9rem}
+.qa .q:hover{background:var(--bg-sunken)}
+.qa .a{padding:0 .9rem;max-height:0;overflow:hidden;transition:max-height .25s ease, padding .25s ease;font-size:.86rem;color:var(--text-dim);background:var(--bg-sunken)}
+.qa.open .a{padding:.8rem .9rem 1rem;max-height:900px}
+.qa .q .arrow{transition:transform .2s}
+.qa.open .q .arrow{transform:rotate(90deg)}
+.qa .tag{font-size:.62rem;text-transform:uppercase;background:var(--bg-sunken);color:var(--text-dim);border-radius:4px;padding:.1em .4em;margin-right:.4em}
+
+.lab{border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.2rem;margin:1rem 0;background:var(--bg-panel)}
+.lab h4{margin-top:0}
+.lab .lk{font-size:.68rem;font-weight:700;color:#fff;background:var(--c-alloc);padding:.15em .5em;border-radius:5px;margin-right:.5rem}
+.lab .lstep{font-size:.68rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:.7rem}
+
+.dbg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.8rem;margin:1rem 0}
+.dbg-card{border:1px solid var(--border);border-radius:8px;padding:.9rem 1rem;background:var(--bg-panel)}
+.dbg-card code{display:block;margin-bottom:.4rem;color:var(--c-alloc);font-size:.88rem}
+.dbg-card p{margin:.2rem 0;font-size:.82rem;color:var(--text-dim)}
+
+.mis{border:1px solid var(--c-fail);border-radius:8px;margin:.8rem 0;overflow:hidden}
+.mis .wrong{padding:.7rem .9rem;background:var(--c-fail-bg);color:var(--c-fail);font-weight:600;font-size:.88rem}
+.mis .right{padding:.7rem .9rem;background:var(--bg-panel);font-size:.86rem}
+
+.checklist label{display:flex;gap:.6rem;align-items:flex-start;padding:.4rem .2rem;font-size:.9rem;border-bottom:1px dashed var(--border)}
+.checklist input{margin-top:.3rem}
+.checklist input:checked + span{text-decoration:line-through;color:var(--text-dim)}
+
+.gloss-search{width:100%;max-width:420px;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-sunken);color:var(--text);font-size:.9rem;margin-bottom:1rem}
+.gloss-item{border-bottom:1px solid var(--border);padding:.7rem 0}
+.gloss-item dt{font-weight:700;font-family:var(--mono);color:var(--c-arch)}
+.gloss-item dd{margin:.25rem 0 0;font-size:.87rem;color:var(--text-dim)}
+
+.va-bits{display:flex;font-family:var(--mono);font-size:.78rem;text-align:center;margin:1rem 0;flex-wrap:wrap;gap:2px}
+.va-bits .seg{border:1px solid var(--border);border-radius:6px;padding:.6rem .3rem;background:var(--bg-panel);cursor:pointer;transition:background .15s}
+.va-bits .seg:hover, .va-bits .seg.hl{background:var(--c-arch-bg);border-color:var(--c-arch)}
+.va-bits .seg .lbl{display:block;font-size:.68rem;color:var(--text-dim);margin-bottom:.3rem}
+.va-detail{border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem;background:var(--bg-sunken);font-size:.85rem;min-height:2.4rem}
+
+.mode-quickreview .study-only{display:none!important}
+.mode-badge{font-size:.66rem;padding:.15em .5em;border-radius:5px;background:var(--c-alloc-bg);color:var(--c-alloc);margin-left:.4em}
+
+footer.doc{max-width:1440px;margin:2rem auto 0;padding:1.5rem 2.6rem;color:var(--text-dim);font-size:.8rem;border-top:1px solid var(--border)}
+
+@media (max-width: 980px){
+  .layout{grid-template-columns:1fr}
+  aside.sidebar{position:fixed;left:0;top:48px;bottom:0;width:80vw;max-width:320px;transform:translateX(-100%);transition:transform .2s;z-index:50;box-shadow:0 0 30px rgba(0,0,0,.35);height:calc(100vh - 48px)}
+  aside.sidebar.open{transform:translateX(0)}
+  #menuToggle{display:inline-flex}
+  main.content{padding:1.2rem 1.1rem 5rem}
+  #searchInput{width:140px}
+  .brand{min-width:0}
+}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <button id="menuToggle" class="iconbtn" aria-label="Toggle navigation">☰</button>
+    <div class="brand">
+      <h1>Linux Kernel Study Notes — Chapter 9</h1>
+      <div class="sub">Process Address Space — From Virtual Address → VMA → Page Table → Page Fault → Physical Page</div>
+      <div class="meta-pills">
+        <span class="pill">Source: Understanding the Linux Kernel, Ch.9 (historical, Linux 2.6 era)</span>
+        <span class="pill">Modern mapping: Linux 5.x / 6.x</span>
+        <span class="pill">Architecture focus: ARM64 (AArch64)</span>
+      </div>
+    </div>
+    <div class="top-controls">
+      <div id="searchbox">
+        <input id="searchInput" type="text" placeholder="Search struct / function / register / topic…" autocomplete="off">
+        <div id="searchResults"></div>
+      </div>
+      <button id="modeToggle" class="iconbtn" title="Toggle Study Mode / Quick Review Mode">📖 Study Mode</button>
+      <button id="themeToggle" class="iconbtn" title="Toggle dark/light">🌓</button>
+    </div>
+  </div>
+  <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+</header>
+
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="progress-label">Reading progress: <span id="progressPct">0%</span></div>
+
+  <h5>Overview</h5>
+  <a href="#overview">01. Chapter Overview</a>
+  <a href="#aspace">02. Process Address Space</a>
+
+  <h5>Core Data Structures</h5>
+  <a href="#mmstruct">03. mm_struct</a>
+  <a href="#vma">04. vm_area_struct</a>
+  <a href="#regions">05. Memory Regions</a>
+  <a href="#flags">06. VMA Flags</a>
+  <a href="#rbtree">07. VMA Linked List &amp; RB-Tree / Maple Tree</a>
+
+  <h5>Finding &amp; Building VMAs</h5>
+  <a href="#findvma">08. find_vma()</a>
+  <a href="#gua">09. get_unmapped_area()</a>
+  <a href="#mmap">10. mmap()</a>
+  <a href="#munmap">11. munmap()</a>
+
+  <h5>Page Fault</h5>
+  <a href="#pagefault">12. Page Fault (CPU → Kernel)</a>
+  <a href="#arm64fault">13. ARM64 Page Fault (ESR_EL1/FAR_EL1)</a>
+  <a href="#demandpaging">14. Demand Paging</a>
+  <a href="#filebacked">15. File-backed Memory</a>
+  <a href="#cow">16. Copy-On-Write</a>
+  <a href="#noncontig">17. Non-contiguous Memory (vmalloc)</a>
+
+  <h5>Process Lifecycle</h5>
+  <a href="#create">18. Process Creation</a>
+  <a href="#exit">19. Process Exit</a>
+
+  <h5>Heap</h5>
+  <a href="#heap">20. Heap (malloc/calloc/free)</a>
+  <a href="#brk">21. brk()</a>
+
+  <h5>ARM64 Deep Dive</h5>
+  <a href="#arm64vm">22. ARM64 Virtual Memory</a>
+  <a href="#ptwalk">23. Page Table Walk (worked example)</a>
+
+  <h5>Reference</h5>
+  <a href="#sourcemap">24. Kernel Source Mapping</a>
+  <a href="#labs">25. Debugging Labs</a>
+  <a href="#misconceptions">26. Common Misconceptions</a>
+  <a href="#quiz">27. Knowledge Check</a>
+  <a href="#knowledgemap">28. Final Knowledge Map</a>
+  <a href="#glossary">29. Glossary</a>
+  <a href="#cheatsheet">Cheat Sheet</a>
+  <a href="#selfassess">Self-Assessment</a>
+</aside>
+
+<main class="content" id="content">
+
+<!-- ============================================================ -->
+<section class="topic" id="overview">
+<h2>01. Chapter Overview</h2>
+<div class="topic-badges"><span class="badge src">SOURCE: BOOK Ch.9</span><span class="badge arch">ARM64 mapping included</span></div>
+
+<p class="lead">Chapter 9 của <i>Understanding the Linux Kernel</i> (bản gốc viết cho Linux 2.4/2.6, kiến trúc x86) trả lời một câu hỏi duy nhất: <b>khi một process nhìn thấy một địa chỉ ảo, kernel tổ chức và ánh xạ nó đến RAM vật lý như thế nào?</b> Tài liệu này giữ nguyên toàn bộ nội dung, thuật ngữ của Chapter 9 (mm_struct, vm_area_struct, red-black tree, do_page_fault…), sau đó mapping từng khái niệm sang Linux kernel hiện đại (5.x/6.x) và sang ARM64 — vì bản gốc được viết trước khi ARM64 tồn tại và trước rất nhiều thay đổi lớn (mmap_lock, maple tree…).</p>
+
+<div class="callout"><b class="label">What this chapter teaches</b>
+Cách kernel biểu diễn "không gian địa chỉ" của một process bằng <code class="sym">mm_struct</code> + tập hợp <code class="sym">vm_area_struct</code> (VMA), cách kernel tìm VMA nhanh (red-black tree), cách <code class="sym">mmap()</code>/<code class="sym">brk()</code> tạo VMA mới mà <b>không</b> cấp phát RAM ngay, và cách Page Fault là cơ chế trung tâm biến "virtual" thành "physical" đúng lúc cần (demand paging, copy-on-write).</div>
+
+<div class="callout warn"><b class="label">Why it matters</b>
+Đây là nền tảng của toàn bộ memory management: hiểu sai phần này dẫn đến hiểu sai <code>malloc()</code>, hiểu sai <code>fork()</code>, hiểu sai vì sao <code>mmap(MAP_ANONYMOUS)</code> "nhanh", hiểu sai vì sao overcommit tồn tại, và không debug được page fault / OOM trên thiết bị thật (kể cả board ARM64 nhúng).</div>
+
+<h3>Learning objectives — bạn phải tự trace được:</h3>
+<div class="diagram arch">
+<pre>
+User Virtual Address
+        │
+Process Address Space
+        │
+mm_struct
+        │
+vm_area_struct
+        │
+Page Tables
+        │
+PTE
+        │
+Physical Page
+        │
+Page Fault
+        │
+do_page_fault / ARM64 fault handler
+        │
+Memory Management
+        │
+Page Allocation
+        │
+PTE Update
+        │
+Return to User Space
+</pre>
+<div class="cap">Đây là "spine" xuyên suốt toàn bộ tài liệu — mọi section bên dưới đều là một bước phóng to (zoom-in) của một mắt xích trong chuỗi này.</div>
+</div>
+
+<h3>Big Picture</h3>
+<div class="diagram arch">
+<pre>
+                PROCESS
+                   │
+                   ▼
+             task_struct
+                   │
+                   ▼
+               mm_struct
+                   │
+          ┌────────┴────────┐
+          ▼                 ▼
+      mmap / VMA       page tables
+          │                 │
+          ▼                 ▼
+  vm_area_struct          PGD
+          │                 │
+          │                PUD
+          │                 │
+          │                PMD
+          │                 │
+          │                PTE
+          │                 │
+          └───────────┬─────┘
+                       ▼
+                  Physical Page
+</pre>
+<div class="cap">task_struct → mm_struct → vm_area_struct → page tables → physical memory. Hai nhánh (VMA và page tables) mô tả CÙNG một vùng địa chỉ nhưng ở hai mức trừu tượng khác nhau — xem callout bên dưới.</div>
+</div>
+
+<div class="callout fail"><b class="label">Phải phân biệt — không được coi là cùng một thứ</b>
+<ul>
+<li><b>Virtual Address</b> — một con số trong không gian địa chỉ của process, không tự nó "tồn tại" trong RAM.</li>
+<li><b>VMA (vm_area_struct)</b> — metadata mô tả MỘT VÙNG virtual address liên tục có cùng thuộc tính (quyền, backing file...). Không chứa dữ liệu, không chứa physical page.</li>
+<li><b>Page Table</b> — cấu trúc dữ liệu (PGD→PUD→PMD→PTE) mà MMU dùng để dịch virtual → physical. Tồn tại song song, độc lập về mặt cấu trúc với VMA.</li>
+<li><b>PTE</b> — một entry trong bảng cuối cùng của page table, chứa physical frame number + quyền truy cập của MỘT trang 4KB.</li>
+<li><b>Physical Page</b> — vùng RAM vật lý thật sự, được cấp phát bởi buddy allocator, được PTE trỏ tới.</li>
+</ul>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="aspace">
+<h2>02. Process Address Space</h2>
+<div class="topic-badges"><span class="badge src">CONCEPT</span></div>
+
+<h3>Process address space là gì?</h3>
+<p>Là tập hợp <b>toàn bộ các địa chỉ ảo hợp lệ</b> mà một process được phép sử dụng, cùng với "ý nghĩa" của mỗi vùng địa chỉ đó (code, data, heap, stack, thư viện dùng chung, file mapping...). Về mặt kernel, address space = <code class="sym">mm_struct</code> + danh sách <code class="sym">vm_area_struct</code> + page table gốc (<code class="sym">pgd</code>).</p>
+
+<h3>Tại sao mỗi process có address space riêng?</h3>
+<p>Vì kernel cấp cho mỗi process (không tính thread cùng mm) một page table riêng (PGD riêng). MMU chỉ dịch địa chỉ dựa trên page table đang active (được nạp vào thanh ghi gốc — CR3 trên x86, <code class="sym">TTBR0_EL1</code> trên ARM64). Khi context switch, kernel đổi thanh ghi này → cùng một con số địa chỉ ảo lập tức trỏ đến physical page khác.</p>
+
+<h3>Virtual address có thực sự tồn tại trong RAM không?</h3>
+<div class="callout"><b class="label">Không.</b> Virtual address chỉ là một con số trừu tượng trong "khế ước" giữa process và kernel. Nó CHỈ tương ứng với RAM thật khi có một PTE hợp lệ ánh xạ nó → physical frame. Trước khi page fault đầu tiên xảy ra trên một vùng (ví dụ vừa <code>malloc()</code> xong), địa chỉ đó hoàn toàn không có RAM đứng sau.</div>
+
+<h3>Ví dụ — hai process, cùng địa chỉ ảo, khác physical page</h3>
+<div class="twrap"><table>
+<tr><th>Process A</th><th>Process B</th></tr>
+<tr><td><code>0x400000</code> → PGD_A → ... → Page Frame #1200</td><td><code>0x400000</code> → PGD_B → ... → Page Frame #5031</td></tr>
+<tr><td><code>0x401000</code> → PGD_A → ... → Page Frame #1201</td><td><code>0x401000</code> → PGD_B → ... → Page Frame #5032</td></tr>
+</table></div>
+<p>Cả hai process cùng dùng con số <code>0x400000</code> (thường là địa chỉ nạp của executable, ASLR có thể làm nó khác nhau trong thực tế) nhưng hai PGD khác nhau khiến MMU tra ra hai physical frame hoàn toàn độc lập. Đây chính là cách kernel cô lập bộ nhớ giữa các process — không cần phần cứng "biết" về process, chỉ cần page table khác nhau.</p>
+
+<h3>MMU / Page Table / TTBR0_EL1 / TLB trên ARM64</h3>
+<div class="flow">
+<div class="step"><b>MMU</b> (Memory Management Unit) — khối phần cứng trong CPU, chặn mọi truy cập bộ nhớ và dịch VA→PA bằng cách "đi bộ" (walk) page table.</div>
+<div class="step"><b>Page Table</b> — cấu trúc dữ liệu nhiều cấp trong RAM (PGD/PUD/PMD/PTE trên ARM64) do kernel dựng và MMU đọc.</div>
+<div class="step"><b><code class="sym">TTBR0_EL1</code></b> (Translation Table Base Register 0, Exception Level 1) — thanh ghi hệ thống chứa physical address của PGD gốc cho <b>user space</b> của process hiện tại. ARM64 tách biệt user/kernel: <code class="sym">TTBR0_EL1</code> cho VA thấp (user), <code class="sym">TTBR1_EL1</code> cho VA cao (kernel) — khác hẳn x86 chỉ có 1 thanh ghi CR3 cho cả hai.</div>
+<div class="step"><b>TLB</b> (Translation Lookaside Buffer) — cache phần cứng của các bản dịch VA→PA gần đây, giúp MMU không phải walk page table (chậm, nhiều lần truy cập RAM) mỗi lần truy cập bộ nhớ.</div>
+</div>
+<div class="callout pt"><b class="label">Context switch trên ARM64</b> Khi kernel switch sang process khác, nó ghi physical address của PGD mới vào <code class="sym">TTBR0_EL1</code> (hàm <code class="sym">cpu_switch_mm()</code> / <code class="sym">cpu_do_switch_mm()</code>, <code>arch/arm64/include/asm/mmu_context.h</code>) và thường phải làm mất hiệu lực (invalidate) một phần TLB — ARM64 dùng cơ chế ASID (Address Space ID) gắn vào mỗi entry TLB để tránh phải flush toàn bộ TLB ở mỗi context switch.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="mmstruct">
+<h2>03. mm_struct — Memory Descriptor</h2>
+<div class="topic-badges"><span class="badge src">STRUCT</span><span class="badge warn">OLD vs MODERN</span></div>
+
+<p class="lead"><code class="sym">struct mm_struct</code> là "hộ chiếu" duy nhất mô tả toàn bộ address space của một process. Mỗi process (không tính kernel thread) có đúng một con trỏ <code class="sym">task_struct→mm</code> trỏ tới một <code class="sym">mm_struct</code>; các thread trong cùng process (tạo bằng <code>clone(CLONE_VM)</code>) <b>chia sẻ</b> cùng một <code class="sym">mm_struct</code>.</p>
+
+<div class="codebox">
+<div class="cb-head"><span class="cb-path">Historical (Linux 2.6.x) — mm_types.h / sched.h</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">struct</span> <span class="ty">mm_struct</span> {
+    <span class="kw">struct</span> <span class="ty">vm_area_struct</span> *mmap;        <span class="cm">/* danh sách liên kết các VMA */</span>
+    <span class="kw">struct</span> <span class="ty">rb_root</span> mm_rb;              <span class="cm">/* red-black tree của các VMA */</span>
+    <span class="kw">struct</span> <span class="ty">vm_area_struct</span> *mmap_cache; <span class="cm">/* cache VMA truy cập gần nhất */</span>
+    pgd_t *pgd;                         <span class="cm">/* page global directory gốc */</span>
+    atomic_t mm_users;                  <span class="cm">/* số "user" đang dùng address space (threads) */</span>
+    atomic_t mm_count;                  <span class="cm">/* số tham chiếu tới chính mm_struct */</span>
+    <span class="kw">int</span> map_count;                     <span class="cm">/* số lượng VMA */</span>
+    <span class="kw">struct</span> <span class="ty">rw_semaphore</span> mmap_sem;     <span class="cm">/* khoá bảo vệ mmap/mm_rb */</span>
+    spinlock_t page_table_lock;         <span class="cm">/* khoá bảo vệ page table */</span>
+
+    <span class="kw">unsigned</span> <span class="kw">long</span> start_code, end_code;
+    <span class="kw">unsigned</span> <span class="kw">long</span> start_data, end_data;
+    <span class="kw">unsigned</span> <span class="kw">long</span> start_brk, brk;
+    <span class="kw">unsigned</span> <span class="kw">long</span> start_stack;
+    <span class="kw">unsigned</span> <span class="kw">long</span> arg_start, arg_end;
+    <span class="kw">unsigned</span> <span class="kw">long</span> env_start, env_end;
+};</pre>
+</div>
+
+<h3>Giải thích từng field quan trọng</h3>
+<div class="twrap"><table>
+<tr><th>Field</th><th>Ý nghĩa</th></tr>
+<tr><td><code class="sym">mmap</code></td><td>Đầu danh sách liên kết đơn tất cả VMA của process, sắp theo thứ tự địa chỉ tăng dần (<code class="sym">vm_next</code>) — dùng để duyệt tuần tự (ví dụ in <code>/proc/pid/maps</code>).</td></tr>
+<tr><td><code class="sym">mm_rb</code></td><td>Gốc red-black tree chứa cùng các VMA đó — dùng để <b>tìm kiếm nhanh</b> VMA theo địa chỉ (O(log n) thay vì O(n) như duyệt list).</td></tr>
+<tr><td><code class="sym">mmap_cache</code></td><td>Con trỏ tới VMA được tìm thấy gần nhất trong <code class="sym">find_vma()</code> — tối ưu "locality of reference" vì phần lớn truy cập bộ nhớ liên tiếp rơi vào cùng một VMA.</td></tr>
+<tr><td><code class="sym">pgd</code></td><td>Con trỏ tới trang gốc của page table (Page Global Directory) — giá trị này (dạng physical address) được nạp vào CR3 (x86) hoặc TTBR0_EL1 (ARM64) khi process được schedule.</td></tr>
+<tr><td><code class="sym">mm_count</code></td><td>Reference count của <b>bản thân cấu trúc mm_struct</b> trong bộ nhớ (kể cả khi không còn thread nào dùng nó, ví dụ do "lazy TLB" giữ tạm).</td></tr>
+<tr><td><code class="sym">mm_users</code></td><td>Số lượng "người dùng sống" (thread) đang thực sự sử dụng address space này. Khi về 0 → gọi <code class="sym">exit_mmap()</code> giải phóng VMA/page table, nhưng mm_struct có thể vẫn tồn tại nếu mm_count &gt; 0.</td></tr>
+<tr><td><code class="sym">map_count</code></td><td>Số lượng VMA hiện có — dùng để kiểm tra giới hạn <code>vm.max_map_count</code>.</td></tr>
+<tr><td><code class="sym">mmap_sem</code> / <code class="sym">mmap_lock</code></td><td>Khoá đọc-ghi bảo vệ toàn bộ cây VMA và (một phần) page table khỏi truy cập đồng thời.</td></tr>
+<tr><td><code class="sym">start_code / end_code</code></td><td>Biên của segment code (.text) đã nạp từ executable.</td></tr>
+<tr><td><code class="sym">start_data / end_data</code></td><td>Biên của segment data đã khởi tạo (.data).</td></tr>
+<tr><td><code class="sym">start_brk / brk</code></td><td>Biên khởi đầu và biên hiện tại của heap truyền thống, được thay đổi bởi <code>brk()</code>/<code>sbrk()</code>.</td></tr>
+<tr><td><code class="sym">start_stack</code></td><td>Địa chỉ đáy (khởi đầu) của user stack.</td></tr>
+<tr><td><code class="sym">arg_start/arg_end, env_start/env_end</code></td><td>Vùng chứa command-line arguments và environment variables, nằm ở đỉnh stack lúc exec().</td></tr>
+</table></div>
+
+<div class="callout warn"><b class="label">OLD KERNEL vs MODERN KERNEL</b>
+<div class="twrap"><table>
+<tr><th>Historical (sách, ~2.6.11)</th><th>Modern Linux (5.x/6.x)</th><th>Ghi chú</th></tr>
+<tr><td><code class="sym">mmap_sem</code></td><td><code class="sym">mmap_lock</code></td><td>Đổi tên trong Linux 5.8 (2020) — cùng ngữ nghĩa (rwsem bảo vệ VMA/page-table), API đổi từ <code>down_read(&amp;mm-&gt;mmap_sem)</code> sang <code>mmap_read_lock(mm)</code>.</td></tr>
+<tr><td><code class="sym">mm_rb</code> (red-black tree) + <code class="sym">mmap</code> (linked list) + <code class="sym">mmap_cache</code></td><td><code class="sym">mm_mt</code> — <b>Maple Tree</b> (<code class="sym">struct maple_tree</code>)</td><td>Thay đổi lớn trong Linux 6.1 (cuối 2022, tác giả Liam R. Howlett): rbtree + linked list + 1-entry cache bị thay hoàn toàn bằng một cấu trúc dữ liệu B-tree biến thể (RCU-safe, cache-friendly hơn). <code class="sym">vm_next</code>/<code class="sym">vm_prev</code>/<code class="sym">vm_rb</code> trong <code class="sym">vm_area_struct</code> bị xoá, duyệt VMA nay dùng <b>VMA iterator</b> (<code class="sym">struct vma_iterator</code>, <code class="sym">vma_next()</code>/<code class="sym">vma_prev()</code>).</td></tr>
+<tr><td><code class="sym">page_table_lock</code> (1 spinlock cho toàn bộ mm)</td><td>Có thể tách theo cấp (split ptlock) — mỗi bảng PTE (hoặc PMD) có lock riêng khi <code class="sym">CONFIG_SPLIT_PTLOCK_CPUS</code> phù hợp.</td><td>Tăng khả năng song song trên multi-core.</td></tr>
+</table></div>
+</div>
+<p class="study-only">Các field <code class="sym">start_code/end_code/start_data/end_data/start_brk/brk/start_stack/arg_start/arg_end/env_start/env_end</code> về cơ bản <b>vẫn còn nguyên trong mm_struct hiện đại</b> — đây là phần ổn định nhất của cấu trúc qua nhiều năm, vì chúng chỉ là các con số biên phục vụ <code>/proc/pid/stat</code>, ELF loader và <code>brk()</code>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="vma">
+<h2>04. vm_area_struct (VMA)</h2>
+<div class="topic-badges"><span class="badge src">STRUCT</span><span class="badge fail">Quan trọng nhất chương</span></div>
+
+<div class="codebox">
+<div class="cb-head"><span class="cb-path">Historical struct vm_area_struct</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">struct</span> <span class="ty">vm_area_struct</span> {
+    <span class="kw">struct</span> <span class="ty">mm_struct</span> *vm_mm;           <span class="cm">/* mm_struct sở hữu VMA này */</span>
+    <span class="kw">unsigned</span> <span class="kw">long</span> vm_start;             <span class="cm">/* biên đầu, inclusive */</span>
+    <span class="kw">unsigned</span> <span class="kw">long</span> vm_end;               <span class="cm">/* biên cuối, exclusive */</span>
+    <span class="kw">struct</span> <span class="ty">vm_area_struct</span> *vm_next;   <span class="cm">/* VMA kế tiếp trong linked list */</span>
+    pgprot_t vm_page_prot;                 <span class="cm">/* quyền truy cập ở mức page-table */</span>
+    <span class="kw">unsigned</span> <span class="kw">long</span> vm_flags;              <span class="cm">/* VM_READ | VM_WRITE | ... */</span>
+    <span class="kw">struct</span> <span class="ty">rb_node</span> vm_rb;               <span class="cm">/* node trong mm_rb */</span>
+    <span class="kw">struct</span> <span class="ty">vm_operations_struct</span> *vm_ops; <span class="cm">/* callback: open/close/fault/... */</span>
+    <span class="kw">struct</span> <span class="ty">file</span> *vm_file;             <span class="cm">/* file bị map (NULL nếu anonymous) */</span>
+    <span class="kw">void</span> *vm_private_data;             <span class="cm">/* dữ liệu riêng của driver/subsystem */</span>
+};</pre>
+</div>
+
+<div class="diagram">
+<pre>
+mm_struct
+    │
+    ├── VMA #1  [.text]     vm_start=0x400000  vm_end=0x401000  VM_READ|VM_EXEC
+    │       │
+    ├── VMA #2  [.data]     vm_start=0x600000  vm_end=0x601000  VM_READ|VM_WRITE
+    │       │
+    ├── VMA #3  [heap]      vm_start=0x601000  vm_end=0x621000  VM_READ|VM_WRITE (grows up)
+    │       │
+    ├── VMA #4  [mmap/lib]  vm_start=0x7f0000..  VM_READ|VM_EXEC (file-backed)
+    │       │
+    └── VMA #5  [stack]     vm_start=0x7ffde000  VM_READ|VM_WRITE (grows down)
+</pre>
+<div class="cap">Mỗi VMA là MỘT vùng địa chỉ liên tục có cùng quyền và cùng backing (file hoặc anonymous). Một process nhỏ thường có 15–40 VMA (mỗi shared library nạp thêm 3-4 VMA: text/rodata/data/bss).</div>
+</div>
+
+<div class="callout"><b class="label">VMA đại diện cho cái gì?</b>
+VMA đại diện cho một <b>khai báo ý định</b> ("vùng địa chỉ ảo [vm_start, vm_end) này dùng để làm gì, với quyền gì, backing bởi file nào") — <b>không phải</b> nội dung bộ nhớ thực tế.</div>
+
+<div class="twrap"><table>
+<tr><th>Câu hỏi</th><th>Trả lời</th></tr>
+<tr><td>VMA có chứa physical pages không?</td><td><b>Không.</b> VMA chỉ chứa metadata. Physical pages được trỏ tới gián tiếp thông qua PTE trong page table — page table là cấu trúc hoàn toàn tách biệt.</td></tr>
+<tr><td>VMA có chứa page table không?</td><td><b>Không.</b> Page table (PGD/PUD/PMD/PTE) nằm trong <code class="sym">mm_struct→pgd</code>, độc lập cấu trúc với cây VMA. VMA chỉ mô tả "nên có gì" trong vùng đó; page table là "đang thực sự có gì".</td></tr>
+<tr><td>VMA có chứa dữ liệu process không?</td><td><b>Không.</b> Dữ liệu thật nằm trong physical page (RAM) hoặc trong page cache (nếu file-backed và chưa fault-in).</td></tr>
+<tr><td>VMA khác page frame như thế nào?</td><td>VMA = một dải địa chỉ ảo lớn (có thể hàng trăm MB) với 1 bộ quyền. Page frame = một đơn vị RAM vật lý cố định 4KB (trên ARM64 mặc định). Một VMA lớn có thể (khi fully populated) ánh xạ tới hàng nghìn page frame khác nhau, rời rạc.</td></tr>
+</table></div>
+
+<div class="callout warn"><b class="label">OLD KERNEL vs MODERN KERNEL</b>
+Trong Linux 6.1+, <code class="sym">vm_next</code>/<code class="sym">vm_prev</code>/<code class="sym">vm_rb</code> đã bị <b>xoá khỏi</b> <code class="sym">vm_area_struct</code> (thay bằng vị trí trong maple tree <code class="sym">mm_mt</code>). Duyệt VMA kế tiếp/trước đó nay dùng API iterator: <code class="sym">vma_next(&amp;vmi)</code>, <code class="sym">vma_prev(&amp;vmi)</code> thay vì truy cập trực tiếp field. Các field còn lại (<code class="sym">vm_start, vm_end, vm_mm, vm_page_prot, vm_flags, vm_ops, vm_file, vm_private_data, anon_vma</code>) vẫn tồn tại gần như nguyên vẹn.
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="regions">
+<h2>05. Memory Regions</h2>
+<div class="topic-badges"><span class="badge src">CONCEPT</span></div>
+<p class="lead">"Memory Region" trong tài liệu chính là tên gọi khái niệm của những gì một VMA đại diện: một vùng liên tục trong address space phục vụ một mục đích cụ thể.</p>
+
+<div class="diagram">
+<pre>
+Virtual Address Space (cao → thấp trong sơ đồ này)
+┌──────────────────────────────┐  cao
+│         kernel space         │  (không truy cập được từ user)
+├──────────────────────────────┤
+│            stack             │  ↓ grows down (VM_GROWSDOWN)
+│              ↓                │
+│                               │
+│         (khoảng trống)        │
+│                               │
+│       mmap region /          │
+│       shared libraries       │
+├──────────────────────────────┤
+│              ↑                │
+│            heap              │  ↑ grows up, quản lý bởi brk()
+├──────────────────────────────┤
+│             .bss             │  biến toàn cục chưa khởi tạo
+├──────────────────────────────┤
+│            .data             │  biến toàn cục đã khởi tạo
+├──────────────────────────────┤
+│            .text             │  code, read-only + executable
+└──────────────────────────────┘  thấp
+</pre>
+<div class="cap">Mỗi khối trong sơ đồ này ≈ một hoặc nhiều vm_area_struct riêng biệt.</div>
+</div>
+
+<div class="twrap"><table>
+<tr><th>Region</th><th>VMA tương ứng</th><th>vm_flags điển hình</th><th>Backing</th></tr>
+<tr><td>.text</td><td>1 VMA</td><td>VM_READ|VM_EXEC (không VM_WRITE)</td><td>file-backed (executable)</td></tr>
+<tr><td>.data</td><td>1 VMA</td><td>VM_READ|VM_WRITE</td><td>file-backed, private (COW khi ghi)</td></tr>
+<tr><td>.bss</td><td>thường gộp chung VMA với .data (vượt quá kích thước file → demand-zero)</td><td>VM_READ|VM_WRITE</td><td>anonymous</td></tr>
+<tr><td>heap</td><td>1 VMA co giãn qua brk()</td><td>VM_READ|VM_WRITE</td><td>anonymous</td></tr>
+<tr><td>stack</td><td>1 VMA, VM_GROWSDOWN</td><td>VM_READ|VM_WRITE|VM_GROWSDOWN</td><td>anonymous</td></tr>
+<tr><td>shared library / mmap region</td><td>nhiều VMA (mỗi lib ~3-4 VMA)</td><td>tuỳ segment</td><td>file-backed</td></tr>
+</table></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="flags">
+<h2>06. VMA Flags</h2>
+<div class="topic-badges"><span class="badge src">STRUCT FIELD</span></div>
+
+<div class="twrap"><table>
+<tr><th>Flag</th><th>Ý nghĩa</th></tr>
+<tr><td><code class="sym">VM_READ / VM_WRITE / VM_EXEC</code></td><td>Quyền hiện tại của VMA — được dùng để dựng <code class="sym">vm_page_prot</code> cho PTE.</td></tr>
+<tr><td><code class="sym">VM_SHARED</code></td><td>Thay đổi được chia sẻ giữa các process map cùng file/vùng nhớ (tương ứng <code>MAP_SHARED</code>).</td></tr>
+<tr><td><code class="sym">VM_MAYREAD/MAYWRITE/MAYEXEC</code></td><td>Quyền "được phép nâng cấp lên" qua <code>mprotect()</code>, độc lập với quyền hiện tại.</td></tr>
+<tr><td><code class="sym">VM_GROWSDOWN / VM_GROWSUP</code></td><td>VMA có thể tự mở rộng khi fault xảy ra ngay sát biên (dùng cho stack — GROWSDOWN trên hầu hết kiến trúc kể cả ARM64/x86).</td></tr>
+<tr><td><code class="sym">VM_DONTCOPY</code></td><td>Không nhân bản VMA này khi <code>fork()</code> (ví dụ một số vùng đặc biệt).</td></tr>
+<tr><td><code class="sym">VM_DONTEXPAND</code></td><td>Không cho <code>mremap()</code> mở rộng.</td></tr>
+<tr><td><code class="sym">VM_LOCKED</code></td><td>Trang trong vùng này bị khoá trong RAM (không swap), tương ứng <code>mlock()</code>.</td></tr>
+<tr><td><code class="sym">VM_IO</code></td><td>Vùng ánh xạ tới thiết bị I/O (MMIO) — không phải RAM thường, kernel tránh một số thao tác (ví dụ <code>get_user_pages</code> mặc định).</td></tr>
+<tr><td><code class="sym">VM_RESERVED</code></td><td class="study-only">Cờ lịch sử (Linux 2.6.x) đánh dấu VMA "đặc biệt", loại khỏi core dump và swap. <b>Đã bị xoá trong Linux 3.7</b> (2012) — chức năng của nó được tách thành hai cờ riêng: <code class="sym">VM_DONTDUMP</code> (loại khỏi core dump) và <code class="sym">VM_IO</code>/<code class="sym">VM_PFNMAP</code> (không phải page RAM thường).</td></tr>
+</table></div>
+
+<h3>PROT_* (user API) vs VM_* (kernel internal)</h3>
+<div class="twrap"><table>
+<tr><th>User-space (mmap(2)/mprotect(2))</th><th>Kernel-internal (vm_flags)</th></tr>
+<tr><td><code>PROT_READ</code></td><td><code class="sym">VM_READ</code></td></tr>
+<tr><td><code>PROT_WRITE</code></td><td><code class="sym">VM_WRITE</code></td></tr>
+<tr><td><code>PROT_EXEC</code></td><td><code class="sym">VM_EXEC</code></td></tr>
+</table></div>
+<div class="callout"><b class="label">Tại sao tồn tại hai tầng permission?</b>
+<code>PROT_*</code> là ABI ổn định hướng ra userspace (hằng số cố định trong <code>&lt;sys/mman.h&gt;</code>, giống nhau trên mọi kiến trúc). <code class="sym">VM_*</code> là biểu diễn nội bộ kernel, có nhiều cờ hơn hẳn (GROWSDOWN, LOCKED, IO...) phục vụ logic kernel mà userspace không cần biết. Hàm <code class="sym">calc_vm_prot_bits()</code> (mm/mmap.c) là cầu nối dịch <code>PROT_*</code> → <code class="sym">VM_*</code> khi gọi <code>mmap()</code>/<code>mprotect()</code>. Tách hai tầng giúp kernel tự do thêm cờ nội bộ mới mà không phá vỡ ABI.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="rbtree">
+<h2>07. VMA Linked List &amp; Red-Black Tree / Maple Tree</h2>
+<div class="topic-badges"><span class="badge src">DATA STRUCTURE</span><span class="badge warn">OLD vs MODERN</span></div>
+
+<p class="lead">Chapter 9 dùng <code class="sym">mm_rb</code> (red-black tree) để quản lý VMA, <b>song song</b> với <code class="sym">mmap</code> (linked list). Đây là một quyết định thiết kế có chủ đích, không dư thừa.</p>
+
+<div class="callout"><b class="label">Tại sao kernel không chỉ dùng linked list?</b>
+Một process có thể có hàng chục đến hàng nghìn VMA (thư viện động, mmap file, mảng lớn...). Tìm VMA chứa một địa chỉ bằng cách duyệt linked list là O(n) — với page fault xảy ra liên tục (có thể hàng chục nghìn lần/giây dưới tải cao), đây là điểm nghẽn nghiêm trọng. Red-black tree cho O(log n) tìm kiếm nhưng linked list vẫn được giữ vì một số thao tác (duyệt tuần tự toàn bộ VMA, ví dụ để in <code>/proc/pid/maps</code>, hoặc tìm "khoảng trống" liền kề) tự nhiên hơn nhiều với danh sách đã sắp thứ tự.</div>
+
+<div class="diagram">
+<pre>
+                    VMA (root)
+                   /          \
+               VMA              VMA
+              /   \            /    \
+           VMA    VMA        VMA    VMA
+</pre>
+<div class="cap">Mỗi node của mm_rb là một vm_area_struct, so sánh theo vm_start — cho phép nhị phân tìm kiếm VMA chứa một địa chỉ bất kỳ trong O(log n).</div>
+</div>
+
+<h3>Trace source code (lịch sử — Linux 2.6.x, mm/mmap.c)</h3>
+<div class="flow">
+<div class="step"><code class="sym">find_vma(mm, addr)</code> — tìm VMA có <code>vm_end &gt; addr</code> nhỏ nhất, dùng <code class="sym">mm_rb</code>, có kiểm tra <code class="sym">mmap_cache</code> trước.</div>
+<div class="step"><code class="sym">find_vma_prev(mm, addr, &amp;pprev)</code> — giống trên nhưng trả thêm VMA ngay trước đó (cần khi chèn VMA mới).</div>
+<div class="step"><code class="sym">find_vma_prepare(mm, addr, &amp;pprev, &amp;rb_link, &amp;rb_parent)</code> — dò cây rbtree để tìm đúng vị trí chèn một VMA mới, trả về node cha và con trỏ liên kết sẽ dùng cho <code class="sym">rb_link_node()</code>.</div>
+</div>
+
+<div class="callout warn"><b class="label">Modern Linux (6.1+): Maple Tree thay thế rbtree</b>
+<code class="sym">mm_rb</code> + <code class="sym">mmap</code> linked list + <code class="sym">mmap_cache</code> bị thay bằng một cấu trúc dữ liệu duy nhất: <code class="sym">struct maple_tree mm_mt</code>. Maple tree là B-tree biến thể, RCU-safe, được thiết kế riêng cho bài toán "range-based" như VMA (một entry = một khoảng [start,end) thay vì 1 key). Lợi ích: (1) không cần đồng bộ hai cấu trúc song song, (2) tra cứu range tốt hơn cache locality (nhiều entry/node hơn rbtree), (3) hỗ trợ RCU read-side lock-free lookup tốt hơn cho tương lai "per-VMA locking". <code class="sym">find_vma()</code> vẫn còn tên gọi cũ nhưng bên trong gọi <code class="sym">mas_find()</code> (Maple Tree State) thay vì duyệt rb_node.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="findvma">
+<h2>08. find_vma()</h2>
+<div class="topic-badges"><span class="badge src">FUNCTION</span></div>
+
+<h3>Case: address = 0x7ffff000</h3>
+<div class="chain">
+<span class="cnode">current</span><span class="carrow">→</span>
+<span class="cnode">current->mm</span><span class="carrow">→</span>
+<span class="cnode">mm->mmap_cache (hit?)</span><span class="carrow">→</span>
+<span class="cnode">mm->mm_rb (walk)</span><span class="carrow">→</span>
+<span class="cnode">so sánh vm_start/vm_end</span><span class="carrow">→</span>
+<span class="cnode">matching VMA</span>
+</div>
+
+<h3>Giải thích algorithm (historical)</h3>
+<div class="flow">
+<div class="step">Kiểm tra <code class="sym">mm-&gt;mmap_cache</code>: nếu <code>addr</code> nằm trong <code>[cache-&gt;vm_start, cache-&gt;vm_end)</code>, trả về ngay — O(1) khi có "locality".</div>
+<div class="step">Ngược lại, duyệt <code class="sym">mm_rb</code> từ gốc: nếu <code>addr &lt; node-&gt;vm_end</code>, ghi nhận node này là ứng viên rồi đi sang trái (tìm biên nhỏ hơn sát hơn); nếu <code>addr &gt;= node-&gt;vm_end</code>, đi sang phải.</div>
+<div class="step">Kết quả: VMA đầu tiên (theo địa chỉ) có <code>vm_end &gt; addr</code> — <b>lưu ý</b>: hàm này KHÔNG đảm bảo <code>addr &gt;= vm_start</code>! Caller phải tự kiểm tra thêm điều đó để biết addr có thực sự "nằm trong" VMA hay chỉ "VMA gần nhất phía sau" (dùng khi mở rộng stack).</div>
+<div class="step">Cập nhật <code class="sym">mm-&gt;mmap_cache = vma</code> trước khi trả về, để lần fault kế tiếp (thường cùng vùng) là cache-hit.</div>
+</div>
+
+<details class="func">
+<summary>FUNCTION ANALYSIS — find_vma()</summary>
+<div class="fbody">
+<div class="kv">
+<b>File</b><span>mm/mmap.c (lịch sử &amp; hiện đại — tên file không đổi)</span>
+<b>Kernel version</b><span>Có trong mọi version từ 2.4 tới nay; nội bộ đổi từ rbtree → maple tree ở 6.1</span>
+<b>Purpose</b><span>Tìm VMA (nếu có) chứa hoặc nằm ngay sau một địa chỉ ảo cho trước</span>
+<b>Caller</b><span>Page fault handler, <code>mprotect()</code>, <code>munmap()</code>, <code>/proc/pid/maps</code>, nhiều syscall mm khác</span>
+<b>Callee</b><span>Lịch sử: duyệt rb_node thủ công. Hiện đại: <code class="sym">mas_find()</code></span>
+<b>Input</b><span><code>struct mm_struct *mm, unsigned long addr</code></span>
+<b>Output</b><span><code>struct vm_area_struct *</code> hoặc NULL</span>
+<b>Lock</b><span>Caller phải giữ ít nhất <code class="sym">mmap_lock</code> ở chế độ đọc (read)</span>
+<b>Can sleep</b><span>NO (không cấp phát bộ nhớ, chỉ đọc cấu trúc)</span>
+<b>Context</b><span>Process context (kể cả trong page fault handler, trước khi có thể sleep để alloc page)</span>
+<b>ARM64 relevance</b><span>Được gọi trực tiếp từ <code class="sym">do_page_fault()</code>/<code class="sym">do_translation_fault()</code> trong <code>arch/arm64/mm/fault.c</code> ngay sau khi có <code class="sym">FAR_EL1</code></span>
+<b>Common mistakes</b><span>Quên kiểm tra <code>addr &gt;= vma-&gt;vm_start</code> sau khi gọi — VMA trả về có thể ở SAU địa chỉ truy vấn, không phải chứa nó</span>
+</div>
+</div>
+</details>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="gua">
+<h2>09. get_unmapped_area()</h2>
+<div class="topic-badges"><span class="badge src">FUNCTION</span><span class="badge arch">ARM64</span></div>
+<p class="lead">Mục tiêu: tìm một vùng virtual address <b>chưa được sử dụng</b>, đủ lớn (<code>len</code>), để làm chỗ cho VMA mới trước khi <code>mmap()</code> thực sự tạo nó.</p>
+
+<div class="chain">
+<span class="cnode">mmap()</span><span class="carrow">→</span>
+<span class="cnode">get_unmapped_area()</span><span class="carrow">→</span>
+<span class="cnode">find free address range</span><span class="carrow">→</span>
+<span class="cnode">create VMA</span><span class="carrow">→</span>
+<span class="cnode">insert VMA</span>
+</div>
+
+<div class="twrap"><table>
+<tr><th>Tham số</th><th>Ý nghĩa</th></tr>
+<tr><td><code>addr</code></td><td>Gợi ý địa chỉ mong muốn (hint) — kernel không bắt buộc phải tuân theo trừ khi có <code>MAP_FIXED</code>.</td></tr>
+<tr><td><code>len</code></td><td>Kích thước vùng cần tìm, làm tròn lên bội số PAGE_SIZE.</td></tr>
+<tr><td>alignment</td><td>Một số kiến trúc/loại mapping yêu cầu căn chỉnh đặc biệt (ví dụ shared-memory alignment để tránh cache aliasing).</td></tr>
+<tr><td><code class="sym">TASK_SIZE</code></td><td>Giới hạn trên của user address space — vùng tìm kiếm không bao giờ vượt quá giá trị này.</td></tr>
+</table></div>
+
+<div class="callout pt"><b class="label">ARM64: mmap_base, ASLR, VA_BITS, TASK_SIZE</b>
+Trên ARM64, <code class="sym">TASK_SIZE</code> = <code>1UL &lt;&lt; vabits_actual</code> (tính tại runtime vì CPU có thể hỗ trợ 48-bit hoặc 52-bit VA — LVA, Large Virtual Addressing). <code class="sym">mm-&gt;mmap_base</code> là điểm bắt đầu vùng tìm kiếm cho mmap "top-down" (kernel tìm từ địa chỉ cao xuống thấp theo mặc định trên Linux hiện đại), được kernel làm ngẫu nhiên hoá (ASLR) bằng <code class="sym">arch_mmap_rnd()</code> cộng thêm một offset ngẫu nhiên vào <code class="sym">mmap_base</code> mỗi lần <code>exec()</code>, dựa trên entropy cấu hình qua <code>mmap_rnd_bits</code>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="mmap">
+<h2>10. mmap() / do_mmap() / mmap_region()</h2>
+<div class="topic-badges"><span class="badge src">SYSCALL FLOW</span></div>
+
+<div class="chain">
+<span class="cnode">userspace mmap()</span><span class="carrow">→</span>
+<span class="cnode">sys_mmap / ksys_mmap_pgoff</span><span class="carrow">→</span>
+<span class="cnode">do_mmap()</span><span class="carrow">→</span>
+<span class="cnode">get_unmapped_area()</span><span class="carrow">→</span>
+<span class="cnode">security checks</span><span class="carrow">→</span>
+<span class="cnode">mmap_region()</span><span class="carrow">→</span>
+<span class="cnode">VMA creation + insert</span><span class="carrow">→</span>
+<span class="cnode">page tables (lazy)</span><span class="carrow">→</span>
+<span class="cnode">return address</span>
+</div>
+
+<details class="func" open>
+<summary>FUNCTION ANALYSIS — do_mmap()</summary>
+<div class="fbody">
+<div class="kv">
+<b>File</b><span>mm/mmap.c (lịch sử: <code class="sym">do_mmap_pgoff()</code>; đổi tên thành <code class="sym">do_mmap()</code> trong Linux 3.x)</span>
+<b>Purpose</b><span>Điểm vào trung tâm để tạo một mapping mới trong address space — validate tham số, tìm vùng trống, tạo/gộp VMA</span>
+<b>Caller</b><span>sys_mmap (qua ksys_mmap_pgoff), do_brk_flags() một phần logic tương tự, ELF loader khi nạp executable</span>
+<b>Callee</b><span>get_unmapped_area(), mmap_region()</span>
+<b>Input</b><span>file (hoặc NULL nếu anonymous), addr hint, len, prot, flags, pgoff</span>
+<b>Output</b><span>Địa chỉ ảo của mapping mới, hoặc mã lỗi âm (ép kiểu qua <code>IS_ERR_VALUE</code>)</span>
+<b>Lock</b><span>mmap_lock (write) phải được giữ bởi caller</span>
+<b>Can sleep</b><span>YES (có thể cấp phát cấu trúc VMA, đọc file)</span>
+<b>Memory</b><span>User address space — KHÔNG cấp phát physical page tại bước này</span>
+<b>ARM64 relevance</b><span>Không có logic ARM64-specific trong hàm này — nó là mm/ chung cho mọi kiến trúc; phần kiến trúc-specific nằm ở <code class="sym">arch_get_unmapped_area()</code></span>
+</div>
+</div>
+</details>
+
+<div class="callout fail"><b class="label">mmap() có allocate physical memory ngay không?</b>
+<b>KHÔNG.</b> <code>mmap()</code> chỉ tạo/nối một <code class="sym">vm_area_struct</code> và (thường) không chạm tới page table thật — PTE của vùng này vẫn "not present". Physical page chỉ được cấp phát khi CPU thực sự truy cập một địa chỉ trong vùng đó lần đầu, kích hoạt Page Fault → <code class="sym">handle_mm_fault()</code> → cấp phát page → cập nhật PTE. Đây chính là <b>Demand Paging</b> (xem mục 14).</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="munmap">
+<h2>11. munmap() / do_munmap() / unmap_region() / split_vma()</h2>
+<div class="topic-badges"><span class="badge src">SYSCALL FLOW</span></div>
+
+<h3>Ví dụ — split VMA</h3>
+<div class="diagram">
+<pre>
+Before:
+──────────────── VMA ────────────────
+          [A B C D E F]
+
+munmap(C,D)
+
+After:
+──── VMA1 ────      ─── VMA2 ───
+   [A B]              [E F]
+</pre>
+<div class="cap">munmap() một vùng nằm giữa VMA buộc kernel phải TÁCH một VMA thành hai — mỗi nửa cần vm_area_struct riêng, cùng trỏ tới cùng file (nếu có) nhưng pgoff khác nhau.</div>
+</div>
+
+<div class="chain">
+<span class="cnode">munmap()</span><span class="carrow">→</span>
+<span class="cnode">sys_munmap</span><span class="carrow">→</span>
+<span class="cnode">do_munmap()</span><span class="carrow">→</span>
+<span class="cnode">split_vma() (nếu cần)</span><span class="carrow">→</span>
+<span class="cnode">unmap_region()</span><span class="carrow">→</span>
+<span class="cnode">page table cleanup + TLB flush</span><span class="carrow">→</span>
+<span class="cnode">physical page release (nếu refcount về 0)</span>
+</div>
+
+<div class="flow">
+<div class="step"><b>VMA splitting</b>: <code class="sym">split_vma()</code> nhân bản <code class="sym">vm_area_struct</code>, điều chỉnh <code>vm_start</code>/<code>vm_end</code>/<code>vm_pgoff</code> của hai nửa, gọi <code class="sym">vm_ops-&gt;open()</code> nếu có để driver biết VMA vừa nhân đôi.</div>
+<div class="step"><b>Page table cleanup</b>: <code class="sym">unmap_region()</code> gọi xuống <code class="sym">unmap_page_range()</code> → <code class="sym">zap_pte_range()</code> để duyệt PTE trong vùng bị gỡ, với mỗi PTE hợp lệ: giảm refcount page, gọi <code class="sym">set_pte(pte, 0)</code>.</div>
+<div class="step"><b>TLB invalidation</b>: các entry TLB đã cache bản dịch của vùng vừa gỡ phải bị vô hiệu hoá (<code class="sym">flush_tlb_range()</code> — trên ARM64 hạ tầng thành lệnh <code>TLBI</code> theo VA/ASID) — nếu không, CPU khác (hoặc chính CPU này) có thể vẫn "thấy" mapping cũ trong TLB dù PTE đã bị xoá.</div>
+<div class="step"><b>Physical page release</b>: page chỉ thực sự được trả về buddy allocator khi reference count của <code class="sym">struct page</code> về 0 (một page có thể được nhiều PTE ở nhiều process trỏ tới, ví dụ COW hoặc shared mapping).</div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="pagefault">
+<h2>12. Page Fault Exception Handler</h2>
+<div class="topic-badges"><span class="badge fail">PHẦN QUAN TRỌNG NHẤT</span></div>
+
+<p class="lead">Page Fault phải được hiểu <b>bắt đầu từ CPU/MMU</b>, không bắt đầu từ hàm C.</p>
+
+<h3>Ví dụ</h3>
+<div class="codebox">
+<div class="cb-head"><span class="cb-path">assembly (giả định ARM64)</span><button class="cb-copy">Copy</button></div>
+<pre>ldr x0, [x1]        <span class="cm">// x1 = virtual address cần đọc</span></pre>
+</div>
+
+<div class="diagram">
+<pre>
+CPU thực thi lệnh load/store
+        │
+        ▼
+       MMU
+        │  (tra TLB trước — nếu miss thì:)
+        ▼
+  Page Table Walk (PGD → PUD → PMD → PTE)
+        │
+        ▼
+   PTE invalid / không có quyền phù hợp
+        │
+        ▼
+     Data Abort (exception phần cứng)
+        │
+        ▼
+   Exception Level chuyển sang EL1
+        │
+        ▼
+   ARM64 exception vector (vector table)
+        │
+        ▼
+   Page Fault Handler (C code trong kernel)
+        │
+        ▼
+      find_vma()
+        │
+        ▼
+    check permission
+        │
+        ▼
+  allocate / load page (demand paging / COW / file-backed)
+        │
+        ▼
+     update PTE
+        │
+        ▼
+   return từ exception (ERET trên ARM64)
+        │
+        ▼
+   instruction retry — CPU thực thi LẠI đúng lệnh ldr đã fault
+</pre>
+<div class="cap">Điểm mấu chốt: phần cứng (MMU) là bên PHÁT HIỆN lỗi; kernel chỉ được gọi SAU KHI phần cứng đã quyết định "đây là một exception", và sau khi kernel xử lý xong, CPU thực thi LẠI đúng lệnh gốc — process hoàn toàn không biết page fault đã xảy ra (trừ khi kernel quyết định gửi SIGSEGV).</div>
+</div>
+
+<h3>find_vma() during page fault</h3>
+<div class="diagram">
+<pre>
+Fault Address
+      │
+find_vma(mm, address)
+      │
+  VMA found?
+   /       \
+ NO         YES
+ |           |
+SIGSEGV    permission hợp lệ?
+             |
+        ┌────┴────┐
+       NO          YES
+        |            |
+     SIGSEGV     page fault type?
+                      |
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+      anonymous      file        COW (write vào private+shared page)
+          │           │           │
+          ▼           ▼           ▼
+      cấp phát      đọc từ      copy page mới
+      page mới,     page cache   (nếu refcount>1)
+      zero-fill
+</pre>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="arm64fault">
+<h2>13. ARM64 Page Fault (ESR_EL1 / FAR_EL1)</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span></div>
+
+<div class="twrap"><table>
+<tr><th>Register</th><th>Meaning</th><th>Why it matters</th></tr>
+<tr><td><code class="sym">ESR_EL1</code></td><td>Exception Syndrome Register — lý do chính xác của exception</td><td>Kernel dùng field <code class="sym">EC</code> (Exception Class, bit [31:26]) để biết đây là Data Abort hay loại khác, và <code class="sym">ISS</code> (Instruction Specific Syndrome, bit [24:0]) để biết chi tiết (đọc/ghi, loại lỗi)</td></tr>
+<tr><td><code class="sym">FAR_EL1</code></td><td>Fault Address Register — <b>địa chỉ ảo gây lỗi</b></td><td>Đây chính là tham số quan trọng nhất truyền cho <code class="sym">find_vma()</code></td></tr>
+<tr><td><code class="sym">ELR_EL1</code></td><td>Exception Link Register — địa chỉ lệnh sẽ resume sau khi exception xử lý xong</td><td>Cho phép "instruction retry" sau khi kernel sửa PTE</td></tr>
+<tr><td><code class="sym">SPSR_EL1</code></td><td>Saved Program Status Register — trạng thái CPU (cờ, exception level trước đó...) tại thời điểm exception</td><td>Cần để khôi phục đúng ngữ cảnh khi ERET</td></tr>
+</table></div>
+
+<h3>Data Abort from EL0 — giải mã ESR_EL1</h3>
+<div class="diagram">
+<pre>
+ESR_EL1 (ví dụ minh hoạ — giá trị thật đọc bằng `esr_1` trong crash log / ftrace)
+
+Bit[31:26] EC   = 0b100100  → "Data Abort from a lower Exception level" (EL0 → EL1)
+Bit[25]    IL   = 1         → lệnh gây lỗi dài 32-bit (không phải Thumb 16-bit, ARM64 luôn 32-bit)
+Bit[24:0]  ISS  = chứa nhiều field con, trong đó có:
+    ISS[6]   WnR   = 0 → read fault, = 1 → write fault
+    ISS[5:0] DFSC  = Data Fault Status Code, ví dụ:
+                     0b000100 = Translation fault, level 0
+                     0b000101 = Translation fault, level 1
+                     0b000111 = Translation fault, level 3
+                     0b001101 = Permission fault, level 1
+                     0b001111 = Permission fault, level 3
+</pre>
+<div class="cap">EC=0x24 (Data Abort from lower EL) là trường hợp phổ biến nhất khi user process fault. DFSC phân biệt "trang chưa tồn tại" (translation fault → có thể là demand paging hợp lệ) với "trang tồn tại nhưng sai quyền" (permission fault → có thể là COW hợp lệ, hoặc thực sự SIGSEGV).</div>
+</div>
+
+<h3>Trace nguồn (arch/arm64)</h3>
+<div class="chain">
+<span class="cnode">Data Abort (EL0→EL1)</span><span class="carrow">→</span>
+<span class="cnode">entry.S vector table</span><span class="carrow">→</span>
+<span class="cnode">el0_da (entry-common.c)</span><span class="carrow">→</span>
+<span class="cnode">do_mem_abort() (arch/arm64/mm/fault.c)</span><span class="carrow">→</span>
+<span class="cnode">do_translation_fault / do_page_fault</span><span class="carrow">→</span>
+<span class="cnode">handle_mm_fault() (mm/memory.c)</span>
+</div>
+<div class="callout warn"><b class="label">Lưu ý về version</b> Tên hàm entry chính xác (<code class="sym">el0_da</code>, cách vector table dispatch) đã thay đổi qua các phiên bản kernel ARM64 khi cơ chế entry được viết lại nhiều lần (đặc biệt quanh Linux 5.x với việc hợp nhất entry 32/64-bit). File cốt lõi xử lý fault, <code>arch/arm64/mm/fault.c</code> với các hàm <code class="sym">do_translation_fault()</code>/<code class="sym">do_page_fault()</code>/<code class="sym">do_mem_abort()</code>, ổn định qua nhiều version hơn phần entry assembly.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="demandpaging">
+<h2>14. Demand Paging</h2>
+<div class="topic-badges"><span class="badge fail">CONCEPT CỐT LÕI</span></div>
+
+<div class="callout fail" style="font-size:1.05rem;text-align:center;font-weight:700">
+"Virtual Memory Allocation is NOT the same as Physical Memory Allocation."
+</div>
+
+<h3>Ví dụ: malloc(1GB)</h3>
+<p><code>malloc(1GB)</code> <b>không</b> khiến kernel cấp phát 1GB RAM vật lý ngay lập tức. Nó chỉ khiến (thường qua <code>mmap(MAP_ANONYMOUS)</code> vì kích thước lớn) một VMA 1GB được tạo — không có PTE nào được set. RAM chỉ được cấp phát <b>từng trang 4KB một</b>, đúng lúc process thực sự đọc/ghi vào trang đó.</p>
+
+<div class="diagram">
+<pre>
+malloc()
+   │
+brk() / mmap()
+   │
+   ▼
+  VMA được tạo — KHÔNG có physical page nào phía sau
+   │
+   ▼
+process truy cập một địa chỉ trong VMA lần đầu
+   │
+   ▼
+Page Fault (translation fault — PTE not present)
+   │
+   ▼
+kernel: find_vma() → VMA hợp lệ, VM_WRITE ok
+   │
+   ▼
+allocate physical page (alloc_page(), thường zero-fill cho anonymous)
+   │
+   ▼
+set_pte_at() — ghi PTE trỏ tới page mới, đánh dấu present
+   │
+   ▼
+retry instruction — lệnh ban đầu chạy lại và thành công
+</pre>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="filebacked">
+<h2>15. File-backed Memory</h2>
+<div class="topic-badges"><span class="badge src">CONCEPT</span></div>
+
+<div class="diagram">
+<pre>
+User
+ │
+mmap("file", ...)
+ │
+ ▼
+VMA (vm_file = struct file*, vm_ops = filemap-based ops)
+ │
+process truy cập → page fault
+ │
+ ▼
+VMA có vm_file → filemap_fault() (mm/filemap.c) qua vm_ops->fault
+ │
+ ▼
+tìm trang trong page cache (radix tree / xarray của address_space)
+ │
+   ┌────────┴────────┐
+   ▼                 ▼
+ HIT (đã có)      MISS → đọc từ disk vào page cache
+   │                 │
+   └────────┬────────┘
+            ▼
+   map page cache page vào PTE của process (KHÔNG copy — trừ khi private+write)
+            │
+            ▼
+          User
+</pre>
+</div>
+
+<div class="twrap"><table>
+<tr><th></th><th>Anonymous VMA</th><th>File-backed VMA</th></tr>
+<tr><td>vm_file</td><td>NULL</td><td>trỏ tới struct file</td></tr>
+<tr><td>Nguồn dữ liệu trang lần đầu</td><td>zero-fill page</td><td>đọc từ page cache / disk</td></tr>
+<tr><td>Chia sẻ giữa process?</td><td>Chỉ nếu MAP_SHARED (hiếm, dùng tmpfs/shmem)</td><td>Có — page cache dùng chung cho mọi mapping cùng file</td></tr>
+<tr><td>Ghi ngược ra disk?</td><td>Không</td><td>Có (writeback), trừ khi MAP_PRIVATE (COW, không ghi ngược)</td></tr>
+</table></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="cow">
+<h2>16. Copy-On-Write (COW)</h2>
+<div class="topic-badges"><span class="badge fail">fork() cốt lõi</span></div>
+
+<div class="diagram">
+<pre>
+BEFORE fork():
+Parent ──► Page P (refcount=1, PTE: writable)
+
+AFTER fork():
+Parent ───┐
+          ├──► Page P (refcount=2, CẢ HAI PTE bị đánh dấu READ-ONLY)
+Child  ───┘
+
+Child ghi vào Page P:
+Child
+  │
+  ▼
+Page Fault (permission fault — PTE read-only nhưng lệnh là store)
+  │
+  ▼
+kernel: do_wp_page() — "write protect" fault handler
+  │
+  ▼
+kiểm tra page_count(page) > 1 ?  → YES (COW thật sự)
+  │
+  ▼
+allocate NEW physical page (Page Q)
+  │
+  ▼
+copy_page(Page Q ← Page P)   (copy nội dung 4KB)
+  │
+  ▼
+cập nhật PTE của Child → trỏ tới Page Q, writable
+  │
+  ▼
+giảm refcount Page P (Parent vẫn giữ, không đổi)
+  │
+  ▼
+write succeeds — retry instruction
+
+KẾT QUẢ:
+Parent ──────► Page P (refcount=1 lại)
+Child  ──────► Page Q (bản copy riêng, writable)
+</pre>
+</div>
+
+<div class="twrap"><table>
+<tr><th>Yếu tố</th><th>Vai trò trong COW</th></tr>
+<tr><td>PTE permission</td><td>Cả hai PTE (parent+child) bị hạ xuống read-only tại thời điểm fork, bất kể VMA gốc có VM_WRITE hay không</td></tr>
+<tr><td>Page reference count</td><td><code class="sym">struct page-&gt;_refcount</code> tăng lên khi fork chia sẻ page; <code class="sym">do_wp_page()</code> dùng giá trị này để phân biệt "thực sự đang share" (phải copy) và "chỉ mình tôi giữ" (chỉ cần gỡ read-only, không cần copy — trường hợp exclusive)</td></tr>
+<tr><td>Write fault</td><td>Là "tín hiệu" kích hoạt toàn bộ cơ chế — nếu không ai ghi, page P được share vô thời hạn, tiết kiệm RAM</td></tr>
+<tr><td>copy_page()</td><td>Hàm copy nội dung một trang (4KB) — trên ARM64 có thể tận dụng NEON/instruction tối ưu tuỳ implementation</td></tr>
+<tr><td>TLB</td><td>Sau khi cập nhật PTE, TLB entry cũ (nếu có, trỏ tới Page P với quyền cache sai) phải bị flush cho địa chỉ đó</td></tr>
+</table></div>
+
+<div class="callout"><b class="label">Mapping sang ARM64</b> Cơ chế hoàn toàn giống: ARM64 PTE có bit AP (Access Permission) mã hoá quyền đọc/ghi; fork() hạ AP xuống read-only cho cả hai bên; write fault sinh Data Abort với DFSC = Permission fault; <code class="sym">do_wp_page()</code> xử lý y hệt logic kiến trúc-độc-lập trong <code>mm/memory.c</code>.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="noncontig">
+<h2>17. Non-contiguous Memory Areas (vmalloc)</h2>
+<div class="topic-badges"><span class="badge src">CONCEPT</span></div>
+
+<p class="lead">Đây là cơ chế phía <b>kernel space</b> (không phải user), nhưng dùng cùng nguyên lý VMA/page-table tách biệt đã học ở trên — chỉ khác là "VMA" ở đây là <code class="sym">vm_struct</code> (kernel vmalloc area), không phải <code class="sym">vm_area_struct</code> của process.</p>
+
+<div class="diagram">
+<pre>
+Virtual (liên tục):        Physical (rời rạc):
+0x10000000 ─────────       Page 1 ──► 0x80000000
+0x10001000 ─────────       Page 2 ──► 0x81200000
+0x10002000 ─────────       Page 3 ──► 0x90000000
+</pre>
+<div class="cap">vmalloc() đảm bảo kernel nhìn thấy một dải địa chỉ LIÊN TỤC, dù các trang vật lý phía sau hoàn toàn rời rạc — hữu ích khi cần cấp phát vùng lớn mà buddy allocator không tìm được block liên tục cỡ đó.</div>
+</div>
+
+<div class="twrap"><table>
+<tr><th></th><th>kmalloc()</th><th>vmalloc()</th></tr>
+<tr><td>Virtual contiguous?</td><td>Có</td><td>Có</td></tr>
+<tr><td>Physical contiguous?</td><td><b>Có</b> (bắt buộc)</td><td><b>Không</b> (không cần)</td></tr>
+<tr><td>Tốc độ</td><td>Nhanh (SLUB allocator, không cần lập page table mới)</td><td>Chậm hơn (phải lập page table riêng cho vùng vmalloc)</td></tr>
+<tr><td>Dùng khi nào</td><td>Cấp phát nhỏ, cần physical-contiguous (DMA không IOMMU)</td><td>Cấp phát lớn, không cần physical-contiguous (module code, buffer lớn)</td></tr>
+</table></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="create">
+<h2>18. Process Creation — fork()/clone()</h2>
+<div class="topic-badges"><span class="badge src">FUNCTION FLOW</span></div>
+
+<div class="chain">
+<span class="cnode">fork()</span><span class="carrow">→</span>
+<span class="cnode">copy_process()</span><span class="carrow">→</span>
+<span class="cnode">copy_mm()</span><span class="carrow">→</span>
+<span class="cnode">dup_mm()</span><span class="carrow">→</span>
+<span class="cnode">dup_mmap()</span><span class="carrow">→</span>
+<span class="cnode">VMA duplication</span><span class="carrow">→</span>
+<span class="cnode">copy_page_range() (page table dup)</span><span class="carrow">→</span>
+<span class="cnode">COW setup</span>
+</div>
+
+<div class="flow">
+<div class="step"><code class="sym">copy_mm()</code> (kernel/fork.c) — nếu <code>CLONE_VM</code> được set (tạo thread), chỉ tăng <code class="sym">mm_users</code> và dùng chung mm_struct. Ngược lại (fork process thật), gọi <code class="sym">dup_mm()</code>.</div>
+<div class="step"><code class="sym">dup_mm()</code> — cấp phát mm_struct mới, copy các field vô hướng (start_code, brk...), gọi <code class="sym">dup_mmap()</code>.</div>
+<div class="step"><code class="sym">dup_mmap()</code> (mm/mmap.c) — duyệt toàn bộ VMA của mm cha, với mỗi VMA: cấp phát vm_area_struct mới, copy field, chèn vào cây VMA của mm con, gọi <code class="sym">copy_page_range()</code> để nhân bản entry page-table tương ứng.</div>
+<div class="step"><code class="sym">copy_page_range()</code> (mm/memory.c) — với mỗi PTE hợp lệ trong vùng private+writable: hạ quyền write ở CẢ HAI PTE (cha và con) → thiết lập COW; với VMA <code>VM_SHARED</code>: không cần COW, cả hai cùng trỏ writable tới cùng page.</div>
+</div>
+
+<div class="callout"><b class="label">Tại sao fork() không cần copy toàn bộ RAM?</b>
+Vì bước copy chỉ nhân bản <b>page table entries</b> (con trỏ), không copy nội dung trang. Nhờ COW, việc copy nội dung thực sự bị trì hoãn tới khi (và chỉ khi) có bên ghi vào trang đó — nhiều trường hợp thực tế (ví dụ fork() ngay trước <code>exec()</code> trong <code>system()</code>) không bao giờ ghi gì, nên không bao giờ tốn chi phí copy thật.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="exit">
+<h2>19. Process Exit</h2>
+<div class="topic-badges"><span class="badge src">FUNCTION FLOW</span></div>
+
+<div class="chain">
+<span class="cnode">exit()</span><span class="carrow">→</span>
+<span class="cnode">exit_mm()</span><span class="carrow">→</span>
+<span class="cnode">mmput()</span><span class="carrow">→</span>
+<span class="cnode">exit_mmap() (nếu mm_users→0)</span><span class="carrow">→</span>
+<span class="cnode">VMA + page table cleanup</span><span class="carrow">→</span>
+<span class="cnode">mmdrop() (nếu mm_count→0)</span><span class="carrow">→</span>
+<span class="cnode">physical pages released</span>
+</div>
+
+<div class="callout pt"><b class="label">mm_users vs mm_count — reference counting hai tầng</b>
+<code class="sym">mm_users</code> đếm số thread "sống" đang dùng address space này. Khi về 0, <code class="sym">exit_mmap()</code> chạy — giải phóng mọi VMA và page table, trả physical page về buddy allocator. <code class="sym">mm_count</code> đếm số tham chiếu tới CHÍNH cấu trúc mm_struct trong bộ nhớ (kể cả sau khi mm_users=0) — ví dụ kernel có thể tạm "mượn" mm của process vừa exit cho lazy TLB switch trên một CPU khác trước khi mm_struct thực sự được free bởi <code class="sym">mmdrop()</code>. Nói cách khác: mm_users kiểm soát "khi nào nội dung address space chết", mm_count kiểm soát "khi nào bản thân cấu trúc mm_struct chết" — hai thời điểm có thể khác nhau.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="heap">
+<h2>20. Managing the Heap — malloc/calloc/realloc/free</h2>
+<div class="topic-badges"><span class="badge src">CONCEPT</span></div>
+
+<div class="chain">
+<span class="cnode">malloc()</span><span class="carrow">→</span>
+<span class="cnode">glibc allocator (ptmalloc2)</span><span class="carrow">→</span>
+<span class="cnode">brk() hoặc mmap()</span><span class="carrow">→</span>
+<span class="cnode">kernel: do_brk_flags() / do_mmap()</span><span class="carrow">→</span>
+<span class="cnode">VMA</span><span class="carrow">→</span>
+<span class="cnode">page fault khi truy cập</span><span class="carrow">→</span>
+<span class="cnode">physical page</span>
+</div>
+
+<div class="callout"><b class="label">Tại sao malloc() không đơn giản gọi kernel mỗi lần?</b>
+Gọi syscall (brk/mmap) có chi phí đáng kể (chuyển ngữ cảnh vào kernel, lock mmap_lock). glibc duy trì một "arena" trong không gian đã xin từ kernel, tự quản lý cấp phát nhỏ bên trong arena đó bằng free-list/bin theo kích thước — chỉ gọi lại kernel khi hết vùng hoặc khi trả vùng lớn về hệ thống. Điều này biến hầu hết lệnh gọi <code>malloc()</code>/<code>free()</code> thành thao tác hoàn toàn ở user-space, không có syscall.</div>
+
+<div class="twrap"><table>
+<tr><th>Mechanism</th><th>Purpose</th><th>Typical use</th><th>Physical allocation</th></tr>
+<tr><td><code>malloc()</code></td><td>User-space API cấp phát bộ nhớ động</td><td>Mọi cấp phát heap thông thường</td><td>Gián tiếp, trễ (demand paging)</td></tr>
+<tr><td><code>brk()/sbrk()</code></td><td>Di chuyển biên heap (program break)</td><td>glibc dùng cho cấp phát nhỏ, liên tục</td><td>Trễ — chỉ tạo/mở rộng VMA</td></tr>
+<tr><td><code>mmap()</code></td><td>Tạo mapping độc lập (anonymous hoặc file)</td><td>glibc dùng cho cấp phát &gt; MMAP_THRESHOLD (mặc định 128KB)</td><td>Trễ — page fault khi chạm tới</td></tr>
+<tr><td><code>vmalloc()</code></td><td>Kernel-space, virtual-contiguous</td><td>Buffer kernel lớn, module code</td><td>Ngay lập tức (mỗi page cấp qua alloc_page, nhưng không cần physically-contiguous)</td></tr>
+<tr><td><code>kmalloc()</code></td><td>Kernel-space, physical-contiguous, nhỏ</td><td>Cấu trúc kernel, buffer DMA không IOMMU</td><td>Ngay lập tức</td></tr>
+</table></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="brk">
+<h2>21. brk() / sbrk()</h2>
+<div class="topic-badges"><span class="badge src">FUNCTION</span></div>
+
+<div class="diagram">
+<pre>
+start_brk
+     │
+     ▼
+     ┌────────────────────┐
+     │       HEAP         │
+     │                    │
+     │         │          │
+     │         ▼          │
+     │        brk         │  ← biên hiện tại, di chuyển bởi brk(new_brk)
+     └────────────────────┘
+</pre>
+</div>
+
+<h3>Khi gọi brk(new_brk), kernel phải:</h3>
+<div class="flow">
+<div class="step">1. Validate address — <code>new_brk</code> phải &gt;= <code>mm-&gt;start_brk</code> và không vượt <code class="sym">TASK_SIZE</code>/rlimit RLIMIT_DATA.</div>
+<div class="step">2. Check collision — không được chồng lên VMA khác (ví dụ mmap region phía trên heap).</div>
+<div class="step">3. Expand/shrink VMA — nếu tăng brk: mở rộng <code>vm_end</code> của VMA heap hiện có (hoặc tạo mới nếu chưa có); nếu giảm: gọi <code class="sym">do_munmap()</code> cho phần bị cắt, giải phóng PTE/page tương ứng.</div>
+<div class="step">4. Update mm — ghi <code>mm-&gt;brk = new_brk</code>.</div>
+<div class="step">5. Return new break — trả giá trị brk mới (hoặc giá trị cũ nếu thất bại, theo ABI truyền thống của <code>brk()</code>).</div>
+</div>
+
+<details class="func">
+<summary>FUNCTION ANALYSIS — do_brk_flags() (modern; historical: do_brk())</summary>
+<div class="fbody">
+<div class="kv">
+<b>File</b><span>mm/mmap.c</span>
+<b>Kernel version</b><span>Historical: <code class="sym">do_brk()</code>. Modern (≥5.x): <code class="sym">do_brk_flags()</code> nhận thêm cờ (ví dụ VM_NORESERVE)</span>
+<b>Purpose</b><span>Hiện thực hoá thay đổi program break — tạo/mở rộng một VMA anonymous cho heap</span>
+<b>Caller</b><span>sys_brk()</span>
+<b>Callee</b><span>find_vma(), vma_merge() (thử gộp với VMA liền kề trước khi tạo VMA mới), mmap_region()-style insert</span>
+<b>Can sleep</b><span>YES (cấp phát vm_area_struct)</span>
+<b>Memory</b><span>Chỉ virtual — không cấp phát physical page</span>
+<b>Error path</b><span>Trả -ENOMEM nếu vượt rlimit hoặc va chạm VMA khác</span>
+</div>
+</div>
+</details>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="arm64vm">
+<h2>22. ARM64 Virtual Memory</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span></div>
+
+<div class="diagram arch">
+<pre>
+User VA
+   │
+TTBR0_EL1   (base register cho user page table)
+   │
+  PGD
+   │
+  PUD     (có thể "fold" nếu VA_BITS nhỏ, xem callout)
+   │
+  PMD
+   │
+  PTE
+   │
+  PA  (Physical Address)
+</pre>
+</div>
+
+<div class="twrap"><table>
+<tr><th>Ký hiệu</th><th>Ý nghĩa</th></tr>
+<tr><td><code class="sym">VA_BITS</code></td><td>Số bit địa chỉ ảo thực sự dùng (39, 42, 48 hoặc 52 tuỳ cấu hình <code>CONFIG_ARM64_VA_BITS</code>/CPU); phần còn lại của thanh ghi 64-bit phải là sign-extension (toàn 0 hoặc toàn 1).</td></tr>
+<tr><td><code class="sym">TTBR0_EL1</code></td><td>Base register cho page table user-space (VA thấp).</td></tr>
+<tr><td><code class="sym">TTBR1_EL1</code></td><td>Base register cho page table kernel-space (VA cao) — luôn active, độc lập với process nào đang chạy.</td></tr>
+<tr><td>PGD / P4D / PUD / PMD / PTE</td><td>Các cấp bảng trang, mỗi cấp index 9 bit (với 4KB granule) — số cấp thực tế phụ thuộc VA_BITS.</td></tr>
+</table></div>
+
+<div class="callout warn"><b class="label">Số cấp page table không cố định</b>
+Với 4KB page và VA_BITS=39, kernel ARM64 chỉ dùng <b>3 cấp bảng thật</b> (PGD→PMD→PTE) — cấp PUD bị "fold" (macro trả về chính con trỏ PGD, không có bảng riêng trong RAM), theo cơ chế <code>include/asm-generic/pgtable-nopud.h</code>. Chỉ khi VA_BITS=48 (phổ biến trên SoC server/high-end) mới có đủ 4 cấp PGD→PUD→PMD→PTE như sơ đồ "đầy đủ" ở trên. Không được giả định ARM64 luôn có 4 cấp — phải kiểm tra <code>CONFIG_PGTABLE_LEVELS</code> của board cụ thể.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="ptwalk">
+<h2>23. ARM64 Address Translation — Worked Example</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span></div>
+
+<p class="lead">Giả sử <code>VA_BITS = 48</code>, <code>PAGE_SIZE = 4KB</code> (4 cấp bảng trang đầy đủ). Địa chỉ ví dụ: <code>VA = 0x0000_7FFF_1234_5678</code>.</p>
+
+<h3>Bấm vào từng phần để xem chi tiết</h3>
+<div class="va-bits" id="vaBitsRow">
+<div class="seg" data-detail="Bit [63:48] — phải là sign-extension của bit 47 (ở đây bit47=0 vì đây là user VA, VA_BITS=48 → bit63..48 đều =0). Nếu khác 0/1 đồng nhất, CPU coi là địa chỉ không hợp lệ (address size fault) trước cả khi đụng tới MMU walk."><span class="lbl">[63:48] unused</span>0x0000</div>
+<div class="seg hl" data-detail="PGD index = bit[47:39] = 9 bit, dùng để chọn 1 trong 512 entry của bảng PGD. 0x7FFF... → bit47:39 = 0000000 = 0 → PGD[0]."><span class="lbl">[47:39] PGD idx</span>0</div>
+<div class="seg" data-detail="PUD index = bit[38:30] = 9 bit → chọn 1 trong 512 entry PUD. Với VA=0x7FFF12345678, bit38:30 = 1_1111_1111 = 511 (0x1FF) → PUD[511]."><span class="lbl">[38:30] PUD idx</span>511</div>
+<div class="seg" data-detail="PMD index = bit[29:21] = 9 bit → 512 entry, mỗi entry phủ 2MB. bit29:21 của 0x7FFF12345678 = 010010001 = 145 (0x91)."><span class="lbl">[29:21] PMD idx</span>145</div>
+<div class="seg" data-detail="PTE index = bit[20:12] = 9 bit → 512 entry, mỗi entry phủ 4KB. bit20:12 = 000100010 = 34 (0x22)."><span class="lbl">[20:12] PTE idx</span>34</div>
+<div class="seg" data-detail="Page offset = bit[11:0] = 12 bit → offset trong trang 4KB đã tìm được. 0x678 = 1656."><span class="lbl">[11:0] offset</span>0x678</div>
+</div>
+<div class="va-detail" id="vaDetail">Click / hover vào một ô phía trên để xem giải thích chi tiết từng field.</div>
+
+<h3>Sau khi có PTE</h3>
+<div class="chain">
+<span class="cnode">PTE[34] (hợp lệ, present)</span><span class="carrow">→</span>
+<span class="cnode">Physical Frame Number (PFN)</span><span class="carrow">→</span>
+<span class="cnode">Physical Address = (PFN &lt;&lt; 12) | offset(0x678)</span>
+</div>
+<div class="callout warn"><b class="label">Lưu ý</b> Các chỉ số PGD/PUD/PMD/PTE tính ở trên đúng công thức bit-shift của ARM64 4-level 4KB granule; giá trị PFN/physical address cụ thể phụ thuộc hoàn toàn vào nội dung PTE thật tại thời điểm chạy — không có cách "tính trước" giá trị đó nếu không đọc runtime, nên tài liệu này không bịa số PFN.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="sourcemap">
+<h2>24. Kernel Source Code Mapping (Linux 5.x/6.x)</h2>
+<div class="topic-badges"><span class="badge src">REFERENCE</span></div>
+<p class="lead">Bảng dưới ánh xạ concept → function → file. Không tự invent path — nếu source đã đổi theo version, ghi rõ ở cột cuối.</p>
+
+<div class="twrap"><table>
+<tr><th>Concept</th><th>Function</th><th>File</th><th>Ghi chú version</th></tr>
+<tr><td>Memory descriptor</td><td><code class="sym">struct mm_struct</code></td><td>include/linux/mm_types.h</td><td>mmap_sem→mmap_lock (5.8); mm_rb→mm_mt maple tree (6.1)</td></tr>
+<tr><td>VMA</td><td><code class="sym">struct vm_area_struct</code></td><td>include/linux/mm_types.h</td><td>vm_next/vm_prev/vm_rb xoá ở 6.1 (dùng VMA iterator)</td></tr>
+<tr><td>Tìm VMA</td><td><code class="sym">find_vma()</code></td><td>mm/mmap.c</td><td>Nội bộ đổi từ rbtree walk → mas_find() ở 6.1</td></tr>
+<tr><td>Tạo mapping</td><td><code class="sym">do_mmap()</code>, <code class="sym">mmap_region()</code></td><td>mm/mmap.c</td><td>Một phần logic VMA đang dần tách sang mm/vma.c trong các kernel rất mới (đang phát triển liên tục — kiểm tra lại theo version cụ thể trước khi trích dẫn số dòng)</td></tr>
+<tr><td>Gỡ mapping</td><td><code class="sym">do_munmap()</code>, <code class="sym">split_vma()</code></td><td>mm/mmap.c</td><td>—</td></tr>
+<tr><td>Page fault (kiến trúc-độc-lập)</td><td><code class="sym">handle_mm_fault()</code></td><td>mm/memory.c</td><td>Ổn định qua nhiều version</td></tr>
+<tr><td>Page fault (ARM64)</td><td><code class="sym">do_mem_abort()</code>, <code class="sym">do_translation_fault()</code></td><td>arch/arm64/mm/fault.c</td><td>—</td></tr>
+<tr><td>COW write fault</td><td><code class="sym">do_wp_page()</code></td><td>mm/memory.c</td><td>—</td></tr>
+<tr><td>Process fork mm</td><td><code class="sym">copy_mm()</code>, <code class="sym">dup_mm()</code>, <code class="sym">dup_mmap()</code></td><td>kernel/fork.c, mm/mmap.c</td><td>—</td></tr>
+<tr><td>Process exit mm</td><td><code class="sym">exit_mm()</code>, <code class="sym">mmput()</code>, <code class="sym">exit_mmap()</code></td><td>kernel/exit.c, kernel/fork.c, mm/mmap.c</td><td>—</td></tr>
+<tr><td>brk syscall</td><td><code class="sym">sys_brk()</code>, <code class="sym">do_brk_flags()</code></td><td>mm/mmap.c</td><td>Historical: do_brk()</td></tr>
+<tr><td>Copy user/kernel</td><td><code class="sym">copy_from_user()</code>, <code class="sym">copy_to_user()</code></td><td>include/linux/uaccess.h (+ arch/arm64/lib)</td><td>—</td></tr>
+<tr><td>ARM64 page table macro</td><td>—</td><td>arch/arm64/include/asm/pgtable*.h</td><td>—</td></tr>
+<tr><td>ARM64 kernel entry</td><td>vector table, el0_da</td><td>arch/arm64/kernel/entry.S, entry-common.c</td><td>Entry code viết lại nhiều lần qua các version 5.x</td></tr>
+</table></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="labs">
+<h2>25. Debugging Labs</h2>
+<div class="topic-badges"><span class="badge alloc">HANDS-ON</span></div>
+
+<div class="lab study-only">
+<span class="lk">LAB 01</span><b>/proc/&lt;pid&gt;/maps</b>
+<div class="lstep">Objective</div><p>Quan sát danh sách VMA thật của một process đang chạy.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>cat /proc/$$/maps</pre></div>
+<div class="lstep">Expected output</div><p>Mỗi dòng = 1 VMA: <code>start-end perms offset dev inode pathname</code>. Ví dụ <code>00400000-00401000 r-xp 00000000 08:01 131074 /bin/bash</code>.</p>
+<div class="lstep">What to observe</div><p>perms <code>r-xp</code> = VM_READ|VM_EXEC, private (COW nếu ghi); các vùng <code>[heap]</code>, <code>[stack]</code>, thư viện .so.</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 02</span><b>/proc/&lt;pid&gt;/smaps</b>
+<div class="lstep">Objective</div><p>Xem chi tiết resident/dirty/swap của từng VMA — quan sát demand paging trực tiếp.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>cat /proc/$$/smaps | less</pre></div>
+<div class="lstep">What to observe</div><p><code>Rss</code> (resident, đã fault-in) thường nhỏ hơn nhiều <code>Size</code> (kích thước VMA) — bằng chứng trực tiếp virtual ≠ physical allocation.</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 03</span><b>malloc() và heap</b>
+<div class="lstep">Objective</div><p>Quan sát brk di chuyển khi malloc cấp phát nhỏ liên tục.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>strace -e brk,mmap ./a.out</pre></div>
+<div class="lstep">What to observe</div><p>Nhiều malloc nhỏ đầu tiên chỉ 1-2 lần <code>brk()</code> (glibc mở rộng arena); cấp phát &gt;128KB thường ra <code>mmap()</code> riêng.</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 04</span><b>mmap()</b>
+<div class="lstep">Objective</div><p>Quan sát VMA mới xuất hiện trong /proc/pid/maps ngay sau mmap(), nhưng RSS=0 cho tới khi truy cập.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">C</span><button class="cb-copy">Copy</button></div><pre><span class="kw">void</span> *p = mmap(NULL, 100*1024*1024, PROT_READ|PROT_WRITE,
+               MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+<span class="cm">// pause ở đây, check /proc/self/smaps: Rss ~ 0</span>
+memset(p, 1, 4096); <span class="cm">// chạm 1 page</span>
+<span class="cm">// check lại: Rss = 4KB (chỉ 1 page, không phải 100MB)</span></pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 05</span><b>munmap()</b>
+<div class="lstep">Objective</div><p>Quan sát VMA biến mất khỏi /proc/pid/maps sau munmap.</p>
+<div class="lstep">Command</div><p><code>munmap(p, 100*1024*1024);</code> rồi đọc lại <code>/proc/self/maps</code> — dải địa chỉ biến mất hoàn toàn.</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 06</span><b>fork() + COW</b>
+<div class="lstep">Objective</div><p>Quan sát page được share (COW) trước khi ghi, và tách ra sau khi ghi.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre># Trước fork: cấp phát và ghi 1 vùng lớn để chắc chắn có physical page thật
+# Sau fork, ở parent: xem Pss (Proportional Set Size) trong smaps — Pss < Rss
+# nghĩa là page đang được chia sẻ với child (COW chưa kích hoạt)
+grep -A2 heap /proc/$PID/smaps</pre></div>
+<div class="lstep">What to observe</div><p><code>Shared_Clean/Shared_Dirty</code> tăng ngay sau fork (trước khi con ghi gì); sau khi con ghi, vùng bị ghi chuyển sang <code>Private_Dirty</code> ở cả 2 bên.</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 07</span><b>Page Fault counting</b>
+<div class="lstep">Objective</div><p>Đếm minor/major page fault của một chương trình.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>/usr/bin/time -v ./a.out
+# Minor (reclaiming a frame) page faults: ...
+# Major (requiring I/O) page faults: ...</pre></div>
+<div class="lstep">What to observe</div><p>Minor fault = demand paging thường (zero-fill/COW, không I/O); Major fault = phải đọc từ disk (file-backed miss trong page cache, hoặc swap-in).</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 08</span><b>mprotect()</b>
+<div class="lstep">Objective</div><p>Quan sát thay đổi vm_flags/PTE permission và SIGSEGV khi vi phạm.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">C</span><button class="cb-copy">Copy</button></div><pre>mprotect(p, 4096, PROT_READ); <span class="cm">// gỡ quyền ghi</span>
+*(<span class="kw">char</span>*)p = 1; <span class="cm">// → SIGSEGV (permission fault, không phải translation fault)</span></pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 09</span><b>strace mmap/brk</b>
+<div class="lstep">Objective</div><p>Quan sát toàn bộ syscall liên quan address space của một chương trình thật.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>strace -f -e trace=memory ls /</pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 10</span><b>perf page faults</b>
+<div class="lstep">Objective</div><p>Đo tần suất page fault theo thời gian thực với perf.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>perf stat -e page-faults,minor-faults,major-faults ./a.out</pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 11</span><b>ftrace memory management</b>
+<div class="lstep">Objective</div><p>Trace trực tiếp handle_mm_fault() trên hệ thống Linux thật (cần quyền root, không phải mọi board nhúng có sẵn).</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>echo handle_mm_fault > /sys/kernel/debug/tracing/set_ftrace_filter
+echo function > /sys/kernel/debug/tracing/current_tracer
+cat /sys/kernel/debug/tracing/trace_pipe</pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 12</span><b>GDB xem virtual address</b>
+<div class="lstep">Objective</div><p>Xem trực tiếp địa chỉ ảo của biến, heap, stack trong một process debug.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">gdb</span><button class="cb-copy">Copy</button></div><pre>(gdb) info proc mappings
+(gdb) p &amp;my_var
+(gdb) p $sp</pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 13</span><b>ARM64 page table walk (trên board thật)</b>
+<div class="lstep">Objective</div><p>Nếu có quyền truy cập KGDB/JTAG hoặc /sys/kernel/debug/kernel_page_tables, quan sát cấu trúc bảng trang thật.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell (cần CONFIG_PTDUMP_DEBUGFS)</span><button class="cb-copy">Copy</button></div><pre>cat /sys/kernel/debug/kernel_page_tables</pre></div>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 14</span><b>Debug kernel page fault (oops)</b>
+<div class="lstep">Objective</div><p>Đọc một log Oops ARM64 thật, xác định FAR_EL1/ESR_EL1 trong dump.</p>
+<div class="lstep">What to observe</div><p>Dòng <code>Unable to handle kernel paging request at virtual address ...</code> chính là giá trị đọc từ FAR_EL1; dòng <code>Mem abort info: ESR = 0x...</code> chứa EC/ISS/DFSC đã giải mã sẵn.</p>
+</div>
+
+<div class="lab study-only">
+<span class="lk">LAB 15</span><b>vmalloc vs kmalloc</b>
+<div class="lstep">Objective</div><p>Xem thống kê bộ nhớ vmalloc đang dùng trong kernel.</p>
+<div class="lstep">Command</div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">shell</span><button class="cb-copy">Copy</button></div><pre>cat /proc/vmallocinfo | head
+cat /proc/meminfo | grep -i vmalloc</pre></div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="misconceptions">
+<h2>26. Common Misconceptions</h2>
+<div class="topic-badges"><span class="badge fail">⚠ ĐỌC KỸ</span></div>
+
+<div class="mis"><div class="wrong">❌ VMA chứa physical memory.</div><div class="right">✓ VMA chỉ mô tả một vùng virtual address space — physical page nằm sau PTE, hoàn toàn tách biệt cấu trúc.</div></div>
+<div class="mis"><div class="wrong">❌ malloc() lập tức allocate physical RAM.</div><div class="right">✓ malloc() chỉ tạo/mở rộng vùng virtual (qua brk/mmap); physical page chỉ được cấp khi thực sự truy cập (demand paging).</div></div>
+<div class="mis"><div class="wrong">❌ mmap() lập tức tạo PTE cho toàn bộ range.</div><div class="right">✓ mmap() chỉ tạo VMA; PTE được lập dần qua page fault, trừ trường hợp đặc biệt (ví dụ MAP_POPULATE) chủ động fault-in trước.</div></div>
+<div class="mis"><div class="wrong">❌ Page Fault luôn là lỗi.</div><div class="right">✓ Phần lớn page fault (minor fault) là cơ chế BÌNH THƯỜNG của demand paging và COW — không phải điều gì bất thường.</div></div>
+<div class="mis"><div class="wrong">❌ Page Fault luôn dẫn tới SIGSEGV.</div><div class="right">✓ Chỉ khi không tìm thấy VMA hợp lệ, hoặc vi phạm quyền không thể xử lý (ví dụ ghi vào vùng read-only thật sự), kernel mới gửi SIGSEGV. Đa số fault được xử lý trong suốt.</div></div>
+<div class="mis"><div class="wrong">❌ fork() copy toàn bộ physical memory.</div><div class="right">✓ fork() chỉ nhân bản page table entries (con trỏ) và bật COW — nội dung chỉ được copy khi thực sự có bên ghi vào.</div></div>
+<div class="mis"><div class="wrong">❌ COW chỉ dùng cho fork().</div><div class="right">✓ COW cũng dùng khi mprotect/mở rộng file mapping private, khi swap-in một trang được share, và ở nhiều tình huống khác cần "chia sẻ tạm, tách khi ghi".</div></div>
+<div class="mis"><div class="wrong">❌ VMA và Page Table là một.</div><div class="right">✓ Hai cấu trúc hoàn toàn tách biệt: VMA là metadata "nên có gì", Page Table là trạng thái thật "đang có gì" mà MMU đọc trực tiếp.</div></div>
+<div class="mis"><div class="wrong">❌ TLB chứa physical page.</div><div class="right">✓ TLB chỉ chứa bản dịch (VA→PA đã cache), không chứa dữ liệu của trang.</div></div>
+<div class="mis"><div class="wrong">❌ Truy cập một virtual address nghĩa là RAM đứng sau nó luôn tồn tại.</div><div class="right">✓ Chỉ đúng SAU khi page fault đầu tiên đã xử lý xong — trước đó, địa chỉ có thể hoàn toàn "ảo" theo đúng nghĩa đen.</div></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="quiz">
+<h2>27. Knowledge Check</h2>
+<div class="topic-badges"><span class="badge alloc">CLICK ĐỂ XEM ĐÁP ÁN</span></div>
+<p class="lead">Trả lời trong đầu trước khi bấm mở — mỗi câu có tag chủ đề để bạn biết đang yếu phần nào.</p>
+
+<div class="qa"><div class="q"><span><span class="tag">conceptual</span>1. malloc(1GB) có allocate 1GB physical RAM ngay không?</span><span class="arrow">›</span></div><div class="a">Không. Nó tạo một VMA 1GB (thường qua mmap anonymous vì &gt; MMAP_THRESHOLD). Physical RAM chỉ được cấp từng trang 4KB khi thực sự truy cập, qua page fault.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">conceptual</span>2. VMA có chứa physical page không?</span><span class="arrow">›</span></div><div class="a">Không. VMA (vm_area_struct) chỉ là metadata mô tả một dải địa chỉ ảo và thuộc tính của nó. Physical page được trỏ tới gián tiếp qua PTE trong page table, một cấu trúc hoàn toàn khác.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">reasoning</span>3. Khi process truy cập một anonymous page chưa present, CPU và kernel làm gì?</span><span class="arrow">›</span></div><div class="a">CPU/MMU walk page table, thấy PTE not-present → sinh Data Abort (translation fault) → kernel vào do_page_fault/do_mem_abort → find_vma() xác nhận địa chỉ hợp lệ và có quyền → do_anonymous_page() cấp phát 1 trang zero-fill → set_pte_at() → ERET → CPU retry lệnh gốc.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">reasoning</span>4. Tại sao fork() không cần copy toàn bộ RAM?</span><span class="arrow">›</span></div><div class="a">Vì fork() chỉ nhân bản page table entries và đánh dấu read-only ở cả hai bên (COW) — nội dung chỉ thực sự copy khi có bên ghi vào một trang cụ thể, và chỉ copy đúng 1 trang đó (4KB), không phải toàn bộ RAM.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">conceptual</span>5. COW write fault khác demand paging (anonymous fault) như thế nào?</span><span class="arrow">›</span></div><div class="a">Demand paging (anonymous): PTE not-present → translation fault → cấp phát trang mới, zero-fill. COW: PTE present nhưng read-only, page có refcount &gt; 1 → permission fault → cấp phát trang mới, COPY nội dung trang cũ (không zero-fill) rồi mới cập nhật PTE writable.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">source code</span>6. find_vma() tìm cái gì chính xác?</span><span class="arrow">›</span></div><div class="a">VMA đầu tiên (theo thứ tự địa chỉ) có vm_end &gt; addr. Không đảm bảo addr &gt;= vm_start — caller phải tự kiểm tra thêm để biết addr có thực sự "nằm trong" VMA hay không.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">source code</span>7. mm_struct và vm_area_struct quan hệ như thế nào?</span><span class="arrow">›</span></div><div class="a">Một mm_struct sở hữu NHIỀU vm_area_struct, tổ chức song song trong linked list (mmap, hoặc VMA iterator trên kernel mới) và cây tìm kiếm (mm_rb lịch sử, mm_mt maple tree hiện đại). Mỗi VMA có vm_mm trỏ ngược lại đúng 1 mm_struct sở hữu nó.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">arm64</span>8. TTBR0_EL1 có vai trò gì?</span><span class="arrow">›</span></div><div class="a">Chứa physical address của bảng trang gốc (PGD) cho user space của process hiện tại. Kernel ghi thanh ghi này khi context switch — cho phép cùng một địa chỉ ảo dịch ra physical page khác nhau tuỳ process đang chạy.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">arm64</span>9. FAR_EL1 chứa gì?</span><span class="arrow">›</span></div><div class="a">Địa chỉ ảo (virtual address) gây ra fault — đây là giá trị đầu tiên kernel đọc trong handler và truyền cho find_vma().</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">page table</span>10. PTE thay đổi ở bước nào trong toàn bộ chuỗi page fault?</span><span class="arrow">›</span></div><div class="a">Ở bước cuối cùng trước khi ERET: sau khi kernel đã xác định VMA hợp lệ, đã cấp phát (hoặc tìm được) physical page phù hợp — set_pte_at() ghi PFN + quyền vào PTE, biến nó từ "not present"/"read-only" thành "present"/"writable" tương ứng.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">debugging</span>11. Rss trong /proc/pid/smaps nhỏ hơn nhiều Size của VMA nói lên điều gì?</span><span class="arrow">›</span></div><div class="a">VMA đã được tạo (kích thước ảo = Size) nhưng phần lớn chưa được fault-in (chưa có physical page thật đứng sau) — bằng chứng trực tiếp của demand paging.</div></div>
+
+<div class="qa"><div class="q"><span><span class="tag">memory layout</span>12. Tại sao stack dùng VM_GROWSDOWN thay vì tạo VMA cố định kích thước lớn từ đầu?</span><span class="arrow">›</span></div><div class="a">Vì kích thước stack cần dùng thực tế của một chương trình khó biết trước; VM_GROWSDOWN cho phép kernel mở rộng VMA từng bước khi fault xảy ra ngay dưới vm_start (trong giới hạn rlimit), tránh phải cấp phát trước một vùng khổng lồ không dùng tới.</div></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="knowledgemap">
+<h2>28. Final Knowledge Map</h2>
+<div class="topic-badges"><span class="badge src">SUMMARY</span></div>
+
+<div class="diagram arch">
+<pre>
+                    PROCESS
+                       │
+                       ▼
+                 task_struct
+                       │
+                       ▼
+                   mm_struct
+                       │
+          ┌────────────┴────────────┐
+          ▼                         ▼
+         VMA                    Page Tables
+          │                         │
+          │                  PGD → PUD → PMD → PTE
+          │                         │
+          └──────────────┬──────────┘
+                          ▼
+                    Virtual Address
+                          │
+                          ▼
+                         MMU
+                          │
+                   ┌──────┴──────┐
+                   ▼             ▼
+                 TLB          Page Fault
+                                 │
+                                 ▼
+                          handle_mm_fault()
+                                 │
+                  ┌──────────────┼──────────────┐
+                  ▼              ▼              ▼
+              Anonymous      File-backed        COW
+                  │              │              │
+                  └──────────────┼──────────────┘
+                                 ▼
+                          Physical Page
+</pre>
+</div>
+
+<h3>Learning Path (roadmap gợi ý)</h3>
+<div class="flow">
+<div class="step">01 Process Address Space</div>
+<div class="step">02 mm_struct</div>
+<div class="step">03 VMA</div>
+<div class="step">04 Page Tables</div>
+<div class="step">05 Virtual → Physical translation</div>
+<div class="step">06 mmap()</div>
+<div class="step">07 Page Fault</div>
+<div class="step">08 Demand Paging</div>
+<div class="step">09 Copy-On-Write</div>
+<div class="step">10 ARM64 (TTBR0_EL1, ESR_EL1, FAR_EL1)</div>
+<div class="step">11 Kernel Source (mm/mmap.c, mm/memory.c, arch/arm64/mm/fault.c)</div>
+<div class="step">12 Debugging (Lab 01–15)</div>
+</div>
+
+<h3 class="study-only">Final Project</h3>
+<div class="callout study-only"><b class="label">Trace một Page Fault trên ARM64 Linux — từ User Space đến Physical Page</b>
+Tự thực hiện: viết một chương trình C nhỏ chạm vào một trang <code>mmap(MAP_ANONYMOUS)</code> chưa từng truy cập; dùng <code>strace</code>/<code>ftrace</code>/<code>perf</code> để bắt lại toàn bộ chuỗi: instruction gây fault → FAR_EL1/ESR_EL1 (đọc qua log oops nếu cố tình gây lỗi, hoặc suy luận từ hành vi quan sát được) → find_vma() → handle_mm_fault() → do_anonymous_page() → set_pte_at() → retry. Vẽ lại toàn bộ chuỗi này bằng sơ đồ của riêng bạn và đối chiếu với mục 12–14 phía trên.</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="glossary">
+<h2>29. Glossary</h2>
+<div class="topic-badges"><span class="badge src">SEARCHABLE</span></div>
+<input type="text" class="gloss-search" id="glossSearch" placeholder="Search glossary…">
+<dl id="glossList">
+<div class="gloss-item"><dt>Address Space</dt><dd>Toàn bộ tập hợp địa chỉ ảo hợp lệ của một process, biểu diễn bởi mm_struct + tập VMA + page table.</dd></div>
+<div class="gloss-item"><dt>Virtual Address</dt><dd>Một con số trong không gian địa chỉ của process; không tự động tương ứng với RAM thật.</dd></div>
+<div class="gloss-item"><dt>Physical Address</dt><dd>Địa chỉ RAM vật lý thật, kết quả cuối cùng của việc dịch địa chỉ qua page table.</dd></div>
+<div class="gloss-item"><dt>VMA (vm_area_struct)</dt><dd>Metadata mô tả một vùng địa chỉ ảo liên tục có cùng quyền và backing.</dd></div>
+<div class="gloss-item"><dt>mm_struct</dt><dd>Memory descriptor — cấu trúc trung tâm mô tả toàn bộ address space của một process.</dd></div>
+<div class="gloss-item"><dt>Page</dt><dd>Đơn vị bộ nhớ ảo cố định (thường 4KB) mà kernel quản lý.</dd></div>
+<div class="gloss-item"><dt>Page Frame</dt><dd>Đơn vị RAM vật lý cố định tương ứng kích thước một page.</dd></div>
+<div class="gloss-item"><dt>PTE (Page Table Entry)</dt><dd>Entry cuối cùng trong page table, chứa physical frame number + quyền truy cập của một trang.</dd></div>
+<div class="gloss-item"><dt>PGD (Page Global Directory)</dt><dd>Cấp cao nhất của page table, gốc được nạp vào TTBR/CR3.</dd></div>
+<div class="gloss-item"><dt>PMD (Page Middle Directory)</dt><dd>Cấp trung gian của page table (trên ARM64 3-cấp, đây là cấp thứ hai).</dd></div>
+<div class="gloss-item"><dt>PUD (Page Upper Directory)</dt><dd>Cấp giữa PGD và PMD, có thể "fold" (không tồn tại thật) tuỳ VA_BITS.</dd></div>
+<div class="gloss-item"><dt>TLB (Translation Lookaside Buffer)</dt><dd>Cache phần cứng của các bản dịch VA→PA gần đây.</dd></div>
+<div class="gloss-item"><dt>MMU (Memory Management Unit)</dt><dd>Khối phần cứng dịch địa chỉ ảo sang vật lý bằng cách walk page table.</dd></div>
+<div class="gloss-item"><dt>Page Fault</dt><dd>Exception phần cứng khi MMU không thể hoàn tất dịch địa chỉ (not present, hoặc sai quyền).</dd></div>
+<div class="gloss-item"><dt>Demand Paging</dt><dd>Chiến lược cấp phát physical page trễ, chỉ khi thực sự được truy cập.</dd></div>
+<div class="gloss-item"><dt>Copy-On-Write (COW)</dt><dd>Cơ chế chia sẻ page giữa nhiều mapping (đọc), chỉ copy khi có bên ghi.</dd></div>
+<div class="gloss-item"><dt>Anonymous Memory</dt><dd>Bộ nhớ không có file backing (heap, stack, mmap anonymous).</dd></div>
+<div class="gloss-item"><dt>File-backed Memory</dt><dd>Bộ nhớ có nguồn từ một file thật, đi qua page cache.</dd></div>
+<div class="gloss-item"><dt>mmap()</dt><dd>Syscall tạo một mapping mới (file hoặc anonymous) trong address space.</dd></div>
+<div class="gloss-item"><dt>munmap()</dt><dd>Syscall gỡ bỏ một mapping.</dd></div>
+<div class="gloss-item"><dt>brk() / sbrk()</dt><dd>Syscall di chuyển program break — cơ chế cấp phát heap truyền thống.</dd></div>
+<div class="gloss-item"><dt>kmalloc()</dt><dd>Cấp phát bộ nhớ kernel nhỏ, physical-contiguous, qua SLUB.</dd></div>
+<div class="gloss-item"><dt>vmalloc()</dt><dd>Cấp phát bộ nhớ kernel virtual-contiguous, physical-noncontiguous.</dd></div>
+<div class="gloss-item"><dt>TTBR0_EL1 / TTBR1_EL1</dt><dd>Thanh ghi ARM64 chứa base của page table user (TTBR0) / kernel (TTBR1).</dd></div>
+<div class="gloss-item"><dt>ESR_EL1</dt><dd>Exception Syndrome Register — mã lý do exception (EC, ISS, DFSC).</dd></div>
+<div class="gloss-item"><dt>FAR_EL1</dt><dd>Fault Address Register — địa chỉ ảo gây page fault.</dd></div>
+<div class="gloss-item"><dt>mm_users / mm_count</dt><dd>Hai reference count độc lập của mm_struct — số thread sống dùng (users) vs số tham chiếu tới bản thân cấu trúc (count).</dd></div>
+</dl>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="cheatsheet">
+<h2>Final Cheat Sheet</h2>
+<div class="topic-badges"><span class="badge alloc">5-MINUTE REVIEW</span></div>
+
+<div class="card-grid">
+<div class="ccard"><div class="cch">mm_struct</div><div class="ccb">Address space của 1 process. Key: mmap/mm_rb (mm_mt hiện đại), pgd, mm_users, mm_count, mmap_lock, start_brk/brk.</div></div>
+<div class="ccard"><div class="cch">vm_area_struct (VMA)</div><div class="ccb">Metadata 1 vùng địa chỉ ảo liên tục. Key: vm_start, vm_end, vm_flags, vm_ops, vm_file. KHÔNG chứa physical page.</div></div>
+<div class="ccard"><div class="cch">mmap()</div><div class="ccb">do_mmap()→mmap_region(). Chỉ tạo VMA, KHÔNG cấp physical page ngay.</div></div>
+<div class="ccard"><div class="cch">munmap()</div><div class="ccb">do_munmap()→split_vma() nếu giữa VMA→unmap_region()→TLB flush.</div></div>
+<div class="ccard"><div class="cch">Page Fault</div><div class="ccb">CPU→MMU→walk→PTE invalid→Data Abort→EL1→handler→find_vma()→handle_mm_fault()→update PTE→retry.</div></div>
+<div class="ccard"><div class="cch">Demand Paging</div><div class="ccb">Virtual allocation ≠ Physical allocation. Page thật chỉ cấp khi fault xảy ra.</div></div>
+<div class="ccard"><div class="cch">COW</div><div class="ccb">fork() hạ PTE xuống read-only 2 bên, refcount page tăng. Ghi → do_wp_page() → copy trang mới.</div></div>
+<div class="ccard"><div class="cch">Page Table</div><div class="ccb">ARM64: PGD→PUD(có thể fold)→PMD→PTE. Số cấp phụ thuộc VA_BITS/CONFIG_PGTABLE_LEVELS.</div></div>
+<div class="ccard"><div class="cch">TLB</div><div class="ccb">Cache bản dịch VA→PA. Phải flush khi PTE đổi (munmap, COW, context switch qua ASID).</div></div>
+<div class="ccard"><div class="cch">ARM64 registers</div><div class="ccb">TTBR0_EL1=user PGD base. FAR_EL1=faulting VA. ESR_EL1=EC+ISS(DFSC). ELR_EL1=resume PC.</div></div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="topic" id="selfassess">
+<h2>Final Self-Assessment</h2>
+<div class="topic-badges"><span class="badge src">CHECKLIST — lưu trong trình duyệt</span></div>
+<div class="checklist" id="checklist">
+<label><input type="checkbox" data-k="mm"><span>Tôi hiểu mm_struct</span></label>
+<label><input type="checkbox" data-k="vma"><span>Tôi hiểu VMA</span></label>
+<label><input type="checkbox" data-k="vmapt"><span>Tôi hiểu VMA ↔ Page Table (khác nhau như thế nào)</span></label>
+<label><input type="checkbox" data-k="mmap"><span>Tôi hiểu mmap()</span></label>
+<label><input type="checkbox" data-k="munmap"><span>Tôi hiểu munmap()</span></label>
+<label><input type="checkbox" data-k="pf"><span>Tôi hiểu Page Fault</span></label>
+<label><input type="checkbox" data-k="dp"><span>Tôi hiểu Demand Paging</span></label>
+<label><input type="checkbox" data-k="cow"><span>Tôi hiểu Copy-On-Write</span></label>
+<label><input type="checkbox" data-k="fork"><span>Tôi hiểu fork()</span></label>
+<label><input type="checkbox" data-k="brk"><span>Tôi hiểu brk()</span></label>
+<label><input type="checkbox" data-k="ttbr"><span>Tôi hiểu ARM64 TTBR0_EL1</span></label>
+<label><input type="checkbox" data-k="pgd"><span>Tôi hiểu PGD/PUD/PMD/PTE</span></label>
+<label><input type="checkbox" data-k="esr"><span>Tôi hiểu ESR_EL1</span></label>
+<label><input type="checkbox" data-k="far"><span>Tôi hiểu FAR_EL1</span></label>
+<label><input type="checkbox" data-k="trace"><span>Tôi có thể tự trace source code</span></label>
+<label><input type="checkbox" data-k="debug"><span>Tôi có thể debug page fault</span></label>
+</div>
+</section>
+
+</main>
+</div>
+
+<footer class="doc">
+Linux Kernel Study Notes — Chapter 9: Process Address Space<br>
+Focus: Linux Memory Management • ARM64 • Kernel Source Code<br>
+Nguồn: <i>Understanding the Linux Kernel</i> Ch.9 (historical, Linux 2.6-era, x86) + mapping sang Linux 5.x/6.x và ARM64. Mọi mapping "OLD → MODERN" (mmap_sem→mmap_lock, rbtree→maple tree, VM_RESERVED removal...) đều là các thay đổi thật đã merge vào mainline; số dòng file cụ thể có thể lệch theo từng phiên bản kernel — luôn đối chiếu lại với cây source đang dùng trước khi trích dẫn trong tài liệu sản xuất.
+</footer>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  function applyStored(){
+    try{
+      var t=localStorage.getItem('ch9-theme');
+      if(t==='dark'||t==='light') root.setAttribute('data-theme',t);
+    }catch(e){}
+  }
+  applyStored();
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme');
+    var next;
+    if(cur==='dark') next='light'; else if(cur==='light') next='dark';
+    else{
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      next = prefersDark ? 'light' : 'dark';
+    }
+    root.setAttribute('data-theme',next);
+    try{ localStorage.setItem('ch9-theme',next); }catch(e){}
+  });
+
+  var body=document.body;
+  var modeBtn=document.getElementById('modeToggle');
+  function applyMode(){
+    try{
+      var m=localStorage.getItem('ch9-mode');
+      if(m==='quick'){ body.classList.add('mode-quickreview'); modeBtn.textContent='⚡ Quick Review'; }
+      else { modeBtn.textContent='📖 Study Mode'; }
+    }catch(e){}
+  }
+  applyMode();
+  modeBtn.addEventListener('click',function(){
+    var quick=body.classList.toggle('mode-quickreview');
+    modeBtn.textContent = quick ? '⚡ Quick Review' : '📖 Study Mode';
+    try{ localStorage.setItem('ch9-mode', quick?'quick':'study'); }catch(e){}
+  });
+
+  var sidebar=document.getElementById('sidebar');
+  document.getElementById('menuToggle').addEventListener('click',function(){
+    sidebar.classList.toggle('open');
+  });
+  sidebar.addEventListener('click',function(e){
+    if(e.target.tagName==='A') sidebar.classList.remove('open');
+  });
+
+  var bar=document.getElementById('progressBar');
+  var pct=document.getElementById('progressPct');
+  function updateProgress(){
+    var h=document.documentElement;
+    var scrolled=h.scrollTop||document.body.scrollTop;
+    var height=(h.scrollHeight||document.body.scrollHeight)-h.clientHeight;
+    var p=height>0?Math.min(100,Math.max(0,(scrolled/height)*100)):0;
+    bar.style.width=p+'%';
+    pct.textContent=Math.round(p)+'%';
+  }
+  document.addEventListener('scroll',updateProgress,{passive:true});
+  updateProgress();
+
+  var navLinks=Array.prototype.slice.call(sidebar.querySelectorAll('a[href^="#"]'));
+  var sections=navLinks.map(function(a){return document.querySelector(a.getAttribute('href'));}).filter(Boolean);
+  function onScrollSpy(){
+    var pos=window.scrollY+90;
+    var current=null;
+    sections.forEach(function(s){ if(s && s.offsetTop<=pos) current=s; });
+    navLinks.forEach(function(a){a.classList.remove('active');});
+    if(current){
+      var link=sidebar.querySelector('a[href="#'+current.id+'"]');
+      if(link) link.classList.add('active');
+    }
+  }
+  document.addEventListener('scroll',onScrollSpy,{passive:true});
+  window.addEventListener('load',onScrollSpy);
+
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.cb-copy');
+    if(!btn) return;
+    var box=btn.closest('.codebox');
+    var code=box.querySelector('pre').innerText;
+    navigator.clipboard && navigator.clipboard.writeText(code).then(function(){
+      var old=btn.textContent; btn.textContent='Copied!';
+      setTimeout(function(){btn.textContent=old;},1200);
+    }).catch(function(){});
+  });
+
+  document.addEventListener('click',function(e){
+    var q=e.target.closest('.qa .q');
+    if(!q) return;
+    q.parentElement.classList.toggle('open');
+  });
+
+  var vaSegs=document.querySelectorAll('#vaBitsRow .seg');
+  var vaDetail=document.getElementById('vaDetail');
+  vaSegs.forEach(function(seg){
+    seg.addEventListener('click',function(){
+      vaSegs.forEach(function(s){s.classList.remove('hl');});
+      seg.classList.add('hl');
+      vaDetail.textContent=seg.getAttribute('data-detail');
+    });
+    seg.addEventListener('mouseenter',function(){
+      vaDetail.textContent=seg.getAttribute('data-detail');
+    });
+  });
+
+  var glossSearch=document.getElementById('glossSearch');
+  if(glossSearch){
+    glossSearch.addEventListener('input',function(){
+      var q=glossSearch.value.trim().toLowerCase();
+      document.querySelectorAll('#glossList .gloss-item').forEach(function(item){
+        var txt=item.textContent.toLowerCase();
+        item.hidden = q && txt.indexOf(q)===-1;
+      });
+    });
+  }
+
+  var checklist=document.getElementById('checklist');
+  if(checklist){
+    try{
+      var saved=JSON.parse(localStorage.getItem('ch9-checklist')||'{}');
+      checklist.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+        if(saved[cb.dataset.k]) cb.checked=true;
+      });
+    }catch(e){}
+    checklist.addEventListener('change',function(e){
+      if(e.target.type!=='checkbox') return;
+      try{
+        var saved=JSON.parse(localStorage.getItem('ch9-checklist')||'{}');
+        saved[e.target.dataset.k]=e.target.checked;
+        localStorage.setItem('ch9-checklist', JSON.stringify(saved));
+      }catch(err){}
+    });
+  }
+
+  var idx=[];
+  function buildIndex(){
+    idx=[];
+    document.querySelectorAll('code.sym').forEach(function(el){
+      var sec=el.closest('section.topic');
+      var secTitle=sec?sec.querySelector('h2').textContent.trim():'';
+      var term=el.textContent.trim();
+      if(term) idx.push({term:term, el:sec, section:secTitle});
+    });
+  }
+  window.addEventListener('load',buildIndex);
+
+  var input=document.getElementById('searchInput');
+  var results=document.getElementById('searchResults');
+  function renderResults(list,q){
+    if(!list.length){ results.innerHTML='<div class="empty">No matches for "'+q+'"</div>'; results.classList.add('show'); return; }
+    results.innerHTML=list.slice(0,25).map(function(r,i){
+      return '<div class="res" data-idx="'+i+'"><div>'+r.term+'</div><div class="path">'+r.section+'</div></div>';
+    }).join('');
+    results.classList.add('show');
+    results._current=list;
+  }
+  input.addEventListener('input',function(){
+    var q=input.value.trim().toLowerCase();
+    if(!q){ results.classList.remove('show'); return; }
+    var matches=idx.filter(function(r){ return r.term.toLowerCase().indexOf(q)!==-1; });
+    var seen={}; var uniq=[];
+    matches.forEach(function(m){ var k=m.term+'@'+m.section; if(!seen[k]){seen[k]=1; uniq.push(m);} });
+    renderResults(uniq,q);
+  });
+  results.addEventListener('click',function(e){
+    var r=e.target.closest('.res');
+    if(!r) return;
+    var i=parseInt(r.getAttribute('data-idx'),10);
+    var item=results._current && results._current[i];
+    if(item && item.el){
+      item.el.scrollIntoView({behavior:'smooth',block:'start'});
+      var old=item.el.style.background;
+      item.el.style.transition='background .3s';
+      item.el.style.background='var(--c-arch-bg)';
+      setTimeout(function(){item.el.style.background=old;},1500);
+    }
+    results.classList.remove('show');
+    input.value='';
+  });
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('#searchbox')) results.classList.remove('show');
+  });
+})();
+</script>
+</body>
+</html>

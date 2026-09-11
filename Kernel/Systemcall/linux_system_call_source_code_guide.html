@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux System Call — Source Code Guide</title>
+<style>
+:root{
+  --bg:#0b0f17; --bg2:#0f1420; --panel:#121826; --panel2:#161d2e;
+  --border:#232b3d; --border2:#2c364c;
+  --text:#dbe2f0; --text-dim:#8a93a8; --text-faint:#5b6478;
+  --accent:#4fa3ff; --accent-dim:#2c6fc9;
+  --arm64:#4fa3ff; --generic:#3ecf8e; --x86:#e0b341; --vfs:#b385ff; --mm:#ff9d4d; --syscall:#ff6b6b; --vendor:#ff5fd1;
+  --code-bg:#0a0e17; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius:8px;
+  --maxw:1200px; --sbw:290px;
+}
+html[data-theme="light"]{
+  --bg:#f4f6fb; --bg2:#eceff6; --panel:#ffffff; --panel2:#f7f9fd;
+  --border:#dde3ef; --border2:#c9d2e5;
+  --text:#1a2233; --text-dim:#57607a; --text-faint:#8b93a8;
+  --code-bg:#0e1522;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15.5px;line-height:1.7;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3,h4{font-family:var(--sans);font-weight:700;line-height:1.3;color:var(--text);}
+h1{font-size:34px;}
+h2{font-size:27px;margin-top:0;border-bottom:1px solid var(--border);padding-bottom:12px;}
+h3{font-size:21px;color:var(--accent);}
+h4{font-size:16px;color:var(--text);}
+code,pre,.mono{font-family:var(--mono);}
+code.inline{background:var(--panel2);border:1px solid var(--border);padding:1px 6px;border-radius:4px;font-size:0.9em;color:#ffd479;}
+html[data-theme="light"] code.inline{color:#a15c00;}
+
+/* ---------- Header ---------- */
+header.top{
+  position:sticky;top:0;z-index:100;background:rgba(11,15,23,0.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+html[data-theme="light"] header.top{background:rgba(244,246,251,0.92);}
+.brand{display:flex;flex-direction:column;gap:2px;}
+.brand .t1{font-size:17px;font-weight:800;letter-spacing:0.3px;}
+.brand .t2{font-size:12.5px;color:var(--text-dim);}
+.hdr-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.pill{font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--border2);color:var(--text-dim);background:var(--panel2);white-space:nowrap;}
+.hdr-controls{display:flex;gap:8px;align-items:center;}
+.icon-btn{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px;font-family:var(--sans);}
+.icon-btn:hover{border-color:var(--accent);}
+#searchBox{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px;width:180px;font-family:var(--sans);}
+
+/* ---------- Layout ---------- */
+.layout{display:flex;max-width:1520px;margin:0 auto;align-items:flex-start;}
+nav.sidebar{
+  width:var(--sbw);flex-shrink:0;position:sticky;top:61px;max-height:calc(100vh - 61px);overflow-y:auto;
+  padding:18px 10px 60px 18px;border-right:1px solid var(--border);
+}
+nav.sidebar::-webkit-scrollbar{width:6px;}
+nav.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+nav.sidebar .navgroup{margin-bottom:2px;}
+nav.sidebar a{
+  display:block;padding:6px 10px;border-radius:6px;color:var(--text-dim);font-size:13.2px;
+  border-left:2px solid transparent;
+}
+nav.sidebar a:hover{background:var(--panel2);color:var(--text);text-decoration:none;}
+nav.sidebar a.active{background:var(--panel2);color:var(--accent);border-left:2px solid var(--accent);font-weight:600;}
+nav.sidebar .navnum{color:var(--text-faint);margin-right:6px;font-family:var(--mono);font-size:11px;}
+#sbToggle{display:none;}
+
+main{flex:1;min-width:0;max-width:var(--maxw);margin:0 auto;padding:28px 28px 120px;}
+
+/* ---------- Hero ---------- */
+.hero{background:linear-gradient(180deg,var(--panel) 0%,var(--bg2) 100%);border:1px solid var(--border);border-radius:14px;padding:34px 30px;margin-bottom:34px;}
+.hero h1{margin:0 0 8px;}
+.hero .sub{color:var(--text-dim);font-size:15px;margin-bottom:22px;}
+.pipeline{font-family:var(--mono);font-size:13px;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:2px;color:#9fd0ff;}
+.pipeline .step{padding:5px 14px;border-radius:6px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);}
+.pipeline .arrow{color:var(--text-faint);}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px;}
+.kpi{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.kpi .v{font-size:17px;font-weight:800;color:var(--accent);}
+.kpi .l{font-size:11.5px;color:var(--text-dim);margin-top:3px;}
+
+/* ---------- Sections ---------- */
+section{margin-bottom:52px;scroll-margin-top:75px;}
+section > .sec-badge{display:inline-block;margin-bottom:8px;}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:5px;letter-spacing:0.3px;}
+.b-arm64{background:rgba(79,163,255,0.15);color:var(--arm64);}
+.b-generic{background:rgba(62,207,142,0.15);color:var(--generic);}
+.b-x86{background:rgba(224,179,65,0.15);color:var(--x86);}
+.b-vfs{background:rgba(179,133,255,0.15);color:var(--vfs);}
+.b-mm{background:rgba(255,157,77,0.15);color:var(--mm);}
+.b-syscall{background:rgba(255,107,107,0.15);color:var(--syscall);}
+.b-vendor{background:rgba(255,95,209,0.15);color:var(--vendor);}
+.b-notverified{background:rgba(139,147,168,0.2);color:var(--text-dim);}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin:16px 0;}
+.card h4{margin-top:0;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:800px){.grid2{grid-template-columns:1fr;}}
+
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.6px;}
+th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;}
+th{background:var(--panel2);color:var(--text);font-weight:700;}
+td{color:var(--text-dim);}
+td code.inline, th code.inline{color:#ffd479;}
+.tablewrap{overflow-x:auto;}
+
+.callout{border-radius:10px;padding:14px 18px;margin:16px 0;border:1px solid var(--border2);background:var(--panel2);}
+.callout .ct{font-weight:700;font-size:13px;margin-bottom:6px;display:flex;gap:8px;align-items:center;}
+.callout.key{border-left:4px solid var(--generic);}
+.callout.warn{border-left:4px solid var(--x86);}
+.callout.src{border-left:4px solid var(--arm64);}
+.callout.model{border-left:4px solid var(--vfs);}
+.callout.vendor{border-left:4px solid var(--vendor);}
+
+.codebox{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:14px 0;}
+.codebox .cb-head{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);padding:7px 12px;font-family:var(--mono);font-size:12px;color:var(--text-dim);border-bottom:1px solid var(--border);}
+.codebox .cb-head .fn{color:#9fd0ff;}
+.codebox pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.6;color:#d3d9e6;}
+.codebox pre .c-kw{color:#ff8fb3;}
+.copy-btn{background:transparent;border:1px solid var(--border2);color:var(--text-dim);border-radius:4px;padding:2px 9px;cursor:pointer;font-size:11px;font-family:var(--sans);}
+.copy-btn:hover{color:var(--text);border-color:var(--accent);}
+details.codewrap{margin:14px 0;}
+details.codewrap summary{cursor:pointer;color:var(--text-dim);font-size:12.5px;padding:6px 0;list-style:none;}
+details.codewrap summary::-webkit-details-marker{display:none;}
+details.codewrap summary:before{content:"▶ ";color:var(--accent);}
+details.codewrap[open] summary:before{content:"▼ ";}
+
+.timeline{position:relative;padding-left:26px;border-left:2px solid var(--border2);margin:20px 0;}
+.tl-step{position:relative;margin-bottom:26px;}
+.tl-step::before{content:attr(data-n);position:absolute;left:-38px;top:0;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#04101f;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;}
+.tl-step h4{margin:0 0 8px;}
+
+.flowdiag{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:18px;overflow-x:auto;color:#c7d1e6;white-space:pre;}
+.flowdiag .n{color:#9fd0ff;}
+.flowdiag .arm{color:var(--arm64);}
+.flowdiag .vfs{color:var(--vfs);}
+.flowdiag .mm{color:var(--mm);}
+
+.checklist{list-style:none;padding:0;}
+.checklist li{padding:6px 0;border-bottom:1px dashed var(--border);color:var(--text-dim);}
+.checklist li:before{content:"☐ ";color:var(--accent);}
+
+.back-top{position:fixed;bottom:24px;right:24px;background:var(--accent);color:#04101f;border:none;border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.4);display:none;z-index:200;}
+footer{text-align:center;color:var(--text-faint);font-size:12.5px;padding:30px;border-top:1px solid var(--border);}
+mark{background:rgba(79,163,255,0.35);color:inherit;border-radius:2px;}
+
+@media(max-width:980px){
+  .layout{display:block;}
+  nav.sidebar{position:fixed;top:0;left:0;height:100vh;max-height:100vh;background:var(--bg);z-index:150;transform:translateX(-100%);transition:transform 0.2s;width:82vw;border-right:1px solid var(--border);padding-top:70px;}
+  nav.sidebar.open{transform:translateX(0);}
+  #sbToggle{display:inline-flex;}
+  main{padding:20px 16px 100px;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  #searchBox{width:120px;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button class="icon-btn" id="sbToggle" onclick="document.querySelector('nav.sidebar').classList.toggle('open')">☰</button>
+    <div class="brand">
+      <div class="t1">Linux Kernel · System Call Source Code Guide</div>
+      <div class="t2">Userspace → ARM64 CPU → Kernel Entry → Syscall Dispatch → VFS → Memory → Exception → Return</div>
+    </div>
+  </div>
+  <div class="hdr-controls">
+    <input id="searchBox" placeholder="Search symbol/file…" oninput="doSearch(this.value)">
+    <button class="icon-btn" onclick="toggleTheme()">🌗</button>
+    <button class="icon-btn" onclick="toggleAllDetails()">⇕ Code</button>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="sidebar" id="sidebar">
+  <a href="#overview"><span class="navnum">01</span>Overview</a>
+  <a href="#version-notice"><span class="navnum">—</span>Version &amp; BSP Notice</a>
+  <a href="#book-mapping"><span class="navnum">02</span>Chapter 10 → Modern Linux</a>
+  <a href="#big-picture"><span class="navnum">03</span>Big Picture</a>
+  <a href="#arm64-entry"><span class="navnum">04</span>ARM64 Exception Entry</a>
+  <a href="#ptregs"><span class="navnum">05</span>pt_regs</a>
+  <a href="#syscall-number"><span class="navnum">06</span>Syscall Number</a>
+  <a href="#syscall-dispatch"><span class="navnum">07</span>Syscall Dispatch</a>
+  <a href="#syscall-define"><span class="navnum">08</span>SYSCALL_DEFINE</a>
+  <a href="#read-case"><span class="navnum">10</span>read()</a>
+  <a href="#write-case"><span class="navnum">11</span>write()</a>
+  <a href="#openat-case"><span class="navnum">12</span>openat()</a>
+  <a href="#fd-structures"><span class="navnum">13</span>File Descriptor Chain</a>
+  <a href="#struct-file"><span class="navnum">17</span>struct file</a>
+  <a href="#vfs"><span class="navnum">23</span>VFS / file_operations</a>
+  <a href="#user-access"><span class="navnum">25</span>User Access</a>
+  <a href="#page-fault"><span class="navnum">29</span>Page Fault</a>
+  <a href="#exception-table"><span class="navnum">30</span>Exception Table / Fixup</a>
+  <a href="#syscall-return"><span class="navnum">32</span>Syscall Return</a>
+  <a href="#error-path"><span class="navnum">33</span>Error Path</a>
+  <a href="#locking"><span class="navnum">34</span>Locking</a>
+  <a href="#refcounting"><span class="navnum">35</span>Reference Counting</a>
+  <a href="#register-timeline"><span class="navnum">—</span>Register Timeline</a>
+  <a href="#complete-trace"><span class="navnum">36</span>Complete Trace</a>
+  <a href="#book-vs-kernel"><span class="navnum">37</span>Book vs Kernel</a>
+  <a href="#misconceptions"><span class="navnum">—</span>Misconceptions</a>
+  <a href="#vendor-notes"><span class="navnum">—</span>Vendor BSP Deltas</a>
+  <a href="#roadmap"><span class="navnum">38</span>Reading Roadmap</a>
+  <a href="#self-test"><span class="navnum">39</span>Self Test</a>
+  <a href="#source-index"><span class="navnum">—</span>Source Index</a>
+</nav>
+
+<main id="main">
+
+<div class="hero">
+  <h1>SYSTEM CALL</h1>
+  <div class="sub">From Userspace → ARM64 → Kernel → VFS → Memory → Exception → Userspace — traced against real, on-disk kernel source, not textbook paraphrase.</div>
+  <div class="pipeline">
+    <div class="step">USERSPACE</div><div class="arrow">↓ syscall(fd, buf, count)</div>
+    <div class="step">SVC #0</div><div class="arrow">↓ synchronous exception, EL0→EL1</div>
+    <div class="step">ARM64 EXCEPTION ENTRY <span class="mono" style="color:var(--text-faint)">entry.S</span></div><div class="arrow">↓ kernel_entry, register save</div>
+    <div class="step">PT_REGS</div><div class="arrow">↓ regs-&gt;regs[8] → syscallno</div>
+    <div class="step">SYSCALL DISPATCH <span class="mono" style="color:var(--text-faint)">syscall.c</span></div><div class="arrow">↓ sys_call_table[scno]</div>
+    <div class="step">SYSCALL IMPLEMENTATION <span class="mono" style="color:var(--text-faint)">__arm64_sys_*</span></div><div class="arrow">↓</div>
+    <div class="step">VFS <span class="mono" style="color:var(--text-faint)">vfs_read / vfs_write / do_filp_open</span></div><div class="arrow">↓</div>
+    <div class="step">FILESYSTEM / MEMORY</div><div class="arrow">↓ copy_to_user / copy_from_user</div>
+    <div class="step">RETURN <span class="mono" style="color:var(--text-faint)">x0 = ret</span></div><div class="arrow">↓</div>
+    <div class="step">ERET</div><div class="arrow">↓ EL1→EL0</div>
+    <div class="step">USERSPACE</div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v">ARM64</div><div class="l">Architecture traced</div></div>
+    <div class="kpi"><div class="v">Linux v5.10.241</div><div class="l">Actual source tree version</div></div>
+    <div class="kpi"><div class="v">Source-Driven</div><div class="l">Every claim cites file:line</div></div>
+    <div class="kpi"><div class="v">End-to-End</div><div class="l">read / write / openat traced</div></div>
+  </div>
+</div>
+
+<section id="overview">
+<span class="sec-badge"><span class="badge b-generic">GENERIC</span></span>
+<h2>01 · Overview</h2>
+<p>A system call is the controlled boundary between an unprivileged userspace process (EL0) and the kernel (EL1). This handbook does not re-explain that theory at length — it exists to let you <strong>open the real Linux kernel source and trace</strong> what happens, line by line, when a process executes <code class="inline">read(3, buffer, 100);</code>.</p>
+
+<div class="callout model">
+<div class="ct">🧠 MENTAL MODEL — what is actually being traced</div>
+<div class="flowdiag">Application
+   ↓
+libc wrapper  (packs args into x0-x5, syscall number into x8)
+   ↓
+syscall ABI   (AArch64 SVC calling convention)
+   ↓
+<span class="arm">ARM64 SVC #0</span>  (CPU takes a synchronous exception, EL0 → EL1)
+   ↓
+<span class="arm">exception entry</span>  (arch/arm64/kernel/entry.S)
+   ↓
+<span class="arm">pt_regs</span>   (register state saved on the kernel stack)
+   ↓
+<span class="n">syscall dispatch</span>  (arch/arm64/kernel/syscall.c)
+   ↓
+kernel function  (__arm64_sys_read / __arm64_sys_write / __arm64_sys_openat)
+   ↓
+<span class="vfs">VFS / subsystem</span>  (fs/read_write.c, fs/open.c, fs/namei.c)
+   ↓
+return (x0), <span class="arm">eret</span>, EL1 → EL0</div>
+</div>
+
+<p>Every claim in this document is tagged:</p>
+<p>
+<span class="badge b-arm64">🔵 ARM64</span> architecture-specific &nbsp;
+<span class="badge b-generic">🟢 GENERIC</span> arch-independent kernel code &nbsp;
+<span class="badge b-x86">🟡 X86-ONLY</span> applies only to the book's old x86 examples &nbsp;
+<span class="badge b-vfs">🟣 VFS</span> filesystem layer &nbsp;
+<span class="badge b-mm">🟠 MM</span> memory management &nbsp;
+<span class="badge b-syscall">🔴 SYSCALL</span> syscall infrastructure &nbsp;
+<span class="badge b-vendor">🟪 VENDOR</span> board-specific patch, not upstream &nbsp;
+<span class="badge b-notverified">⚠ NOT VERIFIED</span> could not be confirmed in this tree
+</p>
+</section>
+
+<section id="version-notice">
+<h2>Version &amp; Source Tree Notice</h2>
+<div class="callout warn">
+<div class="ct">⚠️ IMPORTANT — actual tree version differs from the requested target</div>
+<p>Chapter 10 and the original research request targeted <strong>Linux v5.4.x</strong>. The kernel source tree actually available on this machine
+(<code class="inline">C:\Users\PC\Documents\IT6_Kernel\Kernel\K-S800\Src</code>) is confirmed by its top-level <code class="inline">Makefile</code> to be:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">Makefile</span><span>lines 2-4</span></div><pre>VERSION = 5
+PATCHLEVEL = 10
+SUBLEVEL = 241</pre></div>
+<p>i.e. <strong>Linux v5.10.241</strong>, architecture <strong>arm64</strong>. Per the research rule "use the ACTUAL version of the provided source tree, do not silently substitute", <u>this entire document is written against v5.10.241</u>, not v5.4.x. Anywhere the v5.4.x behavior would differ, it is called out explicitly as <span class="badge b-x86">CHANGED</span>.</p>
+</div>
+<div class="callout vendor">
+<div class="ct">🟪 VENDOR BSP — this is not a pristine mainline tree</div>
+<p>Source-code evidence (config symbols, ticket comments, added syscalls) shows this tree is a <strong>vendor board-support package</strong>, apparently for a Konica Minolta "bizhub" multifunction printer product (guard macro <code class="inline">CONFIG_KM_BIZHUB</code>, ticket references like <code class="inline">OP_BTS-38744</code>, board tag <code class="inline">K-S800</code>). It layers real behavioral patches on top of stock v5.10.241. These are flagged inline throughout with <span class="badge b-vendor">🟪 VENDOR</span> and collected in <a href="#vendor-notes">Vendor BSP Deltas</a>. They matter: at least one patch changes what happens on a failed <code class="inline">copy_to_user()</code> (sends <code class="inline">SIGSEGV</code> instead of returning a short count in one code path) and two custom syscalls shift <code class="inline">__NR_syscalls</code> from the stock value to <strong>443</strong>.</p>
+</div>
+</section>
+
+<section id="book-mapping">
+<h2>02 · Chapter 10 → Modern Linux Mapping</h2>
+<div class="tablewrap"><table>
+<tr><th>Chapter 10 Concept</th><th>Modern Linux Concept</th><th>Linux v5.10.241 ARM64 Symbol</th><th>Source File</th><th>Status</th><th>Notes</th></tr>
+<tr><td>POSIX API</td><td>libc wrapper around a syscall</td><td><code class="inline">read()</code>, <code class="inline">write()</code>, <code class="inline">openat()</code> (glibc)</td><td>(outside kernel tree)</td><td><span class="badge b-generic">STILL VALID</span></td><td>libc places args in x0-x5, syscall # in x8, executes <code class="inline">svc #0</code>.</td></tr>
+<tr><td>System Call Handler</td><td>Exception vector + C dispatcher</td><td><code class="inline">el0_sync</code> → <code class="inline">el0_sync_handler</code> → <code class="inline">el0_svc</code></td><td>arch/arm64/kernel/entry.S:696; entry-common.c:375,362</td><td><span class="badge b-arm64">ARM64</span></td><td>Book's x86 "system_call" entry point is replaced by the AArch64 exception vector + handler chain.</td></tr>
+<tr><td>System Call Service Routine</td><td>Generated per-syscall entry point</td><td><code class="inline">__arm64_sys_read</code> / <code class="inline">__arm64_sys_write</code> / <code class="inline">__arm64_sys_openat</code></td><td>generated by <code class="inline">SYSCALL_DEFINEn</code> macro at the syscall's .c file</td><td><span class="badge b-arm64">ARM64</span></td><td>Book's plain <code class="inline">sys_read()</code> naming does not exist as the dispatched symbol on arm64 — see §08.</td></tr>
+<tr><td>System Call Table</td><td>Function-pointer array indexed by syscall number</td><td><code class="inline">sys_call_table[__NR_syscalls]</code></td><td>arch/arm64/kernel/sys.c:58</td><td><span class="badge b-arm64">ARM64</span></td><td>Confirmed to literally exist and be used — see §06/§07.</td></tr>
+<tr><td>System Call Number</td><td><code class="inline">__NR_*</code> constant, passed in a register</td><td>x8 → <code class="inline">pt_regs-&gt;syscallno</code></td><td>include/uapi/asm-generic/unistd.h; arch/arm64/kernel/syscall.c:98</td><td><span class="badge b-arm64">ARM64</span></td><td>Book's x86 <code class="inline">eax</code> is ARM64's <code class="inline">x8</code>.</td></tr>
+<tr><td>Entering/Exiting System Call</td><td><code class="inline">svc #0</code> / <code class="inline">eret</code></td><td><code class="inline">kernel_entry</code> / <code class="inline">kernel_exit</code> macros</td><td>arch/arm64/kernel/entry.S</td><td><span class="badge b-arm64">ARM64</span></td><td>Book's <code class="inline">int $0x80</code>/<code class="inline">sysenter</code> → ARM64 <code class="inline">svc #0</code>/<code class="inline">eret</code>.</td></tr>
+<tr><td>Parameter Passing</td><td>Registers, not stack</td><td>x0-x5 = args, x8 = syscall number</td><td>arch/arm64/include/asm/syscall.h:66-74</td><td><span class="badge b-arm64">ARM64</span></td><td>Book's x86 <code class="inline">ebx,ecx,edx,esi,edi,ebp</code> registers map conceptually to ARM64 x0-x5.</td></tr>
+<tr><td>User Address Space Access</td><td><code class="inline">access_ok()</code> + copy helpers</td><td><code class="inline">__range_ok()</code></td><td>arch/arm64/include/asm/uaccess.h:56-99</td><td><span class="badge b-arm64">ARM64</span></td><td>Still a real range check against <code class="inline">addr_limit</code> in this version — not a no-op.</td></tr>
+<tr><td><code class="inline">get_user()</code></td><td>Single-value user read macro</td><td><code class="inline">__get_user</code> → <code class="inline">__get_user_error</code> → <code class="inline">__get_user_asm</code></td><td>arch/arm64/include/asm/uaccess.h:258-331</td><td><span class="badge b-arm64">ARM64</span></td><td>Inline asm + exception-table fixup, not a function call.</td></tr>
+<tr><td><code class="inline">put_user()</code></td><td>Single-value user write macro</td><td><code class="inline">__put_user</code> → <code class="inline">__put_user_asm</code></td><td>arch/arm64/include/asm/uaccess.h:333-404</td><td><span class="badge b-arm64">ARM64</span></td><td>Symmetric to get_user.</td></tr>
+<tr><td><code class="inline">copy_from_user()</code></td><td>Bulk user→kernel copy</td><td><code class="inline">_copy_from_user</code> → <code class="inline">raw_copy_from_user</code> → <code class="inline">__arch_copy_from_user</code></td><td>include/linux/uaccess.h:151-164; arch/arm64/lib/copy_from_user.S</td><td><span class="badge b-generic">GENERIC</span>+<span class="badge b-arm64">ARM64</span></td><td>Zero-fills the destination tail on partial/failed copy (uaccess.h:161-162).</td></tr>
+<tr><td><code class="inline">copy_to_user()</code></td><td>Bulk kernel→user copy</td><td><code class="inline">_copy_to_user</code> → <code class="inline">raw_copy_to_user</code> → <code class="inline">__arch_copy_to_user</code></td><td>include/linux/uaccess.h:170-182; arch/arm64/lib/copy_to_user.S</td><td><span class="badge b-generic">GENERIC</span>+<span class="badge b-arm64">ARM64</span></td><td><span class="badge b-vendor">VENDOR</span> in this tree's iov_iter path — see <a href="#vendor-notes">Vendor Deltas</a>.</td></tr>
+<tr><td><code class="inline">access_ok()</code></td><td>Range-validate a user pointer</td><td><code class="inline">__range_ok()</code> macro</td><td>arch/arm64/include/asm/uaccess.h:63-98</td><td><span class="badge b-arm64">ARM64</span></td><td>Branchless carry-flag arithmetic against <code class="inline">current_thread_info()-&gt;addr_limit</code>.</td></tr>
+<tr><td>Page Fault</td><td>Data/instruction abort exception</td><td><code class="inline">do_mem_abort()</code>, <code class="inline">do_translation_fault()</code>, <code class="inline">do_page_fault()</code></td><td>arch/arm64/mm/fault.c:725; 604; 456</td><td><span class="badge b-arm64">ARM64</span></td><td>Book's x86 "page fault handler" concept maps to ARM64's ESR_EL1-driven fault dispatch table.</td></tr>
+<tr><td>Exception Table</td><td>Sorted table of (faulting-instr, fixup) pairs</td><td><code class="inline">struct exception_table_entry {int insn, fixup;}</code></td><td>arch/arm64/include/asm/extable.h:18-21</td><td><span class="badge b-arm64">ARM64</span></td><td>Plain relative-offset scheme in v5.10 arm64 — NOT the newer typed-handler (<code class="inline">EX_TYPE_*</code>) mechanism some later kernels use.</td></tr>
+<tr><td>Fixup Code</td><td>Out-of-line recovery instructions</td><td><code class="inline">fixup_exception()</code>, <code class="inline">.fixup</code> section, <code class="inline">USER()</code> macro</td><td>arch/arm64/mm/extable.c:9-22; asm/assembler.h:132-141</td><td><span class="badge b-arm64">ARM64</span></td><td>Rewrites <code class="inline">regs-&gt;pc</code> to the fixup address rather than jumping in hardware.</td></tr>
+<tr><td>Kernel Wrapper</td><td>Arch-specific syscall entry generator</td><td>arm64's own <code class="inline">__SYSCALL_DEFINEx</code></td><td>arch/arm64/include/asm/syscall_wrapper.h:51-73</td><td><span class="badge b-arm64">ARM64</span></td><td>Overrides the generic macro in include/linux/syscalls.h — see §08.</td></tr>
+<tr><td>System Call Return</td><td>Return value in a register, <code class="inline">eret</code></td><td><code class="inline">syscall_set_return_value()</code> writes <code class="inline">regs-&gt;regs[0]</code>; <code class="inline">kernel_exit</code> executes <code class="inline">eret</code></td><td>arch/arm64/include/asm/syscall.h:51-62; entry.S:290-387</td><td><span class="badge b-arm64">ARM64</span></td><td>Negative return value becomes <code class="inline">-errno</code>; libc negates and stores into <code class="inline">errno</code> — kernel never touches userspace <code class="inline">errno</code> directly.</td></tr>
+</table></div>
+</section>
+
+<section id="big-picture">
+<h2>03 · System Call Big Picture</h2>
+<p>Confirmed, source-verified end-to-end flow for <code class="inline">read(3, buffer, 100)</code> on this v5.10.241 arm64 tree (arrows are backed by citations in the sections that follow):</p>
+<div class="flowdiag">USERSPACE  x0=fd  x1=buf  x2=count  x8=__NR_read(63)
+   │
+   │ <span class="n">svc #0</span>                                            <span class="b-notverified" style="font-size:11px">CPU instruction</span>
+   ▼
+<span class="arm">CPU: synchronous exception, EL0 → EL1 (SP_EL1 selected)</span>
+   │  ESR_EL1 = exception class SVC64, ELR_EL1 = return PC, SPSR_EL1 = saved PSTATE
+   ▼
+<span class="arm">vectors[]</span>  entry.S:557           kernel_ventry 0, sync  → b el0_sync
+   ▼
+<span class="arm">el0_sync</span>  entry.S:696            kernel_entry 0  (saves x0-x29 → pt_regs, sets orig_x0/syscallno slot)
+   ▼
+<span class="arm">el0_sync_handler</span>  entry-common.c:375   switch(ESR_ELx_EC) → case ESR_ELx_EC_SVC64 → el0_svc(regs)
+   ▼
+<span class="arm">el0_svc → do_el0_svc</span>  entry-common.c:362 / syscall.c:191
+   ▼
+<span class="n">el0_svc_common</span>  syscall.c:93   orig_x0=regs[0]; syscallno=regs[8]; → invoke_syscall()
+   ▼
+<span class="n">invoke_syscall</span>  syscall.c:39   bounds check scno &lt; __NR_syscalls → sys_call_table[array_index_nospec(scno,nr)]
+   ▼
+<span class="n">__arm64_sys_read(regs)</span>  generated by SYSCALL_DEFINE3(read,...) in fs/read_write.c:672
+   ▼
+<span class="vfs">ksys_read → vfs_read → new_sync_read/f_op-&gt;read → call_read_iter → f_op-&gt;read_iter</span>  fs/read_write.c
+   ▼
+<span class="vfs">filesystem (e.g. ext4_file_read_iter) → page cache</span>
+   ▼
+<span class="mm">copy_to_user() → raw_copy_to_user → __arch_copy_to_user</span>  (possible page fault + fixup — see §29/30)
+   ▼
+return value ← ksys_read ← vfs_read ← __arm64_sys_read
+   ▼
+<span class="n">syscall_set_return_value()</span>  asm/syscall.h:51   regs-&gt;regs[0] = ret
+   ▼
+<span class="arm">ret_to_user → kernel_exit 0</span>  entry.S:757 / 290-387   ELR_EL1 ← pt_regs.pc, SPSR_EL1 ← pt_regs.pstate, x0 ← regs[0]
+   ▼
+<span class="arm">eret</span>  entry.S:366                       EL1 → EL0
+   ▼
+USERSPACE  x0 = return value (or -errno)</div>
+</section>
+
+<section id="arm64-entry">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>04 · ARM64 Exception Entry</h2>
+
+<div class="callout key"><div class="ct">💡 KEY IDEA</div>CPU hardware behavior and Linux software behavior are two different layers. The CPU only knows how to (1) save ELR_EL1/SPSR_EL1/ESR_EL1, (2) switch EL0→EL1, and (3) jump to whatever address VBAR_EL1 + offset points to. Everything past that jump — <code class="inline">pt_regs</code>, dispatch, <code class="inline">sys_call_table</code> — is pure software, written in entry.S/entry-common.c/syscall.c.</div>
+
+<h3>CPU registers involved</h3>
+<div class="tablewrap"><table>
+<tr><th>Register</th><th>Meaning</th><th>Set by</th></tr>
+<tr><td><code class="inline">ELR_EL1</code></td><td>Exception Link Register — PC to return to</td><td>CPU hardware, on exception entry (holds the instruction after <code class="inline">svc #0</code>)</td></tr>
+<tr><td><code class="inline">SPSR_EL1</code></td><td>Saved Program Status Register — PSTATE at time of exception</td><td>CPU hardware</td></tr>
+<tr><td><code class="inline">ESR_EL1</code></td><td>Exception Syndrome Register — why the exception happened (EC field, e.g. <code class="inline">ESR_ELx_EC_SVC64</code>)</td><td>CPU hardware</td></tr>
+<tr><td><code class="inline">VBAR_EL1</code></td><td>Vector Base Address Register — base of the 16-entry exception vector table</td><td>Linux, once at boot: <code class="inline">__primary_switched</code></td></tr>
+<tr><td><code class="inline">SP_EL0</code> / <code class="inline">SP_EL1</code></td><td>Stack pointer banked per exception level</td><td>CPU switches automatically on EL change; kernel_entry additionally swaps <code class="inline">sp_el0</code>↔task struct</td></tr>
+</table></div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/head.S</span><span>lines 421-433 (excerpt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYM_FUNC_START_LOCAL(__primary_switched)
+	...
+	adr_l	x8, vectors			// load VBAR_EL1 with virtual
+	msr	vbar_el1, x8			// vector table address
+	isb</pre></div>
+
+<h3>The vector table</h3>
+<p>A <code class="inline">svc #0</code> executed at EL0 is a synchronous exception taken to EL1 (running on SP_EL1 / EL1h). It lands in the <strong>"Synchronous 64-bit EL0"</strong> slot — the 8th of 16 128-byte slots.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>lines 557-575</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	.align	11
+SYM_CODE_START(vectors)
+	kernel_ventry	1, sync_invalid			// Synchronous EL1t
+	kernel_ventry	1, irq_invalid			// IRQ EL1t
+	kernel_ventry	1, fiq_invalid			// FIQ EL1t
+	kernel_ventry	1, error_invalid		// Error EL1t
+
+	kernel_ventry	1, sync				// Synchronous EL1h   ← kernel-mode faults, incl. uaccess faults (§29)
+	kernel_ventry	1, irq				// IRQ EL1h
+	kernel_ventry	1, fiq_invalid			// FIQ EL1h
+	kernel_ventry	1, error			// Error EL1h
+
+	kernel_ventry	0, sync				// Synchronous 64-bit EL0   ← SVC #0 lands here
+	kernel_ventry	0, irq				// IRQ 64-bit EL0
+	kernel_ventry	0, fiq_invalid			// FIQ 64-bit EL0
+	kernel_ventry	0, error			// Error 64-bit EL0</pre></div>
+<div class="callout warn"><div class="ct">🟪 VENDOR NOTE</div>This tree conditionally replaces the "Error EL1h" slot with a vendor <code class="inline">el1_ignore</code> handler under <code class="inline">CONFIG_IGNORE_ASYNC_ABORT</code> (entry.S:566-570) — not present in mainline v5.10.</div>
+
+<h3>kernel_entry: register save into pt_regs</h3>
+<p><code class="inline">kernel_ventry 0, sync</code> branches to <code class="inline">el0_sync</code>, which immediately runs the <code class="inline">kernel_entry</code> macro — this is the exact point where x0-x29 become <code class="inline">pt_regs</code> fields.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>lines 189-203, 260-263 (excerpt of kernel_entry macro)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	stp	x0, x1, [sp, #16 * 0]
+	stp	x2, x3, [sp, #16 * 1]
+	stp	x4, x5, [sp, #16 * 2]
+	stp	x6, x7, [sp, #16 * 3]
+	stp	x8, x9, [sp, #16 * 4]
+	stp	x10, x11, [sp, #16 * 5]
+	...
+	stp	x28, x29, [sp, #16 * 14]
+	...
+	.if	\el == 0
+	mov	w21, #NO_SYSCALL
+	str	w21, [sp, #S_SYSCALLNO]      // pt_regs->syscallno preset to -1
+	.endif</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>lines 696-701</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYM_CODE_START_LOCAL_NOALIGN(el0_sync)
+	kernel_entry 0
+	mov	x0, sp
+	bl	el0_sync_handler
+	b	ret_to_user
+SYM_CODE_END(el0_sync)</pre></div>
+<p>After <code class="inline">kernel_entry 0</code>, <code class="inline">sp</code> points at the base of the freshly-built <code class="inline">struct pt_regs</code>. <code class="inline">mov x0, sp</code> passes <code class="inline">&amp;pt_regs</code> as the first (and only) argument into the C function <code class="inline">el0_sync_handler(struct pt_regs *regs)</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry-common.c</span><span>lines 375-382, 362-366</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>asmlinkage void noinstr el0_sync_handler(struct pt_regs *regs)
+{
+	unsigned long esr = read_sysreg(esr_el1);
+
+	switch (ESR_ELx_EC(esr)) {
+	case ESR_ELx_EC_SVC64:
+		el0_svc(regs);
+		break;
+	...
+
+static void noinstr el0_svc(struct pt_regs *regs)
+{
+	enter_from_user_mode();
+	do_el0_svc(regs);
+}</pre></div>
+
+<div class="callout src"><div class="ct">🔍 SOURCE CODE — CPU vs software boundary</div>
+<strong>CPU hardware</strong> did: EL0→EL1, ESR_EL1/ELR_EL1/SPSR_EL1 capture, jump to VBAR_EL1+offset.<br>
+<strong>Linux software</strong> did everything else: <code class="inline">kernel_entry</code> saved GPRs into <code class="inline">pt_regs</code>, <code class="inline">el0_sync_handler</code> read <code class="inline">ESR_EL1</code> in C via <code class="inline">read_sysreg()</code> and branched on the exception class.
+</div>
+</section>
+
+<section id="ptregs">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>05 · struct pt_regs</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/ptrace.h</span><span>lines 173-200</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct pt_regs {
+	union {
+		struct user_pt_regs user_regs;
+		struct {
+			u64 regs[31];
+			u64 sp;
+			u64 pc;
+			u64 pstate;
+		};
+	};
+	u64 orig_x0;
+#ifdef __AARCH64EB__
+	u32 unused2;
+	s32 syscallno;
+#else
+	s32 syscallno;
+	u32 unused2;
+#endif
+	u64 orig_addr_limit;
+	u64 pmr_save;               /* only valid when ARM64_HAS_IRQ_PRIO_MASKING */
+	u64 stackframe[2];
+	u64 lockdep_hardirqs;       /* only valid for some EL1 exceptions */
+	u64 exit_rcu;
+};</pre></div>
+
+<div class="grid2">
+<div class="card"><h4>Register → pt_regs field mapping</h4>
+<div class="tablewrap"><table>
+<tr><th>Register</th><th>pt_regs field</th><th>Set where</th></tr>
+<tr><td>x0</td><td><code class="inline">regs[0]</code> (then <code class="inline">orig_x0</code>)</td><td><code class="inline">kernel_entry</code> stp (entry.S:189); <code class="inline">orig_x0 = regs[0]</code> in <code class="inline">el0_svc_common</code> (syscall.c:98)</td></tr>
+<tr><td>x1..x5</td><td><code class="inline">regs[1..5]</code></td><td><code class="inline">kernel_entry</code> stp sequence</td></tr>
+<tr><td>x8</td><td><code class="inline">regs[8]</code>, then copied to <code class="inline">syscallno</code></td><td><code class="inline">kernel_entry</code> stp; <code class="inline">syscallno = scno</code> in <code class="inline">el0_svc_common</code> (syscall.c:99)</td></tr>
+<tr><td>x29/x30 (FP/LR)</td><td><code class="inline">regs[28..29]</code>/(LR handled separately)</td><td><code class="inline">kernel_entry</code></td></tr>
+<tr><td>—</td><td><code class="inline">pc</code></td><td><code class="inline">mrs x22, elr_el1</code> → stored (entry.S ~235-257)</td></tr>
+<tr><td>—</td><td><code class="inline">pstate</code></td><td><code class="inline">mrs x23, spsr_el1</code> → stored</td></tr>
+</table></div>
+</div>
+<div class="card"><h4>Offset macros used by asm</h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">arch/arm64/kernel/asm-offsets.c</span><span>lines 52-76</span></div>
+<pre>DEFINE(S_X0,   offsetof(struct pt_regs, regs[0]));
+...
+DEFINE(S_LR,     offsetof(struct pt_regs, regs[30]));
+DEFINE(S_SP,     offsetof(struct pt_regs, sp));
+DEFINE(S_PSTATE, offsetof(struct pt_regs, pstate));
+DEFINE(S_PC,     offsetof(struct pt_regs, pc));
+DEFINE(S_SYSCALLNO, offsetof(struct pt_regs, syscallno));</pre></div>
+<p>These <code class="inline">S_*</code> constants are what entry.S actually uses (e.g. <code class="inline">str w21, [sp, #S_SYSCALLNO]</code>) — the assembly never hardcodes byte offsets.</p>
+</div>
+</div>
+
+<div class="callout key"><div class="ct">💡 KEY IDEA — orig_x0 vs regs[0]</div><code class="inline">regs[0]</code> gets overwritten with the syscall's return value before <code class="inline">eret</code> (see §32). <code class="inline">orig_x0</code> preserves the original argument value for ptrace/audit/syscall-restart code that needs to know what x0 was <em>before</em> the syscall ran.</div>
+
+<div class="flowdiag">USERSPACE REGISTER (x0..x5, x8)
+        ↓  kernel_entry stp sequence, entry.S:189-203
+    <span class="n">pt_regs.regs[0..8]</span>
+        ↓  el0_svc_common, syscall.c:98-99
+    <span class="n">pt_regs.orig_x0 / pt_regs.syscallno</span>
+        ↓  invoke_syscall, syscall.c:39
+    SYSCALL HANDLER  (__arm64_sys_read(const struct pt_regs *regs))</div>
+</section>
+
+<section id="syscall-number">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>06 · Syscall Number &amp; Table</h2>
+
+<h3>__NR_* definitions</h3>
+<p>ARM64 uses the <strong>generic</strong> syscall numbering table (confirmed via <code class="inline">arch/arm64/include/asm/unistd.h:44-50</code> including <code class="inline">&lt;uapi/asm/unistd.h&gt;</code>, which includes <code class="inline">&lt;asm-generic/unistd.h&gt;</code>).</p>
+<div class="codebox"><div class="cb-head"><span class="fn">include/uapi/asm-generic/unistd.h</span><span>lines 183-184, 205-208</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define __NR_openat 56
+__SYSCALL(__NR_openat, sys_openat)
+...
+#define __NR_read 63
+__SYSCALL(__NR_read, sys_read)
+#define __NR_write 64
+__SYSCALL(__NR_write, sys_write)</pre></div>
+<div class="callout vendor"><div class="ct">🟪 VENDOR NOTE — __NR_syscalls is not the stock value</div>
+This tree's <code class="inline">arch/arm64/include/uapi/asm/unistd.h</code> adds two board-specific syscalls before including the generic table:
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">arch/arm64/include/uapi/asm/unistd.h</span><span>lines 28-39</span></div>
+<pre>#ifdef CONFIG_KM_SEMAPHORE /* sky_kudo */
+#define __NR_km_semaphore 441
+__SYSCALL(__NR_km_semaphore, sys_km_semaphore)
+#endif
+#ifdef CONFIG_KM_TICK
+#define __NR_km_tickget		442
+__SYSCALL(__NR_km_tickget, sys_km_tickget)
+#endif
+#include &lt;asm-generic/unistd.h&gt;</pre></div>
+and <code class="inline">include/uapi/asm-generic/unistd.h:870-871</code> redefines the total:
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">include/uapi/asm-generic/unistd.h</span><span>lines 870-871</span></div>
+<pre>#undef __NR_syscalls
+#define __NR_syscalls 443</pre></div>
+So in this tree <code class="inline">__NR_syscalls == 443</code>, not the stock generic value — the bounds check in <code class="inline">invoke_syscall()</code> (§07) uses this vendor-adjusted number.
+</div>
+
+<h3>sys_call_table — yes, it is real and used on ARM64</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/sys.c</span><span>lines 39-61</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>asmlinkage long sys_ni_syscall(void);
+
+asmlinkage long __arm64_sys_ni_syscall(const struct pt_regs *__unused)
+{
+	return sys_ni_syscall();
+}
+
+#undef __SYSCALL
+#define __SYSCALL(nr, sym)	asmlinkage long __arm64_##sym(const struct pt_regs *);
+#include &lt;asm/unistd.h&gt;
+
+#undef __SYSCALL
+#define __SYSCALL(nr, sym)	[nr] = __arm64_##sym,
+
+const syscall_fn_t sys_call_table[__NR_syscalls] = {
+	[0 ... __NR_syscalls - 1] = __arm64_sys_ni_syscall,
+#include &lt;asm/unistd.h&gt;
+};</pre></div>
+<p><code class="inline">&lt;asm/unistd.h&gt;</code> is included <strong>twice</strong>, each time with <code class="inline">__SYSCALL</code> redefined — first to forward-declare every <code class="inline">__arm64_sys_&lt;name&gt;</code> prototype, then to emit <code class="inline">[nr] = __arm64_sys_&lt;name&gt;,</code> designated initializers. This is pure textual macro substitution at compile time — <strong>there is no separate generated header</strong> (<code class="inline">arch/arm64/include/generated/</code> does not exist in this tree), unlike x86's build-time <code class="inline">syscalltbl.sh</code> script.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/syscall.h</span><span>lines 12-14</span></div>
+<pre>typedef long (*syscall_fn_t)(const struct pt_regs *regs);
+extern const syscall_fn_t sys_call_table[];</pre></div>
+<p>A separate <code class="inline">compat_sys_call_table</code> exists identically for 32-bit compat tasks — <code class="inline">arch/arm64/kernel/sys32.c:132</code>.</p>
+</section>
+
+<section id="syscall-dispatch">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>07 · Syscall Dispatch</h2>
+<div class="flowdiag">x8 (raw)
+   ↓  kernel_entry stp → pt_regs.regs[8]
+<span class="n">do_el0_svc(regs)</span>          syscall.c:191
+   ↓  el0_svc_common(regs, regs->regs[8], __NR_syscalls, sys_call_table)
+<span class="n">el0_svc_common</span>            syscall.c:93
+   ↓  orig_x0=regs[0]; syscallno=scno; syscall_trace_enter() if TIF work pending
+<span class="n">invoke_syscall</span>            syscall.c:39
+   ↓  bounds check scno < __NR_syscalls, array_index_nospec()
+<span class="n">sys_call_table[scno]</span>      arch/arm64/kernel/sys.c:58
+   ↓
+<span class="n">__arm64_sys_read(regs)</span>    generated wrapper</div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/syscall.c</span><span>lines 34-54</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static long __invoke_syscall(struct pt_regs *regs, syscall_fn_t syscall_fn)
+{
+	return syscall_fn(regs);
+}
+
+static void invoke_syscall(struct pt_regs *regs, unsigned int scno,
+			   unsigned int sc_nr,
+			   const syscall_fn_t syscall_table[])
+{
+	long ret;
+
+	if (scno &lt; sc_nr) {
+		syscall_fn_t syscall_fn;
+		syscall_fn = syscall_table[array_index_nospec(scno, sc_nr)];
+		ret = __invoke_syscall(regs, syscall_fn);
+	} else {
+		ret = do_ni_syscall(regs, scno);
+	}
+
+	syscall_set_return_value(current, regs, 0, ret);
+}</pre></div>
+<p><code class="inline">array_index_nospec()</code> is a Spectre-v1 hardening clamp: even though <code class="inline">scno &lt; sc_nr</code> was already checked, this forces the index used for the actual memory load to be bounded, defeating speculative out-of-bounds reads of <code class="inline">sys_call_table</code>. An out-of-range <code class="inline">scno</code> — including a genuinely bad number or the ptrace "skip syscall" sentinel — falls to <code class="inline">do_ni_syscall()</code>, which returns <code class="inline">-ENOSYS</code> via <code class="inline">sys_ni_syscall()</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/syscall.c</span><span>lines 93-99, 191-195</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static void el0_svc_common(struct pt_regs *regs, int scno, int sc_nr,
+			   const syscall_fn_t syscall_table[])
+{
+	unsigned long flags = current_thread_info()-&gt;flags;
+
+	regs-&gt;orig_x0 = regs-&gt;regs[0];
+	regs-&gt;syscallno = scno;
+	...
+
+void do_el0_svc(struct pt_regs *regs)
+{
+	sve_user_discard();
+	el0_svc_common(regs, regs-&gt;regs[8], __NR_syscalls, sys_call_table);
+}</pre></div>
+<div class="callout warn"><div class="ct">⚠️ IMPORTANT</div>For the 32-bit compat path, <code class="inline">do_el0_svc_compat()</code> (syscall.c:198-202) uses <strong>x7</strong>, not x8, as the syscall number register, per the AArch32 ABI — a real architectural difference worth remembering if you ever trace a compat (32-bit) process.</div>
+</section>
+
+<section id="syscall-define">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span> <span class="badge b-syscall">🔴 SYSCALL</span></span>
+<h2>08 · SYSCALL_DEFINE3 — Macro Expansion</h2>
+
+<h3>The generic chain</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/syscalls.h</span><span>lines 216, 223-225</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define SYSCALL_DEFINE3(name, ...) SYSCALL_DEFINEx(3, _##name, __VA_ARGS__)
+...
+#define SYSCALL_DEFINEx(x, sname, ...)				\
+	SYSCALL_METADATA(sname, x, __VA_ARGS__)			\
+	__SYSCALL_DEFINEx(x, sname, __VA_ARGS__)</pre></div>
+<p>The generic fallback <code class="inline">__SYSCALL_DEFINEx</code> (which would generate a plain x86-style <code class="inline">sys_name()</code>) only applies <code class="inline">#ifndef __SYSCALL_DEFINEx</code>. But <code class="inline">syscalls.h:94</code> includes <code class="inline">&lt;asm/syscall_wrapper.h&gt;</code> <em>before</em> that guard is reached — so on arm64, the architecture's own version wins.</p>
+
+<h3>ARM64's override</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/syscall_wrapper.h</span><span>lines 51-67, 13-16</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define __SYSCALL_DEFINEx(x, name, ...)						\
+	asmlinkage long __arm64_sys##name(const struct pt_regs *regs);		\
+	ALLOW_ERROR_INJECTION(__arm64_sys##name, ERRNO);			\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));		\
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));	\
+	asmlinkage long __arm64_sys##name(const struct pt_regs *regs)		\
+	{									\
+		return __se_sys##name(SC_ARM64_REGS_TO_ARGS(x,__VA_ARGS__));	\
+	}									\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))		\
+	{									\
+		long ret = __do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));	\
+		__MAP(x,__SC_TEST,__VA_ARGS__);					\
+		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));		\
+		return ret;							\
+	}									\
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+#define SC_ARM64_REGS_TO_ARGS(x, ...)				\
+	__MAP(x,__SC_ARGS					\
+	      ,,regs-&gt;regs[0],,regs-&gt;regs[1],,regs-&gt;regs[2]	\
+	      ,,regs-&gt;regs[3],,regs-&gt;regs[4],,regs-&gt;regs[5])</pre></div>
+
+<h3>What actually gets generated for read()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 672-675 (source as written)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+{
+	return ksys_read(fd, buf, count);
+}</pre></div>
+<div class="flowdiag"><span class="n">SYSCALL_DEFINE3(read, fd, buf, count)</span>
+      ↓  macro expansion (syscall_wrapper.h:51)
+<span class="arm">__arm64_sys_read(const struct pt_regs *regs)</span>   ← real entry point, referenced by sys_call_table
+      │     body: return __se_sys_read(regs->regs[0], regs->regs[1], regs->regs[2]);
+      ↓
+__se_sys_read(long,long,long)          ← static sign-extension/type-sanitizing shim
+      │     body: long ret = __do_sys_read((unsigned int)a,(char __user*)b,(size_t)c); return ret;
+      ↓
+__do_sys_read(unsigned int fd, char __user *buf, size_t count)   ← static inline, YOUR function body lives here
+      │     body: return ksys_read(fd, buf, count);
+      ↓
+ksys_read()    fs/read_write.c:636</div>
+<div class="callout warn"><div class="ct">⚠️ IMPORTANT — sys_read is NOT the dispatched symbol on arm64</div>
+The generic <code class="inline">__SYSCALL_DEFINEx</code> that would emit a plain <code class="inline">sys_read()</code> function is never used, because arm64's own version takes precedence via include order. A prototype <code class="inline">asmlinkage long sys_read(...)</code> still exists as a <em>declaration</em> for other callers (<code class="inline">include/linux/syscalls.h:493</code>), but the macro only <em>defines</em> <code class="inline">__arm64_sys_read</code> / <code class="inline">__se_sys_read</code> / <code class="inline">__do_sys_read</code>. If you grep the binary or System.map for <code class="inline">sys_read</code>, you won't find the code that actually runs — look for <code class="inline">__arm64_sys_read</code>.
+</div>
+
+<h3>asmlinkage and __user</h3>
+<div class="grid2">
+<div class="card"><h4><code class="inline">asmlinkage</code></h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">include/linux/linkage.h</span><span>lines 16-23</span></div>
+<pre>#ifdef __cplusplus
+#define CPP_ASMLINKAGE extern "C"
+#else
+#define CPP_ASMLINKAGE
+#endif
+#ifndef asmlinkage
+#define asmlinkage CPP_ASMLINKAGE
+#endif</pre></div>
+<p>arm64's own <code class="inline">asm/linkage.h</code> does not redefine it, so on arm64 <code class="inline">asmlinkage</code> is simply empty (or <code class="inline">extern "C"</code>) — unlike historical architectures that used it to force a specific stack-based calling convention.</p>
+</div>
+<div class="card"><h4><code class="inline">__user</code></h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">include/linux/compiler_types.h</span><span>lines 29-36</span></div>
+<pre>#else /* __CHECKER__ */
+# define __kernel
+# ifdef STRUCTLEAK_PLUGIN
+#  define __user	__attribute__((user))
+# else
+#  define __user
+# endif</pre></div>
+<p>Under a normal build it compiles away to nothing — it exists purely for static analysis (sparse's <code class="inline">__CHECKER__</code> path defines it as <code class="inline">__attribute__((noderef, address_space(__user)))</code>) so sparse can catch a raw kernel pointer being dereferenced as if it were user memory.</p>
+</div>
+</div>
+<div class="callout warn"><div class="ct">⚠️ NOT FOUND IN THIS VERSION</div>A macro literally named <code class="inline">__SC_COMP</code> does not exist in <code class="inline">include/linux/syscalls.h</code> or <code class="inline">arch/arm64/include/asm/syscall_wrapper.h</code> in this tree. The compat equivalent is <code class="inline">COMPAT_SYSCALL_DEFINEx</code> (syscall_wrapper.h:20-33), which generates <code class="inline">__arm64_compat_sys_name</code>/<code class="inline">__se_compat_sys_name</code>/<code class="inline">__do_compat_sys_name</code> using the same register-mapping technique.</div>
+</section>
+
+<section id="read-case">
+<span class="sec-badge"><span class="badge b-syscall">🔴 SYSCALL</span> <span class="badge b-vfs">🟣 VFS</span></span>
+<h2>10 · read() — Complete Source Trace</h2>
+<p><code class="inline">read(fd, buf, count)</code> — the primary case study. Every step below is a real function found in this tree, at the file/line cited.</p>
+
+<div class="timeline">
+<div class="tl-step" data-n="01"><h4>Userspace</h4><p>Process holds an open fd (e.g. <code class="inline">fd=3</code>) and calls libc's <code class="inline">read(3, buffer, 100)</code>.</p></div>
+
+<div class="tl-step" data-n="02"><h4>libc wrapper</h4><p>glibc places <code class="inline">fd</code> in x0, <code class="inline">buffer</code> in x1, <code class="inline">100</code> in x2, and <code class="inline">__NR_read</code> (63) in x8, then executes <code class="inline">svc #0</code>. (outside kernel tree — not further cited.)</p></div>
+
+<div class="tl-step" data-n="03"><h4>ARM64 Exception Entry → pt_regs → Dispatch</h4><p>See §04-§07 in full. Result: <code class="inline">invoke_syscall()</code> calls <code class="inline">sys_call_table[63]</code> = <code class="inline">__arm64_sys_read</code>.</p></div>
+
+<div class="tl-step" data-n="04"><h4>__arm64_sys_read → __do_sys_read → ksys_read</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 672-675, 636-670</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+{
+	return ksys_read(fd, buf, count);
+}</pre></div>
+<details class="codewrap"><summary>ksys_read() full body (with vendor CONFIG_KM_BIZHUB retry loop noted)</summary>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 636-670</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
+{
+	struct fd f = fdget_pos(fd);
+	ssize_t ret = -EBADF;
+
+	if (f.file) {
+		loff_t pos, *ppos = file_ppos(f.file);
+		if (ppos) {
+			pos = *ppos;
+			ppos = &amp;pos;
+		}
+		/* [VENDOR CONFIG_KM_BIZHUB: retry loop around vfs_read on -EIO, omitted] */
+		ret = vfs_read(f.file, buf, count, ppos);
+		if (ret &gt;= 0 &amp;&amp; ppos)
+			f.file-&gt;f_pos = pos;
+		fdput_pos(f);
+	}
+	return ret;
+}</pre></div>
+</details>
+<p><strong>Caller:</strong> <code class="inline">__arm64_sys_read</code> (generated). <strong>Callee:</strong> <code class="inline">fdget_pos()</code>, <code class="inline">vfs_read()</code>, <code class="inline">fdput_pos()</code>. If <code class="inline">fdget_pos()</code> returns a NULL <code class="inline">f.file</code> (bad fd), the initializer <code class="inline">ret = -EBADF</code> at the top falls straight through unchanged — this is the exact origin of read(2)'s <code class="inline">EBADF</code>.</p>
+</div>
+
+<div class="tl-step" data-n="05"><h4>fd → struct file: fdget_pos()</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/file.h</span><span>lines 36-39, 63-76</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct fd {
+	struct file *file;
+	unsigned int flags;
+};
+...
+static inline struct fd fdget(unsigned int fd)
+{ return __to_fd(__fdget(fd)); }
+static inline struct fd fdget_pos(int fd)
+{ return __to_fd(__fdget_pos(fd)); }</pre></div>
+<p>Backing implementation, <code class="inline">fs/file.c:1322-1382</code>: <code class="inline">__fget_light()</code> takes a fast, refcount-free path if the task is single-threaded (<code class="inline">files-&gt;count == 1</code>) using <code class="inline">files_lookup_fd_raw()</code>; otherwise falls back to <code class="inline">__fget()</code>, which does take a real <code class="inline">get_file()</code> reference and tags the result with <code class="inline">FDPUT_FPUT</code> so the matching <code class="inline">fdput()</code> knows to <code class="inline">fput()</code> it. <code class="inline">fdget_pos()</code> additionally takes <code class="inline">file-&gt;f_pos_lock</code> when the file needs positional locking (shared fd or a directory).</p>
+</div>
+
+<div class="tl-step" data-n="06"><h4>vfs_read()</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 489-518</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+	ssize_t ret;
+
+	if (!(file-&gt;f_mode &amp; FMODE_READ))
+		return -EBADF;
+	if (!(file-&gt;f_mode &amp; FMODE_CAN_READ))
+		return -EINVAL;
+	if (unlikely(!access_ok(buf, count)))
+		return -EFAULT;
+
+	ret = rw_verify_area(READ, file, pos, count);
+	if (ret)
+		return ret;
+	if (count &gt; MAX_RW_COUNT)
+		count =  MAX_RW_COUNT;
+
+	if (file-&gt;f_op-&gt;read)
+		ret = file-&gt;f_op-&gt;read(file, buf, count, pos);
+	else if (file-&gt;f_op-&gt;read_iter)
+		ret = new_sync_read(file, buf, count, pos);
+	else
+		ret = -EINVAL;
+	if (ret &gt; 0) {
+		fsnotify_access(file);
+		add_rchar(current, ret);
+	}
+	inc_syscr(current);
+	return ret;
+}</pre></div>
+<p>Confirmed in this v5.10.241 tree: both direct (<code class="inline">f_op-&gt;read</code>) and iter-based (<code class="inline">f_op-&gt;read_iter</code>) file_operations are supported side by side — the removal of the direct member happened in a later kernel version than this one. Note the <code class="inline">access_ok(buf, count)</code> call right here at the VFS layer, before ever reaching the filesystem (§25).</p>
+</div>
+
+<div class="tl-step" data-n="07"><h4>new_sync_read() → call_read_iter() → f_op-&gt;read_iter</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 417-433</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static ssize_t new_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+{
+	struct iovec iov = { .iov_base = buf, .iov_len = len };
+	struct kiocb kiocb;
+	struct iov_iter iter;
+	ssize_t ret;
+
+	init_sync_kiocb(&amp;kiocb, filp);
+	kiocb.ki_pos = (ppos ? *ppos : 0);
+	iov_iter_init(&amp;iter, READ, &amp;iov, 1, len);
+
+	ret = call_read_iter(filp, &amp;kiocb, &amp;iter);
+	BUG_ON(ret == -EIOCBQUEUED);
+	if (ppos)
+		*ppos = kiocb.ki_pos;
+	return ret;
+}</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>lines 2038-2042</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline ssize_t call_read_iter(struct file *file, struct kiocb *kio,
+				     struct iov_iter *iter)
+{
+	return file-&gt;f_op-&gt;read_iter(kio, iter);
+}</pre></div>
+<p>This is where a single flat <code class="inline">(buf, count)</code> byte range gets wrapped into a one-segment <code class="inline">struct iov_iter</code> so it can be passed through the same <code class="inline">read_iter</code> interface used by vectored I/O (<code class="inline">readv</code>) and io_uring.</p>
+</div>
+
+<div class="tl-step" data-n="08"><h4>Filesystem — concrete example: ext4</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/ext4/file.c</span><span>lines 1133-1149 (excerpt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>const struct file_operations ext4_file_operations = {
+	.llseek		= ext4_llseek,
+	.read_iter	= ext4_file_read_iter,
+	.write_iter	= ext4_file_write_iter,
+	.iopoll		= iomap_dio_iopoll,
+	.unlocked_ioctl = ext4_ioctl,
+	.mmap		= ext4_file_mmap,
+	.open		= ext4_file_open,
+	.release	= ext4_release_file,
+	.fsync		= ext4_sync_file,
+	.splice_read	= generic_file_splice_read,
+	.splice_write	= iter_file_splice_write,
+};</pre></div>
+<p><code class="inline">ext4_file_read_iter()</code> (fs/ext4/file.c:118) checks for forced shutdown then delegates to DAX/direct-I/O/buffered paths, ultimately reaching the page cache via <code class="inline">generic_file_read_iter()</code>. This is real dynamic dispatch through a function pointer set at filesystem-registration time — see §23 for the general mechanism.</p>
+</div>
+
+<div class="tl-step" data-n="09"><h4>copy_to_user() — page cache → userspace buffer</h4>
+<p>Deep inside the page-cache read path, bytes land in the destination buffer via <code class="inline">copy_to_user()</code> → <code class="inline">raw_copy_to_user()</code> → <code class="inline">__arch_copy_to_user</code> (arm64 assembly). Full trace in §25/§29/§30 (user access, page fault, exception table). In this vendor tree, <code class="inline">lib/iov_iter.c</code>'s copy-out path has been patched — see the callout below and §"Vendor BSP Deltas".</p>
+<div class="callout vendor"><div class="ct">🟪 VENDOR NOTE — copyout() is dead code in this tree</div>
+Mainline v5.10's <code class="inline">copy_page_to_iter_iovec()</code> calls a helper named <code class="inline">copyout()</code> (still present, <code class="inline">lib/iov_iter.c:179-188</code>, unmodified) — but in this tree its call sites have been replaced with a vendor function <code class="inline">__copy_to_user_chk()</code> (lib/iov_iter.c:146-177, ticket <code class="inline">OP_BTS-38744</code>) that does the same <code class="inline">access_ok()</code>+<code class="inline">raw_copy_to_user()</code> but <strong>sends <code class="inline">SIGSEGV</code> to the current task directly</strong> on failure, instead of returning a short-copy count for the caller to translate into <code class="inline">-EFAULT</code>. This is a real, material behavioral deviation — worth knowing before you rely on read(2) returning <code class="inline">-EFAULT</code> for a bad buffer on real hardware running this exact BSP.
+</div>
+</div>
+
+<div class="tl-step" data-n="10"><h4>Return path</h4><p><code class="inline">read_iter</code> return value → <code class="inline">call_read_iter</code> → <code class="inline">new_sync_read</code> → <code class="inline">vfs_read</code> → <code class="inline">ksys_read</code> (updates <code class="inline">f_pos</code>) → <code class="inline">__do_sys_read</code> → <code class="inline">__se_sys_read</code> → <code class="inline">__arm64_sys_read</code> → <code class="inline">invoke_syscall</code> → <code class="inline">syscall_set_return_value()</code> writes <code class="inline">regs-&gt;regs[0]</code> → <code class="inline">ret_to_user</code> → <code class="inline">kernel_exit</code> → <code class="inline">eret</code> → userspace x0. Full detail in §32.</p></div>
+</div>
+
+<h3>Locking in the read path</h3>
+<div class="callout key"><div class="ct">💡 KEY IDEA</div><code class="inline">vfs_read()</code> itself takes <strong>no lock</strong> — confirmed by reading the full function body (fs/read_write.c:489-518): no <code class="inline">inode_lock</code>/<code class="inline">i_rwsem</code>/mutex/semaphore call appears anywhere in it or in <code class="inline">new_sync_read()</code>. Any locking on the read side is internal to the filesystem/page-cache layer, not the generic VFS entry point.</div>
+
+<h3>Error path summary for read()</h3>
+<div class="tablewrap"><table>
+<tr><th>Condition</th><th>Where checked</th><th>Return</th></tr>
+<tr><td>bad/unopened fd</td><td><code class="inline">ksys_read</code>, default <code class="inline">ret</code> when <code class="inline">fdget_pos()</code> yields NULL file</td><td><code class="inline">-EBADF</code></td></tr>
+<tr><td>file not opened for reading</td><td><code class="inline">vfs_read</code>: <code class="inline">!(f_mode &amp; FMODE_READ)</code></td><td><code class="inline">-EBADF</code></td></tr>
+<tr><td>file type can't be read (e.g. write-only special)</td><td><code class="inline">vfs_read</code>: <code class="inline">!(f_mode &amp; FMODE_CAN_READ)</code></td><td><code class="inline">-EINVAL</code></td></tr>
+<tr><td>buffer pointer/length fails range check</td><td><code class="inline">vfs_read</code>: <code class="inline">!access_ok(buf, count)</code></td><td><code class="inline">-EFAULT</code></td></tr>
+<tr><td>negative/overflowing count or position</td><td><code class="inline">rw_verify_area()</code>, fs/read_write.c:379-415</td><td><code class="inline">-EINVAL</code> / <code class="inline">-EOVERFLOW</code></td></tr>
+<tr><td>neither <code class="inline">.read</code> nor <code class="inline">.read_iter</code> set</td><td><code class="inline">vfs_read</code></td><td><code class="inline">-EINVAL</code></td></tr>
+</table></div>
+<div class="callout warn"><div class="ct">⚠️ Not reachable via plain read()</div><code class="inline">-ESPIPE</code> and <code class="inline">-EISDIR</code> exist elsewhere in <code class="inline">fs/read_write.c</code> (positional <code class="inline">pread64</code>/<code class="inline">sendfile</code> family, and <code class="inline">generic_file_rw_checks()</code> used by <code class="inline">copy_file_range</code>) but are <strong>not</strong> reachable through <code class="inline">ksys_read</code>/<code class="inline">vfs_read</code> for a plain <code class="inline">read(2)</code> call — confirmed by direct reading, not assumed.</div>
+</section>
+
+<section id="write-case">
+<span class="sec-badge"><span class="badge b-syscall">🔴 SYSCALL</span> <span class="badge b-vfs">🟣 VFS</span></span>
+<h2>11 · write() — Source Trace</h2>
+<p>Structurally the mirror image of read(): <code class="inline">__arm64_sys_write</code> → <code class="inline">ksys_write</code> → <code class="inline">vfs_write</code> → <code class="inline">new_sync_write</code> → <code class="inline">call_write_iter</code> → <code class="inline">f_op-&gt;write_iter</code>.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 598-628</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+{
+	ssize_t ret;
+
+	if (!(file-&gt;f_mode &amp; FMODE_WRITE))
+		return -EBADF;
+	if (!(file-&gt;f_mode &amp; FMODE_CAN_WRITE))
+		return -EINVAL;
+	if (unlikely(!access_ok(buf, count)))
+		return -EFAULT;
+
+	ret = rw_verify_area(WRITE, file, pos, count);
+	if (ret)
+		return ret;
+	if (count &gt; MAX_RW_COUNT)
+		count =  MAX_RW_COUNT;
+	file_start_write(file);
+	if (file-&gt;f_op-&gt;write)
+		ret = file-&gt;f_op-&gt;write(file, buf, count, pos);
+	else if (file-&gt;f_op-&gt;write_iter)
+		ret = new_sync_write(file, buf, count, pos);
+	else
+		ret = -EINVAL;
+	if (ret &gt; 0) {
+		fsnotify_modify(file);
+		add_wchar(current, ret);
+	}
+	inc_syscw(current);
+	file_end_write(file);
+	return ret;
+}</pre></div>
+
+<h3>Locking difference from read(): sb_start_write, not i_rwsem</h3>
+<p><code class="inline">vfs_write()</code> brackets the call with <code class="inline">file_start_write()</code>/<code class="inline">file_end_write()</code> — this is <strong>freeze protection</strong>, not per-file exclusion:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>lines 2937-2956</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline void file_start_write(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)-&gt;i_mode))
+		return;
+	sb_start_write(file_inode(file)-&gt;i_sb);
+}
+static inline void file_end_write(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)-&gt;i_mode))
+		return;
+	__sb_end_write(file_inode(file)-&gt;i_sb, SB_FREEZE_WRITE);
+}</pre></div>
+<p>The real per-file write exclusion (<code class="inline">inode-&gt;i_rwsem</code>) is taken one layer <em>below</em> <code class="inline">vfs_write</code>, inside the filesystem's <code class="inline">write_iter</code> — e.g. <code class="inline">generic_file_write_iter()</code>:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">mm/filemap.c</span><span>lines 3488-3503</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t generic_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
+{
+	struct file *file = iocb-&gt;ki_filp;
+	struct inode *inode = file-&gt;f_mapping-&gt;host;
+	ssize_t ret;
+
+	inode_lock(inode);                       /* down_write(&inode->i_rwsem) */
+	ret = generic_write_checks(iocb, from);
+	if (ret &gt; 0)
+		ret = __generic_file_write_iter(iocb, from);
+	inode_unlock(inode);
+
+	if (ret &gt; 0)
+		ret = generic_write_sync(iocb, ret);
+	return ret;
+}</pre></div>
+
+<div class="callout vendor"><div class="ct">🟪 VENDOR NOTE — ksys_write has board-specific interception</div>
+<code class="inline">ksys_write()</code> (fs/read_write.c:677-750) in this tree adds, ahead of the standard <code class="inline">vfs_write()</code> call: (1) an <code class="inline">-EIO</code> retry loop under <code class="inline">CONFIG_KM_BIZHUB</code> (lines 730-743), and (2) an MBR write-protect interception that blocks writes to <code class="inline">/dev/kmsda</code> at offsets below 512 bytes (lines 695-729). Neither exists in mainline v5.10 — both are printer/board-specific hardening, not generic Linux behavior.
+</div>
+</section>
+
+<section id="openat-case">
+<span class="sec-badge"><span class="badge b-syscall">🔴 SYSCALL</span> <span class="badge b-vfs">🟣 VFS</span></span>
+<h2>12 · openat() — End-to-End</h2>
+
+<div class="flowdiag"><span class="n">SYSCALL_DEFINE4(openat, dfd, filename, flags, mode)</span>   fs/open.c:1289
+   ↓
+<span class="n">do_sys_open()</span>                                        fs/open.c:1245
+   ↓  builds a struct open_how, delegates
+<span class="n">do_sys_openat2()</span>                                       fs/open.c:1216
+   ├─ <span class="n">get_unused_fd_flags()</span>   fs/file.c:940   → reserves an integer fd (bitmap only)
+   ├─ <span class="n">do_filp_open()</span>          fs/namei.c:3444 → resolves path
+   │     └─ path_openat()      fs/namei.c:3405 (static)
+   │          ├─ alloc_empty_file()  fs/file_table.c:134  → allocates struct file, f_count=1
+   │          └─ do_open() → do_dentry_open()  → f_op->open() callback, fills f_inode/f_mapping/f_op
+   ├─ <span class="n">fd_install(fd, f)</span>       fs/file.c:969   → publishes file pointer into fdtable, consumes the refcount
+   └─ fsnotify_open(f)
+   ↓
+return fd to userspace</div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">fs/open.c</span><span>lines 1216-1243</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static long do_sys_openat2(int dfd, const char __user *filename,
+			   struct open_how *how)
+{
+	struct open_flags op;
+	int fd = build_open_flags(how, &amp;op);
+	struct filename *tmp;
+
+	if (fd)
+		return fd;
+
+	tmp = getname(filename);
+	if (IS_ERR(tmp))
+		return PTR_ERR(tmp);
+
+	fd = get_unused_fd_flags(how-&gt;flags);
+	if (fd &gt;= 0) {
+		struct file *f = do_filp_open(dfd, tmp, &amp;op);
+		if (IS_ERR(f)) {
+			put_unused_fd(fd);
+			fd = PTR_ERR(f);
+		} else {
+			fsnotify_open(f);
+			fd_install(fd, f);
+		}
+	}
+	putname(tmp);
+	return fd;
+}</pre></div>
+<p>Note the ordering: the fd <em>number</em> is reserved (bitmap bit set) before <code class="inline">do_filp_open()</code> even runs, but the fdtable's <code class="inline">fd[]</code> pointer slot stays NULL until <code class="inline">fd_install()</code> runs at the very end. If path resolution fails, <code class="inline">put_unused_fd(fd)</code> releases the reserved number without ever publishing a pointer.</p>
+<div class="callout key"><div class="ct">💡 KEY IDEA — openat2() exists in this tree too</div>v5.10 already has the <code class="inline">openat2(2)</code> syscall (added upstream in v5.6) alongside <code class="inline">openat(2)</code> — both converge on the same <code class="inline">do_sys_openat2()</code>, confirmed at fs/open.c:1316-1339. <code class="inline">openat2</code> takes a user-supplied <code class="inline">struct open_how</code> directly (via <code class="inline">copy_struct_from_user()</code>), while <code class="inline">openat</code> synthesizes one from its flat <code class="inline">(flags, mode)</code> arguments via <code class="inline">build_open_how()</code>.</div>
+
+<h3>Where the fd number comes from</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/file.c</span><span>lines 874-933 (excerpt, alloc_fd)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static int alloc_fd(unsigned start, unsigned end, unsigned flags)
+{
+	struct files_struct *files = current-&gt;files;
+	struct fdtable *fdt;
+	spin_lock(&amp;files-&gt;file_lock);
+repeat:
+	fdt = files_fdtable(files);
+	fd = start;
+	if (fd &lt; files-&gt;next_fd)
+		fd = files-&gt;next_fd;
+	if (fd &lt; fdt-&gt;max_fds)
+		fd = find_next_fd(fdt, fd);
+	error = -EMFILE;
+	if (fd &gt;= end)
+		goto out;
+	error = expand_files(files, fd);
+	if (error &lt; 0) goto out;
+	if (error) goto repeat;
+	if (start &lt;= files-&gt;next_fd)
+		files-&gt;next_fd = fd + 1;
+	__set_open_fd(fd, fdt);
+	if (flags &amp; O_CLOEXEC) __set_close_on_exec(fd, fdt);
+	else __clear_close_on_exec(fd, fdt);
+	error = fd;
+out:
+	spin_unlock(&amp;files-&gt;file_lock);
+	return error;
+}</pre></div>
+<p>This only sets a bit in <code class="inline">fdt-&gt;open_fds</code> — it does <strong>not</strong> write <code class="inline">fdt-&gt;fd[fd]</code>. That pointer write is <code class="inline">fd_install()</code>'s job (§13).</p>
+
+<h3>Where struct file gets allocated</h3>
+<div class="callout warn"><div class="ct">⚠️ NOT FOUND IN THIS VERSION</div><code class="inline">get_empty_filp()</code> (an older kernel's name) does not exist anywhere in this tree — confirmed by full-tree search. The v5.10.241 name is <code class="inline">alloc_empty_file()</code>.</div>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/file_table.c</span><span>lines 96-122 (__alloc_file, called by alloc_empty_file)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static struct file *__alloc_file(int flags, const struct cred *cred)
+{
+	struct file *f;
+	f = kmem_cache_zalloc(filp_cachep, GFP_KERNEL);
+	if (unlikely(!f))
+		return ERR_PTR(-ENOMEM);
+	f-&gt;f_cred = get_cred(cred);
+	...
+	atomic_long_set(&amp;f-&gt;f_count, 1);
+	rwlock_init(&amp;f-&gt;f_owner.lock);
+	spin_lock_init(&amp;f-&gt;f_lock);
+	mutex_init(&amp;f-&gt;f_pos_lock);
+	eventpoll_init_file(f);
+	f-&gt;f_flags = flags;
+	f-&gt;f_mode = OPEN_FMODE(flags);
+	return f;
+}</pre></div>
+<p>This is the exact line where a <code class="inline">struct file</code>'s lifetime refcount starts: <code class="inline">atomic_long_set(&amp;f-&gt;f_count, 1)</code>, allocated from the <code class="inline">filp_cachep</code> slab cache.</p>
+</section>
+
+<section id="fd-structures">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>13 · File Descriptor Data Structure Chain</h2>
+<div class="callout key"><div class="ct">💡 KEY IDEA — three different objects, easy to confuse</div>An integer <code class="inline">fd</code>, a <code class="inline">struct file *</code>, and a <code class="inline">struct inode *</code> are three separate objects with independent lifetimes. Two different fds (even in two different processes, via <code class="inline">dup()</code> or shared <code class="inline">files_struct</code>) can point at the <em>same</em> <code class="inline">struct file</code>; two different <code class="inline">struct file</code> objects (from two independent <code class="inline">open()</code> calls on the same path) point at the <em>same</em> <code class="inline">struct inode</code> but each has its own <code class="inline">f_pos</code>.</div>
+
+<div class="flowdiag">current  (struct task_struct *)
+   ↓  field: files   (include/linux/sched.h:965)
+<span class="n">struct files_struct</span>   include/linux/fdtable.h:49
+   ↓  field: fdt  (RCU pointer to active table; small case points at embedded fdtab)
+<span class="n">struct fdtable</span>        include/linux/fdtable.h:27
+   ↓  field: fd[]  (array of struct file *, RCU-protected)
+fd[3]
+   ↓
+<span class="n">struct file</span>           include/linux/fs.h:923
+   ↓  field: f_path
+<span class="n">struct path</span>  { struct dentry *dentry; struct vfsmount *mnt; }   include/linux/path.h:8
+   ↓                                    ↓
+<span class="vfs">struct dentry</span>  include/linux/dcache.h:89          (vfsmount → superblock of the mount)
+   ↓  field: d_inode
+<span class="vfs">struct inode</span>   include/linux/fs.h:617
+   ↓  field: i_sb
+<span class="vfs">struct super_block</span>  include/linux/fs.h:1456</div>
+
+<h3>struct files_struct</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fdtable.h</span><span>lines 49-68</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct files_struct {
+	atomic_t count;
+	bool resize_in_progress;
+	wait_queue_head_t resize_wait;
+
+	struct fdtable __rcu *fdt;
+	struct fdtable fdtab;
+	spinlock_t file_lock ____cacheline_aligned_in_smp;
+	unsigned int next_fd;
+	unsigned long close_on_exec_init[1];
+	unsigned long open_fds_init[1];
+	unsigned long full_fds_bits_init[1];
+	struct file __rcu * fd_array[NR_OPEN_DEFAULT];
+};</pre></div>
+<p><code class="inline">count</code>: refcount on the <code class="inline">files_struct</code> itself (shared across pthreads via <code class="inline">CLONE_FILES</code>), not on individual files. <code class="inline">fdt</code>: RCU pointer to the currently-active <code class="inline">fdtable</code> — small processes point it straight at the embedded <code class="inline">fdtab</code> (backed by <code class="inline">fd_array[NR_OPEN_DEFAULT]</code>, 64 slots on arm64) to avoid a heap allocation; once more fds are needed, <code class="inline">expand_fdtable()</code> allocates a bigger table and RCU-swaps <code class="inline">fdt</code>. <code class="inline">file_lock</code> protects the bitmaps and `fd[]` slot writes against concurrent open/close/dup/resize.</p>
+
+<h3>struct fdtable</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fdtable.h</span><span>lines 27-34</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct fdtable {
+	unsigned int max_fds;
+	struct file __rcu **fd;      /* current fd array */
+	unsigned long *close_on_exec;
+	unsigned long *open_fds;
+	unsigned long *full_fds_bits;
+	struct rcu_head rcu;
+};</pre></div>
+<div class="tablewrap"><table>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code class="inline">fd[]</code></td><td>the actual <code class="inline">struct file*</code> pointer table, RCU-protected</td></tr>
+<tr><td><code class="inline">max_fds</code></td><td>current capacity of this fdtable instance (grows across resizes; independent of <code class="inline">RLIMIT_NOFILE</code>, which <code class="inline">alloc_fd()</code> enforces separately)</td></tr>
+<tr><td><code class="inline">open_fds</code></td><td>bitmap: bit set = this fd number is allocated (set by <code class="inline">alloc_fd()</code>, cleared on close)</td></tr>
+<tr><td><code class="inline">close_on_exec</code></td><td>bitmap: bit set = <code class="inline">O_CLOEXEC</code>/<code class="inline">FD_CLOEXEC</code> active, consulted by <code class="inline">execve()</code></td></tr>
+<tr><td><code class="inline">full_fds_bits</code></td><td>second-level bitmap marking fully-occupied words of <code class="inline">open_fds</code>, letting <code class="inline">find_next_fd()</code> skip whole exhausted words</td></tr>
+</table></div>
+
+<h3>current → task_struct → files</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/sched.h</span><span>lines 964-965</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	/* Open file information: */
+	struct files_struct		*files;</pre></div>
+<p>(Full <code class="inline">task_struct</code> not reproduced — it is enormous and mostly irrelevant here; this is the one field of interest.) Set at fork time by <code class="inline">copy_files()</code> — either shared (<code class="inline">CLONE_FILES</code>, e.g. POSIX threads) or privately copied via <code class="inline">dup_fd()</code>.</p>
+
+<h3>fd_install() — the moment fd and struct file* are linked</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/file.c</span><span>lines 969-1000 (comment + body, trimmed)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>/*
+ * This consumes the "file" refcount, so callers should treat it
+ * as if they had called fput(file).
+ */
+void fd_install(unsigned int fd, struct file *file)
+{
+	struct files_struct *files = current-&gt;files;
+	struct fdtable *fdt;
+
+	rcu_read_lock_sched();
+	...
+	smp_rmb();  /* coupled with smp_wmb() in expand_fdtable() */
+	fdt = rcu_dereference_sched(files-&gt;fdt);
+	BUG_ON(fdt-&gt;fd[fd] != NULL);
+	rcu_assign_pointer(fdt-&gt;fd[fd], file);
+	rcu_read_unlock_sched();
+}</pre></div>
+<p>The <code class="inline">BUG_ON(fdt-&gt;fd[fd] != NULL)</code> guards against the classic dup2() race the comment above the function describes. Critically: <strong>this call consumes the reference</strong> — after <code class="inline">fd_install()</code>, the fdtable owns the <code class="inline">f_count</code> reference that was set to 1 back in <code class="inline">__alloc_file()</code>.</p>
+</section>
+
+<section id="struct-file">
+<span class="sec-badge"><span class="badge b-vfs">🟣 VFS</span></span>
+<h2>17 · struct file — Field-by-Field</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>lines 923-963 (fields relevant to this study; some fields omitted)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct file {
+	union { struct llist_node fu_llist; struct rcu_head fu_rcuhead; } f_u;
+	struct path		f_path;
+	struct inode		*f_inode;	/* cached value */
+	const struct file_operations	*f_op;
+
+	spinlock_t		f_lock;
+	enum rw_hint		f_write_hint;
+	atomic_long_t		f_count;
+	unsigned int 		f_flags;
+	fmode_t			f_mode;
+	struct mutex		f_pos_lock;
+	loff_t			f_pos;
+	struct fown_struct	f_owner;
+	const struct cred	*f_cred;
+	struct file_ra_state	f_ra;
+	u64			f_version;
+	void			*private_data;
+	struct address_space	*f_mapping;
+	errseq_t		f_wb_err;
+} __randomize_layout __attribute__((aligned(4)));</pre></div>
+<div class="tablewrap"><table>
+<tr><th>Field</th><th>Type</th><th>Points to / meaning</th></tr>
+<tr><td><code class="inline">f_path</code></td><td><code class="inline">struct path</code></td><td>{dentry, vfsmount} — where this open file is in the namespace</td></tr>
+<tr><td><code class="inline">f_inode</code></td><td><code class="inline">struct inode *</code></td><td>literal cached field (NOT a macro over <code class="inline">f_path.dentry-&gt;d_inode</code>) — <code class="inline">file_inode()</code> is just <code class="inline">return f-&gt;f_inode;</code> (fs.h:1337-1340). Kept in sync by <code class="inline">do_dentry_open()</code>, fs/open.c:776.</td></tr>
+<tr><td><code class="inline">f_op</code></td><td><code class="inline">const struct file_operations *</code></td><td>the dynamic-dispatch vtable — see §23</td></tr>
+<tr><td><code class="inline">f_pos</code></td><td><code class="inline">loff_t</code></td><td>current file offset for this open instance (not shared across independent opens)</td></tr>
+<tr><td><code class="inline">f_mapping</code></td><td><code class="inline">struct address_space *</code></td><td>normally <code class="inline">== inode-&gt;i_mapping</code> — see divergent case below</td></tr>
+<tr><td><code class="inline">f_count</code></td><td><code class="inline">atomic_long_t</code> (literally, not <code class="inline">f_ref</code>)</td><td>reference count — see §35</td></tr>
+<tr><td><code class="inline">f_flags</code> / <code class="inline">f_mode</code></td><td><code class="inline">unsigned int</code> / <code class="inline">fmode_t</code></td><td>open flags (<code class="inline">O_*</code>) and the derived <code class="inline">FMODE_*</code> bitmask VFS checks (FMODE_READ, FMODE_CAN_READ, etc.)</td></tr>
+</table></div>
+
+<h3>f_mapping vs inode-&gt;i_mapping — verified, not assumed</h3>
+<p><strong>Normal case — equal, by direct assignment:</strong></p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/open.c</span><span>lines 776-777</span></div>
+<pre>f-&gt;f_inode = inode;
+f-&gt;f_mapping = inode-&gt;i_mapping;</pre></div>
+<p><strong>Verified divergent case — block device special files:</strong></p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/block_dev.c</span><span>lines 1747-1758 (excerpt)</span></div>
+<pre>static int blkdev_open(struct inode * inode, struct file * filp)
+{
+	struct block_device *bdev;
+	...
+	bdev = bd_acquire(inode);
+	filp-&gt;f_mapping = bdev-&gt;bd_inode-&gt;i_mapping;
+	filp-&gt;f_wb_err = filemap_sample_wb_err(filp-&gt;f_mapping);
+	return blkdev_get(bdev, filp-&gt;f_mode, filp);
+}</pre></div>
+<p>This <em>overwrites</em> the mapping <code class="inline">do_dentry_open()</code> had just set, replacing it with the shared internal block-device inode's mapping — where the block layer's page cache actually lives, common to every open of that device node. <code class="inline">file-&gt;f_inode</code> still points at the special-file inode, but <code class="inline">file-&gt;f_mapping</code> points elsewhere.</p>
+<div class="callout warn"><div class="ct">⚠️ NOT VERIFIED</div>A distinct swap-file-specific <code class="inline">f_mapping</code> override was not located in <code class="inline">mm/swapfile.c</code> during this research — do not assume one exists without checking directly.</div>
+
+<h3>get_file() / fput()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>lines 972-980</span></div>
+<pre>static inline struct file *get_file(struct file *f)
+{
+	atomic_long_inc(&amp;f-&gt;f_count);
+	return f;
+}
+#define file_count(x)	atomic_long_read(&amp;(x)-&gt;f_count)</pre></div>
+<p>Full lifecycle and <code class="inline">fput()</code>/<code class="inline">__fput()</code> teardown detail in §35.</p>
+</section>
+
+<section id="vfs">
+<span class="sec-badge"><span class="badge b-vfs">🟣 VFS</span></span>
+<h2>23 · VFS Dynamic Dispatch — file_operations</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>lines 1962-1979 (excerpt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct file_operations {
+	struct module *owner;
+	loff_t (*llseek) (struct file *, loff_t, int);
+	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
+	ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
+	int (*iopoll)(struct kiocb *kiocb, bool spin);
+	int (*iterate) (struct file *, struct dir_context *);
+	int (*iterate_shared) (struct file *, struct dir_context *);
+	__poll_t (*poll) (struct file *, struct poll_table_struct *);
+	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+	int (*mmap) (struct file *, struct vm_area_struct *);
+	int (*open) (struct inode *, struct file *);
+	int (*flush) (struct file *, fl_owner_t id);
+	int (*release) (struct inode *, struct file *);
+	...
+};</pre></div>
+<p>No fields were removed from the pre-iter era: <code class="inline">.read</code>/<code class="inline">.write</code> and <code class="inline">.read_iter</code>/<code class="inline">.write_iter</code> coexist in this version's struct definition (removal of the direct pair happened later than v5.10).</p>
+
+<h3>Where f_op is assigned</h3>
+<p>Assignment happens at filesystem-registration time as a real struct instance (not built dynamically). Concrete example, ext4:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/ext4/file.c</span><span>lines 1133-1149</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>const struct file_operations ext4_file_operations = {
+	.llseek		= ext4_llseek,
+	.read_iter	= ext4_file_read_iter,
+	.write_iter	= ext4_file_write_iter,
+	.mmap		= ext4_file_mmap,
+	.open		= ext4_file_open,
+	.release	= ext4_release_file,
+	.fsync		= ext4_sync_file,
+};</pre></div>
+<p>ext4 populates only <code class="inline">.read_iter</code>/<code class="inline">.write_iter</code> — no <code class="inline">.read</code>/<code class="inline">.write</code> — confirming both dispatch mechanisms genuinely coexist in the struct, but each filesystem picks one.</p>
+
+<div class="flowdiag">open()  →  inode-&gt;i_fop  (set by the filesystem's inode-lookup code, e.g. ext4_iget())
+             │
+             ▼
+do_dentry_open()   fs/open.c   →  f-&gt;f_op = fops_get(inode-&gt;i_fop);   ← the assignment call site
+             │
+             ▼
+<span class="vfs">read()/write() syscalls  →  file-&gt;f_op-&gt;read_iter(...)</span>   ← the call site (call_read_iter, fs.h:2038-2042)</div>
+<div class="callout key"><div class="ct">💡 KEY IDEA — this is real vtable dispatch, not a metaphor</div>"VFS calls the filesystem" concretely means: <code class="inline">struct file</code> holds a raw function pointer (<code class="inline">f_op</code>) that was copied from <code class="inline">inode-&gt;i_fop</code> when the file was opened; <code class="inline">call_read_iter()</code> (fs.h:2038) is a one-line inline function whose entire body is <code class="inline">return file-&gt;f_op-&gt;read_iter(kio, iter);</code> — an indirect call through that pointer, exactly like C++ virtual dispatch without the compiler support.</div>
+</section>
+
+<section id="user-access">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span> <span class="badge b-mm">🟠 MM</span></span>
+<h2>25 · Kernel ↔ Userspace Memory Access</h2>
+<div class="flowdiag">USER VIRTUAL ADDRESS  (char __user *buf)
+        │
+        │  __user pointer
+        ▼
+<span class="mm">access_ok(buf, count)</span>     arch/arm64/include/asm/uaccess.h:98
+        │
+        ├── fails → -EFAULT, no memory touched
+        │
+        ▼ (passes)
+<span class="mm">actual memory access</span>  (ldtr/sttr instruction, or raw_copy_*_user loop)
+        │
+        ├── SUCCESS → bytes moved
+        │
+        └── FAULT (unmapped/protected page)
+              ↓
+          <span class="arm">CPU data abort, EL1h sync vector</span>   (§29)
+              ↓
+          <span class="arm">fixup_exception()</span>                    (§30)
+              ↓
+          regs-&gt;pc rewritten to fixup label
+              ↓
+          uaccess helper returns error / short count → caller returns -EFAULT</div>
+
+<p id="access-ok"><strong>Why the kernel can't just <code class="inline">memcpy(kernel_buf, user_ptr, size)</code>:</strong> a user pointer is unprivileged and unverified — it could point outside the process's mapped range, into an unmapped hole, or (without <code class="inline">access_ok</code>) even be crafted to alias kernel-only ranges depending on <code class="inline">TTBR0</code>/<code class="inline">addr_limit</code> state. A plain <code class="inline">memcpy</code> has no exception-table protection and no range check — a bad pointer would fault deep inside the kernel with no recovery path, i.e. an oops/panic instead of a clean <code class="inline">-EFAULT</code> to the calling process.</p>
+
+<h3>access_ok()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>lines 63-98</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>/*
+ * Test whether a block of memory is a valid user space address.
+ * (u65)addr + (u65)size &lt;= (u65)current-&gt;addr_limit + 1
+ */
+static inline unsigned long __range_ok(const void __user *addr, unsigned long size)
+{
+	unsigned long ret, limit = current_thread_info()-&gt;addr_limit;
+
+	__chk_user_ptr(addr);
+	asm volatile(
+	// A + B &lt;= C + 1 for all A,B,C, in four easy steps:
+	"	adds	%0, %3, %2\n"
+	"	csel	%1, xzr, %1, hi\n"
+	"	csinv	%0, %0, xzr, cc\n"
+	"	sbcs	xzr, %0, %1\n"
+	"	cset	%0, ls\n"
+	: "=&amp;r" (ret), "+r" (limit) : "Ir" (size), "0" (addr) : "cc");
+
+	return ret;
+}
+#define access_ok(addr, size)	__range_ok(addr, size)</pre></div>
+<div class="callout warn"><div class="ct">🔄 CHANGED vs later kernels</div>This v5.10.241 tree still uses the <strong>classic <code class="inline">set_fs()</code>/<code class="inline">addr_limit</code></strong> model — <code class="inline">access_ok()</code> is a real, branchless carry-flag range check against <code class="inline">current_thread_info()-&gt;addr_limit</code>, NOT a stub that always returns true. The later mainline rework that removed <code class="inline">set_fs()</code> entirely (relying purely on hardware TTBR0 isolation) had not landed in this branch. Do not assume <code class="inline">access_ok()</code> is a no-op on this kernel.</div>
+<div class="callout warn"><div class="ct">⚠️ IMPORTANT — access_ok() guarantees a valid ADDRESS RANGE, not a successful access</div>Passing <code class="inline">access_ok()</code> only means the pointer+length falls within the allowed address range (<code class="inline">addr_limit</code>). It says nothing about whether every page in that range is actually mapped, or mapped with the needed permissions. The <em>actual</em> memory access can still fault — that's precisely what the exception-table/fixup mechanism in §29-30 exists to catch.</div>
+
+<h3 id="get_user">get_user() / put_user()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>lines 302-312, 258-271 (mainline path)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define __get_user_error(x, ptr, err)					\
+do {									\
+	__typeof__(*(ptr)) __user *__p = (ptr);				\
+	might_fault();							\
+	if (access_ok(__p, sizeof(*__p))) {				\
+		__p = uaccess_mask_ptr(__p);				\
+		__raw_get_user((x), __p, (err));			\
+	} else {							\
+		(x) = (__force __typeof__(x))0; (err) = -EFAULT;	\
+	}								\
+} while (0)
+
+#define __get_user_asm(instr, alt_instr, reg, x, addr, err, feature)	\
+	asm volatile(							\
+	"1:"ALTERNATIVE(instr "     " reg "1, [%2]\n",			\
+			alt_instr " " reg "1, [%2]\n", feature)		\
+	"2:\n"								\
+	"	.section .fixup, \"ax\"\n"				\
+	"3:	mov	%w0, %3\n"					\
+	"	mov	%1, #0\n"					\
+	"	b	2b\n"						\
+	"	.previous\n"						\
+	_ASM_EXTABLE(1b, 3b)						\
+	: "+r" (err), "=&amp;r" (x)						\
+	: "r" (addr), "i" (-EFAULT))</pre></div>
+<p>Label <code class="inline">1:</code> is the real load instruction. <code class="inline">_ASM_EXTABLE(1b, 3b)</code> registers an exception-table entry pairing that instruction's address with fixup label <code class="inline">3:</code> in the out-of-line <code class="inline">.fixup</code> section, which sets <code class="inline">err = -EFAULT</code> and jumps back to <code class="inline">2:</code>. <code class="inline">put_user()</code>/<code class="inline">__put_user_asm</code> is structurally identical with a store instead of a load.</p>
+
+<h3 id="copy-user">copy_from_user() / copy_to_user()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/uaccess.h</span><span>lines 151-202</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline __must_check unsigned long
+_copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	unsigned long res = n;
+	might_fault();
+	if (!should_fail_usercopy() &amp;&amp; likely(access_ok(from, n))) {
+		instrument_copy_from_user(to, from, n);
+		res = raw_copy_from_user(to, from, n);
+	}
+	if (unlikely(res))
+		memset(to + (n - res), 0, res);
+	return res;
+}
+...
+static __always_inline unsigned long __must_check
+copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	if (likely(check_copy_size(to, n, false)))
+		n = _copy_from_user(to, from, n);
+	return n;
+}</pre></div>
+<div class="callout key"><div class="ct">💡 KEY IDEA — return value is a byte count, never an errno</div><code class="inline">copy_from_user()</code>/<code class="inline">copy_to_user()</code> return the number of bytes that could <strong>not</strong> be copied (0 = full success). They never return a negative errno. On total failure (<code class="inline">access_ok</code> fails, or the whole copy faults), <code class="inline">res == n</code> and line "<code class="inline">memset(to + (n - res), 0, res)</code>" zero-fills the entire destination. On a partial fault mid-copy, only the uncopied tail is zeroed. <strong>Callers</strong> (e.g. syscall wrapper code) are responsible for turning a nonzero return into <code class="inline">-EFAULT</code> — the kernel does this explicitly at each call site, for example:</div>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>lines 1395-1396</span></div>
+<pre>if (unlikely(copy_from_user(&amp;pos, offset, sizeof(loff_t))))
+	return -EFAULT;</pre></div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>lines 419-427</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define raw_copy_from_user(to, from, n)					\
+({									\
+	unsigned long __acfu_ret;					\
+	uaccess_enable_not_uao();					\
+	__acfu_ret = __arch_copy_from_user((to),			\
+			      __uaccess_mask_ptr(from), (n));	\
+	uaccess_disable_not_uao();					\
+	__acfu_ret;							\
+})</pre></div>
+<p><code class="inline">__arch_copy_from_user</code>/<code class="inline">__arch_copy_to_user</code> are hand-written assembly, <code class="inline">arch/arm64/lib/copy_from_user.S</code> / <code class="inline">copy_to_user.S</code>, each faulting instruction wrapped in a <code class="inline">USER(label, instr)</code> macro:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/assembler.h</span><span>lines 132-141</span></div>
+<pre>.macro		_asm_extable, from, to
+	.pushsection	__ex_table, "a"
+	.long		(\from - .), (\to - .)
+	.popsection
+.endm
+
+#define USER(l, x...)				\
+9999:	x;					\
+	_asm_extable	9999b, l</pre></div>
+<p>Usage in the actual copy loop: <code class="inline">USER(9998f, ldtrb tmp1w, [srcin])</code> — labels the load, registers an exception-table entry pointing at fault-recovery label <code class="inline">9998f</code>, which computes and returns the remaining uncopied byte count.</p>
+</section>
+
+<section id="page-fault">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span> <span class="badge b-mm">🟠 MM</span></span>
+<h2>29 · Page Fault on a Bad User Pointer</h2>
+<p>When <code class="inline">copy_from_user()</code>/<code class="inline">get_user()</code> touches an unmapped or permission-denied user address, the load/store instruction inside the uaccess routine itself faults <em>while the CPU is at EL1</em> (kernel mode) — because the copy loop runs in the kernel, even though the address is a userspace one.</p>
+
+<h3>Same vector as any other kernel exception</h3>
+<p>Confirmed by source: this fault is taken through the <strong>same EL1h synchronous vector</strong> used for any kernel-mode synchronous exception (undefined instruction, alignment fault, etc.) — there is no separate "uaccess fault" vector.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>lines 677-683</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	.align	6
+SYM_CODE_START_LOCAL_NOALIGN(el1_sync)
+	kernel_entry 1
+	mov	x0, sp
+	bl	el1_sync_handler
+	kernel_exit 1
+SYM_CODE_END(el1_sync)</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry-common.c</span><span>lines 204-211, 112-122</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>asmlinkage void noinstr el1_sync_handler(struct pt_regs *regs)
+{
+	unsigned long esr = read_sysreg(esr_el1);
+	switch (ESR_ELx_EC(esr)) {
+	case ESR_ELx_EC_DABT_CUR:
+	case ESR_ELx_EC_IABT_CUR:
+		el1_abort(regs, esr);
+		break;
+	...
+
+static void noinstr el1_abort(struct pt_regs *regs, unsigned long esr)
+{
+	unsigned long far = read_sysreg(far_el1);
+	enter_from_kernel_mode(regs);
+	local_daif_inherit(regs);
+	far = untagged_addr(far);
+	do_mem_abort(far, esr, regs);
+	local_daif_mask();
+	exit_to_kernel_mode(regs);
+}</pre></div>
+<p><code class="inline">ESR_ELx_EC_DABT_CUR</code> = "Data Abort taken without a change in Exception level" — exactly the class for a fault hit by <code class="inline">ldtr</code>/<code class="inline">str</code>/etc. inside <code class="inline">copy_from_user</code>/<code class="inline">get_user</code> while already at EL1.</p>
+
+<h3>Fault dispatch table (ESR-driven)</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/mm/fault.c</span><span>lines 42-56, 663-674 (excerpt), 725-740</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct fault_info {
+	int (*fn)(unsigned long addr, unsigned int esr, struct pt_regs *regs);
+	int sig; int code; const char *name;
+};
+static inline const struct fault_info *esr_to_fault_info(unsigned int esr)
+{
+	return fault_info + (esr &amp; ESR_ELx_FSC);
+}
+...
+	{ do_translation_fault,	SIGSEGV, SEGV_MAPERR,	"level 1 translation fault" },
+	{ do_page_fault,	SIGSEGV, SEGV_ACCERR,	"level 1 permission fault"  },
+...
+void do_mem_abort(unsigned long addr, unsigned int esr, struct pt_regs *regs)
+{
+	const struct fault_info *inf = esr_to_fault_info(esr);
+	if (!inf-&gt;fn(addr, esr, regs))
+		return;
+	if (!user_mode(regs)) {
+		pr_alert("Unhandled fault at 0x%016lx\n", addr);
+		mem_abort_decode(esr);
+	}
+	arm64_notify_die(inf-&gt;name, regs, inf-&gt;sig, inf-&gt;code, (void __user *)addr, esr);
+}</pre></div>
+<p>The ESR's Fault Status Code (FSC) field directly indexes the <code class="inline">fault_info[]</code> table, separating translation faults (unmapped page → <code class="inline">do_translation_fault</code>) from access-flag/permission faults (<code class="inline">do_page_fault</code>).</p>
+
+<h3>The kernel-mode-uaccess decision point</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/mm/fault.c</span><span>lines 304-334 (__do_kernel_fault, excerpt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static void __do_kernel_fault(unsigned long addr, unsigned int esr,
+			      struct pt_regs *regs)
+{
+	/*
+	 * Are we prepared to handle this kernel fault?
+	 * We are almost certainly not prepared to handle instruction faults.
+	 */
+	if (!is_el1_instruction_abort(esr) &amp;&amp; fixup_exception(regs))
+		return;
+	...
+	die_kernel_fault(msg, addr, esr, regs);
+}</pre></div>
+<p>This is <strong>the</strong> line where "does the kernel crash or recover" is decided. If <code class="inline">fixup_exception(regs)</code> finds a matching exception-table entry, <code class="inline">regs-&gt;pc</code> is rewritten and the function returns cleanly — the fault is fully absorbed, and execution resumes at the fixup label with an error code set (e.g. <code class="inline">-EFAULT</code>). Only if no entry is found does it fall through to <code class="inline">die_kernel_fault()</code> → oops/panic. This is reached from <code class="inline">do_page_fault()</code>'s <code class="inline">no_context:</code> label and from <code class="inline">do_bad_area()</code>.</p>
+<div class="callout src"><div class="ct">🔍 SOURCE CODE — defense in depth</div><code class="inline">do_page_fault()</code> additionally verifies the faulting PC is genuinely inside a uaccess routine before allowing recovery, rather than trusting any kernel-mode fault against a user address:
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">arch/arm64/mm/fault.c</span><span>lines 486-499 (excerpt)</span></div>
+<pre>if (is_ttbr0_addr(addr) &amp;&amp; is_el1_permission_fault(addr, esr, regs)) {
+	if (regs-&gt;orig_addr_limit == KERNEL_DS)
+		die_kernel_fault("access to user memory with fs=KERNEL_DS", ...);
+	if (is_el1_instruction_abort(esr))
+		die_kernel_fault("execution of user memory", ...);
+	if (!search_exception_tables(regs-&gt;pc))
+		die_kernel_fault("access to user memory outside uaccess routines", ...);
+}</pre></div>
+If the faulting PC is <em>not</em> in the exception table (line: <code class="inline">!search_exception_tables(regs-&gt;pc)</code>), this is treated as a genuine kernel bug and panics rather than silently "fixing up" arbitrary code.</div>
+</section>
+
+<section id="exception-table">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>30 · Exception Table &amp; Fixup</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/extable.h</span><span>lines 18-23, 46</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct exception_table_entry
+{
+	int insn, fixup;
+};
+#define ARCH_HAS_RELATIVE_EXTABLE
+...
+extern int fixup_exception(struct pt_regs *regs);</pre></div>
+<div class="callout warn"><div class="ct">🔄 CHANGED vs newer kernels</div>v5.10 arm64 uses the <strong>plain relative-offset (insn/fixup) scheme</strong> — confirmed: no <code class="inline">handler</code> field, no <code class="inline">EX_TYPE_*</code> macros, no <code class="inline">ex_handler_uaccess_err_zero</code> anywhere in this header (grep came back empty). The later typed/handler-function exception-table generalization (used by some other architectures/newer kernels) had not landed for arm64 in this version.</div>
+
+<h3>fixup_exception() — full function</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/mm/extable.c</span><span>lines 9-22 (full file body)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>int fixup_exception(struct pt_regs *regs)
+{
+	const struct exception_table_entry *fixup;
+
+	fixup = search_exception_tables(instruction_pointer(regs));
+	if (!fixup)
+		return 0;
+
+	if (in_bpf_jit(regs))
+		return arm64_bpf_fixup_exception(fixup, regs);
+
+	regs-&gt;pc = (unsigned long)&amp;fixup-&gt;fixup + fixup-&gt;fixup;
+	return 1;
+}</pre></div>
+<p><code class="inline">search_exception_tables()</code> (generic kernel code, <code class="inline">lib/extable.c</code>) binary-searches the sorted <code class="inline">__ex_table</code> sections (built-in image + loaded modules) for an entry whose relocated <code class="inline">insn</code> field matches the faulting PC. If found, <code class="inline">fixup_exception()</code> decodes the relative <code class="inline">fixup</code> offset back into an absolute address and writes it straight into <code class="inline">regs-&gt;pc</code> — meaning the CPU's next executed instruction, after this synchronous-exception handler returns and <code class="inline">eret</code>s back to EL1, is the fixup code, not wherever the original PC+4 would have been.</p>
+
+<h3>How __ex_table entries get built</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>lines 101-105 (C inline-asm variant)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define _ASM_EXTABLE(from, to)						\
+	"	.pushsection	__ex_table, \"a\"\n"			\
+	"	.align		3\n"					\
+	"	.long		(" #from " - .), (" #to " - .)\n"	\
+	"	.popsection\n"</pre></div>
+<p>Both the C-inline-asm form (<code class="inline">_ASM_EXTABLE</code>, used inside <code class="inline">__get_user_asm</code>/<code class="inline">__put_user_asm</code>) and the pure-assembly form (<code class="inline">_asm_extable</code>/<code class="inline">USER()</code>, used in <code class="inline">copy_from_user.S</code>/<code class="inline">copy_to_user.S</code>) emit the identical linker-section layout: a pair of 32-bit <em>relative</em> offsets (instruction-to-table-entry, fixup-to-table-entry) pushed into the <code class="inline">__ex_table</code> section. The linker collects and sorts all such entries from every compiled object into one contiguous, PC-searchable table — this is <code class="inline">ARCH_HAS_RELATIVE_EXTABLE</code> in action: relative offsets keep the table itself position-independent and compact (8 bytes/entry instead of 16 for absolute 64-bit pointers).</p>
+
+<div class="flowdiag">copy_from_user()
+   ↓
+<span class="mm">raw_copy_from_user → __arch_copy_from_user</span>  (arch/arm64/lib/copy_from_user.S)
+   ↓  USER(9998f, ldtrb tmp1w, [srcin])  ← faulting load, wrapped
+<span class="arm">translation fault (unmapped page)</span>
+   ↓
+<span class="arm">CPU: EL1h synchronous exception</span>  (§29 — same vector as any kernel fault)
+   ↓
+<span class="n">el1_sync_handler → el1_abort → do_mem_abort → do_translation_fault/do_page_fault → __do_kernel_fault</span>
+   ↓
+<span class="n">fixup_exception(regs)</span>   arch/arm64/mm/extable.c:9
+   ↓  search_exception_tables(regs->pc) finds the __ex_table entry for the ldtrb instruction
+regs-&gt;pc = fixup address (9998f)
+   ↓
+<span class="arm">eret</span> back into the copy routine, now executing at 9998f
+   ↓
+fixup code computes remaining uncopied bytes, returns non-zero to raw_copy_from_user
+   ↓
+_copy_from_user() memsets the uncopied tail, returns nonzero
+   ↓
+caller (e.g. read() path) turns nonzero into -EFAULT</div>
+
+<div class="callout key"><div class="ct">💡 KEY IDEA — why the kernel doesn't crash</div>A bad user pointer passed to <code class="inline">copy_from_user</code> causes a real CPU exception, exactly like any other invalid memory access. The kernel doesn't "check the pointer is safe" in advance in any way that avoids the fault — it lets the fault happen, catches it via the exception-table/fixup mechanism because the fault occurred at a PC known to be inside a uaccess routine, and converts it into a normal <code class="inline">-EFAULT</code> return. If the same bad access happened at a PC <em>not</em> registered in <code class="inline">__ex_table</code>, <code class="inline">fixup_exception()</code> returns 0 and the kernel oopses/panics — this is precisely how the kernel tells the difference between "a syscall got a bad pointer" (recoverable) and "a real kernel bug dereferenced garbage" (not recoverable).</div>
+</section>
+
+<section id="syscall-return">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>32 · Syscall Return</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/syscall.h</span><span>lines 51-62</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline void syscall_set_return_value(struct task_struct *task,
+					    struct pt_regs *regs,
+					    int error, long val)
+{
+	if (error)
+		val = error;
+	if (is_compat_thread(task_thread_info(task)))
+		val = lower_32_bits(val);
+	regs-&gt;regs[0] = val;
+}</pre></div>
+<p>Called from <code class="inline">invoke_syscall()</code> (syscall.c:53) right after the syscall function returns — the C return value goes straight into <code class="inline">pt_regs-&gt;regs[0]</code>, which is exactly what will become x0 after <code class="inline">eret</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>lines 757-774 (ret_to_user, excerpt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYM_CODE_START_LOCAL(ret_to_user)
+	disable_daif
+	...
+	ldr	x19, [tsk, #TSK_TI_FLAGS]
+	and	x2, x19, #_TIF_WORK_MASK
+	cbnz	x2, work_pending          // signals, resched, etc. handled first
+finish_ret_to_user:
+	user_enter_irqoff
+	...
+	kernel_exit 0</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>lines 311, 344-346, 362-366 (kernel_exit macro, excerpt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	ldp	x21, x22, [sp, #S_PC]		// load ELR, SPSR
+	...
+	msr	elr_el1, x21			// set up the return data
+	msr	spsr_el1, x22
+	ldp	x0, x1, [sp, #16 * 0]		// x0 <- pt_regs.regs[0] (the return value)
+	ldp	x2, x3, [sp, #16 * 1]
+	...
+	.if	\el == 0
+	ldr	lr, [sp, #S_LR]
+	add	sp, sp, #S_FRAME_SIZE		// restore sp
+	eret					// EL1 -> EL0</pre></div>
+<div class="flowdiag">kernel syscall implementation returns `ret` (long)
+   ↓
+<span class="n">syscall_set_return_value()</span>   regs->regs[0] = ret     (asm/syscall.h:51)
+   ↓
+<span class="arm">ret_to_user</span>  (checks _TIF_WORK_MASK, e.g. pending signals)  entry.S:757
+   ↓
+<span class="arm">kernel_exit 0</span>:  ELR_EL1 <- pt_regs.pc,  SPSR_EL1 <- pt_regs.pstate,  x0 <- pt_regs.regs[0]
+   ↓
+<span class="arm">eret</span>   entry.S:366   (or via KPTI trampoline exit if CONFIG_UNMAP_KERNEL_AT_EL0)
+   ↓
+EL0, PC = ELR_EL1, x0 = return value (or -errno)
+   ↓
+libc: if ((unsigned long)ret > -4096UL) { errno = -ret; ret = -1; }   (glibc convention, outside kernel tree)</div>
+<div class="callout warn"><div class="ct">⚠️ IMPORTANT — the kernel never touches userspace errno</div>The kernel only ever places a plain <code class="inline">long</code> in x0 — a small negative number in the errno range (e.g. <code class="inline">-14</code> for <code class="inline">-EFAULT</code>) on failure, or a non-negative result on success. <strong>libc</strong> is what inspects x0 after the syscall returns, and if it's in the reserved negative-errno range, negates it into the C library's <code class="inline">errno</code> variable and returns <code class="inline">-1</code> from the wrapper function. The kernel source in this tree confirms no code ever writes to a userspace <code class="inline">errno</code> symbol directly.</div>
+</section>
+
+<section id="error-path">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>33 · Error Path Reference</h2>
+<p>Only errors confirmed by direct source reading are listed — nothing added because it's "usually there".</p>
+<div class="tablewrap"><table>
+<tr><th>Error</th><th>Syscall</th><th>Origin (file:line)</th><th>Condition</th></tr>
+<tr><td><code class="inline">EBADF</code></td><td>read/write</td><td><code class="inline">ksys_read</code>/<code class="inline">ksys_write</code>, default <code class="inline">ret</code>; also <code class="inline">vfs_read</code>/<code class="inline">vfs_write</code></td><td><code class="inline">fdget_pos()</code> returns NULL file, or <code class="inline">!(f_mode &amp; FMODE_READ/WRITE)</code></td></tr>
+<tr><td><code class="inline">EINVAL</code></td><td>read/write</td><td><code class="inline">vfs_read</code>/<code class="inline">vfs_write</code>, fs/read_write.c</td><td><code class="inline">!(f_mode &amp; FMODE_CAN_READ/WRITE)</code>, or neither <code class="inline">.read</code>/<code class="inline">.read_iter</code> set; also <code class="inline">rw_verify_area()</code> on negative/overflowed count</td></tr>
+<tr><td><code class="inline">EFAULT</code></td><td>read/write</td><td><code class="inline">vfs_read</code>/<code class="inline">vfs_write</code>, fs/read_write.c:498,607</td><td><code class="inline">!access_ok(buf, count)</code>; deeper, propagated from a copy_to_user/copy_from_user short-copy inside the iov_iter layer</td></tr>
+<tr><td><code class="inline">EOVERFLOW</code></td><td>read/write</td><td><code class="inline">rw_verify_area()</code>, fs/read_write.c:379-415</td><td><code class="inline">pos &lt; 0</code> and <code class="inline">count &gt;= -pos</code> (position+count overflow)</td></tr>
+<tr><td><code class="inline">EMFILE</code></td><td>openat</td><td><code class="inline">alloc_fd()</code>, fs/file.c</td><td><code class="inline">fd &gt;= end</code> (RLIMIT_NOFILE / table exhausted)</td></tr>
+<tr><td><code class="inline">ENFILE</code></td><td>openat</td><td><code class="inline">alloc_empty_file()</code>, fs/file_table.c:134-164</td><td>system-wide open file count at <code class="inline">files_stat.max_files</code></td></tr>
+<tr><td><code class="inline">ENOMEM</code></td><td>openat</td><td><code class="inline">__alloc_file()</code>, fs/file_table.c:96-122</td><td><code class="inline">kmem_cache_zalloc(filp_cachep,...)</code> fails</td></tr>
+<tr><td><code class="inline">ENOSYS</code></td><td>any</td><td><code class="inline">do_ni_syscall()</code> via <code class="inline">sys_ni_syscall()</code>, syscall.c</td><td><code class="inline">scno &gt;= __NR_syscalls</code> in <code class="inline">invoke_syscall()</code></td></tr>
+</table></div>
+<div class="callout warn"><div class="ct">⚠️ Confirmed NOT reachable through the plain syscalls in scope</div><code class="inline">-ESPIPE</code> exists in <code class="inline">fs/read_write.c</code> only inside the positional (<code class="inline">pread64</code>/<code class="inline">pwrite64</code>/<code class="inline">sendfile</code>) syscalls, not in <code class="inline">ksys_read</code>/<code class="inline">ksys_write</code>/<code class="inline">vfs_read</code>/<code class="inline">vfs_write</code>. <code class="inline">-EISDIR</code> exists only in <code class="inline">generic_file_rw_checks()</code> (used by <code class="inline">copy_file_range</code>), not in the plain read/write path — a directory fd is normally rejected earlier, at <code class="inline">open()</code> time.</div>
+</section>
+
+<section id="locking">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>34 · Concurrency &amp; Locking</h2>
+<div class="tablewrap"><table>
+<tr><th>Lock</th><th>Location</th><th>Protects</th><th>Acquire</th><th>Release</th></tr>
+<tr><td><code class="inline">files_struct.file_lock</code> (spinlock)</td><td>include/linux/fdtable.h:56</td><td><code class="inline">next_fd</code>, the fd bitmaps, coordination of <code class="inline">fd[]</code> writes against resize/close/dup</td><td><code class="inline">alloc_fd()</code>, fs/file.c:882</td><td>same function, <code class="inline">out:</code> label</td></tr>
+<tr><td><code class="inline">file.f_pos_lock</code> (mutex)</td><td>include/linux/fs.h (field), init in <code class="inline">__alloc_file</code></td><td><code class="inline">file-&gt;f_pos</code> when the file may be shared/needs atomic seek+read</td><td><code class="inline">fdget_pos()</code> via <code class="inline">__fdget_pos()</code>, fs/file.c:1366-1376, only if <code class="inline">file_needs_f_pos_lock()</code></td><td><code class="inline">fdput_pos()</code> / <code class="inline">__f_unlock_pos()</code>, fs/file.c:1378-1381</td></tr>
+<tr><td><code class="inline">inode.i_rwsem</code> (rw-semaphore)</td><td>via <code class="inline">inode_lock()</code>/<code class="inline">inode_unlock()</code>, include/linux/fs.h:779-786</td><td>serializes writers (and some readers) against each other on the same inode</td><td>inside filesystem's <code class="inline">write_iter</code>, e.g. <code class="inline">generic_file_write_iter()</code>, mm/filemap.c:3494</td><td>same function, line 3498</td></tr>
+<tr><td><code class="inline">sb-&gt;s_writers</code> (percpu rwsem, freeze protection)</td><td><code class="inline">sb_start_write()</code>/<code class="inline">__sb_end_write()</code></td><td>guards a write against a concurrent filesystem freeze — <strong>not</strong> against another writer</td><td><code class="inline">file_start_write()</code>, include/linux/fs.h:2937-2941, called from <code class="inline">vfs_write()</code></td><td><code class="inline">file_end_write()</code>, fs.h:2951-2956</td></tr>
+<tr><td><code class="inline">inode.i_lock</code> (spinlock)</td><td>fs/inode.c</td><td><code class="inline">i_count</code>, <code class="inline">i_state</code> transitions</td><td><code class="inline">igrab()</code>/<code class="inline">iput()</code>, fs/inode.c:1375-1392, 1748-1765</td><td>same functions</td></tr>
+<tr><td>RCU</td><td><code class="inline">fdt-&gt;fd[]</code> array access</td><td>lock-free reads of the fd table while writers use <code class="inline">rcu_assign_pointer</code>/<code class="inline">rcu_dereference_sched</code></td><td><code class="inline">fd_install()</code>, fs/file.c:975-989 (<code class="inline">rcu_read_lock_sched</code>)</td><td>same function</td></tr>
+</table></div>
+<div class="callout key"><div class="ct">💡 KEY IDEA</div>Note the layering: <code class="inline">vfs_read()</code>/<code class="inline">vfs_write()</code> at the generic VFS level take <strong>no per-inode lock at all</strong> for read, and only the freeze-protection percpu-rwsem for write. The actual mutual-exclusion lock most people think of (<code class="inline">i_rwsem</code>) lives one layer down, inside each filesystem's own <code class="inline">write_iter</code> implementation — meaning locking behavior can differ between filesystems even though they're called through the identical <code class="inline">vfs_write()</code> entry point.</div>
+</section>
+
+<section id="refcounting">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>35 · Reference Counting</h2>
+<div class="grid2">
+<div class="card"><h4>struct file — f_count</h4>
+<div class="flowdiag">CREATE
+  __alloc_file()  fs/file_table.c:96
+  atomic_long_set(&f->f_count, 1)
+  ↓
+GET REF
+  get_file()  include/linux/fs.h:972
+  atomic_long_inc(&f->f_count)
+  ↓
+USE  (fd_install() consumes the initial ref;
+      fdget()/__fget() takes+returns a ref via FDPUT_FPUT)
+  ↓
+PUT REF
+  fput() / fput_many()  fs/file_table.c:335-356
+  atomic_long_sub_and_test(refs, &file->f_count)
+  ↓ (only when it hits zero)
+FREE
+  __fput()  fs/file_table.c:255-300
+    -> f_op->release(inode, file)
+    -> dput(dentry), mntput(mnt)
+    -> file_free(file)</div>
+<p><code class="inline">fput()</code> defers the actual teardown (<code class="inline">__fput()</code>) to task-work or delayed work — it can sleep and must not run inline in every calling context (e.g. under a spinlock).</p>
+</div>
+<div class="card"><h4>struct inode — i_count</h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">fs/inode.c</span><span>lines 1375-1392, 1748-1765</span></div>
+<pre>struct inode *igrab(struct inode *inode)
+{
+	spin_lock(&amp;inode-&gt;i_lock);
+	if (!(inode-&gt;i_state &amp; (I_FREEING|I_WILL_FREE))) {
+		__iget(inode);
+		spin_unlock(&amp;inode-&gt;i_lock);
+	} else {
+		spin_unlock(&amp;inode-&gt;i_lock);
+		inode = NULL;
+	}
+	return inode;
+}
+
+void iput(struct inode *inode)
+{
+	if (!inode) return;
+retry:
+	if (atomic_dec_and_lock(&amp;inode-&gt;i_count, &amp;inode-&gt;i_lock)) {
+		if (inode-&gt;i_nlink &amp;&amp; (inode-&gt;i_state &amp; I_DIRTY_TIME)) {
+			atomic_inc(&amp;inode-&gt;i_count);
+			spin_unlock(&amp;inode-&gt;i_lock);
+			mark_inode_dirty_sync(inode);
+			goto retry;
+		}
+		iput_final(inode);
+	}
+}</pre></div>
+<p><code class="inline">i_count</code> is literally an <code class="inline">atomic_t</code> (include/linux/fs.h:691). <code class="inline">igrab()</code> refuses to hand out a reference to an inode already being torn down (<code class="inline">I_FREEING</code>/<code class="inline">I_WILL_FREE</code>), returning NULL instead.</p>
+</div>
+</div>
+<div class="callout warn"><div class="ct">⚠️ IMPORTANT — refcounting is per-object, don't conflate them</div><code class="inline">files_struct.count</code>, <code class="inline">file.f_count</code>, <code class="inline">dentry.d_lockref</code>, and <code class="inline">inode.i_count</code> are four <strong>independent</strong> counters on four independent objects. Closing one fd (dropping one <code class="inline">f_count</code> reference) does not necessarily free the <code class="inline">struct file</code> (another fd from <code class="inline">dup()</code> may hold a reference), and freeing the <code class="inline">struct file</code> via <code class="inline">__fput()</code> only then drops one dentry reference (<code class="inline">dput()</code>) and one inode reference indirectly through the dentry — the inode itself might still be referenced by other dentries or in-kernel holders.</div>
+</section>
+
+<section id="register-timeline">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>Register Timeline — read(3, buffer, 100)</h2>
+<div class="flowdiag">BEFORE SVC   (EL0, userspace)
+    x0 = 3            (fd)
+    x1 = buffer        (user pointer)
+    x2 = 100           (count)
+    x8 = 63            (__NR_read, include/uapi/asm-generic/unistd.h:205)
+    PC = address of the `svc #0` instruction in libc
+
+AFTER EXCEPTION   (CPU hardware, before any Linux code runs)
+    EL  = 1  (SP_EL1 selected, "EL1h")
+    ELR_EL1  = PC of the instruction after `svc #0`   (return address)
+    SPSR_EL1 = PSTATE that was active at EL0 just before the exception
+    ESR_EL1  = exception class = ESR_ELx_EC_SVC64
+    SP       = SP_EL1 (kernel stack for this task)
+
+PT_REGS   (built by kernel_entry, entry.S:189-263)
+    regs.regs[0] = 3          (x0, copied by stp)
+    regs.regs[1] = buffer     (x1)
+    regs.regs[2] = 100        (x2)
+    regs.regs[8] = 63         (x8)
+    regs.pc      = ELR_EL1 value (stored via mrs x22, elr_el1)
+    regs.pstate  = SPSR_EL1 value
+    regs.syscallno = -1 initially (NO_SYSCALL), then...
+
+SYSCALL   (el0_svc_common, syscall.c:93-99)
+    regs.orig_x0  = regs.regs[0]  = 3
+    regs.syscallno = regs.regs[8] = 63
+    invoke_syscall(): sys_call_table[63] == __arm64_sys_read
+    __arm64_sys_read(regs) -> ... -> ksys_read(3, buffer, 100) -> vfs_read(...)
+
+RETURN
+    ksys_read returns e.g. 100 (bytes read) or a negative errno (e.g. -14 for -EFAULT)
+    syscall_set_return_value(): regs.regs[0] = ret     (asm/syscall.h:51-62)
+
+AFTER ERET   (EL0, userspace again)
+    PC = ELR_EL1  (resumes right after the `svc #0` instruction)
+    x0 = ret      (100 on success, or a small negative errno value)
+    libc: if ((unsigned long)x0 > -4096UL) { errno = -x0; return -1; } else return x0;</div>
+</section>
+
+<section id="complete-trace">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>36 · Complete End-to-End Trace</h2>
+<div class="flowdiag">read(3, buffer, 100)
+        ↓
+x0=3  x1=buffer  x2=100  x8=63(__NR_read)
+        ↓
+<span class="arm">svc #0</span>
+        ↓
+<span class="arm">CPU: EL0 → EL1, ESR_EL1/ELR_EL1/SPSR_EL1 captured</span>
+        ↓
+<span class="arm">vectors[] (entry.S:557) → kernel_ventry 0,sync → el0_sync (entry.S:696)</span>
+        ↓
+<span class="arm">kernel_entry 0 → pt_regs built on kernel stack</span>
+        ↓
+<span class="arm">el0_sync_handler → el0_svc → do_el0_svc (entry-common.c / syscall.c:191)</span>
+        ↓
+<span class="n">el0_svc_common → invoke_syscall → sys_call_table[63]</span>  (syscall.c:39-99)
+        ↓
+<span class="n">__arm64_sys_read(regs) → __se_sys_read → __do_sys_read → ksys_read(3,buffer,100)</span>
+        ↓
+fd=3 resolved:
+   <span class="n">current → task_struct.files → files_struct.fdt → fdtable.fd[3] → struct file*</span>
+        ↓
+<span class="vfs">vfs_read(file, buffer, 100, &pos)</span>  — access_ok(), rw_verify_area()
+        ↓
+<span class="vfs">file->f_op->read_iter  (e.g. ext4_file_read_iter)</span>  — dynamic dispatch, §23
+        ↓
+<span class="vfs">filesystem / page cache</span>
+        ↓
+<span class="mm">copy_to_user(buffer, kernel_page_data, n)</span>
+        ↓ (if buffer is bad)
+   <span class="arm">translation fault → EL1h sync vector → do_mem_abort → fixup_exception()</span>  §29-30
+        ↓ (either path)
+return value (bytes read, or -EFAULT/-EBADF/...)
+        ↓
+<span class="n">syscall_set_return_value(): pt_regs.regs[0] = ret</span>
+        ↓
+<span class="arm">ret_to_user → kernel_exit 0 → eret</span>
+        ↓
+EL0, x0 = return value
+        ↓
+userspace (libc translates negative x0 into errno)</div>
+<p>Every node above links to a section with full citations: <a href="#arm64-entry">§04</a>, <a href="#ptregs">§05</a>, <a href="#syscall-dispatch">§07</a>, <a href="#read-case">§10</a>, <a href="#fd-structures">§13</a>, <a href="#vfs">§23</a>, <a href="#user-access">§25</a>, <a href="#page-fault">§29</a>, <a href="#exception-table">§30</a>, <a href="#syscall-return">§32</a>.</p>
+</section>
+
+<section id="book-vs-kernel">
+<span class="sec-badge"><span class="badge b-x86">🟡</span> <span class="badge b-arm64">🔵</span></span>
+<h2>37 · Book vs Kernel</h2>
+<div class="tablewrap"><table>
+<tr><th>Chapter 10 (x86, ~v2.6-era)</th><th>Linux v5.10.241 ARM64 (this tree)</th><th>Difference</th></tr>
+<tr><td><code class="inline">int $0x80</code> / <code class="inline">sysenter</code></td><td><code class="inline">svc #0</code></td><td><span class="badge b-x86">X86 ONLY</span> — different trap instruction entirely; ARM64 always uses <code class="inline">SVC</code> for AArch64 EL0→EL1 syscalls.</td></tr>
+<tr><td>syscall number in <code class="inline">eax</code></td><td>syscall number in <code class="inline">x8</code></td><td><span class="badge b-arm64">ARM64 EQUIVALENT</span> — same role, different register.</td></tr>
+<tr><td>args in <code class="inline">ebx,ecx,edx,esi,edi,ebp</code></td><td>args in <code class="inline">x0-x5</code></td><td><span class="badge b-arm64">ARM64 EQUIVALENT</span></td></tr>
+<tr><td>monolithic <code class="inline">system_call</code> entry point (x86 asm)</td><td><code class="inline">vectors[]</code> table → <code class="inline">el0_sync</code> → <code class="inline">el0_sync_handler</code> → <code class="inline">el0_svc</code> → <code class="inline">do_el0_svc</code></td><td><span class="badge b-x86">CHANGED</span> — ARM64's exception model is vector-table + per-EL/per-class routing, not a single trap gate.</td></tr>
+<tr><td><code class="inline">sys_read()</code> as "the" read implementation</td><td><code class="inline">__arm64_sys_read()</code> is the dispatched symbol; <code class="inline">sys_read</code> is only a declaration</td><td><span class="badge b-arm64">CHANGED</span> — arm64's own <code class="inline">__SYSCALL_DEFINEx</code> (syscall_wrapper.h:51) overrides the generic macro; see §08.</td></tr>
+<tr><td>syscall table generically described as "an array"</td><td>literal <code class="inline">const syscall_fn_t sys_call_table[__NR_syscalls]</code>, built by double-including <code class="inline">&lt;asm/unistd.h&gt;</code> with a redefined <code class="inline">__SYSCALL</code> macro</td><td><span class="badge b-arm64">ARM64</span> — confirmed still real and in active use; no separate generated header file.</td></tr>
+<tr><td><code class="inline">access_ok()</code> presented as a fixed range check</td><td>still a real branchless carry-flag range check against <code class="inline">addr_limit</code> in this version</td><td><span class="badge b-generic">STILL VALID</span> for this version — later mainline kernels removed <code class="inline">set_fs()</code>/<code class="inline">addr_limit</code> entirely, which had NOT happened yet here.</td></tr>
+<tr><td>generic "exception table" concept</td><td><code class="inline">struct exception_table_entry {int insn, fixup;}</code>, plain relative-offset scheme</td><td><span class="badge b-arm64">ARM64</span> — same conceptual mechanism as the book describes, concrete arm64 implementation confirmed; not the newer typed-handler variant.</td></tr>
+<tr><td>"kernel sets errno"</td><td>kernel only ever writes a negative value into x0 (<code class="inline">pt_regs-&gt;regs[0]</code>); libc converts it to <code class="inline">errno</code></td><td><span class="badge b-generic">STILL VALID</span> — the book, read carefully, already describes this correctly; worth restating because it's a common misreading.</td></tr>
+</table></div>
+</section>
+
+<section id="misconceptions">
+<h2>Common Misconceptions</h2>
+<div class="card"><h4>❌ fd == struct file*</h4><p><strong>Wrong.</strong> An <code class="inline">fd</code> is just an integer index into <code class="inline">current-&gt;files-&gt;fdt-&gt;fd[]</code>. <strong>Correct:</strong> the fd is looked up through <code class="inline">fdget()</code>/<code class="inline">fdget_pos()</code> to obtain the actual <code class="inline">struct file *</code>. Multiple fds (via <code class="inline">dup()</code>) can resolve to the identical <code class="inline">struct file*</code>. <em>Evidence:</em> <code class="inline">struct fd { struct file *file; unsigned int flags; };</code> (include/linux/file.h:36-39) — the fd number and the file pointer are explicitly different types passed around together.</p></div>
+<div class="card"><h4>❌ struct file == inode</h4><p><strong>Wrong.</strong> <code class="inline">struct file</code> represents one <em>open instance</em> (with its own <code class="inline">f_pos</code>, <code class="inline">f_flags</code>); <code class="inline">struct inode</code> represents the underlying object on disk, shared by every open instance and every dentry that names it. <em>Evidence:</em> two independent <code class="inline">open()</code> calls on the same path allocate two separate <code class="inline">struct file</code> (via <code class="inline">alloc_empty_file()</code>, fresh <code class="inline">f_count=1</code> each time) but resolve to the same cached <code class="inline">f_inode</code> pointer.</p></div>
+<div class="card"><h4>❌ access_ok() guarantees the memory access will succeed</h4><p><strong>Wrong.</strong> It only validates that the address range falls within <code class="inline">addr_limit</code> — a range check, not a mapping check. <strong>Correct:</strong> the actual load/store can still fault (unmapped page, permission fault), which is exactly why the exception-table/fixup mechanism (§30) exists at all — see the explicit callout in §25.</p></div>
+<div class="card"><h4>❌ the kernel directly sets userspace errno</h4><p><strong>Wrong.</strong> <code class="inline">syscall_set_return_value()</code> (asm/syscall.h:51-62) writes only into <code class="inline">pt_regs-&gt;regs[0]</code>, a plain register. There is no kernel code path that writes a symbol named <code class="inline">errno</code> in the calling process's address space — that translation is entirely libc's job, after <code class="inline">eret</code>.</p></div>
+<div class="card"><h4>❌ a syscall is always one simple C function</h4><p><strong>Wrong.</strong> <code class="inline">SYSCALL_DEFINE3(read, ...)</code> alone expands into three separate generated functions on arm64 (<code class="inline">__arm64_sys_read</code>, <code class="inline">__se_sys_read</code>, <code class="inline">__do_sys_read</code>, §08) before even reaching <code class="inline">ksys_read</code>/<code class="inline">vfs_read</code>/the filesystem's <code class="inline">read_iter</code> — five-plus real function calls deep before touching a byte of data.</p></div>
+<div class="card"><h4>❌ the syscall table mechanism is identical on x86 and ARM64</h4><p><strong>Wrong</strong> — even the naming convention differs. On arm64, the macro that expands <code class="inline">SYSCALL_DEFINEx</code> generates <code class="inline">__arm64_sys_&lt;name&gt;</code> taking a single <code class="inline">const struct pt_regs *</code> argument (arch/arm64/include/asm/syscall_wrapper.h:51-67); the plain, multi-argument <code class="inline">sys_&lt;name&gt;(a,b,c)</code> C signature the book describes is an x86-style convention that arm64 explicitly overrides via its own <code class="inline">__SYSCALL_DEFINEx</code>.</p></div>
+</section>
+
+<section id="vendor-notes">
+<span class="sec-badge"><span class="badge b-vendor">🟪 VENDOR</span></span>
+<h2>Vendor BSP Deltas — K-S800 / Konica Minolta "bizhub"</h2>
+<p>Collected here for reference. None of these are upstream Linux behavior — they are board/product-specific patches discovered while tracing this exact source tree, and are called out inline in their respective sections above.</p>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Delta</th><th>Location</th><th>Effect</th></tr>
+<tr><td>1</td><td>Two extra syscalls: <code class="inline">km_semaphore</code> (441), <code class="inline">km_tickget</code> (442)</td><td>arch/arm64/include/uapi/asm/unistd.h:28-39</td><td><code class="inline">__NR_syscalls</code> becomes <strong>443</strong> instead of the stock generic value — affects the bounds check in <code class="inline">invoke_syscall()</code>.</td></tr>
+<tr><td>2</td><td><code class="inline">CONFIG_KM_BIZHUB</code> retry-on-EIO loop around <code class="inline">vfs_read()</code>/<code class="inline">vfs_write()</code></td><td>fs/read_write.c: <code class="inline">ksys_read</code> ~651-661, <code class="inline">ksys_write</code> ~730-743</td><td>A read/write that returns <code class="inline">-EIO</code> is silently retried (with a <code class="inline">msleep(200)</code>) up to <code class="inline">SYSCALL_RETRY_COUNT</code> times before the error is returned to userspace.</td></tr>
+<tr><td>3</td><td>MBR write-protect interception for <code class="inline">/dev/kmsda</code></td><td>fs/read_write.c: <code class="inline">ksys_write</code>, lines ~695-729</td><td>Writes to that device node at offsets below 512 bytes are intercepted — proprietary storage-protection logic, not generic Linux behavior.</td></tr>
+<tr><td>4</td><td><code class="inline">__copy_to_user_chk()</code> replacing <code class="inline">copyout()</code> call sites</td><td>lib/iov_iter.c:146-177 (ticket <code class="inline">OP_BTS-38744</code>); <code class="inline">copyout()</code> itself (line 179) is now dead code</td><td>A failed user-copy inside the iovec copy-out path sends <code class="inline">SIGSEGV</code> to the current task directly, instead of returning a short-copy count for the caller to turn into <code class="inline">-EFAULT</code>. <strong>Materially changes read(2)'s observable failure behavior for a bad buffer on this exact board.</strong></td></tr>
+<tr><td>5</td><td><code class="inline">CONFIG_KM_DEBUG_COPYUSER</code></td><td>arch/arm64/include/asm/uaccess.h (raw_copy_to/from_user variants)</td><td>Adds <code class="inline">WARN(in_atomic(), ...)</code> guards around the copy helpers — debug/diagnostic only, no change to correct-path behavior.</td></tr>
+<tr><td>6</td><td><code class="inline">CONFIG_IGNORE_ASYNC_ABORT</code> / <code class="inline">el1_ignore</code></td><td>arch/arm64/kernel/entry.S:566-570</td><td>Replaces the "Error EL1h" vector slot handling — not present in mainline v5.10.</td></tr>
+<tr><td>7</td><td><code class="inline">CONFIG_KM_FDTRACE</code> hook in <code class="inline">fd_install()</code></td><td>fs/file.c: <code class="inline">fd_install()</code>, near line 1000</td><td>Calls <code class="inline">fdtrace_open(fd, file)</code> — an fd-open tracer/instrumentation hook, additive, doesn't change fd-table semantics.</td></tr>
+</table></div>
+</section>
+
+<section id="roadmap">
+<h2>38 · Source Code Reading Roadmap</h2>
+<div class="flowdiag">SYSTEM CALL          (you are here — this document)
+      ↓
+ARM64 EXCEPTION      arch/arm64/kernel/entry.S, entry-common.c — read next if the register/exception-level model isn't yet reflexive
+      ↓
+VFS                  fs/read_write.c, fs/open.c, fs/namei.c, fs/file_table.c, fs/file.c
+      ↓
+FILE DESCRIPTOR      include/linux/fdtable.h, include/linux/fs.h (struct file/inode/dentry)
+      ↓
+PAGE CACHE           mm/filemap.c (generic_file_read_iter, generic_file_write_iter)
+      ↓
+MEMORY MANAGEMENT    mm/memory.c, arch/arm64/mm/fault.c, arch/arm64/mm/mmu.c
+      ↓
+FILESYSTEM           fs/ext4/ (or any concrete fs) — see how a real filesystem fills in file_operations/inode_operations
+      ↓
+BLOCK LAYER          block/*.c, fs/block_dev.c
+      ↓
+DEVICE DRIVER        drivers/... — wherever the block layer bottoms out for your actual storage</div>
+<div class="tablewrap"><table>
+<tr><th>Topic</th><th>Why read it next</th><th>Key files</th><th>Key structs</th><th>Prerequisite</th></tr>
+<tr><td>ARM64 exception model in full</td><td>Everything in §04-07 assumed you already accept EL0/EL1/vector-table basics; go deeper into IRQ/FIQ/debug exceptions too</td><td>arch/arm64/kernel/entry.S, entry-common.c, arch/arm64/kernel/traps.c</td><td>pt_regs, struct fault_info</td><td>none — this document is sufficient background</td></tr>
+<tr><td>Page cache internals</td><td>§10 stopped at "reaches the page cache" — the actual page allocation/lookup/readahead logic lives here</td><td>mm/filemap.c, mm/readahead.c</td><td>struct address_space, struct page</td><td>struct file/inode chain (§13/§17)</td></tr>
+<tr><td>Memory management / page tables</td><td>Understand what a "translation fault" (§29) actually means at the page-table level</td><td>mm/memory.c, arch/arm64/mm/mmu.c, arch/arm64/mm/fault.c</td><td>struct mm_struct, struct vm_area_struct, pgd/pud/pmd/pte</td><td>page fault section (§29) in this document</td></tr>
+<tr><td>A concrete filesystem (ext4)</td><td>See real <code class="inline">.read_iter</code>/<code class="inline">.write_iter</code>/<code class="inline">.open</code> implementations behind the vtable in §23</td><td>fs/ext4/file.c, fs/ext4/inode.c</td><td>struct ext4_inode_info</td><td>VFS dynamic dispatch (§23)</td></tr>
+<tr><td>Block layer</td><td>Where page-cache-miss reads actually turn into hardware I/O requests</td><td>block/blk-core.c, fs/block_dev.c</td><td>struct bio, struct request, struct block_device</td><td>a concrete filesystem's I/O path</td></tr>
+</table></div>
+</section>
+
+<section id="self-test">
+<h2>39 · Self Test — Can I Trace It Myself?</h2>
+<p>Process executes <code class="inline">read(3, buffer, 100);</code> — can you answer all of these from source, without re-reading this document?</p>
+<ul class="checklist">
+<li>What is x0? What is x1? What is x2? What is x8?</li>
+<li>What happens to the CPU immediately after <code class="inline">svc #0</code> — which registers get set, by hardware, before any Linux code runs?</li>
+<li>Which exception vector slot does this land in, and why that one specifically (not "Synchronous EL1h")?</li>
+<li>Where is <code class="inline">pt_regs</code> actually built, instruction by instruction?</li>
+<li>How is the syscall dispatched from <code class="inline">pt_regs-&gt;regs[8]</code> to a specific function pointer?</li>
+<li>Which function actually runs — and why is it not literally named <code class="inline">sys_read</code>?</li>
+<li>How does <code class="inline">fd=3</code> become a <code class="inline">struct file*</code> — name every intermediate structure?</li>
+<li>What is <code class="inline">f_op</code>, and where was it assigned?</li>
+<li>How does VFS decide between <code class="inline">.read</code> and <code class="inline">.read_iter</code>?</li>
+<li>How does the kernel access the userspace <code class="inline">buffer</code> — name the exact macro/function chain?</li>
+<li>What happens if <code class="inline">buffer</code> is an invalid pointer — trace the CPU exception through to the returned errno?</li>
+<li>How does the exception table know which faulting instruction to fix up?</li>
+<li>Where is the syscall's return value stored before <code class="inline">eret</code>?</li>
+<li>How does the CPU return to EL0, and what three system registers does that depend on?</li>
+</ul>
+<div class="callout key"><div class="ct">🧠 If any answer above felt shaky</div>Jump back to the matching section via the sidebar — every answer above has a citation trail (file + line + quoted code) somewhere in this document.</div>
+</section>
+
+<section id="source-index">
+<h2>Source Code Index</h2>
+<div class="tablewrap"><table>
+<tr><th>Symbol / Struct</th><th>File</th><th>Category</th><th>Related</th></tr>
+<tr><td><code class="inline">vectors</code></td><td>arch/arm64/kernel/entry.S:557</td><td>ARM64 entry</td><td>kernel_ventry, el0_sync, el1_sync</td></tr>
+<tr><td><code class="inline">kernel_entry</code> / <code class="inline">kernel_exit</code></td><td>arch/arm64/kernel/entry.S:185-288, 290-387</td><td>ARM64 entry</td><td>pt_regs, S_* offsets</td></tr>
+<tr><td><code class="inline">el0_sync_handler</code> / <code class="inline">el0_svc</code></td><td>arch/arm64/kernel/entry-common.c:375, 362</td><td>ARM64 entry</td><td>do_el0_svc</td></tr>
+<tr><td><code class="inline">el1_sync_handler</code> / <code class="inline">el1_abort</code></td><td>arch/arm64/kernel/entry-common.c:204, 112</td><td>ARM64 entry / fault</td><td>do_mem_abort</td></tr>
+<tr><td><code class="inline">do_el0_svc</code> / <code class="inline">el0_svc_common</code> / <code class="inline">invoke_syscall</code></td><td>arch/arm64/kernel/syscall.c:191, 93, 39</td><td>Syscall dispatch</td><td>sys_call_table</td></tr>
+<tr><td><code class="inline">sys_call_table</code></td><td>arch/arm64/kernel/sys.c:58</td><td>Syscall dispatch</td><td>syscall_fn_t</td></tr>
+<tr><td><code class="inline">struct pt_regs</code></td><td>arch/arm64/include/asm/ptrace.h:173</td><td>Register state</td><td>asm-offsets.c</td></tr>
+<tr><td><code class="inline">SYSCALL_DEFINEx</code> / <code class="inline">__SYSCALL_DEFINEx</code> (arm64)</td><td>include/linux/syscalls.h:223; arch/arm64/include/asm/syscall_wrapper.h:51</td><td>Syscall macro</td><td>__arm64_sys_*, __se_sys_*, __do_sys_*</td></tr>
+<tr><td><code class="inline">ksys_read</code> / <code class="inline">ksys_write</code></td><td>fs/read_write.c:636, 677</td><td>VFS entry</td><td>fdget_pos, vfs_read, vfs_write</td></tr>
+<tr><td><code class="inline">vfs_read</code> / <code class="inline">vfs_write</code></td><td>fs/read_write.c:489, 598</td><td>VFS</td><td>new_sync_read, new_sync_write, rw_verify_area</td></tr>
+<tr><td><code class="inline">call_read_iter</code> / <code class="inline">call_write_iter</code></td><td>include/linux/fs.h:2038-2048</td><td>VFS dispatch</td><td>file_operations</td></tr>
+<tr><td><code class="inline">do_sys_openat2</code></td><td>fs/open.c:1216</td><td>Open path</td><td>get_unused_fd_flags, do_filp_open, fd_install</td></tr>
+<tr><td><code class="inline">alloc_empty_file</code> / <code class="inline">__alloc_file</code></td><td>fs/file_table.c:134, 96</td><td>File allocation</td><td>filp_cachep, f_count</td></tr>
+<tr><td><code class="inline">fd_install</code> / <code class="inline">alloc_fd</code></td><td>fs/file.c:969, 874</td><td>FD table</td><td>fdtable, files_struct</td></tr>
+<tr><td><code class="inline">struct files_struct</code> / <code class="inline">struct fdtable</code></td><td>include/linux/fdtable.h:49, 27</td><td>FD table</td><td>task_struct.files</td></tr>
+<tr><td><code class="inline">struct file</code></td><td>include/linux/fs.h:923</td><td>VFS object</td><td>f_op, f_mapping, f_count</td></tr>
+<tr><td><code class="inline">struct dentry</code> / <code class="inline">struct inode</code> / <code class="inline">struct super_block</code></td><td>include/linux/dcache.h:89; include/linux/fs.h:617, 1456</td><td>VFS object</td><td>d_lockref, i_count</td></tr>
+<tr><td><code class="inline">access_ok</code> / <code class="inline">__range_ok</code></td><td>arch/arm64/include/asm/uaccess.h:63-98</td><td>User access</td><td>addr_limit</td></tr>
+<tr><td><code class="inline">get_user</code> / <code class="inline">put_user</code></td><td>arch/arm64/include/asm/uaccess.h:258-404</td><td>User access</td><td>_ASM_EXTABLE</td></tr>
+<tr><td><code class="inline">copy_from_user</code> / <code class="inline">copy_to_user</code></td><td>include/linux/uaccess.h:151-202</td><td>User access</td><td>raw_copy_from_user, __arch_copy_from_user</td></tr>
+<tr><td><code class="inline">struct exception_table_entry</code> / <code class="inline">fixup_exception</code></td><td>arch/arm64/include/asm/extable.h:18; arch/arm64/mm/extable.c:9</td><td>Exception table</td><td>search_exception_tables</td></tr>
+<tr><td><code class="inline">do_mem_abort</code> / <code class="inline">__do_kernel_fault</code></td><td>arch/arm64/mm/fault.c:725, 304</td><td>Page fault</td><td>fault_info[], esr_to_fault_info</td></tr>
+<tr><td><code class="inline">syscall_set_return_value</code></td><td>arch/arm64/include/asm/syscall.h:51</td><td>Syscall return</td><td>pt_regs.regs[0]</td></tr>
+</table></div>
+</section>
+
+</main>
+</div>
+
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<footer>Linux Kernel System Call Source Code Guide · Built from on-disk source at K-S800/Src, Linux v5.10.241, arm64 · Generated for offline study — no external dependencies.</footer>
+
+<script>
+function toggleTheme(){
+  const html=document.documentElement;
+  const cur=html.getAttribute('data-theme');
+  html.setAttribute('data-theme', cur==='light'?'dark':'light');
+}
+function toggleAllDetails(){
+  const all=document.querySelectorAll('details.codewrap');
+  const anyClosed=Array.from(all).some(d=>!d.open);
+  all.forEach(d=>d.open=anyClosed);
+}
+function copyCode(btn){
+  const pre=btn.closest('.codebox').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(()=>{
+    const old=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=old,1200);
+  });
+}
+function doSearch(q){
+  q=q.trim().toLowerCase();
+  document.querySelectorAll('mark.search-hit').forEach(m=>{
+    const parent=m.parentNode; parent.replaceChild(document.createTextNode(m.textContent),m); parent.normalize();
+  });
+  if(!q || q.length<2) return;
+  const walker=document.createTreeWalker(document.getElementById('main'),NodeFilter.SHOW_TEXT,null);
+  let node; const targets=[];
+  while(node=walker.nextNode()){
+    if(node.parentElement.closest('script,style')) continue;
+    if(node.textContent.toLowerCase().includes(q)) targets.push(node);
+  }
+  let first=null;
+  targets.forEach(n=>{
+    const idx=n.textContent.toLowerCase().indexOf(q);
+    if(idx===-1) return;
+    const span=document.createElement('span');
+    const before=n.textContent.slice(0,idx), match=n.textContent.slice(idx,idx+q.length), after=n.textContent.slice(idx+q.length);
+    span.appendChild(document.createTextNode(before));
+    const mk=document.createElement('mark'); mk.className='search-hit'; mk.textContent=match;
+    span.appendChild(mk);
+    span.appendChild(document.createTextNode(after));
+    n.parentNode.replaceChild(span,n);
+    if(!first) first=mk;
+  });
+  if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+}
+// active nav highlight
+const links=document.querySelectorAll('nav.sidebar a');
+const secs=Array.from(document.querySelectorAll('main section[id]'));
+function onScroll(){
+  let cur=secs[0];
+  for(const s of secs){ if(s.getBoundingClientRect().top-90<=0) cur=s; }
+  links.forEach(l=>l.classList.toggle('active', cur && l.getAttribute('href')==='#'+cur.id));
+  document.getElementById('backTop').style.display = window.scrollY>500 ? 'block':'none';
+}
+window.addEventListener('scroll',onScroll); onScroll();
+document.querySelectorAll('nav.sidebar a').forEach(a=>a.addEventListener('click',()=>{
+  document.querySelector('nav.sidebar').classList.remove('open');
+}));
+</script>
+</body>
+</html>

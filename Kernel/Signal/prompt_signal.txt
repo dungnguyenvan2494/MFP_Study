@@ -1,0 +1,1753 @@
+# ROLE
+
+Hãy đóng vai:
+
+- Senior Linux Kernel Developer
+- Linux Kernel Signal Subsystem Expert
+- ARM64 Kernel Source Code Researcher
+- Technical Mentor
+
+Tôi đang nghiên cứu tài liệu:
+
+    Chapter 11 — Signals
+
+Mục tiêu KHÔNG phải học thuộc nội dung của chapter.
+
+Mục tiêu là:
+
+> Đọc Chapter 11 → đối chiếu từng concept với Linux Kernel source code → trace signal từ lúc được generate → pending → kiểm tra blocked/masked → delivery → setup userspace frame → chạy signal handler → return → tiếp tục/restart system call.
+
+Tôi muốn nghiên cứu source code ở mức có thể tự mở Linux Kernel và trace từng function.
+
+============================================================
+# 1. SOURCE VERSION
+============================================================
+
+Ưu tiên:
+
+    Linux Kernel v5.4.x
+
+Architecture:
+
+    ARM64
+
+Nếu source tree được cung cấp có version khác:
+
+    sử dụng chính xác version đó.
+
+KHÔNG được lấy implementation của kernel version khác rồi trình bày như implementation hiện tại.
+
+Nếu implementation của Chapter 11 dựa trên Linux 2.6 / x86:
+
+    phải phân biệt rõ.
+
+Phân loại mọi thông tin:
+
+    [BOOK]
+    [GENERIC KERNEL]
+    [ARM64]
+    [X86]
+    [CHANGED]
+    [OBSOLETE]
+    [INFERENCE]
+
+============================================================
+# 2. CORE QUESTION
+============================================================
+
+Tôi muốn cuối cùng trả lời được câu hỏi:
+
+Một process đang chạy:
+
+    while (1) {
+        work();
+    }
+
+Một signal được gửi:
+
+    kill(pid, SIGUSR1);
+
+Điều gì thực sự xảy ra?
+
+Từ:
+
+    sender
+       ↓
+    signal generation
+       ↓
+    signal pending
+       ↓
+    signal queue
+       ↓
+    blocked signal mask
+       ↓
+    scheduler / return-to-user
+       ↓
+    signal delivery
+       ↓
+    do_signal()
+       ↓
+    handle_signal()
+       ↓
+    setup_frame()
+       ↓
+    userspace signal handler
+       ↓
+    sigreturn
+       ↓
+    restore registers
+       ↓
+    continue original program
+
+Hãy trace toàn bộ bằng source code.
+
+============================================================
+# 3. CHAPTER 11 → MODERN LINUX MAPPING
+============================================================
+
+Phân tích toàn bộ Chapter 11.
+
+Tạo bảng:
+
+| Chapter Concept | Linux v5.4 Concept | Symbol | Source File | Status |
+|----------------|--------------------|--------|-------------|--------|
+
+Bao gồm ít nhất:
+
+    Signal
+    Signal Generation
+    Signal Delivery
+    Pending Signal
+    Blocked Signal
+    Signal Mask
+    Signal Descriptor
+    Signal Handler Descriptor
+    sigaction
+    sigqueue
+    signal handler
+    signal frame
+    signal return
+    signal restart
+    default action
+    ignore
+    terminate
+    dump
+    stop
+    continue
+    realtime signal
+    process-directed signal
+    thread-directed signal
+    process group
+    thread group
+
+============================================================
+# 4. BIG PICTURE
+============================================================
+
+Tạo execution model:
+
+                 SIGNAL GENERATION
+                        │
+          ┌─────────────┴─────────────┐
+          │                           │
+      userspace                    kernel
+          │                           │
+          └─────────────┬─────────────┘
+                        ▼
+                 signal generation
+                        │
+                        ▼
+                 pending signal
+                        │
+                        ▼
+               blocked / ignored?
+                   /          \
+                 yes           no
+                  │             │
+                  ▼             ▼
+             remains        delivery
+             pending            │
+                                ▼
+                         do_signal()
+                                │
+                                ▼
+                         handle_signal()
+                                │
+                                ▼
+                         setup frame
+                                │
+                                ▼
+                           userspace
+                                │
+                                ▼
+                        signal handler
+                                │
+                                ▼
+                           sigreturn
+                                │
+                                ▼
+                        restore context
+                                │
+                                ▼
+                     continue execution
+
+KHÔNG coi diagram này là implementation chính xác.
+
+Hãy sửa theo source code thực tế.
+
+============================================================
+# 5. SIGNAL GENERATION
+============================================================
+
+Nghiên cứu:
+
+    kill()
+    tkill()
+    tgkill()
+
+và các kernel functions liên quan.
+
+Trace:
+
+    userspace
+       ↓
+    syscall
+       ↓
+    syscall wrapper
+       ↓
+    kernel signal generation
+       ↓
+    target task/thread
+       ↓
+    signal pending
+
+Tìm chính xác:
+
+    function
+    source file
+    caller
+    callee
+    important structures
+
+============================================================
+# 6. SIGNAL GENERATION CORE
+============================================================
+
+Tập trung vào:
+
+    send_sig_info()
+    send_signal()
+    specific_send_sig_info()
+    group_send_sig_info()
+
+hoặc tên thực tế trong Linux v5.4.
+
+Phải trace:
+
+    signal number
+    siginfo
+    target task
+    signal queue
+    pending mask
+    shared pending
+    private pending
+
+Đặc biệt giải thích:
+
+    process-directed signal
+
+vs
+
+    thread-directed signal
+
+============================================================
+# 7. PENDING SIGNAL
+============================================================
+
+Nghiên cứu sâu:
+
+    pending signal
+
+Tìm các structures thực tế.
+
+Đặc biệt:
+
+    struct sigpending
+    struct sigqueue
+
+Trace:
+
+    signal
+       ↓
+    sigpending
+       ├── signal mask
+       └── list
+              ↓
+          sigqueue
+              ↓
+          siginfo
+
+Giải thích:
+
+    pending
+    shared_pending
+    private pending
+
+Nếu kernel v5.4 implementation khác Chapter 11:
+
+    giải thích chính xác sự khác biệt.
+
+============================================================
+# 8. SIGNAL MASK
+============================================================
+
+Nghiên cứu:
+
+    blocked signals
+
+Trace:
+
+    task_struct
+       ↓
+    signal-related fields
+       ↓
+    blocked mask
+
+Phân tích:
+
+    sigset_t
+    blocked
+    real_blocked
+    temporary masks
+
+Tìm source code thực tế.
+
+Giải thích bitmask:
+
+    signal N
+        ↓
+    bit N-1
+
+Nếu architecture/version khác:
+
+    dùng implementation thực tế.
+
+============================================================
+# 9. SIGNAL DESCRIPTOR
+============================================================
+
+Phân tích:
+
+    struct signal_struct
+
+Tìm:
+
+    definition
+    important fields
+    lifetime
+    reference counting
+    relationship với task_struct
+
+Giải thích:
+
+    task_struct
+         │
+         ├── signal
+         │      ↓
+         │  signal_struct
+         │
+         └── sighand
+                ↓
+            sighand_struct
+
+Không được nhầm:
+
+    signal_struct
+
+với:
+
+    sighand_struct
+
+============================================================
+# 10. SIGNAL HANDLER DESCRIPTOR
+============================================================
+
+Phân tích:
+
+    struct sighand_struct
+
+Đặc biệt:
+
+    action[]
+    siglock
+    count
+
+Giải thích:
+
+    signal number
+       ↓
+    action[signal - 1]
+       ↓
+    struct k_sigaction
+       ↓
+    sa_handler
+    sa_flags
+    sa_mask
+
+Trace:
+
+    sigaction()
+       ↓
+    changing action
+       ↓
+    sighand_struct
+       ↓
+    action[]
+
+============================================================
+# 11. SIGNAL DATA STRUCTURE MAP
+============================================================
+
+Tạo relationship:
+
+    task_struct
+       │
+       ├── signal
+       │      ↓
+       │  signal_struct
+       │
+       ├── sighand
+       │      ↓
+       │  sighand_struct
+       │
+       ├── pending
+       │      ↓
+       │  sigpending
+       │
+       └── blocked
+              ↓
+           sigset_t
+
+Sau đó:
+
+    signal_struct
+         ↓
+    shared_pending
+
+và:
+
+    task_struct
+         ↓
+    pending
+
+Giải thích tại sao Linux có cả:
+
+    shared pending
+
+và:
+
+    private pending.
+
+============================================================
+# 12. SIGNAL ACTION
+============================================================
+
+Nghiên cứu:
+
+    struct k_sigaction
+
+và userspace:
+
+    struct sigaction
+
+Phải giải thích:
+
+    sa_handler
+    sa_sigaction
+    sa_flags
+    sa_mask
+
+Trace:
+
+    sigaction()
+       ↓
+    syscall
+       ↓
+    kernel implementation
+       ↓
+    copy_from_user()
+       ↓
+    validation
+       ↓
+    action[]
+       ↓
+    sighand_struct
+
+============================================================
+# 13. DEFAULT SIGNAL ACTION
+============================================================
+
+Phân tích các default actions:
+
+    SIG_DFL
+    SIG_IGN
+
+và:
+
+    terminate
+    core dump
+    ignore
+    stop
+    continue
+
+Tạo bảng:
+
+| Signal Action | Kernel Behavior | Function | Result |
+|--------------|-----------------|----------|--------|
+
+Không chỉ mô tả.
+
+Tìm function thực tế xử lý từng case.
+
+============================================================
+# 14. SIGNAL DELIVERY
+============================================================
+
+Đây là phần QUAN TRỌNG NHẤT.
+
+Trace:
+
+    signal pending
+         ↓
+    return to userspace
+         ↓
+    check pending signals
+         ↓
+    do_signal()
+         ↓
+    get_signal()
+         ↓
+    handle_signal()
+         ↓
+    setup_frame()
+         ↓
+    userspace handler
+
+Phải tìm implementation thực tế của Linux v5.4 ARM64.
+
+Đặc biệt xác định:
+
+    do_signal()
+
+    get_signal()
+
+    handle_signal()
+
+    setup_frame()
+
+Nếu ARM64 có implementation riêng:
+
+    phải chỉ rõ source file ARM64.
+
+============================================================
+# 15. WHEN IS A SIGNAL DELIVERED?
+============================================================
+
+Giải thích chính xác:
+
+Signal không nhất thiết được xử lý ngay khi:
+
+    send signal
+
+được gọi.
+
+Trace:
+
+    signal generated
+         ↓
+    pending
+         ↓
+    process continues?
+         ↓
+    scheduler
+         ↓
+    return from syscall
+    OR
+    return from interrupt
+         ↓
+    check pending signal
+         ↓
+    delivery
+
+Phân biệt:
+
+    generation
+
+và:
+
+    delivery
+
+============================================================
+# 16. do_signal()
+============================================================
+
+Phân tích source code cực kỳ chi tiết.
+
+Tìm:
+
+    do_signal()
+
+Giải thích:
+
+    parameters
+    local variables
+    callers
+    callees
+    conditions
+    signal selection
+    handler selection
+    default action
+    syscall restart
+
+Tạo flowchart:
+
+    do_signal()
+        │
+        ├── signal pending?
+        │       │
+        │       └── no → return
+        │
+        └── yes
+              ↓
+          select signal
+              ↓
+          action?
+          ├── IGNORE
+          ├── DEFAULT
+          └── HANDLER
+
+============================================================
+# 17. get_signal()
+============================================================
+
+Nghiên cứu:
+
+    get_signal()
+
+Trace:
+
+    pending queue
+       ↓
+    select signal
+       ↓
+    check blocked
+       ↓
+    dequeue
+       ↓
+    signal action
+       ↓
+    return selected signal
+
+Giải thích:
+
+    tại sao signal được chọn?
+
+    signal nào được ưu tiên?
+
+    standard signal vs realtime signal
+
+    pending mask vs sigqueue list
+
+============================================================
+# 18. SIGNAL QUEUE
+============================================================
+
+Phân tích:
+
+    struct sigqueue
+
+Tạo object diagram:
+
+    sigqueue
+       │
+       ├── list
+       ├── flags
+       ├── siginfo
+       └── user
+
+Giải thích:
+
+    siginfo_t
+
+được sử dụng thế nào.
+
+Đặc biệt:
+
+    SI_USER
+    SI_KERNEL
+    SI_TIMER
+    SI_ASYNCIO
+    SI_TKILL
+
+nếu tồn tại trong source version.
+
+============================================================
+# 19. STANDARD SIGNAL VS REALTIME SIGNAL
+============================================================
+
+Phân tích sâu.
+
+Standard signal:
+
+    có thể merge nhiều lần pending cùng signal.
+
+Realtime signal:
+
+    có queue nhiều instances.
+
+Giải thích bằng source code.
+
+Tạo diagram:
+
+STANDARD:
+
+    SIGUSR1
+       ↓
+    pending bit = 1
+       ↓
+    another SIGUSR1
+       ↓
+    vẫn pending = 1
+
+REALTIME:
+
+    SIGRTMIN
+       ↓
+    sigqueue #1
+       ↓
+    sigqueue #2
+       ↓
+    sigqueue #3
+
+Nếu implementation khác:
+
+    ưu tiên source.
+
+============================================================
+# 20. THREAD VS PROCESS
+============================================================
+
+Phân tích:
+
+    kill()
+    tkill()
+    tgkill()
+
+Giải thích:
+
+    process-directed signal
+
+vs
+
+    thread-directed signal.
+
+Tạo diagram:
+
+PROCESS
+ ├── thread A
+ ├── thread B
+ └── thread C
+
+process-directed:
+
+    signal
+       ↓
+    process/thread group
+       ↓
+    eligible thread
+
+thread-directed:
+
+    signal
+       ↓
+    specific task/thread
+
+============================================================
+# 21. ARM64 SIGNAL DELIVERY
+============================================================
+
+Đây là phần cần cực kỳ chi tiết.
+
+Nghiên cứu ARM64 source.
+
+Trace:
+
+    kernel context
+         ↓
+    signal delivery
+         ↓
+    pt_regs
+         ↓
+    user stack
+         ↓
+    signal frame
+         ↓
+    PC
+         ↓
+    signal handler
+
+Phân tích:
+
+    pt_regs
+    user SP
+    PC
+    PSTATE
+    x0-x30
+
+Giải thích kernel thay đổi register nào để bắt đầu signal handler.
+
+============================================================
+# 22. SIGNAL FRAME
+============================================================
+
+Nghiên cứu:
+
+    setup_frame()
+    setup_rt_frame()
+
+hoặc implementation tương ứng trong v5.4 ARM64.
+
+Phân tích:
+
+    signal frame
+    sigcontext
+    ucontext
+    siginfo
+    stack layout
+
+Tạo diagram:
+
+USER STACK
+
+    ┌─────────────────────┐
+    │ signal frame        │
+    ├─────────────────────┤
+    │ siginfo             │
+    ├─────────────────────┤
+    │ ucontext            │
+    ├─────────────────────┤
+    │ saved registers     │
+    └─────────────────────┘
+
+Chỉ dùng structure thực tế của ARM64 v5.4.
+
+============================================================
+# 23. ARM64 REGISTER TRANSFORMATION
+============================================================
+
+Tạo timeline.
+
+BEFORE SIGNAL:
+
+    PC = original instruction
+    SP = original user stack
+    x0 = ...
+    x1 = ...
+
+SIGNAL DELIVERY:
+
+    PC = signal handler
+    SP = signal frame
+    registers = handler arguments
+
+SIGNAL HANDLER:
+
+    handler(sig, ...)
+
+SIGNAL RETURN:
+
+    sigreturn
+       ↓
+    restore context
+       ↓
+    PC = original PC
+    SP = original SP
+    registers restored
+
+Phải giải thích source code tương ứng.
+
+============================================================
+# 24. sigreturn
+============================================================
+
+Nghiên cứu:
+
+    sigreturn
+    rt_sigreturn
+
+Trace:
+
+    userspace handler
+       ↓
+    return
+       ↓
+    trampoline
+       ↓
+    syscall
+       ↓
+    sigreturn
+       ↓
+    restore registers
+       ↓
+    restore signal mask
+       ↓
+    return to interrupted program
+
+Phân tích ARM64 implementation.
+
+============================================================
+# 25. SIGNAL TRAMPOLINE
+============================================================
+
+Tìm hiểu:
+
+    signal trampoline
+
+Giải thích:
+
+    handler return
+       ↓
+    trampoline
+       ↓
+    sigreturn syscall
+
+Tìm:
+
+    source
+    generated code
+    register convention
+    syscall number
+
+Không được giả định x86 implementation.
+
+============================================================
+# 26. INTERRUPTED SYSTEM CALL
+============================================================
+
+Đây là phần rất quan trọng.
+
+Trace:
+
+    userspace
+       ↓
+    syscall
+       ↓
+    kernel
+       ↓
+    process sleeps
+       ↓
+    signal arrives
+       ↓
+    syscall interrupted
+       ↓
+    signal handler
+       ↓
+    return
+       ↓
+    restart OR return EINTR
+
+Phân tích:
+
+    -ERESTARTSYS
+    -ERESTARTNOINTR
+    -ERESTARTNOHAND
+    -ERESTART_RESTARTBLOCK
+
+nếu các mechanism này tồn tại trong target source.
+
+============================================================
+# 27. SA_RESTART
+============================================================
+
+Nghiên cứu:
+
+    SA_RESTART
+
+Trace:
+
+    syscall interrupted
+         ↓
+    signal delivered
+         ↓
+    signal handler
+         ↓
+    return
+         ↓
+    restart?
+
+Tạo decision tree:
+
+    interrupted syscall
+          │
+          ▼
+    return code?
+          │
+          ▼
+    signal action flags
+          │
+          ▼
+    SA_RESTART?
+       /       \
+     yes        no
+      │          │
+      ▼          ▼
+   restart      EINTR
+
+Chỉ dùng logic source code thực tế.
+
+============================================================
+# 28. sigprocmask()
+============================================================
+
+Trace end-to-end:
+
+    sigprocmask()
+       ↓
+    syscall
+       ↓
+    userspace mask
+       ↓
+    copy_from_user
+       ↓
+    kernel mask
+       ↓
+    blocked
+       ↓
+    pending signal
+
+Giải thích:
+
+    SIG_BLOCK
+    SIG_UNBLOCK
+    SIG_SETMASK
+
+và cách bitmask được cập nhật.
+
+============================================================
+# 29. sigpending()
+============================================================
+
+Trace:
+
+    sigpending()
+       ↓
+    kernel
+       ↓
+    pending
+       ↓
+    blocked
+       ↓
+    result = pending & blocked
+       ↓
+    copy_to_user()
+
+Giải thích chính xác source.
+
+============================================================
+# 30. sigsuspend()
+============================================================
+
+Đây là syscall rất quan trọng để hiểu signal + scheduler.
+
+Trace:
+
+    sigsuspend(mask)
+       ↓
+    change temporary mask
+       ↓
+    sleep
+       ↓
+    signal arrives
+       ↓
+    wakeup
+       ↓
+    signal delivery
+       ↓
+    return
+
+Phân tích:
+
+    TASK_INTERRUPTIBLE
+    schedule()
+    wakeup
+    signal_pending()
+
+============================================================
+# 31. kill()
+============================================================
+
+Trace đầy đủ:
+
+    kill(pid, sig)
+       ↓
+    syscall
+       ↓
+    permission check
+       ↓
+    PID lookup
+       ↓
+    target task/process group
+       ↓
+    signal generation
+       ↓
+    pending
+       ↓
+    wakeup
+
+Phải giải thích PID semantics.
+
+============================================================
+# 32. tkill() / tgkill()
+============================================================
+
+So sánh:
+
+    kill()
+    tkill()
+    tgkill()
+
+Tạo bảng:
+
+| Syscall | Target | PID semantics | Use |
+|---------|--------|---------------|-----|
+
+============================================================
+# 33. sigaction()
+============================================================
+
+Trace:
+
+    sigaction()
+       ↓
+    syscall
+       ↓
+    user struct
+       ↓
+    copy_from_user
+       ↓
+    validation
+       ↓
+    sighand_struct
+       ↓
+    action[]
+       ↓
+    siglock
+
+Phân tích locking.
+
+============================================================
+# 34. SIGNAL LOCKING
+============================================================
+
+Tìm:
+
+    siglock
+
+và các locking mechanism liên quan.
+
+Bảng:
+
+| Lock | Protects | Acquire | Release | Context |
+|------|----------|---------|---------|---------|
+
+Giải thích race conditions:
+
+    Thread A:
+        generate signal
+
+    Thread B:
+        modify sigaction
+
+    Thread C:
+        deliver signal
+
+Kernel đảm bảo consistency như thế nào?
+
+============================================================
+# 35. REFERENCE COUNTING
+============================================================
+
+Phân tích lifetime của:
+
+    task_struct
+    signal_struct
+    sighand_struct
+    sigqueue
+
+Tìm:
+
+    refcount
+    atomic
+    get/put
+
+Giải thích khi:
+
+    process exits
+    thread exits
+    signal pending
+    signal delivered
+
+============================================================
+# 36. SIGNAL GENERATION VS DELIVERY
+============================================================
+
+Đây phải là một chapter riêng trong tài liệu cuối.
+
+So sánh:
+
+GENERATION:
+
+    signal is created
+    ↓
+    pending queue
+    ↓
+    target marked
+    ↓
+    wakeup
+
+DELIVERY:
+
+    kernel checks pending
+    ↓
+    selects signal
+    ↓
+    action
+    ↓
+    default / ignore / handler
+    ↓
+    userspace
+
+Highlight:
+
+> Signal generation != signal delivery.
+
+============================================================
+# 37. COMPLETE SIGNAL TRACE
+============================================================
+
+Case study:
+
+Process A:
+
+    kill(pid_B, SIGUSR1)
+
+Process B:
+
+    signal(SIGUSR1, handler)
+
+Trace:
+
+PROCESS A
+    │
+    │ kill()
+    ▼
+syscall
+    │
+    ▼
+signal generation
+    │
+    ▼
+PROCESS B
+    │
+    ▼
+pending signal
+    │
+    ▼
+scheduler / return-to-user
+    │
+    ▼
+do_signal()
+    │
+    ▼
+get_signal()
+    │
+    ▼
+handle_signal()
+    │
+    ▼
+setup_frame()
+    │
+    ▼
+USERSPACE
+    │
+    ▼
+handler(SIGUSR1)
+    │
+    ▼
+sigreturn
+    │
+    ▼
+restore context
+    │
+    ▼
+original execution
+
+Mỗi arrow phải có:
+
+    function
+    source file
+    data
+    context
+    register state
+
+============================================================
+# 38. COMPLETE SIGNAL + SYSCALL TRACE
+============================================================
+
+Case study nâng cao:
+
+Process:
+
+    read(fd, buffer, size)
+
+Trong lúc process đang ngủ:
+
+    another process
+        ↓
+    kill(pid, SIGUSR1)
+
+Trace:
+
+    read()
+      ↓
+    syscall
+      ↓
+    kernel
+      ↓
+    sleep
+      ↓
+    signal generated
+      ↓
+    wakeup
+      ↓
+    syscall interrupted
+      ↓
+    signal delivery
+      ↓
+    signal handler
+      ↓
+    sigreturn
+      ↓
+    restart / EINTR
+      ↓
+    userspace
+
+Đây phải là một trong những flow quan trọng nhất.
+
+============================================================
+# 39. ARM64 + SIGNAL + SYSCALL
+============================================================
+
+Kết hợp Chapter 10 và Chapter 11.
+
+Tạo flow:
+
+    USERSPACE
+       │
+       ▼
+    SVC #0
+       │
+       ▼
+    ARM64 exception entry
+       │
+       ▼
+    pt_regs
+       │
+       ▼
+    syscall
+       │
+       ▼
+    task sleeps
+       │
+       │ SIGNAL
+       ▼
+    signal pending
+       │
+       ▼
+    wakeup
+       │
+       ▼
+    signal delivery
+       │
+       ▼
+    setup signal frame
+       │
+       ▼
+    USERSPACE HANDLER
+       │
+       ▼
+    sigreturn
+       │
+       ▼
+    restore pt_regs
+       │
+       ▼
+    syscall restart / EINTR
+       │
+       ▼
+    USERSPACE
+
+============================================================
+# 40. SOURCE CODE ARCHAEOLOGY
+============================================================
+
+Với MỖI function quan trọng:
+
+## Definition
+
+    Symbol:
+    File:
+    Prototype:
+
+## Caller
+
+    caller → function
+
+## Callees
+
+    function
+       ├── A
+       ├── B
+       └── C
+
+## Data
+
+    Input
+    Output
+    Structures
+
+## Lock
+
+    lock
+
+## Reference
+
+    refcount
+
+## Context
+
+    Process
+    Interrupt
+    Return-to-user
+    Scheduler
+
+## Error
+
+    Error path
+
+## ARM64
+
+    Architecture-specific behavior
+
+============================================================
+# 41. SOURCE CODE EVIDENCE
+============================================================
+
+Mọi kết luận quan trọng phải có:
+
+    File:
+    Symbol:
+    Source evidence:
+    Explanation:
+
+KHÔNG hallucinate.
+
+Nếu không tìm thấy:
+
+    NOT FOUND IN TARGET SOURCE
+
+Nếu implementation khác:
+
+    IMPLEMENTATION DIFFERENCE
+
+Nếu Chapter 11 mô tả Linux cũ:
+
+    HISTORICAL IMPLEMENTATION
+
+============================================================
+# 42. STRUCTURE MAP
+============================================================
+
+Tạo bảng:
+
+| Structure | Important Fields | Relationship | Lifetime |
+|-----------|------------------|--------------|----------|
+
+Bao gồm:
+
+    task_struct
+    signal_struct
+    sighand_struct
+    sigpending
+    sigqueue
+    k_sigaction
+    sigaction
+    siginfo
+    pt_regs
+    ucontext
+    sigcontext
+
+============================================================
+# 43. SIGNAL STATE MACHINE
+============================================================
+
+Tạo state machine:
+
+        GENERATED
+            │
+            ▼
+         PENDING
+            │
+      ┌─────┴─────┐
+      │           │
+   BLOCKED      UNBLOCKED
+      │           │
+      ▼           ▼
+   PENDING     DELIVERY
+                  │
+          ┌───────┼────────┐
+          ▼       ▼        ▼
+       IGNORE   DEFAULT   HANDLER
+                          │
+                          ▼
+                     SIGRETURN
+                          │
+                          ▼
+                       RESUME
+
+Sửa theo source code nếu cần.
+
+============================================================
+# 44. ERROR / EDGE CASES
+============================================================
+
+Phân tích:
+
+    signal blocked
+    signal ignored
+    signal already pending
+    multiple standard signals
+    realtime signals
+    process exiting
+    thread exiting
+    stopped process
+    traced process
+    syscall interrupted
+    SA_RESTART
+    invalid signal number
+    permission denied
+
+Không chỉ mô tả.
+
+Phải tìm source path.
+
+============================================================
+# 45. BOOK VS MODERN ARM64
+============================================================
+
+Tạo bảng:
+
+| Chapter 11 | Linux v5.4 ARM64 | Difference |
+|------------|-------------------|------------|
+
+Đặc biệt chú ý:
+
+    old x86 signal frame
+    old register model
+    old system call entry
+    old setup_frame()
+
+vs:
+
+    ARM64 pt_regs
+    ARM64 signal frame
+    ARM64 sigreturn
+    ARM64 exception return
+
+============================================================
+# 46. DIAGRAMS
+============================================================
+
+Tạo:
+
+1. Signal Generation
+
+2. Signal Pending
+
+3. Signal Delivery
+
+4. Signal Data Structures
+
+5. Process vs Thread Signals
+
+6. kill() flow
+
+7. sigaction() flow
+
+8. sigprocmask() flow
+
+9. sigsuspend() flow
+
+10. do_signal() flow
+
+11. Signal Frame
+
+12. ARM64 Register Transformation
+
+13. sigreturn()
+
+14. Interrupted Syscall
+
+15. SA_RESTART
+
+16. Complete Signal Flow
+
+17. Signal + Syscall combined flow
+
+18. Signal subsystem architecture
+
+Nếu Mermaid không thể verify offline:
+
+    dùng ASCII/SVG hoặc Mermaid source nhưng phải ghi rõ.
+
+============================================================
+# 47. FINAL MENTAL MODEL
+============================================================
+
+Cuối cùng tạo mental model:
+
+SIGNAL GENERATION
+        ↓
+PENDING STATE
+        ↓
+MASK / BLOCK
+        ↓
+ELIGIBLE SIGNAL
+        ↓
+SIGNAL DELIVERY
+        ↓
+ACTION
+ ┌──────┼──────┐
+ ↓      ↓      ↓
+IGNORE DEFAULT HANDLER
+                ↓
+          SIGNAL FRAME
+                ↓
+          USER HANDLER
+                ↓
+            SIGRETURN
+                ↓
+        RESTORE CONTEXT
+                ↓
+          RESUME/RESTART
+
+============================================================
+# 48. SELF TEST
+============================================================
+
+Tạo câu hỏi để kiểm tra:
+
+1. Signal generation khác signal delivery như thế nào?
+
+2. Signal pending được lưu ở đâu?
+
+3. shared_pending khác pending như thế nào?
+
+4. signal_struct và sighand_struct khác nhau thế nào?
+
+5. signal mask nằm ở đâu?
+
+6. kill() gửi signal đến process hay thread?
+
+7. tgkill() khác kill() thế nào?
+
+8. Khi signal bị block chuyện gì xảy ra?
+
+9. Khi signal được unblock chuyện gì xảy ra?
+
+10. do_signal() được gọi khi nào?
+
+11. get_signal() làm gì?
+
+12. handle_signal() làm gì?
+
+13. Signal frame nằm ở đâu?
+
+14. ARM64 thay đổi register thế nào khi gọi signal handler?
+
+15. sigreturn khôi phục gì?
+
+16. Tại sao signal có thể interrupt syscall?
+
+17. -ERESTARTSYS nghĩa là gì?
+
+18. SA_RESTART ảnh hưởng thế nào?
+
+19. Standard signal và realtime signal khác nhau thế nào?
+
+20. Nếu:
+
+        read()
+
+    đang sleep và signal đến,
+
+    kernel thực hiện flow nào?
+
+============================================================
+# 49. FINAL REQUIREMENT
+============================================================
+
+Ưu tiên:
+
+SOURCE CODE
+    >
+CALL GRAPH
+    >
+DATA STRUCTURE
+    >
+REGISTER STATE
+    >
+STATE MACHINE
+    >
+EXECUTION FLOW
+    >
+THEORY
+
+Không được biến bài nghiên cứu thành textbook chung chung.
+
+Tôi muốn có khả năng mở Linux kernel source và tự trace:
+
+    kill()
+    tgkill()
+    sigaction()
+    sigprocmask()
+    sigpending()
+    sigsuspend()
+
+và quan trọng nhất:
+
+    SIGNAL
+       ↓
+    PENDING
+       ↓
+    DELIVERY
+       ↓
+    USER HANDLER
+       ↓
+    SIGRETURN
+       ↓
+    RESTORE CONTEXT
+
+trên ARM64 Linux Kernel v5.4.
+
+Hãy nghiên cứu source code thực tế trước khi đưa ra kết luận.

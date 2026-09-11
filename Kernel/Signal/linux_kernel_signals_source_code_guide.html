@@ -1,0 +1,2910 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux Kernel Signals — Source-Code Handbook</title>
+<style>
+:root{
+  --bg:#f5f6f8; --bg-elev:#ffffff; --bg-sunken:#eceef2;
+  --text:#1a1d23; --text-dim:#5b6472; --text-faint:#8a92a0;
+  --border:#dde1e6; --border-strong:#c3c9d1;
+  --accent:#2f6fed; --accent-soft:#e8f0fe; --accent-text:#1849b0;
+  --code-bg:#0d1117; --code-text:#e6edf3; --code-header:#161b22; --code-border:#30363d;
+  --ok:#1a7f37; --warn:#9a6700; --danger:#cf222e;
+  --shadow:0 1px 2px rgba(20,25,35,.06), 0 1px 6px rgba(20,25,35,.05);
+  --radius:10px;
+  --tag-arm64:#2f6fed; --tag-generic:#1a7f37; --tag-x86:#9a6700;
+  --tag-signal:#8250df; --tag-scheduler:#bc4c00; --tag-error:#cf222e; --tag-vendor:#57606a;
+}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme: dark){
+    :root{}
+  }
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1216; --bg-elev:#161a20; --bg-sunken:#1b2027;
+    --text:#e6e9ef; --text-dim:#a7afbd; --text-faint:#767f8f;
+    --border:#2a3038; --border-strong:#39414c;
+    --accent:#5b9bff; --accent-soft:#132a4d; --accent-text:#8fb8ff;
+    --code-bg:#0a0d12; --code-text:#dce3ec; --code-header:#12161c; --code-border:#252b33;
+    --ok:#3fb950; --warn:#d29922; --danger:#f85149;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 2px 10px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1216; --bg-elev:#161a20; --bg-sunken:#1b2027;
+  --text:#e6e9ef; --text-dim:#a7afbd; --text-faint:#767f8f;
+  --border:#2a3038; --border-strong:#39414c;
+  --accent:#5b9bff; --accent-soft:#132a4d; --accent-text:#8fb8ff;
+  --code-bg:#0a0d12; --code-text:#dce3ec; --code-header:#12161c; --code-border:#252b33;
+  --ok:#3fb950; --warn:#d29922; --danger:#f85149;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 2px 10px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.6; font-size:15px;
+}
+code, pre, .mono, .sym, .tag, .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;}
+a{color:var(--accent-text); text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3,h4{line-height:1.3; scroll-margin-top:84px;}
+section{scroll-margin-top:84px;}
+p{margin:.6em 0;}
+.container{max-width:1400px;margin:0 auto;}
+
+/* ===== Header ===== */
+header.top{
+  position:sticky; top:0; z-index:60;
+  background:var(--bg-elev); border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow);
+}
+.top-inner{display:flex; align-items:center; gap:16px; padding:10px 18px;}
+.brand{display:flex; flex-direction:column; gap:2px; min-width:0;}
+.brand h1{font-size:18px; margin:0; white-space:nowrap;}
+.brand .sub{font-size:12.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.badges{display:flex; gap:6px; flex-wrap:wrap;}
+.badge{font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; border:1px solid var(--border-strong); color:var(--text-dim); background:var(--bg-sunken); white-space:nowrap;}
+.badge.b-accent{color:var(--accent-text); border-color:var(--accent); background:var(--accent-soft);}
+.top-actions{margin-left:auto; display:flex; align-items:center; gap:8px;}
+.icon-btn{
+  border:1px solid var(--border-strong); background:var(--bg-sunken); color:var(--text);
+  border-radius:8px; padding:7px 10px; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:6px;
+}
+.icon-btn:hover{border-color:var(--accent);}
+#searchBox{
+  width:220px; max-width:38vw; padding:7px 10px; border-radius:8px;
+  border:1px solid var(--border-strong); background:var(--bg-sunken); color:var(--text); font-size:13px;
+}
+#hamburger{display:none;}
+
+/* ===== Hero ===== */
+.hero{padding:22px 18px 6px;}
+.hero-inner{
+  background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:20px 24px 26px;
+}
+.hero-diagram{display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:16px;}
+.hnode{
+  display:inline-block; padding:8px 18px; border-radius:8px; font-weight:700; font-size:13px;
+  border:1px solid var(--border-strong); color:var(--text); background:var(--bg-sunken); text-align:center;
+  min-width:200px;
+}
+.hnode:hover{text-decoration:none; filter:brightness(1.05); border-color:var(--accent);}
+.hnode.small{min-width:150px; font-size:12px; padding:6px 12px;}
+.h-gen{border-color:var(--tag-signal); color:var(--tag-signal); background:color-mix(in srgb, var(--tag-signal) 10%, var(--bg-sunken));}
+.h-pend{border-color:var(--tag-scheduler); color:var(--tag-scheduler); background:color-mix(in srgb, var(--tag-scheduler) 10%, var(--bg-sunken));}
+.h-mask{border-color:var(--warn); color:var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--bg-sunken));}
+.h-deliver{border-color:var(--tag-arm64); color:var(--tag-arm64); background:color-mix(in srgb, var(--tag-arm64) 10%, var(--bg-sunken));}
+.h-frame{border-color:var(--tag-generic); color:var(--tag-generic); background:color-mix(in srgb, var(--tag-generic) 10%, var(--bg-sunken));}
+.h-user{border-color:var(--accent); color:var(--accent-text); background:var(--accent-soft);}
+.h-return{border-color:var(--tag-error); color:var(--tag-error); background:color-mix(in srgb, var(--tag-error) 10%, var(--bg-sunken));}
+.h-resume{border-color:var(--ok); color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, var(--bg-sunken));}
+.harrow{color:var(--text-faint); font-size:14px; line-height:1.2; padding:2px 0;}
+.hbranch{display:flex; gap:36px; justify-content:center; align-items:flex-start; margin:2px 0;}
+.hb-col{display:flex; flex-direction:column; align-items:center; gap:2px;}
+@media (max-width:600px){
+  .hnode{min-width:0; width:100%; max-width:280px;}
+  .hbranch{gap:14px;}
+}
+
+/* ===== Layout ===== */
+.layout{display:grid; grid-template-columns:270px 1fr; gap:0; align-items:start;}
+aside.sidebar{
+  position:sticky; top:53px; align-self:start;
+  height:calc(100vh - 53px); overflow-y:auto;
+  border-right:1px solid var(--border); background:var(--bg-elev);
+  padding:14px 10px 60px;
+}
+aside.sidebar::-webkit-scrollbar{width:8px;}
+aside.sidebar::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:8px;}
+.nav-group{margin-bottom:4px;}
+.nav-group-title{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); padding:12px 10px 4px;}
+nav.toc ul{list-style:none; margin:0; padding:0;}
+nav.toc li a{
+  display:block; padding:6px 10px; border-radius:7px; font-size:13.2px; color:var(--text-dim);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+nav.toc li a:hover{background:var(--bg-sunken); text-decoration:none; color:var(--text);}
+nav.toc li a.active{background:var(--accent-soft); color:var(--accent-text); font-weight:600;}
+nav.toc li a .n{color:var(--text-faint); margin-right:6px; font-variant-numeric:tabular-nums;}
+nav.toc li.hidden{display:none;}
+
+main{min-width:0; padding:26px 34px 100px; max-width:1080px;}
+main > section{margin-bottom:52px;}
+main > section:first-of-type{margin-top:0;}
+
+h2.sec-title{
+  display:flex; align-items:baseline; gap:10px; font-size:22px; margin:0 0 6px;
+  padding-bottom:10px; border-bottom:2px solid var(--border);
+}
+h2.sec-title .num{color:var(--text-faint); font-size:15px; font-weight:600;}
+h3{font-size:16.5px; margin:26px 0 8px;}
+h4{font-size:14.5px; margin:18px 0 6px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.03em;}
+.lead{font-size:15.5px; color:var(--text-dim); margin-top:2px;}
+
+/* ===== Cards / Tables ===== */
+.card{
+  background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px 18px; margin:14px 0; box-shadow:var(--shadow);
+}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr;}}
+table{width:100%; border-collapse:collapse; font-size:13.5px; margin:12px 0;}
+th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;}
+th{background:var(--bg-sunken); font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-dim);}
+tr:hover td{background:var(--bg-sunken);}
+.table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius);}
+.table-wrap table{margin:0; border:none;}
+.table-wrap th:first-child, .table-wrap td:first-child{padding-left:14px;}
+
+/* ===== Tags ===== */
+.tag{display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; border:1px solid var(--border-strong); white-space:nowrap;}
+.tag-arm64{color:var(--tag-arm64); border-color:var(--tag-arm64); background:color-mix(in srgb, var(--tag-arm64) 12%, transparent);}
+.tag-generic{color:var(--tag-generic); border-color:var(--tag-generic); background:color-mix(in srgb, var(--tag-generic) 12%, transparent);}
+.tag-x86{color:var(--tag-x86); border-color:var(--tag-x86); background:color-mix(in srgb, var(--tag-x86) 12%, transparent);}
+.tag-signal{color:var(--tag-signal); border-color:var(--tag-signal); background:color-mix(in srgb, var(--tag-signal) 12%, transparent);}
+.tag-scheduler{color:var(--tag-scheduler); border-color:var(--tag-scheduler); background:color-mix(in srgb, var(--tag-scheduler) 12%, transparent);}
+.tag-error{color:var(--tag-error); border-color:var(--tag-error); background:color-mix(in srgb, var(--tag-error) 12%, transparent);}
+.tag-vendor{color:var(--tag-vendor); border-color:var(--tag-vendor); border-style:dashed; background:color-mix(in srgb, var(--tag-vendor) 10%, transparent);}
+
+/* ===== Callouts ===== */
+.callout{border-radius:var(--radius); padding:12px 16px; margin:14px 0; border:1px solid var(--border); border-left-width:4px; font-size:14px;}
+.callout.info{border-left-color:var(--accent); background:var(--accent-soft);}
+.callout.warn{border-left-color:var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--bg-elev));}
+.callout.danger{border-left-color:var(--danger); background:color-mix(in srgb, var(--danger) 8%, var(--bg-elev));}
+.callout.ok{border-left-color:var(--ok); background:color-mix(in srgb, var(--ok) 8%, var(--bg-elev));}
+.callout b{display:block; margin-bottom:4px;}
+
+/* ===== Code blocks ===== */
+.code-block{border-radius:var(--radius); overflow:hidden; margin:14px 0; border:1px solid var(--code-border); box-shadow:var(--shadow);}
+.code-head{
+  display:flex; align-items:center; gap:10px; background:var(--code-header); color:var(--code-text);
+  padding:8px 12px; font-size:12.5px; border-bottom:1px solid var(--code-border);
+}
+.code-head .file{color:#9cdcfe; font-weight:600;}
+.code-head .symf{color:var(--text-faint);}
+.code-head .spacer{flex:1;}
+.copy-btn{
+  background:transparent; border:1px solid var(--code-border); color:var(--code-text);
+  border-radius:6px; padding:4px 9px; font-size:11.5px; cursor:pointer;
+}
+.copy-btn:hover{border-color:var(--accent); color:var(--accent-text);}
+.code-block pre{margin:0; padding:14px 16px; overflow-x:auto; background:var(--code-bg); color:var(--code-text); font-size:12.8px; line-height:1.55;}
+.code-block code{white-space:pre;}
+.cm{color:#6a9955;} .kw{color:#c586c0;} .fn{color:#dcdcaa;} .tp{color:#4ec9b0;} .str{color:#ce9178;} .nb{color:#b5cea8;}
+
+/* ===== Diagram / ASCII flow ===== */
+.diagram{
+  background:var(--bg-sunken); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px 18px; overflow-x:auto; margin:14px 0;
+}
+.diagram pre{margin:0; font-size:12.6px; line-height:1.5; color:var(--text);}
+.flow{display:flex; flex-direction:column; align-items:stretch; gap:0; margin:14px 0;}
+.flow-step{
+  display:flex; gap:12px; align-items:flex-start; background:var(--bg-elev); border:1px solid var(--border);
+  border-radius:var(--radius); padding:12px 14px; position:relative; box-shadow:var(--shadow);
+}
+.flow-step + .flow-step{margin-top:22px;}
+.flow-step + .flow-step::before{
+  content:"↓"; position:absolute; top:-22px; left:24px; color:var(--text-faint); font-size:16px;
+}
+.flow-step .idx{
+  flex:none; width:30px; height:30px; border-radius:8px; background:var(--accent-soft); color:var(--accent-text);
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12.5px;
+}
+.flow-step .body{min-width:0;}
+.flow-step .ttl{font-weight:700; font-size:14px;}
+.flow-step .desc{color:var(--text-dim); font-size:13.3px; margin-top:2px;}
+
+/* clickable trace nodes */
+.trace{display:flex; flex-direction:column; gap:0; margin:14px 0; max-width:520px;}
+.trace a.node{
+  display:block; background:var(--bg-elev); border:1px solid var(--border-strong); border-radius:8px;
+  padding:9px 14px; font-size:13.2px; font-weight:600; color:var(--text); text-align:center; position:relative;
+}
+.trace a.node:hover{border-color:var(--accent); color:var(--accent-text); text-decoration:none; background:var(--accent-soft);}
+.trace a.node + a.node{margin-top:20px;}
+.trace a.node + a.node::before{content:"↓"; position:absolute; top:-20px; left:50%; transform:translateX(-50%); color:var(--text-faint);}
+
+/* ===== Struct cards ===== */
+.struct-card h4{margin-top:0;}
+.kv{display:grid; grid-template-columns:120px 1fr; gap:4px 12px; font-size:13.3px; margin:8px 0;}
+.kv .k{color:var(--text-faint); font-weight:600;}
+
+/* ===== Details/Checklist/Quiz ===== */
+details.qa{border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin:10px 0; background:var(--bg-elev);}
+details.qa summary{cursor:pointer; font-weight:600; font-size:13.8px;}
+details.qa .answer{margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:13.6px; color:var(--text-dim);}
+.checklist{list-style:none; padding:0; margin:10px 0;}
+.checklist li{padding:6px 0 6px 28px; position:relative; font-size:13.8px;}
+.checklist li::before{content:"☐"; position:absolute; left:0; color:var(--text-faint); font-size:15px;}
+.misconception{border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin:14px 0;}
+.misconception .wrong{color:var(--danger); font-weight:700;}
+.misconception .correct{color:var(--ok); font-weight:700; margin-top:8px;}
+.misconception .why{margin-top:6px; font-size:13.5px; color:var(--text-dim);}
+.misconception .src{margin-top:6px; font-size:12px; color:var(--text-faint);}
+
+/* ===== back to top ===== */
+#backTop{
+  position:fixed; right:20px; bottom:20px; z-index:70; display:none;
+  background:var(--accent); color:#fff; border:none; border-radius:50%; width:42px; height:42px;
+  font-size:18px; cursor:pointer; box-shadow:var(--shadow);
+}
+#backTop.show{display:block;}
+
+/* ===== mobile ===== */
+.sidebar-overlay{display:none;}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;}
+  aside.sidebar{
+    position:fixed; top:0; left:0; height:100vh; width:280px; z-index:90;
+    transform:translateX(-102%); transition:transform .2s ease; padding-top:64px;
+  }
+  aside.sidebar.open{transform:translateX(0);}
+  #hamburger{display:flex;}
+  main{padding:20px 16px 100px;}
+  #searchBox{width:120px;}
+  .sidebar-overlay{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:80;
+  }
+  .sidebar-overlay.show{display:block;}
+  .brand .sub{display:none;}
+}
+::selection{background:var(--accent); color:#fff;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <button id="hamburger" class="icon-btn" aria-label="Toggle menu">☰</button>
+    <div class="brand">
+      <h1>Linux Kernel Signals</h1>
+      <div class="sub">Signal Generation → Pending → Delivery → Handler → Sigreturn</div>
+    </div>
+    <div class="badges">
+      <span class="badge b-accent" id="verBadge">Linux v5.10.241</span>
+      <span class="badge">ARM64</span>
+      <span class="badge">Source-Code Driven</span>
+    </div>
+    <div class="top-actions">
+      <input id="searchBox" type="search" placeholder="Search functions, files…">
+      <button id="themeToggle" class="icon-btn" aria-label="Toggle theme">🌓</button>
+    </div>
+  </div>
+</header>
+
+<section class="hero container">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <h2 style="margin:0 0 4px; font-size:19px;">Từ signal đến resume — một sơ đồ, đúng theo source</h2>
+      <p style="margin:0; color:var(--text-dim); font-size:13.5px;">Mỗi bước dưới đây là một anchor — bấm để nhảy thẳng tới phần giải thích + source code tương ứng.</p>
+    </div>
+    <div class="hero-diagram">
+      <a href="#generation" class="hnode h-gen">SIGNAL GENERATION</a>
+      <div class="harrow">↓</div>
+      <a href="#pending" class="hnode h-pend">PENDING</a>
+      <div class="harrow">↓</div>
+      <a href="#mask" class="hnode h-mask">BLOCKED / MASKED?</a>
+      <div class="hbranch">
+        <div class="hb-col">
+          <div class="harrow">↙ YES</div>
+          <a href="#pending" class="hnode h-pend small">PENDING (chờ)</a>
+        </div>
+        <div class="hb-col">
+          <div class="harrow">↘ NO</div>
+          <a href="#delivery" class="hnode h-deliver small">DELIVERY</a>
+        </div>
+      </div>
+      <div class="harrow">↓</div>
+      <a href="#do-signal" class="hnode h-deliver">do_signal()</a>
+      <div class="harrow">↓</div>
+      <a href="#get-signal" class="hnode h-deliver">get_signal()</a>
+      <div class="harrow">↓</div>
+      <a href="#handle-signal" class="hnode h-deliver">handle_signal()</a>
+      <div class="harrow">↓</div>
+      <a href="#arm64-frame" class="hnode h-frame">setup_frame()</a>
+      <div class="harrow">↓</div>
+      <a href="#signal-handler" class="hnode h-user">USER HANDLER (EL0)</a>
+      <div class="harrow">↓</div>
+      <a href="#sigreturn" class="hnode h-return">sigreturn</a>
+      <div class="harrow">↓</div>
+      <a href="#sigreturn" class="hnode h-return">RESTORE CONTEXT</a>
+      <div class="harrow">↓</div>
+      <a href="#interrupted-syscall" class="hnode h-resume">RESUME / RESTART</a>
+    </div>
+  </div>
+</section>
+
+<div class="sidebar-overlay" id="overlay"></div>
+
+<div class="layout container">
+<aside class="sidebar" id="sidebar">
+<nav class="toc" id="tocNav">
+
+<div class="nav-group">
+<div class="nav-group-title">Foundations</div>
+<ul>
+<li><a href="#overview"><span class="n">01</span>Overview</a></li>
+<li><a href="#mapping"><span class="n">02</span>Chapter 11 → Modern Linux</a></li>
+<li><a href="#architecture"><span class="n">03</span>Signal Architecture</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Generation &amp; State</div>
+<ul>
+<li><a href="#generation"><span class="n">04</span>Signal Generation</a></li>
+<li><a href="#pending"><span class="n">05</span>Pending Signals</a></li>
+<li><a href="#mask"><span class="n">06</span>Signal Mask</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Data Structures</div>
+<ul>
+<li><a href="#struct-signal-struct"><span class="n">07</span>signal_struct</a></li>
+<li><a href="#struct-sighand"><span class="n">08</span>sighand_struct</a></li>
+<li><a href="#struct-sigpending"><span class="n">09</span>sigpending</a></li>
+<li><a href="#struct-sigqueue"><span class="n">10</span>sigqueue</a></li>
+<li><a href="#struct-ksigaction"><span class="n">11</span>k_sigaction</a></li>
+<li><a href="#struct-siginfo"><span class="n">12</span>siginfo</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Syscalls</div>
+<ul>
+<li><a href="#sys-kill"><span class="n">13</span>kill()</a></li>
+<li><a href="#sys-tkill"><span class="n">14</span>tkill()</a></li>
+<li><a href="#sys-tgkill"><span class="n">15</span>tgkill()</a></li>
+<li><a href="#sys-sigaction"><span class="n">16</span>sigaction()</a></li>
+<li><a href="#sys-sigprocmask"><span class="n">17</span>sigprocmask()</a></li>
+<li><a href="#sys-sigpending"><span class="n">18</span>sigpending()</a></li>
+<li><a href="#sys-sigsuspend"><span class="n">19</span>sigsuspend()</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Delivery Pipeline</div>
+<ul>
+<li><a href="#delivery"><span class="n">20</span>Signal Delivery</a></li>
+<li><a href="#do-signal"><span class="n">21</span>do_signal()</a></li>
+<li><a href="#get-signal"><span class="n">22</span>get_signal()</a></li>
+<li><a href="#handle-signal"><span class="n">23</span>handle_signal()</a></li>
+<li><a href="#default-actions"><span class="n">24</span>Default Actions</a></li>
+<li><a href="#signal-handler"><span class="n">25</span>Signal Handler</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">ARM64 Frame &amp; Return</div>
+<ul>
+<li><a href="#signal-frame"><span class="n">26</span>Signal Frame</a></li>
+<li><a href="#arm64-frame"><span class="n">27</span>ARM64 Signal Frame</a></li>
+<li><a href="#arm64-registers"><span class="n">28</span>ARM64 Registers</a></li>
+<li><a href="#trampoline"><span class="n">29</span>Signal Trampoline</a></li>
+<li><a href="#sigreturn"><span class="n">30</span>sigreturn()</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Syscall Interaction</div>
+<ul>
+<li><a href="#interrupted-syscall"><span class="n">31</span>Interrupted Syscall</a></li>
+<li><a href="#sa-restart"><span class="n">32</span>SA_RESTART</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Semantics</div>
+<ul>
+<li><a href="#std-vs-rt"><span class="n">33</span>Standard vs Realtime</a></li>
+<li><a href="#process-vs-thread"><span class="n">34</span>Process vs Thread</a></li>
+<li><a href="#locking"><span class="n">35</span>Locking</a></li>
+<li><a href="#refcounting"><span class="n">36</span>Reference Counting</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Case Studies</div>
+<ul>
+<li><a href="#complete-trace"><span class="n">37</span>Complete Signal Trace</a></li>
+<li><a href="#syscall-trace"><span class="n">38</span>Signal + Syscall Trace</a></li>
+<li><a href="#book-vs-modern"><span class="n">39</span>Book vs Modern Kernel</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Extras</div>
+<ul>
+<li><a href="#misconceptions">Common Misconceptions</a></li>
+<li><a href="#how-to-read">How to Read the Source</a></li>
+<li><a href="#mental-model">Final Mental Model</a></li>
+</ul>
+</div>
+
+<div class="nav-group">
+<div class="nav-group-title">Reference</div>
+<ul>
+<li><a href="#function-index"><span class="n">40</span>Source Code Index</a></li>
+<li><a href="#roadmap"><span class="n">41</span>Learning Roadmap</a></li>
+<li><a href="#self-test"><span class="n">42</span>Self Test</a></li>
+</ul>
+</div>
+
+</nav>
+</aside>
+
+<main id="mainContent">
+
+<section id="overview">
+<h2 class="sec-title"><span class="num">01</span>Overview</h2>
+
+<div class="callout warn">
+<b>⚠ Nguồn thực tế khác với đề bài</b>
+Đề bài yêu cầu ưu tiên Linux v5.4.x. Source tree thật sự có trên máy (<code>Kernel/K-S800/Src</code>) là
+<b>Linux v5.10.241</b> (xem <code>Makefile</code>: <code>VERSION=5 PATCHLEVEL=10 SUBLEVEL=241</code>), ARM64, một BSP
+(board support package) có vendor patch riêng. Theo đúng nguyên tắc "dùng chính xác version được cung cấp",
+toàn bộ tài liệu này trace trên <b>v5.10.241</b>, không phải v5.4. Khác biệt so với v5.4 được ghi chú ở
+<a href="#book-vs-modern">§39 Book vs Modern Kernel</a>. Hai vị trí có <span class="tag tag-vendor">VENDOR PATCH</span>
+(sửa đổi riêng của hãng, không có trong mainline) được đánh dấu rõ trong <a href="#sys-kill">§13</a> và
+<a href="#get-signal">§22</a>.
+</div>
+
+<h3>Signal là gì?</h3>
+<p>Dưới góc nhìn kernel, một signal <b>không phải</b> là một lời gọi hàm bất đồng bộ được kernel "bắn" thẳng vào
+handler của process đích. Nó là <b>một bit được bật trong một bitmask</b> (<code>sigset_t</code>) cộng với (tuỳ loại)
+một <code>struct sigqueue</code> chứa <code>siginfo</code> nằm trong một <i>hàng đợi</i>
+(<code>struct sigpending</code>). Việc "chạy handler" chỉ xảy ra sau đó, tại một thời điểm kernel biết chắc
+process sắp quay lại userspace (EL0) — không phải tại thời điểm signal được tạo ra.</p>
+
+<h3>Generation ≠ Delivery — khái niệm trung tâm</h3>
+<div class="grid2">
+<div class="card">
+<h4 style="color:var(--tag-signal); margin-top:0;">GENERATION (tạo signal)</h4>
+<p style="font-size:13.6px;">Chạy trong ngữ cảnh của <b>sender</b> (hoặc kernel report lỗi). Chỉ làm 3 việc:</p>
+<ol style="font-size:13.4px; padding-left:18px;">
+<li>Alloc <code>sigqueue</code>, gắn vào <code>pending</code> hoặc <code>shared_pending</code></li>
+<li>Bật bit trong <code>pending->signal</code> (sigset_t)</li>
+<li>Đặt <code>TIF_SIGPENDING</code> trên thread đích + đánh thức nó</li>
+</ol>
+<p style="font-size:13.3px; color:var(--text-faint);">Symbol: <code>__send_signal()</code> — <code>kernel/signal.c:1077</code></p>
+</div>
+<div class="card">
+<h4 style="color:var(--tag-arm64); margin-top:0;">DELIVERY (giao signal)</h4>
+<p style="font-size:13.6px;">Chạy trong ngữ cảnh của <b>chính process nhận</b>, chỉ tại điểm nó sắp rời kernel
+để về EL0 (<code>ret_to_user</code>). Kernel kiểm <code>TIF_SIGPENDING</code>, gọi <code>do_signal()</code> →
+<code>get_signal()</code> chọn 1 signal → dựng signal frame trên user stack → chuyển <code>pt_regs.pc</code>
+sang handler.</p>
+<p style="font-size:13.3px; color:var(--text-faint);">Symbol: <code>do_notify_resume()</code> — <code>arch/arm64/kernel/signal.c:917</code></p>
+</div>
+</div>
+
+<div class="callout info">
+<b>Hệ quả quan trọng</b>
+Giữa lúc generate và lúc deliver, process nhận có thể đã chạy hàng nghìn lệnh khác (nếu nó đang RUNNING trên
+CPU khác) hoặc đang ngủ (nếu nó bị đánh thức bởi chính signal đó). <code>kill()</code> trả về ngay sau bước
+generation — <b>không</b> đợi handler chạy xong, thậm chí không đợi handler bắt đầu chạy.
+</div>
+
+<h3>Legend — Source Tags</h3>
+<p style="font-size:13.4px;">
+<span class="tag tag-arm64">🔵 ARM64</span>
+<span class="tag tag-generic">🟢 GENERIC</span>
+<span class="tag tag-x86">🟡 X86</span>
+<span class="tag tag-signal">🟣 SIGNAL</span>
+<span class="tag tag-scheduler">🟠 SCHEDULER</span>
+<span class="tag tag-error">🔴 ERROR</span>
+<span class="tag tag-vendor">⚪ VENDOR PATCH</span>
+</p>
+<p class="lead" style="font-size:13px;">GENERIC = <code>kernel/signal.c</code>, dùng chung mọi kiến trúc. ARM64 = <code>arch/arm64/kernel/signal.c</code> và headers arch-specific. VENDOR PATCH = code được BSP thêm vào, không tồn tại trong mainline Linux — được giữ lại trong tài liệu để trung thực với source thật, nhưng không phải kiến thức kernel tổng quát.</p>
+</section>
+
+<section id="mapping">
+<h2 class="sec-title"><span class="num">02</span>Chapter 11 → Modern Linux Mapping</h2>
+<p class="lead">Đối chiếu khái niệm sách (thường mô tả Linux 2.6/x86) với symbol thật trong v5.10.241 ARM64.</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Chapter Concept</th><th>Linux v5.10 Concept</th><th>Symbol</th><th>Source File</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Signal</td><td>Bit trong <code>sigset_t</code> + optional <code>sigqueue</code></td><td><code>sigaddset()</code></td><td>include/linux/signal.h</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>Signal Generation</td><td>Đặt bit pending + queue siginfo</td><td><code>__send_signal()</code></td><td>kernel/signal.c:1077</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>Signal Delivery</td><td>Kiểm tra tại return-to-user, build frame</td><td><code>do_signal()</code></td><td>arch/arm64/kernel/signal.c:846</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT</span></td></tr>
+<tr><td>Pending Signal</td><td>2 hàng đợi: private + shared</td><td><code>task_struct.pending</code>, <code>signal_struct.shared_pending</code></td><td>include/linux/sched.h:981, sched/signal.h:94</td><td><span class="tag tag-generic">CHANGED (structure tách rõ hơn sách)</span></td></tr>
+<tr><td>Blocked Signal</td><td><code>sigset_t blocked</code> trên từng thread</td><td><code>task_struct.blocked</code></td><td>include/linux/sched.h:977</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>Signal Mask</td><td>Bitmask 64-bit (hoặc nhiều word) — bit N-1 = signal N</td><td><code>sigset_t</code></td><td>include/uapi/asm-generic/signal.h</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>Signal Descriptor</td><td>Tách thành 2 struct riêng</td><td><code>struct signal_struct</code></td><td>include/linux/sched/signal.h:82</td><td><span class="tag tag-generic">CHANGED</span></td></tr>
+<tr><td>Signal Handler Descriptor</td><td>Bảng action dùng chung cho cả thread group</td><td><code>struct sighand_struct</code></td><td>include/linux/sched/signal.h:20</td><td><span class="tag tag-generic">CHANGED (sách gộp vào signal descriptor)</span></td></tr>
+<tr><td>sigaction</td><td>Giống hệt khái niệm POSIX</td><td><code>do_sigaction()</code></td><td>kernel/signal.c:4085</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>sigqueue</td><td>Node của hàng đợi realtime/standard</td><td><code>struct sigqueue</code></td><td>include/linux/signal_types.h:20</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>signal handler (chạy ở đâu)</td><td>Chạy ở EL0 (userspace), không phải kernel</td><td><code>setup_return()</code></td><td>arch/arm64/kernel/signal.c:729</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT</span></td></tr>
+<tr><td>signal frame</td><td><code>struct rt_sigframe</code> trên user stack</td><td><code>setup_rt_frame()</code></td><td>arch/arm64/kernel/signal.c:766</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT (x86 dùng sigcontext khác hẳn)</span></td></tr>
+<tr><td>signal return</td><td><code>rt_sigreturn</code> syscall duy nhất, không có "sigreturn cũ" trên ARM64</td><td><code>SYSCALL_DEFINE0(rt_sigreturn)</code></td><td>arch/arm64/kernel/signal.c:530</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT</span></td></tr>
+<tr><td>signal restart</td><td><code>-ERESTARTSYS</code>/<code>NOHAND</code>/<code>NOINTR</code>/<code>RESTARTBLOCK</code></td><td><code>do_signal()</code> switch</td><td>arch/arm64/kernel/signal.c:870</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>default action</td><td>Bitmask <code>SIG_KERNEL_*_MASK</code></td><td><code>sig_kernel_ignore()</code>, v.v.</td><td>include/linux/signal.h:416-445</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>ignore</td><td><code>SIG_IGN</code>, bỏ qua trong <code>get_signal()</code></td><td><code>get_signal()</code></td><td>kernel/signal.c:2677</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>terminate</td><td><code>do_group_exit()</code></td><td><code>get_signal()</code> nhánh fatal</td><td>kernel/signal.c:2865</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>dump (core dump)</td><td><code>do_coredump()</code></td><td><code>get_signal()</code></td><td>kernel/signal.c:2765</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>stop</td><td><code>do_signal_stop()</code></td><td><code>get_signal()</code></td><td>kernel/signal.c:2304</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>continue</td><td>SIGCONT xoá stop signals khỏi mọi queue</td><td><code>prepare_signal()</code></td><td>kernel/signal.c:906</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>realtime signal</td><td>SIGRTMIN..SIGRTMAX, mỗi instance 1 <code>sigqueue</code></td><td><code>__send_signal()</code></td><td>kernel/signal.c:1117</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>process-directed signal</td><td>Gửi vào <code>shared_pending</code>, type=PIDTYPE_TGID</td><td><code>group_send_sig_info()</code></td><td>kernel/signal.c:1410</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>thread-directed signal</td><td>Gửi vào <code>t->pending</code> riêng, type=PIDTYPE_PID</td><td><code>do_send_sig_info()</code></td><td>kernel/signal.c:1290</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>process group</td><td><code>__kill_pgrp_info()</code>, PIDTYPE_PGID</td><td><code>kill(-pgid, sig)</code></td><td>kernel/signal.c:1430</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>thread group</td><td>= "process" theo nghĩa POSIX (CLONE_THREAD)</td><td><code>signal_struct</code> dùng chung</td><td>include/linux/sched/signal.h:82</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="architecture">
+<h2 class="sec-title"><span class="num">03</span>Signal Architecture — Big Picture</h2>
+
+<div class="diagram">
+<pre>
+              SIGNAL GENERATION
+                     │
+       ┌─────────────┴─────────────┐
+   userspace: kill()/tkill()   kernel: force_sig*(), fault handler
+       └─────────────┬─────────────┘
+                     ▼
+        __send_signal()  [kernel/signal.c:1077]
+         • sigaddset(&pending->signal, sig)
+         • sigqueue nếu cần (realtime hoặc siginfo chi tiết)
+         • complete_signal() → signal_wake_up() → TIF_SIGPENDING
+                     │
+                     ▼
+              PENDING (task->pending  hoặc  signal->shared_pending)
+                     │
+                     ▼
+        blocked?  sigismember(&t->blocked, sig)
+                 /                \
+              YES                  NO
+               │                    │
+          vẫn PENDING       TIF_SIGPENDING làm task
+        (chờ unblock)       return-to-user CHECK cờ
+                                     │
+                                     ▼
+                     do_notify_resume() → do_signal(regs)
+                              [arch/arm64/kernel/signal.c:846/917]
+                                     │
+                                     ▼
+                              get_signal(&ksig)   [kernel/signal.c:2534]
+                                     │
+                    ┌────────────────┼─────────────────┐
+                    ▼                ▼                  ▼
+                 SIG_IGN         SIG_DFL           có sa_handler
+                 (loop lại)    (default action)     (return true)
+                                     │                  │
+                          terminate/dump/stop      handle_signal()
+                                                  [arch/arm64/…:808]
+                                                         │
+                                                  setup_rt_frame()
+                                                  [arch/arm64/…:766]
+                                                         │
+                                                    USER HANDLER (EL0)
+                                                         │
+                                                     sigreturn
+                                                         │
+                                                  restore_sigframe()
+                                                         │
+                                                  RESUME / RESTART SYSCALL
+</pre>
+</div>
+<div class="callout ok"><b>Đã đối chiếu với source thật</b> — sơ đồ trên KHÔNG phải suy đoán, mỗi mũi tên đều map tới function/dòng cụ thể đã đọc từ <code>kernel/signal.c</code> và <code>arch/arm64/kernel/signal.c</code> trong source tree tại <code>Kernel/K-S800/Src</code>.</div>
+
+<h3>Data structure map (task_struct → signal subsystem)</h3>
+<div class="diagram">
+<pre>
+                         task_struct                         [include/linux/sched.h:643]
+                              │
+        ┌───────────┬─────────┼───────────┬─────────────┐
+        ▼           ▼         ▼           ▼             ▼
+    ->signal    ->sighand  ->blocked   ->pending    ->real_blocked / saved_sigmask
+        │           │      (sigset_t)      │           (sigset_t — temp masks)
+        ▼           ▼                      ▼
+ signal_struct  sighand_struct       struct sigpending
+  [sched/signal   [sched/signal        [signal_types.h:30]
+   .h:82]          .h:20]               ├── signal (sigset_t) ← bitmask
+        │           │                   └── list  (sigqueue*) ← chi tiết
+        ▼           ▼
+  shared_pending  action[64]
+  (sigpending)   (k_sigaction[])
+        │
+        ▼
+  cùng cấu trúc sigpending như trên (signal + list)
+</pre>
+</div>
+<p style="font-size:13.3px;">Chìa khoá: <code>sighand_struct</code> được share giữa các thread bởi <code>CLONE_SIGHAND</code> (bảng disposition &amp; lock chung); <code>signal_struct</code> được share bởi <code>CLONE_THREAD</code> (định nghĩa "cùng một process" theo POSIX). Chi tiết từng struct ở <a href="#struct-signal-struct">§07-§12</a>.</p>
+</section>
+
+<section id="generation">
+<h2 class="sec-title"><span class="num">04</span>Signal Generation</h2>
+<p class="lead">Trace từ syscall <code>kill()</code> xuống tận chỗ bit pending được bật.</p>
+
+<div class="trace">
+<a class="node" href="#sys-kill">sys_kill(pid, sig)</a>
+<a class="node" href="#sys-kill">kill_something_info() / kill_pid_info()</a>
+<a class="node" href="#generation">group_send_sig_info() → send_signal()</a>
+<a class="node" href="#generation">__send_signal()  (giữ siglock)</a>
+<a class="node" href="#pending">sigaddset(&pending->signal, sig)  +  sigqueue nếu cần</a>
+<a class="node" href="#generation">complete_signal()</a>
+<a class="node" href="#delivery">signal_wake_up() → set TIF_SIGPENDING + wake_up_state()</a>
+</div>
+
+<h3>__send_signal() — lõi của signal generation</h3>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">__send_signal() · line 1077</span><span class="tag tag-signal" style="margin-left:6px;">SIGNAL</span><span class="spacer"></span><button class="copy-btn" data-copy="cb1">COPY</button></div>
+<pre id="cb1"><code>static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struct *t,
+			enum pid_type type, bool force)
+{
+	struct sigpending *pending;
+	struct sigqueue *q;
+	int override_rlimit;
+	int ret = 0, result;
+
+	assert_spin_locked(&t->sighand->siglock);
+
+	result = TRACE_SIGNAL_IGNORED;
+	if (!prepare_signal(sig, t, force))
+		goto ret;
+
+	pending = (type != PIDTYPE_PID) ? &t->signal->shared_pending : &t->pending;
+	/*
+	 * Short-circuit ignored signals and support queuing
+	 * exactly one non-rt signal, so that we can get more
+	 * detailed information about the cause of the signal.
+	 */
+	result = TRACE_SIGNAL_ALREADY_PENDING;
+	if (legacy_queue(pending, sig))
+		goto ret;
+	...
+	q = __sigqueue_alloc(sig, t, GFP_ATOMIC, override_rlimit);
+	if (q) {
+		list_add_tail(&q->list, &pending->list);
+		/* ... điền q-&gt;info tuỳ SEND_SIG_NOINFO / SEND_SIG_PRIV / info thật ... */
+	}
+out_set:
+	signalfd_notify(t, sig);
+	sigaddset(&pending->signal, sig);      /* ← BẬT BIT trong bitmask pending */
+	complete_signal(sig, t, type);         /* ← tìm thread để đánh thức */
+ret:
+	trace_signal_generate(sig, info, t, type != PIDTYPE_PID, result);
+	return ret;
+}</code></pre>
+</div>
+
+<div class="grid2">
+<div class="card">
+<h4 style="margin-top:0;">pending queue nào?</h4>
+<p style="font-size:13.4px;"><code>type != PIDTYPE_PID</code> (tức gửi cho cả process, ví dụ <code>kill()</code>) →
+<code>t->signal->shared_pending</code>.<br>
+<code>type == PIDTYPE_PID</code> (thread cụ thể, ví dụ <code>tgkill()</code>) →
+<code>t->pending</code> riêng của thread.</p>
+</div>
+<div class="card">
+<h4 style="margin-top:0;">legacy_queue() — vì sao signal chuẩn không "chồng chất"</h4>
+<div class="code-block" style="margin:8px 0;"><pre style="padding:10px;"><code>static inline bool legacy_queue(struct sigpending *signals, int sig)
+{
+	return (sig &lt; SIGRTMIN) && sigismember(&signals-&gt;signal, sig);
+}</code></pre></div>
+<p style="font-size:13.2px;">Nếu signal &lt; SIGRTMIN (không phải realtime) VÀ bit đã bật sẵn → bỏ luôn, không alloc thêm <code>sigqueue</code>. Đây chính là cơ chế merge của standard signal (<a href="#std-vs-rt">§33</a>).</p>
+</div>
+</div>
+
+<h3>complete_signal() — chọn thread để đánh thức</h3>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">complete_signal() · line 996</span><span class="spacer"></span><button class="copy-btn" data-copy="cb2">COPY</button></div>
+<pre id="cb2"><code>static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
+{
+	struct signal_struct *signal = p->signal;
+	struct task_struct *t;
+
+	if (wants_signal(sig, p))
+		t = p;                                   /* main thread ưu tiên nhận trước */
+	else if ((type == PIDTYPE_PID) || thread_group_empty(p))
+		return;                                   /* chỉ 1 thread, tự dequeue lúc chạy lại */
+	else {
+		t = signal->curr_target;                 /* round-robin qua các thread */
+		while (!wants_signal(sig, t)) {
+			t = next_thread(t);
+			if (t == signal->curr_target)
+				return;                      /* không ai nhận, để trong queue chờ */
+		}
+		signal->curr_target = t;
+	}
+
+	if (sig_fatal(p, sig) && !(signal->flags & SIGNAL_GROUP_EXIT) &&
+	    !sigismember(&t->real_blocked, sig) && (sig == SIGKILL || !p->ptrace)) {
+		if (!sig_kernel_coredump(sig)) {
+			signal->flags = SIGNAL_GROUP_EXIT;   /* fatal → hạ cả nhóm thread ngay */
+			signal->group_exit_code = sig;
+			t = p;
+			do {
+				sigaddset(&t->pending.signal, SIGKILL);
+				signal_wake_up(t, 1);
+			} while_each_thread(p, t);
+			return;
+		}
+	}
+	signal_wake_up(t, sig == SIGKILL);      /* ← đặt TIF_SIGPENDING + wake_up_state() */
+}</code></pre>
+</div>
+<p style="font-size:13.4px;"><code>wants_signal()</code> (line 979) trả <code>false</code> nếu thread đang bị block signal đó, đang <code>PF_EXITING</code>, hoặc đang stopped/traced — nghĩa là kernel <b>chọn một thread cụ thể</b> để "giao việc dequeue", chứ không chạy handler ngay tại đây.</p>
+
+<div class="callout danger">
+<b>Nhầm lẫn thường gặp</b>
+<code>complete_signal()</code>/<code>signal_wake_up()</code> KHÔNG chạy signal handler. Chúng chỉ set cờ
+<code>TIF_SIGPENDING</code> và gọi <code>wake_up_state()</code> để đưa task về runnable. Handler chỉ chạy khi
+chính task đó tự trở về userspace và đi qua <code>do_notify_resume()</code> — xem <a href="#delivery">§20</a>.
+</div>
+</section>
+
+<section id="pending">
+<h2 class="sec-title"><span class="num">05</span>Pending Signals</h2>
+<p class="lead">Có <b>2 hàng đợi pending</b> song song cho mỗi process đa luồng — đây là điểm hay bị hiểu sai nhất.</p>
+
+<div class="diagram">
+<pre>
+   task_struct  (từng thread)                signal_struct (chung cả process)
+        │                                            │
+        └── pending  (struct sigpending)             └── shared_pending  (struct sigpending)
+              ├── signal  (sigset_t)  ← bitmask             ├── signal  (sigset_t)
+              └── list    (sigqueue*) ← chi tiết siginfo     └── list    (sigqueue*)
+              "PRIVATE / thread-directed"                  "SHARED / process-directed"
+              nguồn: tgkill(), page fault đồng bộ           nguồn: kill(pid,...), kill(-pgid,...)
+              (SIGSEGV/SIGFPE/SIGILL/SIGBUS/SIGTRAP)        raise() trong tiến trình 1 luồng
+</pre>
+</div>
+
+<table>
+<thead><tr><th></th><th>task_struct.pending (private)</th><th>signal_struct.shared_pending</th></tr></thead>
+<tbody>
+<tr><td>Ai dequeue trước?</td><td colspan="2"><code>dequeue_signal()</code> (kernel/signal.c:635) luôn thử <code>tsk->pending</code> <b>TRƯỚC</b>, rồi mới <code>tsk->signal->shared_pending</code>.</td></tr>
+<tr><td>Ví dụ nguồn gốc</td><td><code>tgkill()</code>, fault đồng bộ (SIGSEGV do truy cập sai)</td><td><code>kill(pid,sig)</code>, <code>kill(-pgid,sig)</code>, <code>raise()</code></td></tr>
+<tr><td>Ai có thể nhận</td><td>Chỉ chính thread đó</td><td>Bất kỳ thread nào trong group thoả <code>wants_signal()</code></td></tr>
+</tbody>
+</table>
+
+<h3>dequeue_signal() — nơi thực sự lấy signal ra khỏi queue</h3>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">dequeue_signal() · line 635</span><span class="spacer"></span><button class="copy-btn" data-copy="cb3">COPY</button></div>
+<pre id="cb3"><code>int dequeue_signal(struct task_struct *tsk, sigset_t *mask, kernel_siginfo_t *info)
+{
+	bool resched_timer = false;
+	int signr;
+
+	/* We only dequeue private signals from ourselves ... */
+	signr = __dequeue_signal(&tsk->pending, mask, info, &resched_timer);
+	if (!signr) {
+		signr = __dequeue_signal(&tsk->signal->shared_pending,
+					 mask, info, &resched_timer);
+		/* itimer SIGALRM: rearm ở đây, không phải lúc gửi */
+	}
+	recalc_sigpending();
+	if (!signr)
+		return 0;
+	...
+	return signr;
+}</code></pre>
+</div>
+
+<h3>next_signal() — thứ tự ưu tiên khi chọn signal</h3>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">next_signal() · line 214</span><span class="spacer"></span><button class="copy-btn" data-copy="cb4">COPY</button></div>
+<pre id="cb4"><code>#define SYNCHRONOUS_MASK \
+	(sigmask(SIGSEGV) | sigmask(SIGBUS) | sigmask(SIGILL) | \
+	 sigmask(SIGTRAP) | sigmask(SIGFPE) | sigmask(SIGSYS))
+
+int next_signal(struct sigpending *pending, sigset_t *mask)
+{
+	...
+	x = *s &~ *m;                 /* word đầu: các signal 1..32 chưa bị block */
+	if (x) {
+		if (x & SYNCHRONOUS_MASK)
+			x &= SYNCHRONOUS_MASK;     /* ƯU TIÊN fault signal đồng bộ trước */
+		sig = ffz(~x) + 1;                /* bit thấp nhất còn lại → số hiệu nhỏ nhất */
+		return sig;
+	}
+	...  /* các word sau: realtime signals, SIGRTMIN trước SIGRTMAX */
+}</code></pre>
+</div>
+<p style="font-size:13.4px;">Kết luận về thứ tự chọn: (1) trong <code>get_signal()</code>, <code>dequeue_synchronous_signal()</code>
+được gọi trước tiên — synchronous fault signal (SIGSEGV do lệnh vừa fault) luôn được ưu tiên tuyệt đối để
+<code>pc</code> trong signal frame đúng là lệnh gây lỗi; (2) trong mỗi lời gọi <code>next_signal()</code>,
+signal số nhỏ hơn được ưu tiên trước (ffz tìm bit 0 thấp nhất của phần đã đảo).</p>
+
+<h3>recalc_sigpending() — TIF_SIGPENDING được tính lại thế nào</h3>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">recalc_sigpending_tsk() · line 160</span><span class="spacer"></span><button class="copy-btn" data-copy="cb5">COPY</button></div>
+<pre id="cb5"><code>static bool recalc_sigpending_tsk(struct task_struct *t)
+{
+	if ((t->jobctl & (JOBCTL_PENDING_MASK | JOBCTL_TRAP_FREEZE)) ||
+	    PENDING(&t->pending, &t->blocked) ||
+	    PENDING(&t->signal->shared_pending, &t->blocked) ||
+	    cgroup_task_frozen(t)) {
+		set_tsk_thread_flag(t, TIF_SIGPENDING);
+		return true;
+	}
+	return false;   /* không tự clear ở đây — chỉ caller biết mới được clear */
+}
+#define PENDING(p,b) has_pending_signals(&(p)->signal, (b))</code></pre>
+</div>
+<p style="font-size:13.4px;"><code>PENDING(p,b)</code> = "<code>p->signal &amp;~ b</code> có bit nào khác 0 không" — tức <b>có ít nhất một signal
+đang pending mà KHÔNG bị block</b>. Đây là công thức chính xác nối liền §05 (pending) và §06 (mask).</p>
+</section>
+
+<section id="mask">
+<h2 class="sec-title"><span class="num">06</span>Signal Mask</h2>
+<p class="lead"><code>sigset_t blocked</code> trên từng <code>task_struct</code> — bitmask riêng cho từng thread (không share giữa các thread trong cùng group).</p>
+
+<div class="diagram">
+<pre>
+sigset_t.sig[]  (mảng unsigned long, _NSIG_WORDS phần tử — 64-bit arch thường là 1 word cho 64 signal đầu)
+
+  bit index:   0    1    2    3    4    5   ...   30   31
+  signal số:   1    2    3    4    5    6   ...   31   32
+               ↑ SIGHUP  ↑ SIGINT   ↑ SIGQUIT ...            (giá trị cụ thể tuỳ arch, xem asm-generic/signal.h)
+
+Quy tắc chung xác nhận từ source (kernel/signal.c, include/linux/signal.h):
+    sigmask(sig)   = 1UL << ((sig) - 1)      →  signal N chiếm BIT (N-1)
+    sigismember(set, sig)  kiểm set->sig[word] &amp; sigmask(sig)
+</pre>
+</div>
+
+<h3>3 mask liên quan trên task_struct</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Field</th><th>File:line</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>blocked</code></td><td>include/linux/sched.h:977</td><td>Mask hiện hành — signal nào bị chặn không cho dequeue. Sửa qua <code>sigprocmask()</code>/<code>rt_sigprocmask</code>.</td></tr>
+<tr><td><code>real_blocked</code></td><td>include/linux/sched.h:978</td><td>Dùng tạm trong <code>sigsuspend()</code>/<code>ppoll</code> kiểu syscall — giữ mask cũ trong khi <code>blocked</code> bị thay bởi mask mới truyền vào, để phân biệt "chặn thật" và "chặn tạm cho syscall này".</td></tr>
+<tr><td><code>saved_sigmask</code></td><td>include/linux/sched.h:980</td><td>Nơi <code>sigsuspend()</code> cất mask cũ trước khi ghi mask mới; khôi phục lại khi <code>TIF_RESTORE_SIGMASK</code> được xử lý ở <code>restore_saved_sigmask()</code>.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout info"><b>Block ≠ Discard</b> — Signal bị block <b>không biến mất</b>. Bit trong <code>pending->signal</code> vẫn được set (xem <code>__send_signal()</code> ở §04 — không hề kiểm tra <code>blocked</code> khi set bit); nó chỉ không được <code>next_signal()</code> chọn ra (vì <code>next_signal(pending, mask)</code> loại trừ <code>mask</code>=blocked). Ngoại lệ: signal chuẩn (&lt;SIGRTMIN) bị gửi nhiều lần trong lúc bị block chỉ giữ lại 1 bản duy nhất (do <code>legacy_queue()</code>), nhưng bit đó không "mất" — nó dequeue được ngay khi unblock.</div>
+</section>
+
+<section id="struct-signal-struct">
+<h2 class="sec-title"><span class="num">07</span>struct signal_struct</h2>
+<div class="card struct-card">
+<div class="kv">
+<div class="k">File</div><div>include/linux/sched/signal.h:82</div>
+<div class="k">Shared by</div><div><code>CLONE_THREAD</code> — <b>đây là định nghĩa "cùng một process"</b> trong kernel POSIX-thread model</div>
+<div class="k">Allocated by</div><div><code>copy_signal()</code> (fork/clone path)</div>
+<div class="k">Refcount</div><div><code>refcount_t sigcnt</code> — free khi về 0, trong <code>__cleanup_signal()</code></div>
+</div>
+<h4>Important fields (đã đọc trực tiếp từ source)</h4>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/sched/signal.h</span><span class="symf">struct signal_struct · line 82</span><span class="spacer"></span><button class="copy-btn" data-copy="cb6">COPY</button></div>
+<pre id="cb6"><code>struct signal_struct {
+	refcount_t		sigcnt;
+	atomic_t		live;
+	int			nr_threads;
+	struct list_head	thread_head;
+
+	wait_queue_head_t	wait_chldexit;	/* for wait4() */
+
+	/* current thread group signal load-balancing target: */
+	struct task_struct	*curr_target;
+
+	/* shared signal handling: */
+	struct sigpending	shared_pending;
+
+	/* For collecting multiprocess signals during fork */
+	struct hlist_head	multiprocess;
+
+	/* thread group exit support */
+	int			group_exit_code;
+	int			notify_count;
+	struct task_struct	*group_exit_task;
+
+	/* thread group stop support, overloads group_exit_code too */
+	int			group_stop_count;
+	unsigned int		flags; /* see SIGNAL_* flags below */
+	...
+	struct rlimit rlim[RLIM_NLIMITS];
+	...
+};</code></pre>
+</div>
+<h4>Relationship</h4>
+<p style="font-size:13.4px;"><code>task_struct.signal</code> (con trỏ) trỏ vào 1 <code>signal_struct</code> dùng chung cho mọi thread trong
+group. Nó chứa <code>shared_pending</code> — hàng đợi signal <i>process-directed</i> (xem §05), cộng với
+resource accounting tổng hợp toàn process (rlimit, cpu time, wait_chldexit cho <code>wait4()</code>) — những
+thứ vốn "thuộc về process" chứ không riêng 1 thread nào.</p>
+<h4>Không nhầm với sighand_struct</h4>
+<p style="font-size:13.4px;"><code>signal_struct</code> = trạng thái + hàng đợi shared. <code>sighand_struct</code> (§08) = bảng disposition
+(sa_handler) + lock. Hai struct này share theo 2 cờ clone <b>khác nhau</b>: <code>CLONE_THREAD</code> vs
+<code>CLONE_SIGHAND</code> — về lý thuyết có thể tách rời (dù trong thực tế glibc luôn set cả hai cùng lúc khi
+tạo pthread).</p>
+</div>
+</section>
+
+<section id="struct-sighand">
+<h2 class="sec-title"><span class="num">08</span>struct sighand_struct</h2>
+<div class="card struct-card">
+<div class="kv">
+<div class="k">File</div><div>include/linux/sched/signal.h:20</div>
+<div class="k">Shared by</div><div><code>CLONE_SIGHAND</code></div>
+<div class="k">Allocated by</div><div><code>copy_sighand()</code></div>
+<div class="k">Refcount</div><div><code>refcount_t count</code></div>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/sched/signal.h</span><span class="symf">struct sighand_struct · line 20</span><span class="spacer"></span><button class="copy-btn" data-copy="cb7">COPY</button></div>
+<pre id="cb7"><code>struct sighand_struct {
+	spinlock_t		siglock;
+	refcount_t		count;
+	wait_queue_head_t	signalfd_wqh;
+	struct k_sigaction	action[_NSIG];
+};</code></pre>
+</div>
+<h4>action[sig-1] → struct k_sigaction</h4>
+<div class="diagram"><pre>
+signal số N   ────►   sighand->action[N - 1]   ────►   struct k_sigaction
+                                                            ├── sa.sa_handler
+                                                            ├── sa.sa_flags
+                                                            ├── sa.sa_mask
+                                                            └── sa.sa_restorer (nếu SA_RESTORER)
+</pre></div>
+<h4>siglock — khoá quan trọng nhất của cả subsystem</h4>
+<p style="font-size:13.4px;"><code>spinlock_t siglock</code> nằm ở <i>sighand_struct</i> nhưng theo comment trong source
+("locking sighand_struct is always a proper superset of the locking of signal_struct") — nó bảo vệ <b>cả
+sighand lẫn signal</b>: mọi thao tác đọc/ghi <code>action[]</code>, <code>pending</code>,
+<code>shared_pending</code>, <code>blocked</code> (qua <code>set_current_blocked</code>) đều giữ lock này.
+Chi tiết ở <a href="#locking">§35</a>.</p>
+</div>
+</section>
+
+<section id="struct-sigpending">
+<h2 class="sec-title"><span class="num">09</span>struct sigpending</h2>
+<div class="card struct-card">
+<div class="kv">
+<div class="k">File</div><div>include/linux/signal_types.h:30</div>
+<div class="k">Instances</div><div><code>task_struct.pending</code> (private) và <code>signal_struct.shared_pending</code> (shared) — cùng 1 kiểu struct, 2 vai trò</div>
+<div class="k">Lifetime</div><div>Gắn liền vòng đời task/signal_struct chứa nó; <code>flush_sigqueue()</code> giải phóng toàn bộ list khi task/exit</div>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/signal_types.h</span><span class="symf">struct sigpending · line 30</span><span class="spacer"></span><button class="copy-btn" data-copy="cb8">COPY</button></div>
+<pre id="cb8"><code>struct sigpending {
+	struct list_head list;
+	sigset_t signal;
+};</code></pre>
+</div>
+<p style="font-size:13.4px;">Chỉ 2 field: <code>signal</code> là bitmask "signal nào đang pending" (dùng để check nhanh không cần duyệt
+list), <code>list</code> là danh sách liên kết các <code>sigqueue</code> (§10) chứa siginfo chi tiết. Một bit
+trong <code>signal</code> có thể tương ứng 0 node trong <code>list</code> (SIGKILL, kernel thread — xem
+<code>__send_signal()</code> nhánh <code>goto out_set</code> bỏ qua alloc sigqueue) hoặc nhiều node (realtime
+signal xếp hàng).</p>
+</div>
+</section>
+
+<section id="struct-sigqueue">
+<h2 class="sec-title"><span class="num">10</span>struct sigqueue</h2>
+<div class="card struct-card">
+<div class="kv">
+<div class="k">File</div><div>include/linux/signal_types.h:20</div>
+<div class="k">Allocated by</div><div><code>__sigqueue_alloc()</code> (GFP_ATOMIC, tính vào <code>RLIMIT_SIGPENDING</code>)</div>
+<div class="k">Freed by</div><div><code>__sigqueue_free()</code> sau khi <code>collect_signal()</code> lấy siginfo ra</div>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/signal_types.h</span><span class="symf">struct sigqueue · line 20</span><span class="spacer"></span><button class="copy-btn" data-copy="cb9">COPY</button></div>
+<pre id="cb9"><code>struct sigqueue {
+	struct list_head list;
+	int flags;
+	kernel_siginfo_t info;
+	struct user_struct *user;
+};</code></pre>
+</div>
+<h4>Object diagram</h4>
+<div class="diagram"><pre>
+sigqueue
+  ├── list   ──► liên kết trong sigpending.list
+  ├── flags  ──► SIGQUEUE_PREALLOC (dùng cho realtime timer, không alloc động)
+  ├── info   ──► kernel_siginfo_t (si_signo, si_code, si_pid, si_uid, si_value, ...)
+  └── user   ──► struct user_struct* — để tính ngược quota RLIMIT_SIGPENDING đúng user
+</pre></div>
+<p style="font-size:13.4px;">SIGKILL và kernel thread <b>không alloc sigqueue</b> (short-circuit trong <code>__send_signal()</code>,
+<code>goto out_set</code>) — chỉ set bit trong <code>pending->signal</code>, vì SIGKILL luôn có hành xử cố định,
+không cần siginfo chi tiết.</p>
+</div>
+</section>
+
+<section id="struct-ksigaction">
+<h2 class="sec-title"><span class="num">11</span>struct k_sigaction / siginfo si_code</h2>
+<div class="card struct-card">
+<div class="kv">
+<div class="k">File</div><div>include/linux/signal_types.h:49 (k_sigaction) và uapi/asm-generic/signal.h:104 (sigaction, phần userspace thấy)</div>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/signal_types.h</span><span class="symf">struct k_sigaction · line 49</span><span class="spacer"></span><button class="copy-btn" data-copy="cb10">COPY</button></div>
+<pre id="cb10"><code>struct k_sigaction {
+	struct sigaction sa;
+#ifdef __ARCH_HAS_KA_RESTORER
+	__sigrestore_t ka_restorer;
+#endif
+};
+
+/* uapi/asm-generic/signal.h:104 — phần "sa" bên trong, layout thấy được từ userspace */
+struct sigaction {
+	__sighandler_t sa_handler;
+	unsigned long sa_flags;
+#ifdef SA_RESTORER
+	__sigrestore_t sa_restorer;
+#endif
+	sigset_t sa_mask;		/* mask last for extensibility */
+};</code></pre>
+</div>
+<div class="grid2">
+<div class="card">
+<h4 style="margin-top:0;">sa_handler / sa_sigaction</h4>
+<p style="font-size:13.3px;">Cùng 1 union vị trí bộ nhớ. Nếu <code>SA_SIGINFO</code> được set trong <code>sa_flags</code>,
+kernel coi đây là <code>void (*)(int, siginfo_t*, void*)</code> (<code>sa_sigaction</code>) và truyền thêm 2
+tham số qua <code>x1</code>/<code>x2</code> — xem <code>setup_rt_frame()</code> §26/§28.</p>
+</div>
+<div class="card">
+<h4 style="margin-top:0;">sa_mask / sa_flags</h4>
+<p style="font-size:13.3px;"><code>sa_mask</code>: mask bổ sung được OR vào <code>blocked</code> trong lúc handler chạy (<code>signal_delivered()</code>, kernel/signal.c:2884). <code>sa_flags</code> quan trọng: <code>SA_RESTART</code> (§32), <code>SA_SIGINFO</code>, <code>SA_ONESHOT</code>/<code>SA_RESETHAND</code>, <code>SA_NODEFER</code>, <code>SA_RESTORER</code>, <code>SA_ONSTACK</code>.</p>
+</div>
+</div>
+<h4>Trace: sigaction() thay đổi action[] ra sao</h4>
+<div class="trace">
+<a class="node" href="#sys-sigaction">sys_rt_sigaction()</a>
+<a class="node" href="#sys-sigaction">copy_from_user(&new_ka.sa, act, ...)</a>
+<a class="node" href="#sys-sigaction">do_sigaction(sig, &new_ka, &old_ka)</a>
+<a class="node" href="#locking">spin_lock_irq(&sighand->siglock)</a>
+<a class="node" href="#struct-ksigaction">*k = *act   (k = &sighand->action[sig-1])</a>
+</div>
+</div>
+</section>
+
+<section id="struct-siginfo">
+<h2 class="sec-title"><span class="num">12</span>siginfo_t &amp; pt_regs</h2>
+<div class="grid2">
+<div class="card struct-card">
+<h4 style="margin-top:0;">siginfo_t (kernel_siginfo_t)</h4>
+<div class="kv"><div class="k">File</div><div>include/uapi/asm-generic/siginfo.h</div></div>
+<div class="code-block" style="margin-top:8px;">
+<pre style="padding:10px;"><code>/* Các field cố định đầu struct (macro __SIGINFO): */
+int si_signo;
+int si_errno;
+int si_code;
+union __sifields _sifields;   /* union theo loại signal */
+
+/* Macro tiện: si_pid = _sifields._kill._pid, si_uid = ... */
+#define si_pid   _sifields._kill._pid
+#define si_uid   _sifields._kill._uid</code></pre>
+</div>
+<h4>SI_ codes xác nhận có trong source</h4>
+<div class="table-wrap"><table>
+<thead><tr><th>Macro</th><th>Giá trị</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>SI_USER</code></td><td>0</td><td>Gửi bởi <code>kill()</code>/<code>raise()</code> từ userspace</td></tr>
+<tr><td><code>SI_KERNEL</code></td><td>0x80</td><td>Kernel tự sinh (SEND_SIG_PRIV)</td></tr>
+<tr><td><code>SI_TIMER</code></td><td>-2</td><td>POSIX timer hết hạn</td></tr>
+<tr><td><code>SI_MESGQ</code></td><td>-3</td><td>Realtime message queue đổi trạng thái</td></tr>
+<tr><td><code>SI_ASYNCIO</code></td><td>-4</td><td>AIO hoàn tất</td></tr>
+<tr><td><code>SI_SIGIO</code></td><td>-5</td><td>Queued SIGIO</td></tr>
+<tr><td><code>SI_TKILL</code></td><td>-6</td><td><code>tkill()</code>/<code>tgkill()</code> syscall</td></tr>
+</tbody>
+</table></div>
+</div>
+<div class="card struct-card">
+<h4 style="margin-top:0;">struct pt_regs (ARM64)</h4>
+<div class="kv"><div class="k">File</div><div>arch/arm64/include/asm/ptrace.h:173</div></div>
+<div class="code-block" style="margin-top:8px;">
+<pre style="padding:10px;"><code>struct pt_regs {
+	union {
+		struct user_pt_regs user_regs;
+		struct {
+			u64 regs[31];   /* x0..x30 */
+			u64 sp;
+			u64 pc;
+			u64 pstate;
+		};
+	};
+	u64 orig_x0;
+	s32 syscallno;
+	u64 orig_addr_limit;
+	u64 pmr_save;
+	u64 stackframe[2];
+	...
+};</code></pre>
+</div>
+<p style="font-size:13.3px;"><code>pt_regs</code> nằm trên <b>kernel stack</b> (không phải user stack) — được exception entry (<code>kernel_entry</code>, Ch.10) lưu ngay khi vào EL1. Đây chính là "bức ảnh chụp" toàn bộ trạng thái user mà <code>setup_sigframe()</code> sẽ copy sang <b>user stack</b> để tạo signal frame — xem <a href="#arm64-frame">§27</a>. <code>syscallno</code> dùng bởi <code>in_syscall()</code> (§31) để biết có đang giữa 1 syscall hay không.</p>
+</div>
+</div>
+</section>
+
+<section id="sys-kill">
+<h2 class="sec-title"><span class="num">13</span>kill()</h2>
+<div class="callout warn"><b>⚠ VENDOR PATCH phát hiện trong source thật</b>
+<code>SYSCALL_DEFINE2(kill, ...)</code> tại <code>kernel/signal.c:3765</code> trong BSP này có thêm một đoạn
+<code>printk()</code> debug không có trong mainline Linux (comment tiếng Nhật, mã QA nội bộ
+"<code>2019/07/10 ft_kondo OP_BTS-9921</code>"). Đây là <span class="tag tag-vendor">VENDOR PATCH</span>, được
+giữ nguyên để trung thực với source, nhưng KHÔNG phải hành vi chuẩn của kernel.</div>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">SYSCALL_DEFINE2(kill) · line 3765</span><span class="tag tag-vendor" style="margin-left:6px;">VENDOR PATCH</span><span class="spacer"></span><button class="copy-btn" data-copy="cb11">COPY</button></div>
+<pre id="cb11"><code>SYSCALL_DEFINE2(kill, pid_t, pid, int, sig)
+{
+	struct kernel_siginfo info;
+
+	// 2019/07/10 ft_kondo OP_BTS-9921 pid=0の場合にログ出力.       ← VENDOR PATCH (debug log)
+	if( pid == 0 ){
+		printk("kill pid is null [pid=%d][%s]\n", current->pid, current->comm);
+	}
+
+	prepare_kill_siginfo(sig, &info);
+	return kill_something_info(sig, &info, pid);
+}</code></pre>
+</div>
+
+<h3>PID semantics của kill(pid, sig) — kill_something_info()</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>pid</th><th>Hành vi</th><th>Function</th></tr></thead>
+<tbody>
+<tr><td>pid &gt; 0</td><td>Gửi tới đúng 1 process (thread group) có TGID = pid</td><td><code>kill_proc_info()</code> → <code>kill_pid_info()</code> → <code>group_send_sig_info()</code></td></tr>
+<tr><td>pid == 0</td><td>Gửi tới mọi process trong process group của caller</td><td><code>kill_something_info()</code>, kernel/signal.c:1563</td></tr>
+<tr><td>pid == -1</td><td>Gửi tới mọi process có quyền, trừ init &amp; caller</td><td><code>kill_something_info()</code></td></tr>
+<tr><td>pid &lt; -1</td><td>Gửi tới process group <code>|pid|</code></td><td><code>__kill_pgrp_info()</code>, kernel/signal.c:1430</td></tr>
+</tbody>
+</table></div>
+
+<div class="trace">
+<a class="node" href="#sys-kill">sys_kill(pid, sig)</a>
+<a class="node" href="#sys-kill">kill_something_info() (phân loại theo pid, kernel/signal.c:1563)</a>
+<a class="node" href="#sys-kill">kill_pid_info() → pid_task() lookup</a>
+<a class="node" href="#generation">group_send_sig_info() → check_kill_permission() → send_signal()</a>
+<a class="node" href="#generation">__send_signal(sig, info, t, PIDTYPE_TGID, force)</a>
+<a class="node" href="#generation">complete_signal() → signal_wake_up()</a>
+</div>
+
+<h4>check_kill_permission() — quyền gửi signal</h4>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">check_kill_permission() · line 834</span><span class="spacer"></span><button class="copy-btn" data-copy="cb12">COPY</button></div>
+<pre id="cb12"><code>static int check_kill_permission(int sig, struct kernel_siginfo *info,
+				 struct task_struct *t)
+{
+	...
+	if (!si_fromuser(info))
+		return 0;                       /* signal từ kernel luôn được phép */
+	error = audit_signal_info(sig, t);
+	if (!same_thread_group(current, t) && !kill_ok_by_cred(t)) {
+		switch (sig) {
+		case SIGCONT:
+			/* SIGCONT được phép nếu cùng session, dù khác uid */
+			...
+		default:
+			return -EPERM;
+		}
+	}
+	return security_task_kill(t, info, sig, NULL);
+}</code></pre>
+</div>
+<p style="font-size:13.3px;"><code>kill_ok_by_cred()</code> (line 818) so <code>euid</code>/<code>uid</code> của sender với
+<code>suid</code>/<code>uid</code> của target — đúng chuẩn POSIX: "same real or effective UID".</p>
+</section>
+
+<section id="sys-tkill">
+<h2 class="sec-title"><span class="num">14</span>tkill()</h2>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">SYSCALL_DEFINE2(tkill), do_tkill() · line 3926/3966</span><span class="spacer"></span><button class="copy-btn" data-copy="cb13">COPY</button></div>
+<pre id="cb13"><code>static int do_tkill(pid_t tgid, pid_t pid, int sig)
+{
+	struct kernel_siginfo info;
+	clear_siginfo(&info);
+	info.si_signo = sig;
+	info.si_code = SI_TKILL;                  /* ← đánh dấu nguồn gốc: tkill/tgkill */
+	info.si_pid = task_tgid_vnr(current);
+	info.si_uid = from_kuid_munged(current_user_ns(), current_uid());
+	return do_send_specific(tgid, pid, sig, &info);
+}
+
+SYSCALL_DEFINE2(tkill, pid_t, pid, int, sig)
+{
+	if (pid <= 0) return -EINVAL;
+	return do_tkill(0, pid, sig);              /* tgid = 0 → không kiểm tra group */
+}</code></pre>
+</div>
+<p style="font-size:13.3px;"><code>do_send_specific()</code> (line 3897) gọi <code>find_task_by_vpid(pid)</code> rồi
+<code>do_send_sig_info(sig, info, p, PIDTYPE_PID)</code> — <b>PIDTYPE_PID</b>, nghĩa là signal đi vào
+<code>t->pending</code> riêng của đúng 1 thread, không phải <code>shared_pending</code>.</p>
+</section>
+
+<section id="sys-tgkill">
+<h2 class="sec-title"><span class="num">15</span>tgkill()</h2>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">SYSCALL_DEFINE3(tgkill) · line 3950</span><span class="spacer"></span><button class="copy-btn" data-copy="cb14">COPY</button></div>
+<pre id="cb14"><code>/**
+ *  sys_tgkill - send signal to one specific thread
+ *  @tgid: the thread group ID of the thread
+ *  @pid: the PID of the thread
+ *
+ *  This syscall also checks the @tgid and returns -ESRCH even if the PID
+ *  exists but it's not belonging to the target process anymore. This
+ *  method solves the problem of threads exiting and PIDs getting reused.
+ */
+SYSCALL_DEFINE3(tgkill, pid_t, tgid, pid_t, pid, int, sig)
+{
+	if (pid <= 0 || tgid <= 0)
+		return -EINVAL;
+	return do_tkill(tgid, pid, sig);
+}</code></pre>
+</div>
+<p style="font-size:13.3px;">Khác <code>tkill()</code> duy nhất ở chỗ <code>do_send_specific()</code> thêm điều kiện
+<code>task_tgid_vnr(p) == tgid</code> — chống race "PID bị tái sử dụng cho thread khác sau khi thread cũ đã
+exit". Đây là lý do glibc <code>pthread_kill()</code> dùng <code>tgkill()</code> chứ không dùng <code>tkill()</code>.</p>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Syscall</th><th>Target</th><th>PID semantics</th><th>Use case điển hình</th></tr></thead>
+<tbody>
+<tr><td><code>kill(pid,sig)</code></td><td>Process (thread group) hoặc pgrp</td><td>pid &gt;0/0/-1/&lt;-1 (§13)</td><td>Gửi tới cả process, kernel chọn 1 thread nhận</td></tr>
+<tr><td><code>tkill(pid,sig)</code></td><td>1 thread cụ thể theo global PID</td><td>pid = PID của thread (không phải TGID)</td><td>Lịch sử (glibc cũ dùng), có race khi PID tái sử dụng</td></tr>
+<tr><td><code>tgkill(tgid,pid,sig)</code></td><td>1 thread cụ thể, xác thực thuộc đúng group</td><td>tgid = PID của thread group leader, pid = PID thread</td><td><code>pthread_kill()</code> hiện tại của glibc — an toàn với race</td></tr>
+</tbody>
+</table></div>
+</section>
+
+<section id="sys-sigaction">
+<h2 class="sec-title"><span class="num">16</span>sigaction()</h2>
+<div class="trace">
+<a class="node" href="#sys-sigaction">sys_rt_sigaction(sig, act, oact, sigsetsize)</a>
+<a class="node" href="#sys-sigaction">copy_from_user(&new_ka.sa, act, sizeof(sigaction))</a>
+<a class="node" href="#sys-sigaction">do_sigaction(sig, &new_ka, &old_ka)</a>
+<a class="node" href="#locking">spin_lock_irq(&p->sighand->siglock)</a>
+<a class="node" href="#struct-ksigaction">k = &p->sighand->action[sig-1]; *k = *act</a>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">do_sigaction() · line 4085</span><span class="spacer"></span><button class="copy-btn" data-copy="cb15">COPY</button></div>
+<pre id="cb15"><code>int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
+{
+	struct task_struct *p = current, *t;
+	struct k_sigaction *k;
+	sigset_t mask;
+
+	if (!valid_signal(sig) || sig < 1 || (act && sig_kernel_only(sig)))
+		return -EINVAL;                 /* không cho đổi action của SIGKILL/SIGSTOP */
+
+	k = &p->sighand->action[sig-1];
+
+	spin_lock_irq(&p->sighand->siglock);
+	if (oact) *oact = *k;                   /* trả lại action cũ */
+
+	if (act) {
+		sigdelsetmask(&act->sa.sa_mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
+		*k = *act;                       /* GHI action mới */
+		/*
+		 * POSIX 3.3.1.3: set SIG_IGN cho signal đang pending → xoá pending
+		 * (kể cả nếu đang bị block).
+		 */
+		if (sig_handler_ignored(sig_handler(p, sig), sig)) {
+			sigemptyset(&mask);
+			sigaddset(&mask, sig);
+			flush_sigqueue_mask(&mask, &p->signal->shared_pending);
+			for_each_thread(p, t)
+				flush_sigqueue_mask(&mask, &t->pending);
+		}
+	}
+	spin_unlock_irq(&p->sighand->siglock);
+	return 0;
+}</code></pre>
+</div>
+<div class="callout info"><b>Vì sao SIGKILL/SIGSTOP không đổi được action?</b> <code>sig_kernel_only(sig)</code> chặn ngay đầu hàm khi <code>act != NULL</code> — đảm bảo bất biến "SIGKILL và SIGSTOP luôn có default action, không thể bị bắt/bỏ qua" ở mức API, không phải chỉ ở <code>get_signal()</code>.</div>
+</section>
+
+<section id="sys-sigprocmask">
+<h2 class="sec-title"><span class="num">17</span>sigprocmask()</h2>
+<div class="trace">
+<a class="node" href="#sys-sigprocmask">sys_rt_sigprocmask(how, nset, oset, sigsetsize)</a>
+<a class="node" href="#sys-sigprocmask">copy_from_user(&new_set, nset, ...)</a>
+<a class="node" href="#sys-sigprocmask">sigdelsetmask(&new_set, SIGKILL|SIGSTOP)  ← không cho block 2 signal này</a>
+<a class="node" href="#sys-sigprocmask">sigprocmask(how, &new_set, NULL)</a>
+<a class="node" href="#mask">__set_current_blocked(&newset)</a>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">sigprocmask() · line 3058</span><span class="spacer"></span><button class="copy-btn" data-copy="cb16">COPY</button></div>
+<pre id="cb16"><code>int sigprocmask(int how, sigset_t *set, sigset_t *oldset)
+{
+	struct task_struct *tsk = current;
+	sigset_t newset;
+
+	if (oldset) *oldset = tsk->blocked;
+
+	switch (how) {
+	case SIG_BLOCK:
+		sigorsets(&newset, &tsk->blocked, set);      /* blocked |= set */
+		break;
+	case SIG_UNBLOCK:
+		sigandnsets(&newset, &tsk->blocked, set);    /* blocked &= ~set */
+		break;
+	case SIG_SETMASK:
+		newset = *set;                               /* blocked = set */
+		break;
+	default:
+		return -EINVAL;
+	}
+	__set_current_blocked(&newset);
+	return 0;
+}</code></pre>
+</div>
+<p style="font-size:13.3px;"><code>__set_current_blocked()</code> (không show ở đây) giữ <code>siglock</code>, gán <code>tsk->blocked = newset</code>
+rồi gọi <code>recalc_sigpending()</code> — điều này giải thích tại sao <b>unblock một signal đang pending sẽ
+lập tức đặt lại TIF_SIGPENDING</b> dù không có signal mới nào được gửi.</p>
+</section>
+
+<section id="sys-sigpending">
+<h2 class="sec-title"><span class="num">18</span>sigpending()</h2>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">do_sigpending() · line 3196</span><span class="spacer"></span><button class="copy-btn" data-copy="cb17">COPY</button></div>
+<pre id="cb17"><code>static void do_sigpending(sigset_t *set)
+{
+	spin_lock_irq(&current->sighand->siglock);
+	sigorsets(set, &current->pending.signal,
+		  &current->signal->shared_pending.signal);      /* private | shared */
+	spin_unlock_irq(&current->sighand->siglock);
+
+	/* Outside the lock because only this thread touches it. */
+	sigandsets(set, &current->blocked, set);              /* … AND blocked */
+}</code></pre>
+</div>
+<div class="diagram"><pre>
+result = (task->pending.signal | task->signal->shared_pending.signal) & task->blocked
+                                                                          ^^^^^^^^^^^^
+                                          ĐÚNG như tên gọi POSIX "sigpending" — trả về những
+                                          signal ĐANG bị chặn VÀ đang chờ, không phải mọi signal
+                                          đang chờ nói chung.
+</pre></div>
+<p style="font-size:13.3px;">Đây là điểm dễ hiểu lầm tên hàm: <code>sigpending(2)</code> man page nói "return set of
+pending signals" nhưng thực chất chỉ hữu ích với những signal <i>đã bị block</i> — signal không bị block thì
+đằng nào cũng được deliver ngay, không "nằm chờ" đủ lâu để quan sát qua syscall này.</p>
+</section>
+
+<section id="sys-sigsuspend">
+<h2 class="sec-title"><span class="num">19</span>sigsuspend()</h2>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">sigsuspend() · line 4568</span><span class="spacer"></span><button class="copy-btn" data-copy="cb18">COPY</button></div>
+<pre id="cb18"><code>static int sigsuspend(sigset_t *set)
+{
+	current->saved_sigmask = current->blocked;   /* cất mask cũ */
+	set_current_blocked(set);                    /* áp mask mới (thường mở 1 signal) */
+
+	while (!signal_pending(current)) {
+		__set_current_state(TASK_INTERRUPTIBLE);
+		schedule();                          /* ngủ tới khi CÓ signal chưa-bị-block */
+	}
+	set_restore_sigmask();                       /* đánh dấu: sigreturn phải khôi phục mask cũ */
+	return -ERESTARTNOHAND;                      /* luôn coi như bị ngắt, KHÔNG tự restart */
+}</code></pre>
+</div>
+<div class="trace">
+<a class="node" href="#sys-sigsuspend">sigsuspend(mask)</a>
+<a class="node" href="#mask">saved_sigmask = blocked; blocked = mask</a>
+<a class="node" href="#pending">TASK_INTERRUPTIBLE + schedule()</a>
+<a class="node" href="#generation">signal khác đến → signal_wake_up() → wake_up_state()</a>
+<a class="node" href="#pending">signal_pending(current) true → thoát vòng lặp</a>
+<a class="node" href="#delivery">trả -ERESTARTNOHAND → do_signal() xử lý ở return-to-user</a>
+</div>
+<p style="font-size:13.3px;"><code>-ERESTARTNOHAND</code> có nghĩa: nếu <b>không có handler nào chạy</b> (ví dụ signal đó SIG_IGN), syscall
+được restart tự động; nhưng nếu <b>có handler chạy</b>, syscall trả <code>-EINTR</code> cho user — đây là hành
+vi đúng chuẩn POSIX cho <code>sigsuspend()</code> (luôn "ngắt" theo nghĩa quan sát được bởi ứng dụng khi có
+handler). Xem cơ chế restart mã lỗi ở <a href="#sa-restart">§32</a>.</p>
+</section>
+
+<section id="delivery">
+<h2 class="sec-title"><span class="num">20</span>Signal Delivery — Timeline</h2>
+<p class="lead">Phần lớn nhất và quan trọng nhất của tài liệu. Signal <b>chỉ</b> được deliver tại một điểm duy nhất:
+ngay trước khi task rời kernel để về EL0.</p>
+
+<div class="flow">
+<div class="flow-step"><div class="idx">01</div><div class="body"><div class="ttl">Signal pending</div><div class="desc">Bit đã bật trong <code>task->pending.signal</code> hoặc <code>task->signal->shared_pending.signal</code>, <code>TIF_SIGPENDING</code> đã set trên thread.</div></div></div>
+<div class="flow-step"><div class="idx">02</div><div class="body"><div class="ttl">Kernel checks pending — return-to-user path</div><div class="desc">Exception return (từ syscall hoặc interrupt) đọc <code>current_thread_info()->flags</code>; nếu dính <code>_TIF_WORK_MASK</code> (gồm <code>_TIF_SIGPENDING</code>) → gọi <code>do_notify_resume()</code>. <span class="tag tag-arm64">ARM64</span> arch/arm64/kernel/signal.c:917</div></div></div>
+<div class="flow-step"><div class="idx">03</div><div class="body"><div class="ttl">do_signal(regs)</div><div class="desc">Xử lý syscall-restart bookkeeping trước, rồi gọi <code>get_signal()</code>. <span class="tag tag-arm64">ARM64</span> line 846</div></div></div>
+<div class="flow-step"><div class="idx">04</div><div class="body"><div class="ttl">get_signal(&ksig)</div><div class="desc">Vòng lặp: dequeue → nếu SIG_IGN thì lặp tiếp; nếu SIG_DFL thì thực thi default action (có thể không return — terminate); nếu có handler thì trả <code>true</code>. <span class="tag tag-signal">SIGNAL</span> kernel/signal.c:2534</div></div></div>
+<div class="flow-step"><div class="idx">05</div><div class="body"><div class="ttl">Determine action</div><div class="desc"><code>ka->sa.sa_handler == SIG_IGN</code> / <code>== SIG_DFL</code> / khác (con trỏ handler thật) — 3 nhánh trong vòng lặp get_signal().</div></div></div>
+<div class="flow-step"><div class="idx">06</div><div class="body"><div class="ttl">default / ignore / handler</div><div class="desc">Default: terminate/coredump/stop/continue/ignore tuỳ bảng <code>SIG_KERNEL_*_MASK</code> (§24). Handler: thoát vòng lặp get_signal(), trả true.</div></div></div>
+<div class="flow-step"><div class="idx">07</div><div class="body"><div class="ttl">handle_signal() → setup_rt_frame()</div><div class="desc">Dựng <code>struct rt_sigframe</code> trên user stack, copy toàn bộ pt_regs + FPSIMD vào đó. <span class="tag tag-arm64">ARM64</span> line 808/766</div></div></div>
+<div class="flow-step"><div class="idx">08</div><div class="body"><div class="ttl">Modify user registers</div><div class="desc"><code>setup_return()</code>: <code>regs->pc = handler</code>, <code>regs->sp = sigframe</code>, <code>regs->regs[0..2]</code> = tham số handler, <code>regs->regs[30]</code> = trampoline. Line 729</div></div></div>
+<div class="flow-step"><div class="idx">09</div><div class="body"><div class="ttl">Return to userspace</div><div class="desc"><code>kernel_exit</code> → <code>eret</code>. CPU nhảy tới <code>regs->pc</code> = địa chỉ handler, với <code>sp</code> đã trỏ signal frame.</div></div></div>
+<div class="flow-step"><div class="idx">10</div><div class="body"><div class="ttl">Handler executes tại EL0</div><div class="desc">Handler chạy như một hàm bình thường của user, <code>ret</code> ở cuối rơi vào trampoline → <code>rt_sigreturn</code> (§29-30).</div></div></div>
+</div>
+</section>
+
+<section id="do-signal">
+<h2 class="sec-title"><span class="num">21</span>do_signal()</h2>
+<div class="card">
+<div class="kv">
+<div class="k">File</div><div>arch/arm64/kernel/signal.c:846 <span class="tag tag-arm64" style="margin-left:4px;">ARM64</span></div>
+<div class="k">Symbol</div><div><code>static void do_signal(struct pt_regs *regs)</code></div>
+<div class="k">Caller</div><div><code>do_notify_resume()</code> khi <code>thread_flags & (_TIF_SIGPENDING | _TIF_NOTIFY_SIGNAL)</code></div>
+<div class="k">Callee</div><div><code>in_syscall()</code>, <code>forget_syscall()</code>, <code>get_signal()</code>, <code>handle_signal()</code>, <code>setup_restart_syscall()</code>, <code>restore_saved_sigmask()</code></div>
+<div class="k">Không trả giá trị</div><div>void — thay đổi trực tiếp <code>regs</code> rồi return</div>
+</div>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">do_signal() · line 846</span><span class="tag tag-arm64" style="margin-left:6px;">ARM64</span><span class="spacer"></span><button class="copy-btn" data-copy="cb19">COPY</button></div>
+<pre id="cb19"><code>static void do_signal(struct pt_regs *regs)
+{
+	unsigned long continue_addr = 0, restart_addr = 0;
+	int retval = 0;
+	struct ksignal ksig;
+	bool syscall = in_syscall(regs);
+
+	if (syscall) {
+		continue_addr = regs->pc;
+		restart_addr = continue_addr - (compat_thumb_mode(regs) ? 2 : 4);
+		retval = regs->regs[0];
+
+		forget_syscall(regs);   /* tránh ret_to_user tự restart lần 2 */
+
+		switch (retval) {
+		case -ERESTARTNOHAND:
+		case -ERESTARTSYS:
+		case -ERESTARTNOINTR:
+		case -ERESTART_RESTARTBLOCK:
+			regs->regs[0] = regs->orig_x0;
+			regs->pc = restart_addr;      /* lùi PC lại lệnh svc, ĐỀ PHÒNG restart */
+			break;
+		}
+	}
+
+	if (get_signal(&ksig)) {
+		/* Có handler thật sự → có thể phải HUỶ quyết định restart ở trên */
+		if (regs->pc == restart_addr &&
+		    (retval == -ERESTARTNOHAND ||
+		     retval == -ERESTART_RESTARTBLOCK ||
+		     (retval == -ERESTARTSYS &&
+		      !(ksig.ka.sa.sa_flags & SA_RESTART)))) {
+			syscall_set_return_value(current, regs, -EINTR, 0);
+			regs->pc = continue_addr;      /* KHÔNG restart — trả EINTR */
+		}
+		handle_signal(&ksig, regs);
+		return;
+	}
+
+	/* Không có signal nào cần deliver (SIG_IGN hoặc queue rỗng) */
+	if (syscall && regs->pc == restart_addr) {
+		if (retval == -ERESTART_RESTARTBLOCK)
+			setup_restart_syscall(regs);
+		user_rewind_single_step(current);
+	}
+	restore_saved_sigmask();
+}</code></pre>
+</div>
+
+<h4>Decision tree</h4>
+<div class="diagram"><pre>
+do_signal(regs)
+   │
+   ├── syscall đang dở (in_syscall(regs))?
+   │      └── YES: lùi pc về restart_addr NẾU retval ∈ {-ERESTARTNOHAND,-ERESTARTSYS,
+   │                -ERESTARTNOINTR,-ERESTART_RESTARTBLOCK}   (chuẩn bị sẵn cho restart)
+   │
+   ├── get_signal(&ksig) → có signal cần deliver?
+   │      ├── YES ──► còn đứng ở restart_addr VÀ (NOHAND | RESTARTBLOCK | (SYS &amp;&amp; !SA_RESTART))?
+   │      │              ├── YES: đổi lại thành EINTR, pc = continue_addr (KHÔNG restart)
+   │      │              └── NO : giữ nguyên (SẼ restart sau khi handler chạy xong)
+   │      │           → handle_signal(&ksig, regs)  → return (không đi tiếp bên dưới)
+   │      │
+   │      └── NO  ──► không có gì để deliver
+   │                    └── còn đứng ở restart_addr?
+   │                           ├── retval == -ERESTART_RESTARTBLOCK → setup_restart_syscall()
+   │                           └── restore_saved_sigmask()
+</pre></div>
+<div class="callout info"><b>Error path</b> — <code>do_signal()</code> không có "error path" theo nghĩa trả mã lỗi; lỗi duy nhất có thể xảy ra là <code>handle_signal()</code>/<code>setup_rt_frame()</code> không dựng được frame (stack overflow, <code>access_ok()</code> fail) → <code>force_sigsegv(SIGSEGV)</code> được gọi bên trong <code>signal_setup_done()</code>, khiến vòng lặp <code>do_notify_resume()</code> chạy lại với SIGSEGV mới pending.</div>
+</section>
+
+<section id="get-signal">
+<h2 class="sec-title"><span class="num">22</span>get_signal()</h2>
+<div class="callout warn"><b>⚠ VENDOR PATCH phát hiện trong source thật</b>
+Thân hàm <code>get_signal()</code> (kernel/signal.c:2534) trong BSP này chứa một khối lớn
+<code>#ifdef CONFIG_THREADDRV</code> (comment Shift-JIS tiếng Nhật, mã QA "CQ.527056", "AR.1074521"…) ghi log
+riêng khi các process tên <code>mfp000_hwQt</code>/<code>lui000</code> nhận fatal signal, dùng cho debug watchdog
+nội bộ của hãng. Đây là <span class="tag tag-vendor">VENDOR PATCH</span> — không liên quan gì đến ngữ nghĩa
+signal chuẩn của Linux. Bên dưới là <b>logic chuẩn</b> (đã lược bỏ khối vendor) để không gây nhiễu khi học.</div>
+
+<div class="card">
+<div class="kv">
+<div class="k">File</div><div>kernel/signal.c:2534 <span class="tag tag-generic" style="margin-left:4px;">GENERIC</span></div>
+<div class="k">Symbol</div><div><code>bool get_signal(struct ksignal *ksig)</code></div>
+<div class="k">Caller</div><div><code>do_signal()</code> (arch/arm64/kernel/signal.c:885)</div>
+<div class="k">Callee</div><div><code>dequeue_synchronous_signal()</code>, <code>dequeue_signal()</code>, <code>ptrace_signal()</code>, <code>do_signal_stop()</code>, <code>do_coredump()</code>, <code>do_group_exit()</code></div>
+<div class="k">Return</div><div><code>true</code> nếu có handler cần chạy (điền <code>ksig</code>); <code>false</code> nếu không còn gì để deliver</div>
+</div>
+</div>
+
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">get_signal() (đã lược bỏ khối VENDOR PATCH) · line 2534</span><span class="tag tag-generic" style="margin-left:6px;">GENERIC</span><span class="spacer"></span><button class="copy-btn" data-copy="cb20">COPY</button></div>
+<pre id="cb20"><code>bool get_signal(struct ksignal *ksig)
+{
+	struct sighand_struct *sighand = current->sighand;
+	struct signal_struct *signal = current->signal;
+	int signr;
+
+	if (unlikely(current->task_works)) task_work_run();
+	if (unlikely(uprobe_deny_signal())) return false;
+	try_to_freeze();
+
+relock:
+	spin_lock_irq(&sighand->siglock);
+
+	if (unlikely(signal->flags & SIGNAL_CLD_MASK)) {
+		/* thông báo cha (do_notify_parent_cldstop) rồi goto relock */
+	}
+
+	if (signal_group_exit(signal)) {         /* nhóm đã bị đánh dấu chết */
+		ksig->info.si_signo = signr = SIGKILL;
+		sigdelset(&current->pending.signal, SIGKILL);
+		recalc_sigpending();
+		goto fatal;
+	}
+
+	for (;;) {
+		struct k_sigaction *ka;
+
+		if (unlikely(current->jobctl & JOBCTL_STOP_PENDING) && do_signal_stop(0))
+			goto relock;
+		if (unlikely(current->jobctl & (JOBCTL_TRAP_MASK | JOBCTL_TRAP_FREEZE))) {
+			/* ptrace trap handling */
+			goto relock;
+		}
+
+		/* Synchronous fault signal (SIGSEGV do lệnh vừa fault) LUÔN ưu tiên */
+		signr = dequeue_synchronous_signal(&ksig->info);
+		if (!signr)
+			signr = dequeue_signal(current, &current->blocked, &ksig->info);
+
+		if (!signr)
+			break;                     /* queue rỗng → return false */
+
+		if (unlikely(current->ptrace) && signr != SIGKILL) {
+			signr = ptrace_signal(signr, &ksig->info);
+			if (!signr) continue;
+		}
+
+		ka = &sighand->action[signr-1];
+
+		if (ka->sa.sa_handler == SIG_IGN)      /* Do nothing. */
+			continue;
+		if (ka->sa.sa_handler != SIG_DFL) {
+			ksig->ka = *ka;
+			if (ka->sa.sa_flags & SA_ONESHOT)
+				ka->sa.sa_handler = SIG_DFL;
+			break;                          /* → return true, chạy handler */
+		}
+
+		/* ==== Default action ==== */
+		if (sig_kernel_ignore(signr)) continue;
+		if (unlikely(signal->flags & SIGNAL_UNKILLABLE) && !sig_kernel_only(signr))
+			continue;
+
+		if (sig_kernel_stop(signr)) {
+			if (signr != SIGSTOP) {
+				spin_unlock_irq(&sighand->siglock);
+				if (is_current_pgrp_orphaned()) goto relock;
+				spin_lock_irq(&sighand->siglock);
+			}
+			if (likely(do_signal_stop(ksig->info.si_signo)))
+				goto relock;           /* đã release siglock bên trong */
+			continue;
+		}
+
+	fatal:
+		spin_unlock_irq(&sighand->siglock);
+		current->flags |= PF_SIGNALED;
+
+		if (sig_kernel_coredump(signr)) {
+			proc_coredump_connector(current);
+			do_coredump(&ksig->info);
+		}
+		if (current->flags & PF_IO_WORKER) goto out;
+
+		do_group_exit(ksig->info.si_signo);    /* KHÔNG TRẢ VỀ */
+	}
+	spin_unlock_irq(&sighand->siglock);
+out:
+	ksig->sig = signr;
+	return ksig->sig > 0;
+}</code></pre>
+</div>
+
+<h4>Flow chọn / xử lý signal</h4>
+<div class="diagram"><pre>
+   pending (2 queue: private trước, shared sau)
+        │
+        ▼
+   blocked?  ──── dequeue_signal() chỉ trả signal KHÔNG nằm trong &current->blocked
+        │
+        ▼
+   dequeue (xoá khỏi list + sigdelset khỏi bitmask, gọi recalc_sigpending())
+        │
+        ▼
+   action = sighand->action[sig-1]
+        │
+   ┌────┼─────────────┬───────────────┐
+   ▼    ▼             ▼               ▼
+ SIG_IGN  SIG_DFL(ignore-class)   SIG_DFL(stop)   SIG_DFL(fatal)      handler thật
+  loop     loop lại              do_signal_stop() do_coredump()+      ksig->ka=*ka
+  lại                            + goto relock    do_group_exit()     break→return true
+                                                   (KHÔNG RETURN)
+</pre></div>
+<div class="callout ok"><b>Tại sao signal được chọn theo thứ tự này?</b> Synchronous fault trước (để PC trong signal frame đúng lệnh gây lỗi) → rồi theo thứ tự bit thấp nhất của <code>next_signal()</code> (§05) → private pending trước shared pending (§05, <code>dequeue_signal</code>). Standard vs realtime: xem <a href="#std-vs-rt">§33</a>.</div>
+</section>
+
+<section id="handle-signal">
+<h2 class="sec-title"><span class="num">23</span>handle_signal()</h2>
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">handle_signal() · line 808</span><span class="tag tag-arm64" style="margin-left:6px;">ARM64</span><span class="spacer"></span><button class="copy-btn" data-copy="cb21">COPY</button></div>
+<pre id="cb21"><code>static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
+{
+	sigset_t *oldset = sigmask_to_save();
+	int usig = ksig->sig;
+	int ret;
+
+	rseq_signal_deliver(ksig, regs);
+
+	if (is_compat_task()) {
+		if (ksig->ka.sa.sa_flags & SA_SIGINFO)
+			ret = compat_setup_rt_frame(usig, ksig, oldset, regs);
+		else
+			ret = compat_setup_frame(usig, ksig, oldset, regs);
+	} else {
+		ret = setup_rt_frame(usig, ksig, oldset, regs);    /* ← native AArch64 */
+	}
+
+	ret |= !valid_user_regs(&regs->user_regs, current);
+
+	signal_setup_done(ret, ksig, test_thread_flag(TIF_SINGLESTEP));
+}</code></pre>
+</div>
+<div class="trace">
+<a class="node" href="#handle-signal">handle_signal(&ksig, regs)</a>
+<a class="node" href="#arm64-frame">setup_rt_frame() → get_sigframe() + setup_sigframe()</a>
+<a class="node" href="#arm64-registers">setup_return() — ghi pc/sp/x0-2/x30 vào regs</a>
+<a class="node" href="#handle-signal">valid_user_regs() — chặn pstate nguy hiểm</a>
+<a class="node" href="#handle-signal">signal_setup_done() → signal_delivered() cập nhật blocked mask</a>
+</div>
+<h4>signal_setup_done() → signal_delivered() — cập nhật blocked mask</h4>
+<div class="code-block">
+<div class="code-head"><span class="file">kernel/signal.c</span><span class="symf">signal_delivered() · line 2884</span><span class="spacer"></span><button class="copy-btn" data-copy="cb22">COPY</button></div>
+<pre id="cb22"><code>static void signal_delivered(struct ksignal *ksig, int stepping)
+{
+	sigset_t blocked;
+	clear_restore_sigmask();
+	sigorsets(&blocked, &current->blocked, &ksig->ka.sa.sa_mask); /* blocked |= sa_mask */
+	if (!(ksig->ka.sa.sa_flags & SA_NODEFER))
+		sigaddset(&blocked, ksig->sig);              /* + chính signal đó (trừ khi SA_NODEFER) */
+	set_current_blocked(&blocked);
+	tracehook_signal_handler(stepping);
+}</code></pre>
+</div>
+<p style="font-size:13.3px;">Đây là lý do handler <b>mặc định không bị chính signal của nó ngắt đệ quy</b>: mask được cập nhật trước
+khi <code>eret</code> vào handler, và mask cũ (<code>oldset</code>, chính là <code>blocked</code> TRƯỚC dòng
+này) đã được lưu vào <code>uc_sigmask</code> trong signal frame để <code>sigreturn</code> khôi phục lại đúng.</p>
+</section>
+
+<section id="default-actions">
+<h2 class="sec-title"><span class="num">24</span>Default Actions</h2>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/signal.h</span><span class="symf">SIG_KERNEL_*_MASK · line 416-445</span><span class="spacer"></span><button class="copy-btn" data-copy="cb23">COPY</button></div>
+<pre id="cb23"><code>#define SIG_KERNEL_ONLY_MASK (\
+	rt_sigmask(SIGKILL)   |  rt_sigmask(SIGSTOP))
+
+#define SIG_KERNEL_STOP_MASK (\
+	rt_sigmask(SIGSTOP)   |  rt_sigmask(SIGTSTP)   | \
+	rt_sigmask(SIGTTIN)   |  rt_sigmask(SIGTTOU))
+
+#define SIG_KERNEL_COREDUMP_MASK (\
+	rt_sigmask(SIGQUIT)   |  rt_sigmask(SIGILL)    | \
+	rt_sigmask(SIGTRAP)   |  rt_sigmask(SIGABRT)   | \
+	... /* SIGFPE, SIGSEGV, SIGBUS, SIGSYS, SIGXCPU, SIGXFSZ */ )
+
+#define SIG_KERNEL_IGNORE_MASK (\
+	rt_sigmask(SIGCONT)   |  rt_sigmask(SIGCHLD)   | \
+	rt_sigmask(SIGWINCH)  |  rt_sigmask(SIGURG))
+
+#define sig_kernel_only(sig)     siginmask(sig, SIG_KERNEL_ONLY_MASK)
+#define sig_kernel_coredump(sig) siginmask(sig, SIG_KERNEL_COREDUMP_MASK)
+#define sig_kernel_ignore(sig)   siginmask(sig, SIG_KERNEL_IGNORE_MASK)
+#define sig_kernel_stop(sig)     siginmask(sig, SIG_KERNEL_STOP_MASK)</code></pre>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Signal Action</th><th>Kernel Behavior</th><th>Function</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Ignore-class (SIGCHLD, SIGCONT khi không stop, SIGURG, SIGWINCH)</td><td><code>sig_kernel_ignore()==true</code> → <code>continue</code> vòng lặp</td><td><code>get_signal()</code></td><td>Không có gì xảy ra</td></tr>
+<tr><td>Stop (SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU)</td><td>Dừng cả thread group</td><td><code>do_signal_stop()</code>, line 2304</td><td>Task → TASK_STOPPED, báo cha qua <code>do_notify_parent_cldstop</code></td></tr>
+<tr><td>Coredump (SIGQUIT, SIGILL, SIGABRT, SIGFPE, SIGSEGV, SIGBUS, SIGSYS, SIGTRAP, SIGXCPU, SIGXFSZ)</td><td>Ghi core file rồi thoát cả group</td><td><code>do_coredump()</code> + <code>do_group_exit()</code></td><td>Process chết, file core (nếu rlimit cho phép)</td></tr>
+<tr><td>Terminate (mọi signal fatal còn lại, kể cả SIGKILL)</td><td>Thoát cả thread group, không dump</td><td><code>do_group_exit(signr)</code></td><td>Process chết, exit code mang bit signal</td></tr>
+<tr><td>Continue (SIGCONT khi đang stop)</td><td>Xoá mọi stop signal khỏi mọi queue, đánh thức cả group</td><td><code>prepare_signal()</code>, line 926</td><td>Task → TASK_RUNNING</td></tr>
+</tbody>
+</table></div>
+</section>
+
+<section id="signal-handler">
+<h2 class="sec-title"><span class="num">25</span>Signal Handler — chạy ở đâu, thế nào?</h2>
+<div class="callout ok"><b>Handler chạy ở EL0 (userspace), KHÔNG chạy ở EL1 (kernel)</b>
+Kernel không "gọi" hàm handler bằng một lời gọi hàm C thông thường. Nó <b>giả lập</b> một lời gọi hàm bằng cách
+sửa <code>pt_regs</code> (§28) rồi <code>eret</code> — phần cứng ARM64 tự chuyển từ EL1 xuống EL0 và nhảy PC tới
+<code>ka->sa.sa_handler</code>. Từ góc nhìn CPU, đây đơn thuần là "quay lại userspace tại một địa chỉ khác với
+SP khác", không có gì đặc biệt về privilege level.</div>
+<div class="diagram"><pre>
+regs TRƯỚC eret (do setup_return thiết lập):
+    pc      = ka-&gt;sa.sa_handler        ← "địa chỉ gọi hàm"
+    sp      = user-&gt;sigframe           ← "stack frame mới"
+    x0      = usig                     ← "đối số 1"
+    x1      = &frame-&gt;info (nếu SA_SIGINFO)
+    x2      = &frame-&gt;uc   (nếu SA_SIGINFO)
+    x30(lr) = sigtramp                 ← "địa chỉ return" = trampoline, KHÔNG phải code gốc
+
+  eret (EL1→EL0) ──► CPU nhảy tới pc=handler với SP=sigframe, X0..X2=tham số
+                       giống hệt như user code tự BLR vào handler với các đối số đó.
+</pre></div>
+<p style="font-size:13.4px;">Handler thực thi hoàn toàn bằng user-mode instructions, với đầy đủ quyền hạn (và giới hạn) như code bình
+thường của process — có thể gọi syscall, ghi bộ nhớ, v.v. Khi handler <code>ret</code>, nó không "return về nơi
+gọi cũ" (vì kernel không thực sự gọi nó) mà rơi vào <b>trampoline</b> (§29) vì đó là giá trị <code>x30</code>
+kernel đã đặt.</p>
+</section>
+
+<section id="signal-frame">
+<h2 class="sec-title"><span class="num">26</span>Signal Frame — khái niệm chung</h2>
+<p class="lead">Signal frame là vùng nhớ trên <b>user stack</b> (hoặc alternate signal stack nếu <code>SA_ONSTACK</code>)
+nơi kernel lưu toàn bộ ngữ cảnh bị ngắt, để <code>sigreturn</code> sau này khôi phục lại chính xác.</p>
+<div class="diagram"><pre>
+USER STACK (khái quát, không phụ thuộc kiến trúc)
+
+┌─────────────────────────────┐
+│ signal handler return addr  │  ← trỏ tới trampoline, không phải code gốc
+├─────────────────────────────┤
+│ signal information (siginfo)│  ← nếu SA_SIGINFO
+├─────────────────────────────┤
+│ ucontext                    │  ← gồm uc_sigmask + uc_mcontext
+├─────────────────────────────┤
+│ sigcontext (trong ucontext) │  ← toàn bộ thanh ghi + pc/sp/pstate lúc bị ngắt
+├─────────────────────────────┤
+│ saved FP/SIMD registers     │  ← V0-V31, FPSR, FPCR
+├─────────────────────────────┤
+│ original stack/context      │  ← phần stack còn lại của process trước signal
+└─────────────────────────────┘
+</pre></div>
+<p style="font-size:13.4px;">Cấu trúc <b>chính xác</b> trên ARM64 (không suy đoán) nằm ở <a href="#arm64-frame">§27</a> — lấy trực tiếp từ
+<code>struct rt_sigframe</code>/<code>struct sigcontext</code>/<code>struct ucontext</code> trong
+<code>arch/arm64/kernel/signal.c</code> và <code>arch/arm64/include/uapi/asm/{ucontext,sigcontext}.h</code>.</p>
+</section>
+
+<section id="arm64-frame">
+<h2 class="sec-title"><span class="num">27</span>ARM64 Signal Frame — chi tiết từ source</h2>
+
+<div class="grid2">
+<div class="card struct-card">
+<h4 style="margin-top:0;">struct rt_sigframe</h4>
+<div class="code-block"><pre style="padding:10px;"><code>/* arch/arm64/kernel/signal.c:40 */
+struct rt_sigframe {
+	struct siginfo info;
+	struct ucontext uc;
+};
+
+struct frame_record {   /* line 45 — cho unwinder/backtrace */
+	u64 fp;
+	u64 lr;
+};</code></pre></div>
+</div>
+<div class="card struct-card">
+<h4 style="margin-top:0;">struct ucontext</h4>
+<div class="code-block"><pre style="padding:10px;"><code>/* arch/arm64/include/uapi/asm/ucontext.h:22 */
+struct ucontext {
+	unsigned long     uc_flags;
+	struct ucontext  *uc_link;
+	stack_t           uc_stack;
+	sigset_t          uc_sigmask;   /* ← mask để khôi phục ở sigreturn */
+	__u8              __unused[1024/8 - sizeof(sigset_t)];
+	struct sigcontext uc_mcontext;  /* last — cho phép mở rộng */
+};</code></pre></div>
+</div>
+</div>
+
+<div class="card struct-card">
+<h4 style="margin-top:0;">struct sigcontext</h4>
+<div class="code-block"><pre style="padding:10px;"><code>/* arch/arm64/include/uapi/asm/sigcontext.h:28 */
+struct sigcontext {
+	__u64 fault_address;
+	__u64 regs[31];    /* x0..x30 của process lúc bị ngắt */
+	__u64 sp;
+	__u64 pc;
+	__u64 pstate;
+	__u8  __reserved[4096] __attribute__((__aligned__(16)));
+	/* __reserved chứa chuỗi record có magic-tag: fpsimd_context (FPSIMD_MAGIC),
+	   esr_context (ESR_MAGIC, nếu do fault), sve_context (SVE_MAGIC, nếu có SVE),
+	   kết thúc bằng _aarch64_ctx{magic=0,size=0} */
+};</code></pre></div>
+</div>
+
+<h3>Layout đầy đủ trên user stack (đã xác nhận từ get_sigframe()/setup_sigframe())</h3>
+<div class="diagram"><pre>
+  USER STACK (địa chỉ cao ở TRÊN, thấp ở DƯỚI — stack mọc XUỐNG)
+
+  ┌──────────────────────────────────────────────────┐
+  │ ... nội dung stack của process TRƯỚC signal ...   │
+  ├──────────────────────────────────────────────────┤ ◄── regs->sp CŨ (hoặc sas_ss_sp+size nếu SA_ONSTACK)
+  │ struct frame_record { u64 fp; u64 lr; }           │  fp/lr CŨ của process → cho backtrace xuyên handler
+  ├──────────────────────────────────────────────────┤  (căn 16 byte)
+  │ struct rt_sigframe {                              │
+  │   struct siginfo info;      ← copy nếu SA_SIGINFO │
+  │   struct ucontext uc {                             │
+  │     uc_flags, uc_link, uc_stack (altstack cũ)      │
+  │     uc_sigmask            ← blocked TRƯỚC handler  │
+  │     struct sigcontext uc_mcontext {                │
+  │       fault_address                                │
+  │       regs[31]            ← x0..x30 process         │
+  │       sp, pc, pstate      ← SP/PC/PSTATE process    │
+  │       __reserved[4096]: fpsimd_context → esr_context│
+  │                           → sve_context → terminator│
+  │     }                                              │
+  │   }                                                │
+  │ }                                                  │
+  ├──────────────────────────────────────────────────┤ ◄── regs->sp MỚI = user->sigframe (setup_return đặt)
+  └──────────────────────────────────────────────────┘
+</pre></div>
+
+<h4>get_sigframe() / setup_sigframe() — tính toán vị trí frame</h4>
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">get_sigframe() · line 701</span><span class="tag tag-arm64" style="margin-left:6px;">ARM64</span><span class="spacer"></span><button class="copy-btn" data-copy="cb24">COPY</button></div>
+<pre id="cb24"><code>static int get_sigframe(struct rt_sigframe_user_layout *user,
+			 struct ksignal *ksig, struct pt_regs *regs)
+{
+	unsigned long sp, sp_top;
+
+	init_user_layout(user);
+	setup_sigframe_layout(user, false);       /* tính size cần cho fpsimd/esr/sve */
+
+	sp = sp_top = sigsp(regs->sp, ksig);      /* SP hiện tại, hoặc altstack nếu SA_ONSTACK */
+
+	sp = round_down(sp - sizeof(struct frame_record), 16);
+	user->next_frame = (struct frame_record __user *)sp;
+
+	sp = round_down(sp, 16) - sigframe_size(user);
+	user->sigframe = (struct rt_sigframe __user *)sp;
+
+	if (!access_ok(user->sigframe, sp_top - sp))
+		return -EFAULT;                    /* stack không ghi được → SIGSEGV sau đó */
+	return 0;
+}</code></pre>
+</div>
+<p style="font-size:13.3px;"><code>sigsp()</code> quyết định dùng SP hiện tại hay <code>sas_ss_sp + sas_ss_size</code> (alternate signal stack) —
+đây chính là cơ chế cho phép bắt <code>SIGSEGV</code> do stack-overflow: nếu dùng SP hiện tại (đã tràn), việc
+ghi signal frame sẽ tiếp tục fault. Alternate stack (<code>sigaltstack()</code>, §11) né được vấn đề này.</p>
+</section>
+
+<section id="arm64-registers">
+<h2 class="sec-title"><span class="num">28</span>ARM64 Register Timeline</h2>
+
+<div class="grid2">
+<div class="card">
+<h4 style="margin-top:0; color:var(--text-dim);">BEFORE (ngữ cảnh bị ngắt)</h4>
+<div class="code-block"><pre style="padding:10px;"><code>pc      = PC gốc (lệnh đang/sắp chạy)
+sp      = SP user gốc
+x0..x30 = giá trị của process
+pstate  = PSTATE của process</code></pre></div>
+</div>
+<div class="card">
+<h4 style="margin-top:0; color:var(--tag-arm64);">DELIVERY (do setup_return() ghi)</h4>
+<div class="code-block"><pre style="padding:10px;"><code>pc      = ka->sa.sa_handler
+sp      = user->sigframe
+x0      = usig
+x1      = &frame->info    (nếu SA_SIGINFO)
+x2      = &frame->uc      (nếu SA_SIGINFO)
+x29     = &user->next_frame->fp
+x30     = sigtramp (vDSO __kernel_rt_sigreturn, hoặc sa_restorer)
+pstate.BTYPE = C (nếu BTI)   pstate.TCO = 0</code></pre></div>
+</div>
+</div>
+
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">setup_return() · line 729</span><span class="tag tag-arm64" style="margin-left:6px;">ARM64</span><span class="spacer"></span><button class="copy-btn" data-copy="cb25">COPY</button></div>
+<pre id="cb25"><code>static void setup_return(struct pt_regs *regs, struct k_sigaction *ka,
+			 struct rt_sigframe_user_layout *user, int usig)
+{
+	__sigrestore_t sigtramp;
+
+	regs->regs[0] = usig;
+	regs->sp = (unsigned long)user->sigframe;
+	regs->regs[29] = (unsigned long)&user->next_frame->fp;
+	regs->pc = (unsigned long)ka->sa.sa_handler;
+
+	if (system_supports_bti()) {
+		regs->pstate &= ~PSR_BTYPE_MASK;
+		regs->pstate |= PSR_BTYPE_C;      /* giả lập BLR để BTI không chặn nhầm */
+	}
+	regs->pstate &= ~PSR_TCO_BIT;              /* tắt MTE tag-check-override cho handler */
+
+	if (ka->sa.sa_flags & SA_RESTORER)
+		sigtramp = ka->sa.sa_restorer;
+	else
+		sigtramp = VDSO_SYMBOL(current->mm->context.vdso, sigtramp);
+
+	regs->regs[30] = (unsigned long)sigtramp;   /* lr → trampoline, KHÔNG phải code gốc */
+}</code></pre>
+</div>
+
+<div class="card">
+<h4 style="margin-top:0; color:var(--tag-generic);">HANDLER — thực thi tại EL0</h4>
+<p style="font-size:13.4px;"><code>handler(signo, siginfo*, ucontext*)</code> chạy với các thanh ghi trên. Handler có thể tự do dùng/ghi đè
+mọi thanh ghi (trừ <code>sp</code>/<code>pc</code> nó không kiểm soát trực tiếp — chúng nằm trong
+<code>uc.uc_mcontext</code> nếu handler muốn thay đổi điểm quay về, đây là kỹ thuật hiếm dùng để "nhảy" sau
+khi xử lý SIGSEGV).</p>
+</div>
+
+<div class="card">
+<h4 style="margin-top:0; color:var(--tag-error);">SIGNAL RETURN (do restore_sigframe() ghi lại)</h4>
+<div class="code-block"><pre style="padding:10px;"><code>pc      = uc_mcontext.pc      (PC gốc)
+sp      = uc_mcontext.sp      (SP gốc)
+x0..x30 = uc_mcontext.regs[]  (khôi phục toàn bộ)
+pstate  = uc_mcontext.pstate  (đã qua valid_user_regs() lọc)
+blocked = uc_sigmask          (mask TRƯỚC khi vào handler)</code></pre></div>
+</div>
+</section>
+
+<section id="trampoline">
+<h2 class="sec-title"><span class="num">29</span>Signal Trampoline</h2>
+<p class="lead">Trampoline là đoạn mã cực ngắn nằm trong <b>vDSO</b> (không phải do compiler sinh trong binary user,
+không phải trên stack) mà kernel trỏ <code>x30</code> (link register) vào trước khi nhảy vào handler.</p>
+<div class="diagram"><pre>
+handler(sig, info, uc) chạy xong → `ret`
+        │  (ret nhảy tới địa chỉ trong x30 — kernel đã đặt = sigtramp)
+        ▼
+__kernel_rt_sigreturn   (ký hiệu trong vDSO, xem VDSO_SYMBOL(mm->context.vdso, sigtramp))
+        │
+        ▼
+mov x8, #__NR_rt_sigreturn   ; nạp số hiệu syscall (139 trên ARM64)
+svc #0                       ; gọi syscall — KHÔNG có cách nào gọi rt_sigreturn "thủ công" đúng ABI
+        │
+        ▼
+el0_svc → sys_call_table[__NR_rt_sigreturn] → SYSCALL_DEFINE0(rt_sigreturn)
+</pre></div>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Chi tiết xác nhận từ source</th></tr></thead>
+<tbody>
+<tr><td>Vị trí code</td><td>vDSO (<code>arch/arm64/kernel/vdso/sigreturn.S</code> sinh symbol <code>__kernel_rt_sigreturn</code>), được ánh xạ vào mọi process — KHÔNG phải on-stack trampoline như x86 cũ.</td></tr>
+<tr><td>Được trỏ tới bởi</td><td><code>setup_return()</code>: <code>sigtramp = VDSO_SYMBOL(current->mm->context.vdso, sigtramp)</code> trừ khi <code>sa_flags & SA_RESTORER</code> thì dùng <code>ka->sa.sa_restorer</code> do glibc cung cấp.</td></tr>
+<tr><td>Register convention</td><td><code>x8</code> = số hiệu syscall (<code>__NR_rt_sigreturn</code>), theo đúng AAPCS64 syscall ABI — không có gì đặc biệt so với syscall thường, ngoại trừ đây là syscall duy nhất "biết" nó đang restore signal frame qua chính giá trị <code>regs->sp</code> lúc gọi.</td></tr>
+</tbody>
+</table></div>
+<div class="callout warn"><b>Không giả định x86</b> — Trên x86 cũ, trampoline từng được kernel <i>ghi trực tiếp lên stack</i> (executable stack) rồi thực thi ngay tại đó — đây là lỗ hổng bảo mật lịch sử (stack thực thi được). ARM64 modern dùng vDSO cố định, không cần stack executable. Xem thêm <a href="#book-vs-modern">§39</a>.</div>
+</section>
+
+<section id="sigreturn">
+<h2 class="sec-title"><span class="num">30</span>sigreturn() / rt_sigreturn</h2>
+<div class="card">
+<div class="kv">
+<div class="k">File</div><div>arch/arm64/kernel/signal.c:530 <span class="tag tag-arm64" style="margin-left:4px;">ARM64</span></div>
+<div class="k">Symbol</div><div><code>SYSCALL_DEFINE0(rt_sigreturn)</code> — ARM64 <b>chỉ có</b> rt_sigreturn, không có "sigreturn" cũ kiểu x86</div>
+<div class="k">Callee</div><div><code>restore_sigframe()</code>, <code>restore_altstack()</code>, <code>arm64_notify_segfault()</code></div>
+</div>
+</div>
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">SYSCALL_DEFINE0(rt_sigreturn) · line 530</span><span class="tag tag-arm64" style="margin-left:6px;">ARM64</span><span class="spacer"></span><button class="copy-btn" data-copy="cb26">COPY</button></div>
+<pre id="cb26"><code>SYSCALL_DEFINE0(rt_sigreturn)
+{
+	struct pt_regs *regs = current_pt_regs();
+	struct rt_sigframe __user *frame;
+
+	current->restart_block.fn = do_no_restart_syscall;  /* rt_sigreturn KHÔNG bao giờ tự restart */
+
+	if (regs->sp & 15)
+		goto badframe;                 /* SP phải align 16 — bằng chứng frame hợp lệ */
+
+	frame = (struct rt_sigframe __user *)regs->sp;
+	if (!access_ok(frame, sizeof(*frame)))
+		goto badframe;
+
+	if (restore_sigframe(regs, frame))
+		goto badframe;
+
+	if (restore_altstack(&frame->uc.uc_stack))
+		goto badframe;
+
+	return regs->regs[0];             /* x0 VỪA được khôi phục từ frame */
+
+badframe:
+	arm64_notify_segfault(regs->sp);   /* frame hỏng/bị craft sai → SIGSEGV */
+	return 0;
+}</code></pre>
+</div>
+
+<h4>restore_sigframe() — khôi phục toàn bộ pt_regs từ user stack</h4>
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">restore_sigframe() · line 486</span><span class="spacer"></span><button class="copy-btn" data-copy="cb27">COPY</button></div>
+<pre id="cb27"><code>static int restore_sigframe(struct pt_regs *regs, struct rt_sigframe __user *sf)
+{
+	sigset_t set;
+	int i, err;
+	struct user_ctxs user;
+
+	err = __copy_from_user(&set, &sf->uc.uc_sigmask, sizeof(set));
+	if (err == 0)
+		set_current_blocked(&set);        /* ← khôi phục MASK trước handler */
+
+	for (i = 0; i < 31; i++)
+		__get_user_error(regs->regs[i], &sf->uc.uc_mcontext.regs[i], err);
+	__get_user_error(regs->sp, &sf->uc.uc_mcontext.sp, err);
+	__get_user_error(regs->pc, &sf->uc.uc_mcontext.pc, err);
+	__get_user_error(regs->pstate, &sf->uc.uc_mcontext.pstate, err);
+
+	forget_syscall(regs);                     /* tránh rt_sigreturn TỰ bị restart */
+
+	err |= !valid_user_regs(&regs->user_regs, current);   /* LỌC pstate — cấm leo lên EL1 */
+	if (err == 0)
+		err = parse_user_sigframe(&user, sf);  /* tìm khối FPSIMD/SVE theo magic-tag */
+
+	if (err == 0 && system_supports_fpsimd())
+		err = user.sve ? restore_sve_fpsimd_context(&user)
+				: restore_fpsimd_context(user.fpsimd);
+	return err ? -EFAULT : 0;
+}</code></pre>
+</div>
+
+<h3>Vòng khứ hồi đầy đủ</h3>
+<div class="diagram"><pre>
+KX  = kernel_exit 0 (sau do_signal)          H  = handler @ EL0
+TR  = __kernel_rt_sigreturn (vDSO)           SR = SYSCALL_DEFINE0(rt_sigreturn)
+RS  = restore_sigframe()                     O  = process @ EL0 tại PC bị ngắt
+
+1. KX  → H : eret — pc=handler, sp=frame, x0=signo, x30=trampoline
+2. H     : handler(signo, siginfo*, ucontext*) chạy — CÓ THỂ sửa uc->uc_mcontext để đổi điểm quay lại
+3. H  → TR: ret → pc = x30 = __kernel_rt_sigreturn
+4. TR    : mov x8, #__NR_rt_sigreturn ; svc #0
+5. TR → SR: el0_svc → sys_call_table[139]
+6. SR    : frame = (rt_sigframe*)regs->sp ; if (sp & 15) → badframe → SIGSEGV
+7. SR → RS: restore_sigframe(regs, frame)
+8. RS    : set_current_blocked(uc_sigmask) — khôi phục MASK
+9. RS    : regs->regs[0..30] ← uc_mcontext.regs[]
+10. RS   : regs->sp/pc/pstate ← uc_mcontext.{sp,pc,pstate}
+11. RS   : forget_syscall(regs) — regs->syscallno = -1 → rt_sigreturn KHÔNG bị restart
+12. RS   : valid_user_regs() lọc pstate ; parse_user_sigframe() → restore FPSIMD/SVE
+13. SR → KX2: return regs->regs[0] (= x0 vừa khôi phục)
+14. KX2 → O : eret — pc=uc_mcontext.pc, sp=uc_mcontext.sp, x0..x30 khôi phục, pstate khôi phục
+
+  Process tiếp tục ĐÚNG lệnh bị ngắt, ĐÚNG thanh ghi — như thể signal chưa từng xảy ra
+  (trừ side-effect handler đã gây ra). Nếu syscall cần restart: pc đã được do_signal() đặt
+  lùi lại trước đó (§21) → trỏ lại `svc` → syscall CHẠY LẠI TỪ ĐẦU, không phải "tiếp tục".
+</pre></div>
+<div class="callout danger"><b>rt_sigreturn là syscall đặc biệt nhất trong kernel</b> — nó là syscall duy nhất mà mục đích chính là <b>ghi đè toàn bộ <code>pt_regs</code></b> bằng dữ liệu do userspace cung cấp (từ user stack). <code>valid_user_regs()</code> tồn tại chính vì lý do này: nếu không lọc <code>pstate</code>, user code có thể tự "craft" một signal frame để leo thang exception level hoặc bật cờ debug nguy hiểm.</div>
+</section>
+
+<section id="interrupted-syscall">
+<h2 class="sec-title"><span class="num">31</span>Interrupted System Call</h2>
+
+<div class="diagram"><pre>
+   userspace: read(fd, buf, size)
+        │
+        ▼
+   syscall entry (svc #0) → sys_read() → ... → chờ dữ liệu → TASK_INTERRUPTIBLE + schedule()
+        │                                            (process NGỦ trong kernel, giữa syscall)
+        │                                                        ▲
+        │                                          signal khác đến: __send_signal()
+        │                                          → signal_wake_up() → wake_up_state()
+        ▼                                                        │
+   thức dậy giữa chừng, vòng lặp chờ trong read() kiểm signal_pending()
+        │
+        ▼
+   trả về  -ERESTARTSYS  (hoặc -ERESTARTNOINTR / -ERESTARTNOHAND / -ERESTART_RESTARTBLOCK
+        │                  tuỳ driver/syscall — KHÔNG phải -EINTR ngay tại đây)
+        ▼
+   syscall trở về ret_to_user với regs->regs[0] = -ERESTART*
+        │
+        ▼
+   do_signal(regs)  [arch/arm64/kernel/signal.c:846] — xem §21
+        │  in_syscall(regs) == true → lùi regs->pc về restart_addr (pc - 4)
+        ▼
+   get_signal(&ksig) — có signal + có handler?
+        │
+   ┌────┴─────────────────────────────┐
+   │ YES: kiểm SA_RESTART (xem §32)   │ NO: không có signal cần deliver
+   ▼                                  ▼
+ SA_RESTART?                    regs->pc đã ở restart_addr
+  ├─ CÓ → giữ pc=restart_addr    → nếu -ERESTART_RESTARTBLOCK: setup_restart_syscall()
+  │        → handler chạy xong    → user_rewind_single_step()
+  │        → sigreturn khôi phục pc=restart_addr
+  │        → CPU chạy lại `svc` TỪ ĐẦU → syscall RESTART
+  └─ KHÔNG → set regs->regs[0]=-EINTR, pc=continue_addr (SAU svc)
+             → handler chạy xong → sigreturn → syscall trả -EINTR cho ứng dụng
+</pre></div>
+
+<h3>4 mã lỗi restart — xác nhận có trong source</h3>
+<div class="code-block">
+<div class="code-head"><span class="file">include/linux/errno.h</span><span class="symf">ERESTART* · line 14-18</span><span class="spacer"></span><button class="copy-btn" data-copy="cb28">COPY</button></div>
+<pre id="cb28"><code>#define ERESTARTSYS		512
+#define ERESTARTNOINTR		513
+#define ERESTARTNOHAND		514  /* restart if no handler.. */
+#define ERESTART_RESTARTBLOCK	516  /* restart by calling sys_restart_syscall */</code></pre>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Mã lỗi</th><th>Ý nghĩa</th><th>Kết quả trong do_signal()</th></tr></thead>
+<tbody>
+<tr><td><code>-ERESTARTNOINTR</code></td><td>Luôn restart, bất kể handler có <code>SA_RESTART</code> hay không</td><td><b>Luôn restart</b> — điều kiện huỷ-restart trong do_signal() không liệt kê mã này</td></tr>
+<tr><td><code>-ERESTARTSYS</code></td><td>Restart CHỈ NẾU handler có <code>SA_RESTART</code></td><td>Restart nếu <code>ka.sa.sa_flags & SA_RESTART</code>, ngược lại trả <code>-EINTR</code></td></tr>
+<tr><td><code>-ERESTARTNOHAND</code></td><td>Restart CHỈ NẾU không có handler nào thực sự chạy (vd chỉ có SIG_IGN)</td><td>Nếu có handler chạy (<code>get_signal()==true</code>) → LUÔN <code>-EINTR</code>, bất kể SA_RESTART</td></tr>
+<tr><td><code>-ERESTART_RESTARTBLOCK</code></td><td>"Restart chậm" — không chạy lại syscall gốc, mà gọi <code>sys_restart_syscall()</code> với state đã lưu trong <code>current->restart_block</code> (dùng cho <code>poll()</code>/<code>nanosleep()</code> — cần nhớ "còn bao lâu nữa")</td><td>Nếu không restart được: <code>setup_restart_syscall(regs)</code> đặt <code>regs->regs[8] = __NR_restart_syscall</code></td></tr>
+</tbody>
+</table></div>
+
+<div class="callout info"><b>Vì sao read() "biết" phải trả -ERESTARTSYS thay vì -EINTR ngay?</b> Đây là quy ước nội bộ kernel: hàm chờ dữ liệu bên trong <code>sys_read()</code>/driver trả các mã <code>-ERESTART*</code> đặc biệt này (không phải errno chuẩn POSIX) khi bị đánh thức bởi signal. Kernel <b>chuyển đổi</b> chúng thành <code>-EINTR</code> thật (giá trị errno chuẩn) hoặc thành syscall được chạy lại, tại đúng một chỗ: <code>do_signal()</code>. Ứng dụng userspace <b>không bao giờ thấy</b> giá trị 512-516 — nó chỉ thấy <code>-EINTR</code> hoặc syscall "tự nhiên hoàn tất" như chưa từng bị ngắt.</div>
+</section>
+
+<section id="sa-restart">
+<h2 class="sec-title"><span class="num">32</span>SA_RESTART</h2>
+<div class="diagram"><pre>
+                    interrupted syscall trả về  regs->regs[0] = retval
+                                    │
+                                    ▼
+                     retval ∈ {-ERESTARTNOHAND, -ERESTARTSYS,
+                               -ERESTARTNOINTR, -ERESTART_RESTARTBLOCK} ?
+                                    │
+                              YES   │   NO → không liên quan restart, trả nguyên retval
+                                    ▼
+                 do_signal(): lùi pc về restart_addr (CHUẨN BỊ SẴN cho restart)
+                                    │
+                                    ▼
+                       get_signal(&ksig)  có handler thật sự để chạy?
+                          │                              │
+                        KHÔNG                           CÓ
+                          │                              │
+              (không huỷ quyết định restart ở trên)      ▼
+                          │                    Xét theo retval cụ thể:
+                          │             ┌───────────────┼────────────────┐
+                          │             ▼               ▼                ▼
+                          │      -ERESTARTNOHAND   -ERESTARTSYS    -ERESTARTNOINTR
+                          │      HOẶC               │                    │
+                          │      -ERESTART_         ka.sa_flags &        LUÔN
+                          │      RESTARTBLOCK        SA_RESTART?         RESTART
+                          │             │           ╱        ╲           (không xét
+                          │          LUÔN         CÓ         KHÔNG        SA_RESTART)
+                          │          → EINTR    RESTART     → EINTR
+                          ▼
+                 syscall && pc==restart_addr?
+                    │
+              -ERESTART_RESTARTBLOCK?
+                    │
+                 setup_restart_syscall(regs)
+                 regs->regs[8] = __NR_restart_syscall
+</pre></div>
+
+<div class="callout warn"><b>SA_RESTART KHÔNG có hiệu lực tuyệt đối</b> — Bảng trên cho thấy rõ: <code>SA_RESTART</code> chỉ được kernel tham khảo khi mã lỗi là <code>-ERESTARTSYS</code>. Với <code>-ERESTARTNOINTR</code>, syscall LUÔN restart dù không có <code>SA_RESTART</code>. Với <code>-ERESTARTNOHAND</code>, nếu có handler thật chạy thì LUÔN trả <code>-EINTR</code> dù CÓ <code>SA_RESTART</code>. Nói cách khác: <b>quyết định restart hay không phần lớn nằm ở chỗ syscall gốc trả mã lỗi nào</b>, <code>SA_RESTART</code> chỉ là một trong nhiều điều kiện.</div>
+
+<h4>Đoạn source quyết định (trích lại từ §21 để đối chiếu)</h4>
+<div class="code-block">
+<div class="code-head"><span class="file">arch/arm64/kernel/signal.c</span><span class="symf">do_signal() — đoạn quyết định restart · line 891-898</span><span class="spacer"></span><button class="copy-btn" data-copy="cb29">COPY</button></div>
+<pre id="cb29"><code>if (regs->pc == restart_addr &&
+    (retval == -ERESTARTNOHAND ||
+     retval == -ERESTART_RESTARTBLOCK ||
+     (retval == -ERESTARTSYS &&
+      !(ksig.ka.sa.sa_flags & SA_RESTART)))) {
+	syscall_set_return_value(current, regs, -EINTR, 0);
+	regs->pc = continue_addr;
+}</code></pre>
+</div>
+</section>
+
+<section id="std-vs-rt">
+<h2 class="sec-title"><span class="num">33</span>Standard vs Realtime Signal</h2>
+<div class="grid2">
+<div class="card">
+<h4 style="margin-top:0;">STANDARD (số hiệu &lt; SIGRTMIN)</h4>
+<div class="diagram" style="margin-top:0;"><pre>
+SIGUSR1 lần 1 ──► sigaddset(pending, SIGUSR1)   bit=1
+SIGUSR1 lần 2 ──► legacy_queue() thấy bit đã 1
+                   → return TRACE_SIGNAL_ALREADY_PENDING
+                   → KHÔNG alloc thêm sigqueue, KHÔNG tăng gì cả
+                   pending vẫn chỉ có 1 bit = 1
+</pre></div>
+<p style="font-size:13.2px;">Xác nhận trực tiếp từ <code>legacy_queue()</code> (kernel/signal.c:1072): <code>(sig &lt; SIGRTMIN) && sigismember(&signals->signal, sig)</code>. → Gửi N lần SIGUSR1 liên tiếp trong lúc bị block chỉ dequeue được <b>đúng 1 lần</b> sau khi unblock.</p>
+</div>
+<div class="card">
+<h4 style="margin-top:0;">REALTIME (SIGRTMIN..SIGRTMAX)</h4>
+<div class="diagram" style="margin-top:0;"><pre>
+SIGRTMIN lần 1 ──► __sigqueue_alloc() → sigqueue #1 → list_add_tail
+SIGRTMIN lần 2 ──► __sigqueue_alloc() → sigqueue #2 → list_add_tail
+SIGRTMIN lần 3 ──► __sigqueue_alloc() → sigqueue #3 → list_add_tail
+                    pending->list: [#1] → [#2] → [#3]   (FIFO, dequeue theo thứ tự)
+</pre></div>
+<p style="font-size:13.2px;"><code>legacy_queue()</code> chỉ áp dụng cho <code>sig &lt; SIGRTMIN</code>, nên realtime signal luôn đi tiếp tới
+<code>__sigqueue_alloc()</code> mỗi lần gửi (trừ khi hết quota <code>RLIMIT_SIGPENDING</code> → <code>-EAGAIN</code>,
+xem <code>__send_signal()</code> nhánh <code>TRACE_SIGNAL_OVERFLOW_FAIL</code>).</p>
+</div>
+</div>
+<div class="callout ok"><b>Kết luận đã xác nhận bằng source</b> — Standard signal: "có thể merge nhiều lần pending cùng signal" là ĐÚNG (chỉ giữ 1 bit, không giữ số lần). Realtime signal: "có queue nhiều instance" là ĐÚNG (mỗi lần gửi = 1 node <code>sigqueue</code> riêng, giữ nguyên siginfo của từng lần).</div>
+</section>
+
+<section id="process-vs-thread">
+<h2 class="sec-title"><span class="num">34</span>Process vs Thread-Directed Signal</h2>
+<div class="diagram"><pre>
+                 PROCESS (thread group, chung 1 signal_struct + sighand_struct)
+                /        |        \
+             T1(leader) T2        T3
+                │         │        │
+             pending    pending  pending     ← mỗi thread có sigpending RIÊNG (private)
+             (riêng)    (riêng)  (riêng)
+                \         │        /
+                 \        │       /
+                  ▼        ▼      ▼
+                shared_pending  (1 CÁI DUY NHẤT, trong signal_struct, dùng chung cả 3 thread)
+</pre></div>
+<div class="grid2">
+<div class="card">
+<h4 style="margin-top:0;">process-directed (kill/pgrp)</h4>
+<div class="diagram" style="margin-top:0;"><pre>
+kill(pid, sig)
+   ↓
+group_send_sig_info(sig, info, p, PIDTYPE_TGID)
+   ↓
+send_signal() → __send_signal(..., PIDTYPE_TGID, ...)
+   ↓ (type != PIDTYPE_PID)
+pending = &t->signal->shared_pending
+   ↓
+complete_signal() CHỌN 1 thread bất kỳ thoả wants_signal()
+   (ưu tiên main thread nếu nó nhận được; không thì round-robin
+    qua signal->curr_target)
+</pre></div>
+</div>
+<div class="card">
+<h4 style="margin-top:0;">thread-directed (tgkill/tkill/fault đồng bộ)</h4>
+<div class="diagram" style="margin-top:0;"><pre>
+tgkill(tgid, pid, sig)
+   ↓
+do_tkill() → do_send_specific()
+   ↓
+do_send_sig_info(sig, info, p, PIDTYPE_PID)
+   ↓ (type == PIDTYPE_PID)
+pending = &t->pending    ← ĐÚNG thread p, không ai khác
+   ↓
+complete_signal(): thread_group_empty() hoặc PIDTYPE_PID
+   → nếu chính t muốn (wants_signal) thì đánh thức t,
+     nếu không thì return (t tự dequeue lúc chạy lại)
+</pre></div>
+</div>
+</div>
+<p style="font-size:13.3px;">Bảng so sánh 3 syscall gửi signal đã có ở <a href="#sys-tgkill">§15</a>.</p>
+</section>
+
+<section id="locking">
+<h2 class="sec-title"><span class="num">35</span>Signal Locking</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Lock</th><th>Protects</th><th>Acquire</th><th>Release</th><th>Context</th></tr></thead>
+<tbody>
+<tr><td><code>sighand->siglock</code> (spinlock_t)</td><td><code>action[]</code>, <code>pending</code>, <code>shared_pending</code>, <code>blocked</code> (qua các hàm set_current_blocked), jobctl, group_exit state</td><td><code>spin_lock_irq()</code> / <code>lock_task_sighand()</code></td><td><code>spin_unlock_irq()</code> / <code>unlock_task_sighand()</code></td><td>Process context, tắt IRQ local (vì signal có thể generate từ interrupt context — vd timer)</td></tr>
+</tbody>
+</table></div>
+<p style="font-size:13.4px;">Đây gần như là <b>khoá duy nhất</b> của toàn bộ signal subsystem — do comment trong
+<code>include/linux/sched/signal.h:76-81</code> giải thích rõ: <i>"signal_struct does not have its own locking,
+because a shared signal_struct always implies a shared sighand_struct, so locking sighand_struct is always a
+proper superset of the locking of signal_struct."</i> Không có "signal_struct lock" riêng.</p>
+
+<h3>Race condition — 3 thread cùng lúc</h3>
+<div class="diagram"><pre>
+  Thread A: kill()/tgkill()          Thread B: sigaction()             Thread C: get_signal() (deliver)
+       │                                   │                                   │
+       ▼                                   ▼                                   ▼
+  lock_task_sighand()                spin_lock_irq(siglock)             spin_lock_irq(siglock)
+  → __send_signal()                  → do_sigaction()                   (trong get_signal(), do_signal_stop(), …)
+  → sigaddset(pending)               → ghi action[sig-1]
+  → complete_signal()                → flush pending nếu SIG_IGN
+       │                                   │                                   │
+       └───────────────┬───────────────────┴───────────────┬──────────────────┘
+                        ▼  siglock là spinlock ĐƠN, 3 thread SERIALIZE hoàn toàn qua nó
+                 Không có 2 thao tác nào ở trên chồng lấn nhau về mặt bộ nhớ.
+</pre></div>
+<div class="callout ok"><b>Kernel đảm bảo consistency thế nào?</b> Bằng cách buộc <b>mọi</b> điểm chạm vào <code>action[]</code>, <code>pending</code>, <code>shared_pending</code>, hay <code>blocked</code> đều phải giữ đúng 1 spinlock (<code>siglock</code>) — không có "read nhanh không khoá" ở những field này (khác với <code>rlim[]</code> vốn cố ý không khoá vì lý do hiệu năng, theo comment trong <code>signal_struct</code>). Vì siglock tắt luôn IRQ cục bộ (<code>spin_lock_irq</code>), interrupt handler gửi signal (hiếm, nhưng có) cũng không thể deadlock với process context đang giữ lock.</div>
+</section>
+
+<section id="refcounting">
+<h2 class="sec-title"><span class="num">36</span>Reference Counting</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Struct</th><th>Refcount field</th><th>Tăng khi</th><th>Giảm/free khi</th></tr></thead>
+<tbody>
+<tr><td><code>signal_struct</code></td><td><code>refcount_t sigcnt</code></td><td><code>copy_signal()</code> lúc <code>fork()</code> mà không có <code>CLONE_THREAD</code> tạo mới (refcount=1); nếu có CLONE_THREAD thì <code>get_signal_struct()</code>-style tăng ref của signal_struct cha</td><td>Thread cuối cùng của group thoát → <code>__exit_signal()</code> → về 0 → <code>__cleanup_signal()</code> free struct</td></tr>
+<tr><td><code>sighand_struct</code></td><td><code>refcount_t count</code></td><td><code>copy_sighand()</code> — tăng nếu <code>CLONE_SIGHAND</code>, alloc mới nếu không</td><td><code>__cleanup_sighand()</code> khi count về 0 (thường cùng lúc với thread cuối exit)</td></tr>
+<tr><td><code>task_struct</code></td><td><code>refcount_t usage</code> (ngoài phạm vi signal, nhưng liên quan)</td><td><code>get_task_struct()</code> mỗi khi giữ con trỏ dài hạn (vd <code>signal->curr_target</code>, <code>group_exit_task</code>)</td><td><code>put_task_struct()</code>; struct thật sự free qua RCU sau <code>__put_task_struct()</code></td></tr>
+<tr><td><code>sigqueue</code></td><td>Không dùng refcount — sở hữu đơn (owned bởi đúng 1 list tại 1 thời điểm)</td><td><code>__sigqueue_alloc()</code></td><td><code>__sigqueue_free()</code> ngay sau <code>collect_signal()</code> lấy nó ra khỏi list (trừ <code>SIGQUEUE_PREALLOC</code> dùng cho posix-timer, được tái sử dụng thay vì free)</td></tr>
+</tbody>
+</table></div>
+<div class="grid2">
+<div class="card">
+<h4 style="margin-top:0;">Khi process exits</h4>
+<p style="font-size:13.3px;"><code>do_exit()</code> → <code>exit_signals()</code>/<code>__exit_signal()</code> flush toàn bộ <code>pending</code> và (nếu là thread cuối) <code>shared_pending</code> qua <code>flush_sigqueue()</code>, rồi drop reference <code>signal_struct</code>/<code>sighand_struct</code>.</p>
+</div>
+<div class="card">
+<h4 style="margin-top:0;">Khi thread exits (không phải cuối)</h4>
+<p style="font-size:13.3px;">Chỉ <code>task_struct.pending</code> riêng bị flush; <code>shared_pending</code> và <code>sighand_struct</code> vẫn sống cho các thread còn lại — refcount chỉ giảm 1.</p>
+</div>
+</div>
+</section>
+
+<section id="complete-trace">
+<h2 class="sec-title"><span class="num">37</span>Complete Signal Trace</h2>
+<p class="lead">Case study: <b>Process A</b> chạy <code>kill(pid_B, SIGUSR1)</code>; <b>Process B</b> đã đăng ký handler qua <code>signal(SIGUSR1, handler)</code>. Click từng bước để nhảy tới section chi tiết.</p>
+
+<div class="trace">
+<a class="node" href="#sys-kill">PROCESS A: sys_kill(pid_B, SIGUSR1)</a>
+<a class="node" href="#sys-kill">kill_pid_info() → group_send_sig_info(PIDTYPE_TGID)</a>
+<a class="node" href="#generation">__send_signal(): sigaddset(&B.shared_pending.signal, SIGUSR1)</a>
+<a class="node" href="#generation">complete_signal(): chọn thread B thoả wants_signal() → signal_wake_up()</a>
+<a class="node" href="#pending">PROCESS B: TIF_SIGPENDING set, wake_up_state() (B rời TASK_INTERRUPTIBLE nếu đang ngủ)</a>
+<a class="node" href="#delivery">B chạy lại → return-to-user → do_notify_resume() thấy _TIF_SIGPENDING</a>
+<a class="node" href="#do-signal">do_signal(regs)  [arch/arm64/kernel/signal.c:846]</a>
+<a class="node" href="#get-signal">get_signal(&ksig): dequeue SIGUSR1, action != SIG_DFL/SIG_IGN → ksig.ka = *ka</a>
+<a class="node" href="#handle-signal">handle_signal(&ksig, regs)</a>
+<a class="node" href="#arm64-frame">setup_rt_frame(): dựng rt_sigframe trên user stack của B</a>
+<a class="node" href="#arm64-registers">setup_return(): regs->pc=handler, sp=sigframe, x0=SIGUSR1, x30=trampoline</a>
+<a class="node" href="#signal-handler">USERSPACE (EL0): handler(SIGUSR1, info, uc) chạy trong B</a>
+<a class="node" href="#trampoline">handler ret → __kernel_rt_sigreturn (vDSO)</a>
+<a class="node" href="#sigreturn">svc → SYSCALL_DEFINE0(rt_sigreturn) → restore_sigframe()</a>
+<a class="node" href="#sigreturn">eret: pc/sp/x0-30/pstate khôi phục, blocked mask khôi phục</a>
+<a class="node" href="#complete-trace">B tiếp tục ĐÚNG lệnh bị ngắt trước khi nhận SIGUSR1</a>
+</div>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Bước</th><th>Function</th><th>Source</th><th>Dữ liệu chính</th><th>Register/State liên quan</th></tr></thead>
+<tbody>
+<tr><td>Gửi</td><td><code>__send_signal</code></td><td>kernel/signal.c:1077</td><td><code>sig=SIGUSR1</code>, <code>info=SEND_SIG_NOINFO</code></td><td>Ngữ cảnh: A (sender), không đụng tới regs của B</td></tr>
+<tr><td>Đánh thức</td><td><code>signal_wake_up</code></td><td>kernel/signal.c (gọi từ complete_signal)</td><td><code>t=B</code></td><td><code>TIF_SIGPENDING</code> trên B; nếu B ở CPU khác → <code>kick_process()</code> gửi IPI</td></tr>
+<tr><td>Kiểm tra</td><td><code>do_notify_resume</code></td><td>arch/arm64/kernel/signal.c:917</td><td><code>thread_flags & _TIF_SIGPENDING</code></td><td>Chạy trong ngữ cảnh B, ngay trước <code>eret</code> về EL0</td></tr>
+<tr><td>Chọn signal</td><td><code>get_signal</code></td><td>kernel/signal.c:2534</td><td><code>ksig.sig=SIGUSR1</code>, <code>ksig.ka</code></td><td>Giữ <code>B.sighand->siglock</code> trong lúc dequeue</td></tr>
+<tr><td>Dựng frame</td><td><code>setup_rt_frame</code></td><td>arch/arm64/kernel/signal.c:766</td><td><code>rt_sigframe</code> trên <code>B</code> user stack</td><td><code>B.regs.sp</code> (trước khi sửa) dùng làm gốc tính vị trí frame</td></tr>
+<tr><td>Nhảy vào handler</td><td><code>setup_return</code></td><td>arch/arm64/kernel/signal.c:729</td><td>—</td><td><code>B.regs.pc=handler</code>, <code>sp=sigframe</code>, <code>x0=SIGUSR1</code>, <code>x30=trampoline</code></td></tr>
+<tr><td>Return</td><td><code>rt_sigreturn</code></td><td>arch/arm64/kernel/signal.c:530</td><td>đọc lại <code>uc_mcontext</code></td><td><code>B.regs</code> toàn bộ được ghi đè từ frame</td></tr>
+</tbody>
+</table></div>
+</section>
+
+<section id="syscall-trace">
+<h2 class="sec-title"><span class="num">38</span>Signal + Syscall Combined Trace</h2>
+<p class="lead">Case study nâng cao: process đang <code>read(fd, buffer, size)</code> và ngủ chờ dữ liệu; process khác gọi
+<code>kill(pid, SIGUSR1)</code>. Kết hợp toàn bộ Ch.10 (syscall/exception entry) với Ch.11 (signal).</p>
+
+<div class="diagram"><pre>
+   USERSPACE (process B)                     PROCESS A                 ARM64 core / kernel
+        │
+        │  read(fd, buffer, size)
+        ▼
+     SVC #0 ──────────────────────────────────────────────────► ARM64 exception entry (kernel_entry)
+                                                                       │
+                                                                       ▼
+                                                                  pt_regs lưu trên kernel stack B
+                                                                       │
+                                                                       ▼
+                                                                  sys_read() → driver không có data
+                                                                       │
+                                                                       ▼
+                                                       set_current_state(TASK_INTERRUPTIBLE); schedule();
+                                                                  (B rời CPU, "ngủ" GIỮA syscall)
+                                                                       ▲
+                                                                       │ SIGNAL
+                                             kill(pid_B,SIGUSR1) ──────┘
+                                             __send_signal() → sigaddset(shared_pending)
+                                             complete_signal() → signal_wake_up(B)
+                                             wake_up_state() → B: TASK_INTERRUPTIBLE→TASK_RUNNING
+                                                                       │
+                                                                       ▼
+                                                            B được lập lịch lại, vòng lặp chờ trong
+                                                            sys_read() kiểm signal_pending(current)==true
+                                                                       │
+                                                                       ▼
+                                                            sys_read() trả  -ERESTARTSYS  (KHÔNG phải -EINTR)
+                                                                       │
+                                                                       ▼
+                                                            ret_to_user → do_notify_resume()
+                                                            → do_signal(regs)      [§21]
+                                                              in_syscall()==true → lùi pc về restart_addr
+                                                                       │
+                                                                       ▼
+                                                            get_signal(&ksig) → có handler SIGUSR1?
+                                                                       │
+                                                     ┌─────────────────┴──────────────────┐
+                                                     ▼ CÓ handler                          ▼ KHÔNG (SIG_IGN/no handler)
+                                            SA_RESTART set?                         không đổi gì thêm
+                                             ├─ CÓ: giữ pc=restart_addr             (đã lùi pc sẵn ở trên)
+                                             │      handle_signal() → setup_rt_frame()
+                                             │      eret vào handler (EL0)
+                                             │      handler chạy, ret → trampoline → rt_sigreturn
+                                             │      restore_sigframe(): pc khôi phục = restart_addr
+                                             │      eret → CPU chạy lại `svc` TỪ ĐẦU → sys_read() CHẠY LẠI
+                                             │
+                                             └─ KHÔNG: regs->regs[0]=-EINTR, pc=continue_addr (sau svc)
+                                                    handle_signal() → setup_rt_frame() → eret vào handler
+                                                    handler chạy, ret → trampoline → rt_sigreturn
+                                                    restore_sigframe(): pc = continue_addr
+                                                    eret → userspace thấy read() trả -EINTR (errno=EINTR)
+</pre></div>
+
+<h3>ARM64 + Signal + Syscall — timeline hợp nhất Ch.10/Ch.11</h3>
+<div class="diagram"><pre>
+USERSPACE
+    │  read()
+    ▼
+SVC #0
+    ▼
+ARM64 exception entry (kernel_entry, Ch.10)  →  pt_regs lưu trên kernel stack
+    ▼
+sys_read()  →  task sleeps (TASK_INTERRUPTIBLE + schedule())
+    │                                     ▲
+    │                          SIGNAL: __send_signal() + complete_signal()
+    ▼                                     │
+signal pending  ──────────────────────────┘
+    ▼
+wakeup (wake_up_state trong signal_wake_up)
+    ▼
+sys_read() dequeue xong retval=-ERESTARTSYS → về ret_to_user
+    ▼
+do_notify_resume() → do_signal(regs)  [arch/arm64/kernel/signal.c]
+    ▼
+get_signal() → handle_signal() → setup_rt_frame()  (nếu có handler)
+    ▼
+USERSPACE HANDLER (EL0)
+    ▼
+sigreturn → restore_sigframe() → khôi phục pt_regs
+    ▼
+syscall restart (svc chạy lại) HOẶC EINTR (tuỳ SA_RESTART, §32)
+    ▼
+USERSPACE tiếp tục
+</pre></div>
+<div class="callout info"><b>Đây là "Master Diagram" của tài liệu</b> — nó gộp: signal generation (§04), pending/wakeup (§05), return-to-user check (§20), do_signal/get_signal/handle_signal (§21-23), signal frame ARM64 (§26-28), trampoline/sigreturn (§29-30), và interrupted-syscall/SA_RESTART (§31-32) vào đúng MỘT luồng thời gian thực tế.</div>
+</section>
+
+<section id="book-vs-modern">
+<h2 class="sec-title"><span class="num">39</span>Book (Chapter 11) vs Linux v5.10.241 ARM64</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Chapter 11 (thường mô tả 2.6/x86)</th><th>Linux v5.10.241 ARM64 (source thật)</th><th>Difference</th></tr></thead>
+<tbody>
+<tr><td>Signal frame dựng trực tiếp bằng asm-inline trên stack, có thể chứa <i>code thực thi</i> (trampoline nằm ngay trên stack)</td><td><code>setup_rt_frame()</code> chỉ dựng <b>data</b> (rt_sigframe); trampoline nằm trong vDSO, KHÔNG nằm trên stack</td><td><span class="tag tag-error">X86 ONLY / HISTORICAL</span> — loại bỏ vì lý do bảo mật (NX/executable-stack)</td></tr>
+<tr><td>"sigreturn" và "rt_sigreturn" là 2 syscall khác nhau (x86 có cả 2 vì lịch sử signal cũ kiểu BSD)</td><td>ARM64 <b>chỉ có</b> <code>rt_sigreturn</code> (__NR_rt_sigreturn); không định nghĩa syscall "sigreturn" cũ</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT</span> — ARM64 sinh sau, chỉ giữ ABI hiện đại</td></tr>
+<tr><td>Đăng ký handler qua bảng đơn giản gắn trực tiếp trên process descriptor</td><td>Tách hẳn 2 struct: <code>signal_struct</code> (state + shared_pending) và <code>sighand_struct</code> (action[] + siglock), share theo 2 cờ CLONE khác nhau</td><td><span class="tag tag-generic">CHANGED</span> — hỗ trợ NPTL (POSIX threads) đúng chuẩn từ 2.6 trở đi</td></tr>
+<tr><td>pt_regs / cách truyền tham số handler theo calling convention x86 (stack-based args một phần)</td><td>AAPCS64: tham số qua x0-x2, hoàn toàn qua thanh ghi</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT</span></td></tr>
+<tr><td>"Signal delivery xảy ra ngay khi kernel rảnh" (mô tả chung chung)</td><td>Chính xác là: <b>chỉ tại điểm return-to-user</b> (<code>do_notify_resume</code>), kiểm <code>_TIF_WORK_MASK</code> bao gồm <code>_TIF_SIGPENDING</code></td><td><span class="tag tag-generic">STILL VALID</span> nhưng cần chính xác hoá bằng cờ TIF cụ thể</td></tr>
+<tr><td>Core dump layout / định dạng cũ</td><td><code>do_coredump()</code> dùng ELF core format hiện đại, không đổi về khái niệm</td><td><span class="tag tag-generic">STILL VALID</span></td></tr>
+<tr><td>Không đề cập FPSIMD/SVE trong signal frame (sách cũ, trước ARM64/SVE)</td><td><code>__reserved[4096]</code> chứa chuỗi magic-tag: <code>fpsimd_context</code>, <code>esr_context</code>, <code>sve_context</code> — mở rộng được mà vẫn tương thích ngược</td><td><span class="tag tag-arm64">ARM64 EQUIVALENT</span> — cơ chế này không tồn tại khi Chapter 11 được viết</td></tr>
+<tr><td>Restart syscall mô tả chung "kernel tự động thử lại"</td><td>4 mã <code>-ERESTART*</code> cụ thể với ngữ nghĩa khác nhau (§31-32), xử lý tập trung ở <code>do_signal()</code></td><td><span class="tag tag-generic">STILL VALID</span>, chi tiết hơn sách nhiều</td></tr>
+</tbody>
+</table></div>
+<div class="callout warn"><b>Về vendor patch của BSP này</b> — Hai đoạn <span class="tag tag-vendor">VENDOR PATCH</span> tìm thấy (sys_kill debug log ở §13, khối CONFIG_THREADDRV trong get_signal() ở §22) không tồn tại trong bất kỳ phiên bản Linux mainline nào (kể cả 2.6, kể cả 5.10 gốc) — chúng là customization riêng của nhà sản xuất board cho mục đích debug watchdog nội bộ, không nên coi là kiến thức kernel tổng quát.</div>
+</section>
+
+<section id="misconceptions">
+<h2 class="sec-title">Common Misconceptions</h2>
+<div class="misconception">
+<div class="wrong">❌ WRONG: Signal generation = signal delivery</div>
+<div class="correct">✅ CORRECT: Generation chỉ bật bit pending + đánh thức; delivery là bước riêng chạy trong ngữ cảnh
+process nhận, tại return-to-user.</div>
+<div class="why">Why: <code>kill()</code> trả về ngay sau <code>__send_signal()</code>, không chờ handler chạy. Xem <a href="#overview">§01</a>, <a href="#generation">§04</a>.</div>
+<div class="src">Source: kernel/signal.c:1077 (__send_signal), arch/arm64/kernel/signal.c:846 (do_signal)</div>
+</div>
+<div class="misconception">
+<div class="wrong">❌ WRONG: Signal bị block nghĩa là signal biến mất</div>
+<div class="correct">✅ CORRECT: Bit vẫn được set trong <code>pending->signal</code>; nó chỉ không được <code>next_signal()</code>
+chọn ra cho tới khi unblock.</div>
+<div class="why">Why: <code>__send_signal()</code> không hề kiểm tra <code>t->blocked</code> trước khi <code>sigaddset()</code>.</div>
+<div class="src">Source: kernel/signal.c:1171, next_signal() line 214</div>
+</div>
+<div class="misconception">
+<div class="wrong">❌ WRONG: kill() luôn thực thi handler ngay lập tức</div>
+<div class="correct">✅ CORRECT: <code>kill()</code> chỉ đặt hàng (queue); handler chạy sau đó, trong ngữ cảnh của process
+nhận, khi nó tự quay lại userspace.</div>
+<div class="why">Why: Không có cơ chế nào trong kernel "nhảy" trực tiếp vào code của process khác từ ngữ cảnh sender.</div>
+<div class="src">Source: complete_signal()/signal_wake_up() chỉ gọi wake_up_state(), kernel/signal.c:1068</div>
+</div>
+<div class="misconception">
+<div class="wrong">❌ WRONG: Signal handler chạy ở kernel mode (EL1)</div>
+<div class="correct">✅ CORRECT: Handler chạy hoàn toàn ở EL0 (userspace); kernel chỉ sửa <code>pt_regs</code> rồi <code>eret</code>.</div>
+<div class="why">Why: <code>setup_return()</code> chỉ ghi giá trị vào struct <code>pt_regs</code> nằm trên kernel stack; CPU
+mới là thứ thật sự chuyển exception level khi <code>eret</code> chạy.</div>
+<div class="src">Source: arch/arm64/kernel/signal.c:729 (setup_return)</div>
+</div>
+<div class="misconception">
+<div class="wrong">❌ WRONG: sigreturn chỉ đơn giản "return" như một lời gọi hàm bình thường</div>
+<div class="correct">✅ CORRECT: <code>rt_sigreturn</code> là một syscall đặc biệt ghi đè TOÀN BỘ <code>pt_regs</code> (kể cả
+pc, sp, pstate) bằng dữ liệu đọc từ user stack — không có "return address" theo nghĩa thông thường.</div>
+<div class="why">Why: Handler được "gọi" bằng cách giả lập lời gọi hàm (sửa pc/sp/x0), nên nó không thể return kiểu
+bình thường về nơi đã gọi nó — vì kernel chưa từng thực sự CALL nó bằng instruction BL/BLR.</div>
+<div class="src">Source: arch/arm64/kernel/signal.c:486 (restore_sigframe), 530 (rt_sigreturn)</div>
+</div>
+<div class="misconception">
+<div class="wrong">❌ WRONG: Mọi signal đều được xếp hàng (queue) riêng biệt từng instance</div>
+<div class="correct">✅ CORRECT: Chỉ realtime signal (≥SIGRTMIN) mới queue nhiều instance; standard signal chỉ giữ 1 bit,
+các lần gửi trùng lặp trong lúc pending bị gộp lại.</div>
+<div class="why">Why: <code>legacy_queue()</code> chặn alloc thêm <code>sigqueue</code> cho standard signal đã pending.</div>
+<div class="src">Source: kernel/signal.c:1072 (legacy_queue), xem §33</div>
+</div>
+</section>
+
+<section id="how-to-read">
+<h2 class="sec-title">How to Read the Source</h2>
+<ul class="checklist">
+<li>Tìm nơi signal được generate — <code>__send_signal()</code>, kernel/signal.c:1077</li>
+<li>Tìm target task/thread — <code>t</code> parameter, xác định qua <code>type</code> (PIDTYPE_PID vs TGID)</li>
+<li>Tìm pending structure — <code>t->pending</code> vs <code>t->signal->shared_pending</code>, signal_types.h:30</li>
+<li>Tìm signal mask — <code>t->blocked</code>, include/linux/sched.h:977</li>
+<li>Tìm signal action — <code>t->sighand->action[sig-1]</code>, sched/signal.h:24</li>
+<li>Tìm điểm delivery — <code>do_notify_resume()</code>, arch/arm64/kernel/signal.c:917</li>
+<li>Tìm <code>get_signal()</code> — kernel/signal.c:2534</li>
+<li>Tìm <code>handle_signal()</code> — arch/arm64/kernel/signal.c:808</li>
+<li>Tìm <code>setup_frame()</code>/<code>setup_rt_frame()</code> — arch/arm64/kernel/signal.c:766</li>
+<li>Tìm ARM64 signal frame — <code>struct rt_sigframe</code>, arch/arm64/kernel/signal.c:40</li>
+<li>Tìm signal trampoline — vDSO <code>__kernel_rt_sigreturn</code>, VDSO_SYMBOL() trong setup_return()</li>
+<li>Tìm sigreturn — <code>SYSCALL_DEFINE0(rt_sigreturn)</code>, arch/arm64/kernel/signal.c:530</li>
+<li>Tìm syscall restart — 4 mã <code>-ERESTART*</code> trong do_signal(), arch/arm64/kernel/signal.c:870</li>
+</ul>
+</section>
+
+<section id="mental-model">
+<h2 class="sec-title">Final Mental Model</h2>
+<div class="diagram"><pre>
+GENERATION        __send_signal()
+    ↓
+PENDING           sigaddset(pending->signal, sig) [+ sigqueue nếu cần]
+    ↓
+MASK              sigismember(&blocked, sig)?
+    ↓
+SELECTION         next_signal() + dequeue_signal() (private trước, shared sau; sync fault ưu tiên)
+    ↓
+DELIVERY          do_notify_resume() → do_signal() → get_signal()
+    ↓
+ACTION
+ ┌──────┬──────┬────────┐
+ ↓      ↓      ↓
+IGNORE DEFAULT HANDLER
+       (term/dump/     ↓
+        stop/cont) SIGNAL FRAME    setup_rt_frame() trên user stack
+                        ↓
+                  USER HANDLER     chạy tại EL0
+                        ↓
+                   SIGRETURN       rt_sigreturn syscall, restore_sigframe()
+                        ↓
+                RESTORE CONTEXT    pt_regs + blocked mask khôi phục từ frame
+                        ↓
+              RESUME / RESTART     tiếp tục lệnh cũ, hoặc chạy lại syscall (SA_RESTART)
+</pre></div>
+</section>
+
+<section id="function-index">
+<h2 class="sec-title"><span class="num">40</span>Source Code Index</h2>
+<p class="lead">Bảng tra cứu toàn bộ symbol đã trace trong tài liệu. Gõ vào ô tìm kiếm để lọc theo tên hàm, file, hoặc category.</p>
+<input id="fnSearch" type="search" placeholder="Lọc theo function / file / category…" style="width:100%; max-width:420px; padding:8px 12px; border-radius:8px; border:1px solid var(--border-strong); background:var(--bg-sunken); color:var(--text); font-size:13.5px; margin-bottom:10px;">
+<div class="table-wrap">
+<table id="fnTable">
+<thead><tr><th>Function</th><th>Source</th><th>Category</th><th>Architecture</th></tr></thead>
+<tbody>
+<tr><td><code>__send_signal</code></td><td>kernel/signal.c:1077</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>send_signal</code></td><td>kernel/signal.c:1215</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>do_send_sig_info</code></td><td>kernel/signal.c:1290</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>group_send_sig_info</code></td><td>kernel/signal.c:1410</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>complete_signal</code></td><td>kernel/signal.c:996</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>prepare_signal</code></td><td>kernel/signal.c:906</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>wants_signal</code></td><td>kernel/signal.c:979</td><td>Generation</td><td>GENERIC</td></tr>
+<tr><td><code>legacy_queue</code></td><td>kernel/signal.c:1072</td><td>Generation / Realtime</td><td>GENERIC</td></tr>
+<tr><td><code>signal_wake_up</code></td><td>kernel/signal.c (via sched/signal.h)</td><td>Generation / Scheduler</td><td>SCHEDULER</td></tr>
+<tr><td><code>sys_kill</code> (SYSCALL_DEFINE2 kill)</td><td>kernel/signal.c:3765</td><td>Syscall</td><td>GENERIC / VENDOR PATCH</td></tr>
+<tr><td><code>kill_something_info</code></td><td>kernel/signal.c:1563</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>kill_pid_info</code></td><td>kernel/signal.c:1445</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>check_kill_permission</code></td><td>kernel/signal.c:834</td><td>Syscall / Permission</td><td>GENERIC</td></tr>
+<tr><td><code>do_tkill</code></td><td>kernel/signal.c:3926</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>sys_tgkill</code></td><td>kernel/signal.c:3950</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>sys_tkill</code></td><td>kernel/signal.c:3966</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>do_sigaction</code></td><td>kernel/signal.c:4085</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>sys_rt_sigaction</code></td><td>kernel/signal.c:4364</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>sigprocmask</code></td><td>kernel/signal.c:3058</td><td>Syscall / Mask</td><td>GENERIC</td></tr>
+<tr><td><code>sys_rt_sigprocmask</code></td><td>kernel/signal.c:3141</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>do_sigpending</code></td><td>kernel/signal.c:3196</td><td>Syscall / Pending</td><td>GENERIC</td></tr>
+<tr><td><code>sigsuspend</code></td><td>kernel/signal.c:4568</td><td>Syscall</td><td>GENERIC</td></tr>
+<tr><td><code>next_signal</code></td><td>kernel/signal.c:214</td><td>Pending / Selection</td><td>GENERIC</td></tr>
+<tr><td><code>dequeue_signal</code></td><td>kernel/signal.c:635</td><td>Pending / Selection</td><td>GENERIC</td></tr>
+<tr><td><code>dequeue_synchronous_signal</code></td><td>kernel/signal.c:713</td><td>Pending / Selection</td><td>GENERIC</td></tr>
+<tr><td><code>recalc_sigpending</code></td><td>kernel/signal.c:188</td><td>Pending / TIF</td><td>GENERIC</td></tr>
+<tr><td><code>get_signal</code></td><td>kernel/signal.c:2534</td><td>Delivery</td><td>GENERIC / VENDOR PATCH</td></tr>
+<tr><td><code>signal_delivered</code></td><td>kernel/signal.c:2884</td><td>Delivery / Mask</td><td>GENERIC</td></tr>
+<tr><td><code>do_signal_stop</code></td><td>kernel/signal.c:2304</td><td>Default Action</td><td>GENERIC</td></tr>
+<tr><td><code>do_coredump</code></td><td>kernel/signal.c (call site 2765)</td><td>Default Action</td><td>GENERIC</td></tr>
+<tr><td><code>do_signal</code></td><td>arch/arm64/kernel/signal.c:846</td><td>Delivery</td><td>ARM64</td></tr>
+<tr><td><code>do_notify_resume</code></td><td>arch/arm64/kernel/signal.c:917</td><td>Delivery</td><td>ARM64</td></tr>
+<tr><td><code>handle_signal</code></td><td>arch/arm64/kernel/signal.c:808</td><td>Delivery / Handler</td><td>ARM64</td></tr>
+<tr><td><code>setup_rt_frame</code></td><td>arch/arm64/kernel/signal.c:766</td><td>Signal Frame</td><td>ARM64</td></tr>
+<tr><td><code>get_sigframe</code></td><td>arch/arm64/kernel/signal.c:701</td><td>Signal Frame</td><td>ARM64</td></tr>
+<tr><td><code>setup_sigframe</code></td><td>arch/arm64/kernel/signal.c:611</td><td>Signal Frame</td><td>ARM64</td></tr>
+<tr><td><code>setup_return</code></td><td>arch/arm64/kernel/signal.c:729</td><td>Registers</td><td>ARM64</td></tr>
+<tr><td><code>restore_sigframe</code></td><td>arch/arm64/kernel/signal.c:486</td><td>Sigreturn</td><td>ARM64</td></tr>
+<tr><td><code>SYSCALL_DEFINE0(rt_sigreturn)</code></td><td>arch/arm64/kernel/signal.c:530</td><td>Sigreturn</td><td>ARM64</td></tr>
+<tr><td><code>parse_user_sigframe</code></td><td>arch/arm64/kernel/signal.c:326</td><td>Signal Frame / FPSIMD</td><td>ARM64</td></tr>
+<tr><td><code>preserve_fpsimd_context</code></td><td>arch/arm64/kernel/signal.c:171</td><td>Signal Frame / FPSIMD</td><td>ARM64</td></tr>
+<tr><td><code>restore_fpsimd_context</code></td><td>arch/arm64/kernel/signal.c:189</td><td>Sigreturn / FPSIMD</td><td>ARM64</td></tr>
+<tr><td><code>setup_restart_syscall</code></td><td>arch/arm64/kernel/signal.c:797</td><td>Restart</td><td>ARM64</td></tr>
+<tr><td><code>in_syscall</code></td><td>arch/arm64/include/asm/ptrace.h:202</td><td>Restart</td><td>ARM64</td></tr>
+<tr><td><code>sig_kernel_ignore/stop/coredump/only</code></td><td>include/linux/signal.h:442-445</td><td>Default Action</td><td>GENERIC</td></tr>
+<tr><td><code>flush_sigqueue</code></td><td>kernel/signal.c:467</td><td>Refcounting / Cleanup</td><td>GENERIC</td></tr>
+<tr><td><code>__sigqueue_alloc</code> / <code>__sigqueue_free</code></td><td>kernel/signal.c (call sites 1122, 458)</td><td>sigqueue lifecycle</td><td>GENERIC</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="roadmap">
+<h2 class="sec-title"><span class="num">41</span>Learning Roadmap</h2>
+<div class="flow">
+<div class="flow-step"><div class="idx">1</div><div class="body"><div class="ttl">Nắm data structures</div><div class="desc">Đọc §07-§12 trước tiên — nếu không phân biệt được <code>pending</code> vs <code>shared_pending</code>, <code>signal_struct</code> vs <code>sighand_struct</code>, phần sau sẽ rối.</div></div></div>
+<div class="flow-step"><div class="idx">2</div><div class="body"><div class="ttl">Trace 1 syscall generation đơn giản</div><div class="desc">Đọc §13 (kill) + §04, tự mở <code>kernel/signal.c</code> đúng dòng, xác nhận từng bước.</div></div></div>
+<div class="flow-step"><div class="idx">3</div><div class="body"><div class="ttl">Hiểu return-to-user check</div><div class="desc">§20 + §21 (do_signal) — đây là "cầu nối" quan trọng nhất giữa generation và delivery.</div></div></div>
+<div class="flow-step"><div class="idx">4</div><div class="body"><div class="ttl">Đọc get_signal() từng dòng</div><div class="desc">§22 — vòng lặp trung tâm quyết định ignore/default/handler. Bỏ qua khối VENDOR PATCH.</div></div></div>
+<div class="flow-step"><div class="idx">5</div><div class="body"><div class="ttl">Học ARM64 signal frame bằng tay</div><div class="desc">§26-§28 — vẽ lại layout stack trên giấy, đối chiếu với <code>struct rt_sigframe</code> thật.</div></div></div>
+<div class="flow-step"><div class="idx">6</div><div class="body"><div class="ttl">Trace sigreturn ngược lại</div><div class="desc">§29-§30 — đi từ <code>rt_sigreturn</code> ngược lên xem nó đọc field nào từ đâu.</div></div></div>
+<div class="flow-step"><div class="idx">7</div><div class="body"><div class="ttl">Ráp lại case study syscall bị ngắt</div><div class="desc">§31-§32 + §38 — đây là câu hỏi phỏng vấn kernel kinh điển nhất về signal.</div></div></div>
+<div class="flow-step"><div class="idx">8</div><div class="body"><div class="ttl">Tự làm lại Self Test</div><div class="desc">§42 — không nhìn đáp án trước, chỉ mở lại source khi bí.</div></div></div>
+</div>
+</section>
+
+<section id="self-test">
+<h2 class="sec-title"><span class="num">42</span>Self Test</h2>
+<p class="lead">Click vào câu hỏi để xem đáp án.</p>
+
+<details class="qa"><summary>1. Signal generation khác signal delivery như thế nào?</summary>
+<div class="answer">Generation = chạy trong ngữ cảnh sender, chỉ set bit pending + đánh thức (<code>__send_signal()</code>). Delivery = chạy trong ngữ cảnh process nhận, tại return-to-user, build frame + nhảy vào handler (<code>do_signal()</code>). Hai việc có thể cách nhau tuỳ ý về thời gian.</div></details>
+
+<details class="qa"><summary>2. Signal pending được lưu ở đâu?</summary>
+<div class="answer">2 nơi: <code>task_struct.pending</code> (riêng từng thread) và <code>task_struct.signal->shared_pending</code> (chung cả thread group). Mỗi nơi là 1 <code>struct sigpending</code> gồm bitmask <code>signal</code> + list <code>sigqueue</code>.</div></details>
+
+<details class="qa"><summary>3. shared_pending khác pending như thế nào?</summary>
+<div class="answer"><code>pending</code> nhận signal thread-directed (tgkill, fault đồng bộ) — chỉ chính thread đó dequeue được. <code>shared_pending</code> nhận signal process-directed (kill, raise) — bất kỳ thread nào trong group thoả <code>wants_signal()</code> cũng có thể được chọn để dequeue. <code>dequeue_signal()</code> luôn thử <code>pending</code> riêng TRƯỚC.</div></details>
+
+<details class="qa"><summary>4. signal_struct và sighand_struct khác nhau thế nào?</summary>
+<div class="answer"><code>signal_struct</code>: state + <code>shared_pending</code>, share theo <code>CLONE_THREAD</code>. <code>sighand_struct</code>: bảng <code>action[64]</code> + <code>siglock</code>, share theo <code>CLONE_SIGHAND</code>. Về lý thuyết tách rời được, thực tế luôn đi cùng nhau khi tạo pthread.</div></details>
+
+<details class="qa"><summary>5. Signal mask nằm ở đâu?</summary>
+<div class="answer"><code>task_struct.blocked</code> (sigset_t) — riêng từng thread, không share. Còn có <code>real_blocked</code> và <code>saved_sigmask</code> dùng tạm cho <code>sigsuspend()</code>/syscall kiểu ppoll.</div></details>
+
+<details class="qa"><summary>6. kill() gửi signal đến process hay thread?</summary>
+<div class="answer">Đến process (thread group) — dùng <code>PIDTYPE_TGID</code>, đẩy vào <code>shared_pending</code>, kernel tự chọn 1 thread phù hợp để nhận qua <code>complete_signal()</code>.</div></details>
+
+<details class="qa"><summary>7. tgkill() khác kill() thế nào?</summary>
+<div class="answer"><code>tgkill(tgid,pid,sig)</code> gửi tới ĐÚNG 1 thread cụ thể (<code>PIDTYPE_PID</code>, vào <code>t->pending</code> riêng), có kiểm tra tgid để tránh race PID bị tái sử dụng. <code>kill()</code> gửi tới cả process, kernel tự chọn thread.</div></details>
+
+<details class="qa"><summary>8. Khi signal bị block chuyện gì xảy ra?</summary>
+<div class="answer">Bit vẫn được set trong <code>pending->signal</code> bình thường (generation không quan tâm blocked). Nó chỉ không được <code>next_signal()</code>/<code>dequeue_signal()</code> chọn ra cho tới khi bị unblock.</div></details>
+
+<details class="qa"><summary>9. Khi signal được unblock chuyện gì xảy ra?</summary>
+<div class="answer"><code>__set_current_blocked()</code> gọi <code>recalc_sigpending()</code> ngay lập tức; nếu có signal vừa unblock đang pending, <code>TIF_SIGPENDING</code> được set lại → lần return-to-user tiếp theo sẽ deliver nó, không cần signal mới nào được gửi.</div></details>
+
+<details class="qa"><summary>10. do_signal() được gọi khi nào?</summary>
+<div class="answer">Trong <code>do_notify_resume()</code>, khi <code>thread_flags & (_TIF_SIGPENDING | _TIF_NOTIFY_SIGNAL)</code>, đúng vào điểm task chuẩn bị <code>eret</code> về EL0 (sau syscall hoặc sau interrupt/exception).</div></details>
+
+<details class="qa"><summary>11. get_signal() làm gì?</summary>
+<div class="answer">Vòng lặp: dequeue 1 signal → nếu SIG_IGN thì bỏ qua lặp tiếp → nếu SIG_DFL thì thực thi default action (có thể không return, vd terminate) → nếu có handler thật thì điền <code>ksig</code> và trả <code>true</code>. Trả <code>false</code> nếu hàng đợi rỗng.</div></details>
+
+<details class="qa"><summary>12. handle_signal() làm gì?</summary>
+<div class="answer">Gọi <code>setup_rt_frame()</code> để dựng signal frame trên user stack, rồi kiểm tra <code>valid_user_regs()</code>, cuối cùng gọi <code>signal_setup_done()</code> để cập nhật <code>blocked</code> mask (thêm sa_mask + chính signal đó trừ SA_NODEFER).</div></details>
+
+<details class="qa"><summary>13. Signal frame nằm ở đâu?</summary>
+<div class="answer">Trên USER STACK (dưới <code>regs->sp</code> hiện tại), hoặc trên alternate signal stack nếu handler dùng <code>SA_ONSTACK</code> + <code>sigaltstack()</code>. Vị trí chính xác tính bởi <code>get_sigframe()</code>.</div></details>
+
+<details class="qa"><summary>14. ARM64 thay đổi register thế nào khi gọi signal handler?</summary>
+<div class="answer"><code>setup_return()</code>: <code>pc</code>=địa chỉ handler, <code>sp</code>=địa chỉ signal frame, <code>x0</code>=số hiệu signal, <code>x1/x2</code>=siginfo*/ucontext* (nếu SA_SIGINFO), <code>x30</code>=địa chỉ trampoline (vDSO hoặc sa_restorer) để khi handler <code>ret</code> sẽ tự rơi vào đường sigreturn.</div></details>
+
+<details class="qa"><summary>15. sigreturn khôi phục gì?</summary>
+<div class="answer">Toàn bộ <code>pt_regs</code> (x0-x30, sp, pc, pstate — đã lọc qua <code>valid_user_regs()</code>), signal mask (<code>uc_sigmask</code> → <code>set_current_blocked()</code>), FPSIMD/SVE state, và alternate stack settings (<code>restore_altstack()</code>).</div></details>
+
+<details class="qa"><summary>16. Tại sao signal có thể interrupt syscall?</summary>
+<div class="answer">Khi 1 syscall đang ngủ (TASK_INTERRUPTIBLE) chờ điều kiện (dữ liệu, lock, timeout), một signal khác đến sẽ đánh thức nó qua <code>wake_up_state()</code>. Vòng lặp chờ bên trong syscall kiểm <code>signal_pending()</code> và thoát sớm, trả một trong các mã <code>-ERESTART*</code> thay vì tiếp tục chờ.</div></details>
+
+<details class="qa"><summary>17. -ERESTARTSYS nghĩa là gì?</summary>
+<div class="answer">Mã lỗi nội bộ kernel (giá trị 512, không phải errno POSIX thật) nghĩa là "syscall bị ngắt bởi signal, restart NẾU handler có SA_RESTART, ngược lại trả -EINTR cho user". Được xử lý và chuyển đổi hoàn toàn trong <code>do_signal()</code>, userspace không bao giờ thấy giá trị 512.</div></details>
+
+<details class="qa"><summary>18. SA_RESTART ảnh hưởng thế nào?</summary>
+<div class="answer">Chỉ có hiệu lực khi mã lỗi là <code>-ERESTARTSYS</code>: nếu set, kernel lùi <code>pc</code> về lệnh <code>svc</code> để chạy lại syscall sau khi handler xong; nếu không set, kernel đổi thành <code>-EINTR</code> và tiếp tục sau <code>svc</code>. Với <code>-ERESTARTNOINTR</code> luôn restart bất kể cờ này; với <code>-ERESTARTNOHAND</code>, có handler chạy thì luôn EINTR bất kể cờ này.</div></details>
+
+<details class="qa"><summary>19. Standard signal và realtime signal khác nhau thế nào?</summary>
+<div class="answer">Standard (&lt;SIGRTMIN): chỉ giữ 1 bit pending, gửi trùng nhiều lần bị gộp (<code>legacy_queue()</code>). Realtime (SIGRTMIN..SIGRTMAX): mỗi lần gửi tạo 1 <code>sigqueue</code> riêng, xếp hàng FIFO, giữ nguyên siginfo từng lần, dequeue tuần tự.</div></details>
+
+<details class="qa"><summary>20. Nếu read() đang sleep và signal đến, kernel thực hiện flow nào?</summary>
+<div class="answer">(1) <code>__send_signal()</code> đặt bit + <code>complete_signal()</code> đánh thức task; (2) vòng chờ trong <code>sys_read()</code> thấy <code>signal_pending()</code>, trả <code>-ERESTARTSYS</code>; (3) <code>ret_to_user</code> → <code>do_notify_resume()</code> → <code>do_signal()</code> lùi pc về lệnh svc; (4) <code>get_signal()</code> chọn signal, nếu có handler → <code>handle_signal()</code> dựng frame, huỷ quyết định restart nếu không có SA_RESTART; (5) handler chạy ở EL0; (6) <code>rt_sigreturn</code> khôi phục pt_regs với pc đã được đặt đúng (restart_addr hoặc continue_addr); (7) syscall chạy lại từ đầu HOẶC ứng dụng nhận -EINTR — xem sơ đồ đầy đủ ở <a href="#syscall-trace">§38</a>.</div></details>
+</section>
+
+<footer style="margin-top:60px; padding-top:20px; border-top:1px solid var(--border); color:var(--text-faint); font-size:12px;">
+Linux Kernel Signals — Source-Code Handbook · Trace trên Linux v5.10.241, ARM64, BSP <code>K-S800</code> ·
+Mọi kết luận đều đối chiếu trực tiếp với <code>kernel/signal.c</code> và <code>arch/arm64/kernel/signal.c</code> trong source tree thật.
+Hai đoạn <span class="tag tag-vendor" style="font-size:9px;">VENDOR PATCH</span> được giữ nguyên và đánh dấu rõ để không hiểu nhầm là hành vi kernel chuẩn.
+</footer>
+
+</main>
+</div>
+
+<button id="backTop" aria-label="Back to top">↑</button>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Theme toggle ---------- */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeToggle');
+  function getStoredTheme(){
+    try { return localStorage.getItem('signal-guide-theme'); } catch(e){ return null; }
+  }
+  function setStoredTheme(v){
+    try { localStorage.setItem('signal-guide-theme', v); } catch(e){}
+  }
+  function applyTheme(t){
+    if(t === 'light' || t === 'dark'){ root.setAttribute('data-theme', t); }
+    else { root.removeAttribute('data-theme'); }
+  }
+  var saved = getStoredTheme();
+  if(saved) applyTheme(saved);
+  if(themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var current = root.getAttribute('data-theme');
+      var next;
+      if(current === 'dark') next = 'light';
+      else if(current === 'light') next = 'dark';
+      else {
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        next = prefersDark ? 'light' : 'dark';
+      }
+      applyTheme(next);
+      setStoredTheme(next);
+    });
+  }
+
+  /* ---------- Mobile sidebar ---------- */
+  var sidebar = document.getElementById('sidebar');
+  var hamburger = document.getElementById('hamburger');
+  var overlay = document.getElementById('overlay');
+  function openSidebar(){ sidebar.classList.add('open'); overlay.classList.add('show'); }
+  function closeSidebar(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+  if(hamburger){
+    hamburger.addEventListener('click', function(){
+      if(sidebar.classList.contains('open')) closeSidebar(); else openSidebar();
+    });
+  }
+  if(overlay){ overlay.addEventListener('click', closeSidebar); }
+  document.querySelectorAll('nav.toc a').forEach(function(a){
+    a.addEventListener('click', function(){ closeSidebar(); });
+  });
+
+  /* ---------- Active section highlighting ---------- */
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('nav.toc a[href^="#"]'));
+  var linkByHash = {};
+  navLinks.forEach(function(a){ linkByHash[a.getAttribute('href')] = a; });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main > section[id]'));
+
+  function clearActive(){
+    navLinks.forEach(function(a){ a.classList.remove('active'); });
+  }
+  function setActive(id){
+    clearActive();
+    var link = linkByHash['#' + id];
+    if(link){
+      link.classList.add('active');
+      if(typeof link.scrollIntoView === 'function'){
+        var rect = link.getBoundingClientRect();
+        var sidebarRect = sidebar.getBoundingClientRect();
+        if(rect.top < sidebarRect.top || rect.bottom > sidebarRect.bottom){
+          link.scrollIntoView({block:'nearest'});
+        }
+      }
+    }
+  }
+
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      var best = null, bestRatio = 0;
+      entries.forEach(function(e){
+        if(e.isIntersecting && e.intersectionRatio > bestRatio){
+          bestRatio = e.intersectionRatio; best = e.target;
+        }
+      });
+      if(best){ setActive(best.id); }
+    }, {root:null, rootMargin:'-84px 0px -60% 0px', threshold:[0,0.1,0.25,0.5,0.75,1]});
+    sections.forEach(function(s){ io.observe(s); });
+  }
+
+  /* ---------- Sidebar search / filter ---------- */
+  var searchBox = document.getElementById('searchBox');
+  if(searchBox){
+    searchBox.addEventListener('input', function(){
+      var q = searchBox.value.trim().toLowerCase();
+      navLinks.forEach(function(a){
+        var li = a.closest('li');
+        if(!li) return;
+        var text = a.textContent.toLowerCase();
+        li.classList.toggle('hidden', q.length > 0 && text.indexOf(q) === -1);
+      });
+      document.querySelectorAll('.nav-group').forEach(function(g){
+        var anyVisible = Array.prototype.some.call(g.querySelectorAll('li'), function(li){
+          return !li.classList.contains('hidden');
+        });
+        g.style.display = anyVisible ? '' : 'none';
+      });
+      if(q.length === 0){
+        document.querySelectorAll('.nav-group').forEach(function(g){ g.style.display = ''; });
+      }
+    });
+  }
+
+  /* ---------- Function index table filter ---------- */
+  var fnSearch = document.getElementById('fnSearch');
+  var fnTable = document.getElementById('fnTable');
+  if(fnSearch && fnTable){
+    var rows = Array.prototype.slice.call(fnTable.querySelectorAll('tbody tr'));
+    fnSearch.addEventListener('input', function(){
+      var q = fnSearch.value.trim().toLowerCase();
+      rows.forEach(function(r){
+        var text = r.textContent.toLowerCase();
+        r.style.display = (q.length === 0 || text.indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+  }
+
+  /* ---------- Copy buttons ---------- */
+  document.querySelectorAll('.copy-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var targetId = btn.getAttribute('data-copy');
+      var codeEl = targetId ? document.getElementById(targetId) : btn.closest('.code-block').querySelector('pre');
+      if(!codeEl) return;
+      var text = codeEl.innerText || codeEl.textContent || '';
+      function done(ok){
+        var original = btn.textContent;
+        btn.textContent = ok ? 'COPIED' : 'FAILED';
+        setTimeout(function(){ btn.textContent = original; }, 1400);
+      }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ done(false); });
+      } else {
+        try{
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          done(ok);
+        } catch(e){ done(false); }
+      }
+    });
+  });
+
+  /* ---------- Back to top ---------- */
+  var backTop = document.getElementById('backTop');
+  if(backTop){
+    window.addEventListener('scroll', function(){
+      backTop.classList.toggle('show', window.scrollY > 500);
+    }, {passive:true});
+    backTop.addEventListener('click', function(){
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+  }
+})();
+</script>
+</body>
+</html>

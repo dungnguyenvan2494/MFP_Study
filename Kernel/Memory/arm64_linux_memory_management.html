@@ -1,0 +1,2045 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARM64 Linux Kernel Memory Management — Source Code Handbook</title>
+<style>
+:root{
+  --bg:#f4f5f7; --bg-panel:#ffffff; --bg-sunken:#eceef1; --bg-code:#0f172a;
+  --text:#1a1f2b; --text-dim:#5b6472; --border:#d7dbe1;
+  --c-arch:#1d5fb4; --c-arch-bg:#e8f0fc;
+  --c-alloc:#166a3d; --c-alloc-bg:#e6f5ec;
+  --c-warn:#a5560c; --c-warn-bg:#fdf0e2;
+  --c-pt:#6b31b0; --c-pt-bg:#f2e9fb;
+  --c-fail:#b3261e; --c-fail-bg:#fbe8e7;
+  --c-src:#4a5361; --c-src-bg:#eceef1;
+  --link:#1d5fb4;
+  --code-text:#d6e2ff;
+  --code-keyword:#ff9d5c; --code-string:#9ece6a; --code-comment:#6b7280; --code-fn:#7dd3fc; --code-num:#f6c177;
+  --shadow:0 1px 3px rgba(20,20,30,.08);
+  --mono:"SF Mono",Consolas,"Cascadia Mono","JetBrains Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color-scheme: light;
+}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme: dark){
+    --bg:#14161c; --bg-panel:#1b1e26; --bg-sunken:#111318; --border:#2c3038;
+    --text:#e7e9ee; --text-dim:#9aa2b1;
+    --c-arch:#7db4f5; --c-arch-bg:#152030;
+    --c-alloc:#7cd6a0; --c-alloc-bg:#132419;
+    --c-warn:#e3a25c; --c-warn-bg:#2a1e10;
+    --c-pt:#c69bf0; --c-pt-bg:#221733;
+    --c-fail:#f28b82; --c-fail-bg:#2a1414;
+    --c-src:#a7afbd; --c-src-bg:#1e222b;
+    --link:#7db4f5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161c; --bg-panel:#1b1e26; --bg-sunken:#111318; --border:#2c3038;
+  --text:#e7e9ee; --text-dim:#9aa2b1;
+  --c-arch:#7db4f5; --c-arch-bg:#152030;
+  --c-alloc:#7cd6a0; --c-alloc-bg:#132419;
+  --c-warn:#e3a25c; --c-warn-bg:#2a1e10;
+  --c-pt:#c69bf0; --c-pt-bg:#221733;
+  --c-fail:#f28b82; --c-fail-bg:#2a1414;
+  --c-src:#a7afbd; --c-src-bg:#1e222b;
+  --link:#7db4f5;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6}
+body{padding-bottom:4rem}
+a{color:var(--link)}
+h1,h2,h3,h4{font-family:var(--sans);line-height:1.25;scroll-margin-top:5.2rem}
+code,pre,kbd{font-family:var(--mono)}
+code.sym{background:var(--bg-sunken);border:1px solid var(--border);border-radius:4px;padding:.05em .35em;font-size:.9em;white-space:nowrap}
+
+/* ---------- header ---------- */
+header.top{position:sticky;top:0;z-index:40;background:var(--bg-panel);border-bottom:1px solid var(--border);box-shadow:var(--shadow)}
+.top-inner{max-width:1400px;margin:0 auto;padding:.7rem 1.2rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;margin-right:auto;min-width:220px}
+.brand h1{font-size:1.05rem;margin:0;font-weight:700;letter-spacing:.2px}
+.brand .sub{font-size:.78rem;color:var(--text-dim);margin-top:.1rem}
+.meta-pills{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.35rem}
+.pill{font-size:.68rem;padding:.15em .55em;border-radius:99px;border:1px solid var(--border);color:var(--text-dim);background:var(--bg-sunken);white-space:nowrap}
+.top-controls{display:flex;align-items:center;gap:.5rem}
+#searchbox{position:relative}
+#searchInput{width:230px;padding:.45rem .7rem;border-radius:8px;border:1px solid var(--border);background:var(--bg-sunken);color:var(--text);font-size:.85rem}
+#searchInput:focus{outline:2px solid var(--c-arch);outline-offset:1px}
+#searchResults{position:absolute;top:110%;left:0;width:340px;max-height:60vh;overflow:auto;background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:none;z-index:60}
+#searchResults.show{display:block}
+#searchResults .res{padding:.5rem .7rem;border-bottom:1px solid var(--border);cursor:pointer;font-size:.82rem}
+#searchResults .res:hover{background:var(--bg-sunken)}
+#searchResults .res .path{color:var(--text-dim);font-size:.72rem}
+#searchResults .empty{padding:.6rem .7rem;color:var(--text-dim);font-size:.8rem}
+.iconbtn{border:1px solid var(--border);background:var(--bg-sunken);color:var(--text);border-radius:8px;padding:.45rem .6rem;cursor:pointer;font-size:.85rem;line-height:1}
+.iconbtn:hover{border-color:var(--c-arch)}
+#menuToggle{display:none}
+.progress-track{height:3px;background:var(--bg-sunken)}
+.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--c-arch),var(--c-alloc));transition:width .08s linear}
+
+/* ---------- layout ---------- */
+.layout{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:270px 1fr;gap:0;align-items:start}
+aside.sidebar{position:sticky;top:48px;height:calc(100vh - 48px);overflow-y:auto;border-right:1px solid var(--border);padding:1rem .8rem 3rem;background:var(--bg-panel)}
+aside.sidebar h5{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:1.1rem 0 .35rem;padding-left:.4rem}
+aside.sidebar h5:first-child{margin-top:0}
+aside.sidebar a{display:block;padding:.3rem .5rem;border-radius:6px;color:var(--text);text-decoration:none;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+aside.sidebar a:hover{background:var(--bg-sunken)}
+aside.sidebar a.active{background:var(--c-arch-bg);color:var(--c-arch);font-weight:600}
+main.content{padding:1.6rem 2.4rem 6rem;min-width:0}
+.progress-label{font-size:.7rem;color:var(--text-dim);padding:.3rem .5rem}
+
+/* ---------- section chrome ---------- */
+section.topic{padding-top:2.4rem;margin-top:-1.4rem;border-top:1px dashed transparent}
+section.topic:first-of-type{padding-top:0}
+.topic h2{font-size:1.55rem;display:flex;align-items:center;gap:.6rem;margin-bottom:.15rem}
+.topic .topic-badges{display:flex;gap:.35rem;flex-wrap:wrap;margin:.25rem 0 1.1rem}
+.badge{font-size:.66rem;font-weight:700;letter-spacing:.03em;padding:.15em .5em;border-radius:5px;text-transform:uppercase}
+.badge.arch{color:var(--c-arch);background:var(--c-arch-bg)}
+.badge.alloc{color:var(--c-alloc);background:var(--c-alloc-bg)}
+.badge.warn{color:var(--c-warn);background:var(--c-warn-bg)}
+.badge.pt{color:var(--c-pt);background:var(--c-pt-bg)}
+.badge.fail{color:var(--c-fail);background:var(--c-fail-bg)}
+.badge.src{color:var(--c-src);background:var(--c-src-bg)}
+h3{font-size:1.18rem;margin-top:2rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
+h4{font-size:1rem;margin-top:1.4rem;color:var(--text)}
+p{color:var(--text)}
+.lead{font-size:1rem;color:var(--text-dim);max-width:78ch}
+
+/* ---------- callouts ---------- */
+.callout{border-left:4px solid var(--c-arch);background:var(--c-arch-bg);border-radius:6px;padding:.8rem 1rem;margin:1rem 0;font-size:.9rem}
+.callout.warn{border-color:var(--c-warn);background:var(--c-warn-bg)}
+.callout.fail{border-color:var(--c-fail);background:var(--c-fail-bg)}
+.callout.alloc{border-color:var(--c-alloc);background:var(--c-alloc-bg)}
+.callout.pt{border-color:var(--c-pt);background:var(--c-pt-bg)}
+.callout b.label{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;opacity:.85}
+
+/* ---------- tables ---------- */
+.twrap{overflow-x:auto;margin:1rem 0;border:1px solid var(--border);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.82rem;min-width:560px}
+th,td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--bg-sunken);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);position:sticky;top:0}
+tr:last-child td{border-bottom:none}
+td code, th code{font-size:.85em}
+
+/* ---------- code blocks ---------- */
+.codebox{background:var(--bg-code);border-radius:8px;margin:1rem 0;overflow:hidden;border:1px solid #000;box-shadow:var(--shadow)}
+.codebox .cb-head{display:flex;align-items:center;justify-content:space-between;padding:.4rem .8rem;background:#0b1220;border-bottom:1px solid #000;color:#9aa5b8;font-size:.72rem}
+.codebox .cb-path{font-family:var(--mono)}
+.codebox .cb-copy{background:transparent;border:1px solid #33415580;color:#c7d2e0;border-radius:5px;padding:.2rem .55em;font-size:.68rem;cursor:pointer}
+.codebox .cb-copy:hover{border-color:#5b7fd6;color:#fff}
+.codebox pre{margin:0;padding:.85rem 1rem;overflow-x:auto;color:var(--code-text);font-size:.81rem;line-height:1.55}
+.codebox pre .kw{color:var(--code-keyword)}
+.codebox pre .st{color:var(--code-string)}
+.codebox pre .cm{color:var(--code-comment);font-style:italic}
+.codebox pre .fn{color:var(--code-fn)}
+.codebox pre .nu{color:var(--code-num)}
+
+/* ---------- diagrams (ascii) ---------- */
+.diagram{background:var(--bg-sunken);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;margin:1rem 0}
+.diagram pre{margin:0;font-size:.78rem;line-height:1.45;color:var(--text)}
+.diagram.arch pre{color:var(--c-arch)}
+.diagram .cap{font-size:.72rem;color:var(--text-dim);margin-top:.5rem;border-top:1px dashed var(--border);padding-top:.4rem}
+
+/* ---------- flow steps ---------- */
+.flow{border-left:3px solid var(--border);margin:1rem 0 1rem .3rem;padding-left:1rem}
+.flow .step{position:relative;margin-bottom:.65rem;font-size:.86rem}
+.flow .step::before{content:"";position:absolute;left:-1.32rem;top:.35rem;width:9px;height:9px;border-radius:50%;background:var(--c-arch)}
+
+/* ---------- details / collapsible ---------- */
+details.func{border:1px solid var(--border);border-radius:8px;margin:.7rem 0;background:var(--bg-panel)}
+details.func>summary{cursor:pointer;padding:.55rem .8rem;font-size:.86rem;font-weight:600;list-style:revert}
+details.func[open]>summary{border-bottom:1px solid var(--border)}
+details.func .fbody{padding:.7rem .9rem}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:.25rem .8rem;font-size:.82rem;margin:.4rem 0}
+.kv b{color:var(--text-dim);font-weight:600}
+
+/* ---------- flashcards ---------- */
+.fc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.8rem;margin:1rem 0}
+.fc{border:1px solid var(--border);border-radius:10px;padding:1rem;background:var(--bg-panel);cursor:pointer;min-height:110px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:.86rem;transition:transform .15s}
+.fc:hover{border-color:var(--c-arch)}
+.fc.flipped{background:var(--c-arch-bg);color:var(--c-arch);font-weight:600}
+.fc .hint{position:absolute}
+
+/* ---------- interview qa ---------- */
+.qa{border:1px solid var(--border);border-radius:8px;margin:.8rem 0;overflow:hidden}
+.qa .q{padding:.7rem .9rem;font-weight:600;cursor:pointer;background:var(--bg-panel);display:flex;justify-content:space-between;gap:1rem;font-size:.88rem}
+.qa .q:hover{background:var(--bg-sunken)}
+.qa .a{padding:0 .9rem;max-height:0;overflow:hidden;transition:max-height .25s ease, padding .25s ease;font-size:.85rem;color:var(--text-dim);background:var(--bg-sunken)}
+.qa.open .a{padding:.8rem .9rem 1rem;max-height:600px}
+.qa .q .arrow{transition:transform .2s}
+.qa.open .q .arrow{transform:rotate(90deg)}
+
+/* ---------- labs ---------- */
+.lab{border:1px solid var(--border);border-radius:8px;padding:1rem 1.1rem;margin:1rem 0;background:var(--bg-panel)}
+.lab h4{margin-top:0}
+.lab .lk{font-size:.68rem;font-weight:700;color:#fff;background:var(--c-alloc);padding:.15em .5em;border-radius:5px;margin-right:.5rem}
+
+/* ---------- debug cards ---------- */
+.dbg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.8rem;margin:1rem 0}
+.dbg-card{border:1px solid var(--border);border-radius:8px;padding:.9rem 1rem;background:var(--bg-panel)}
+.dbg-card code{display:block;margin-bottom:.4rem;color:var(--c-alloc);font-size:.88rem}
+.dbg-card p{margin:.2rem 0;font-size:.8rem;color:var(--text-dim)}
+
+footer.doc{max-width:1400px;margin:2rem auto 0;padding:1.5rem 2.4rem;color:var(--text-dim);font-size:.78rem;border-top:1px solid var(--border)}
+
+/* ---------- responsive ---------- */
+@media (max-width: 980px){
+  .layout{grid-template-columns:1fr}
+  aside.sidebar{position:fixed;left:0;top:48px;bottom:0;width:78vw;max-width:320px;transform:translateX(-100%);transition:transform .2s;z-index:50;box-shadow:0 0 30px rgba(0,0,0,.35)}
+  aside.sidebar.open{transform:translateX(0)}
+  #menuToggle{display:inline-flex}
+  main.content{padding:1.2rem 1.1rem 5rem}
+  #searchInput{width:150px}
+  .brand{min-width:0}
+}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <button id="menuToggle" class="iconbtn" aria-label="Toggle navigation">☰</button>
+    <div class="brand">
+      <h1>ARM64 Linux Kernel Memory Management</h1>
+      <div class="sub">From Physical Pages to Buddy, SLUB, vmalloc, MMU, TLB and DMA</div>
+      <div class="meta-pills">
+        <span class="pill">Architecture: ARM64 (AArch64)</span>
+        <span class="pill">Kernel: Linux 5.10.241</span>
+        <span class="pill">Board: Konica Minolta bizhub S800 (EagleBK_defconfig)</span>
+        <span class="pill">Type: Source Code Study Handbook</span>
+      </div>
+    </div>
+    <div class="top-controls">
+      <div id="searchbox">
+        <input id="searchInput" type="text" placeholder="Search function / struct / macro / topic…" autocomplete="off">
+        <div id="searchResults"></div>
+      </div>
+      <button id="themeToggle" class="iconbtn" title="Toggle dark/light">🌓</button>
+    </div>
+  </div>
+  <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+</header>
+
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="progress-label">Reading progress: <span id="progressPct">0%</span></div>
+
+  <h5>Overview</h5>
+  <a href="#big-picture">0. Big Picture</a>
+  <a href="#board-identity">0b. Board &amp; Kernel Identity</a>
+  <a href="#mental-model">Final Mental Model</a>
+
+  <h5>ARM64 Architecture</h5>
+  <a href="#va-space">1. Virtual Address Space</a>
+  <a href="#page-tables">2. Page Tables (PGD/PMD/PTE)</a>
+  <a href="#mmu-init">3. MMU Init &amp; Context Switch</a>
+  <a href="#tlb">4. TLB</a>
+  <a href="#pt-attrs">5. Page Table Attributes</a>
+
+  <h5>Boot &amp; Physical Memory</h5>
+  <a href="#boot-memblock">6. memblock &amp; Boot Flow</a>
+  <a href="#struct-page">7. struct page</a>
+  <a href="#pfn-page">8. PFN ↔ struct page</a>
+  <a href="#zones-numa">9. Memory Zones &amp; NUMA</a>
+
+  <h5>Zoned / Buddy Allocator</h5>
+  <a href="#gfp-flags">10. GFP Flags</a>
+  <a href="#buddy">11–12. Buddy Allocator</a>
+  <a href="#migratetype">13. Migrate Types</a>
+  <a href="#pcp">14. Per-CPU Pages</a>
+  <a href="#slowpath">15–16. Slowpath / Reclaim / Compaction</a>
+
+  <h5>SLUB &amp; kmalloc</h5>
+  <a href="#slub">17. SLUB Allocator</a>
+  <a href="#kmalloc">18. kmalloc()</a>
+  <a href="#compare-alloc">kmalloc vs alloc_pages vs vmalloc</a>
+
+  <h5>vmalloc &amp; Kernel Mapping</h5>
+  <a href="#vmalloc">21. vmalloc()</a>
+  <a href="#vmalloc-pt">23. Page Table Mapping</a>
+  <a href="#vfree">vfree() / vunmap()</a>
+  <a href="#highmem">28. HIGHMEM: Doc vs ARM64</a>
+  <a href="#ioremap">29. ioremap / MMIO</a>
+
+  <h5>DMA &amp; CMA</h5>
+  <a href="#dma">26. DMA API</a>
+  <a href="#cma">27. CMA</a>
+
+  <h5>Synthesis</h5>
+  <a href="#real-traces">30. Real Code Traces</a>
+  <a href="#source-map">27. Source Code Map</a>
+  <a href="#debugging">34. Debugging</a>
+  <a href="#labs">35. Hands-on Labs</a>
+  <a href="#interview">Interview Questions</a>
+  <a href="#flashcards">Quick Revision Flashcards</a>
+</aside>
+
+<main class="content" id="content">
+<section class="topic" id="big-picture">
+<h2>0. Big Picture</h2>
+<div class="topic-badges"><span class="badge src">SOURCE VERIFIED</span><span class="badge arch">ARM64</span></div>
+<p class="lead">Toàn bộ tài liệu này được xây trên một cây kernel <b>thật</b> — Linux <b>5.10.241</b>, arch <code class="sym">arm64</code>, cấu hình board <code class="sym">EagleBK_defconfig</code> (họ board Konica Minolta bizhub S800 / Marvell Armada 8K). Mọi function, struct, macro, số dòng trong tài liệu đều được grep + đọc trực tiếp từ cây này. Khi tài liệu Chapter 8 (kinh điển, Linux 2.6/historical) mô tả một cơ chế không còn đúng trên ARM64 hiện đại, điều đó được nêu rõ trong các bảng "Concept → ARM64 implementation" xuyên suốt tài liệu.</p>
+
+<div class="diagram arch">
+<pre>
+                         APPLICATION (userspace)
+                                │
+                        mmap() / malloc()
+                                │
+                          PAGE FAULT  (arch/arm64/mm/fault.c)
+                                │
+                    ┌───────────┼────────────────┐
+                    ▼           ▼                ▼
+                 kmalloc()   vmalloc()        mmap(MAP_ANON)
+                 (SLUB)      (KVA + pages)     (page cache / anon)
+                    │           │                │
+                    ▼           ▼                ▼
+             allocate_slab() alloc_page()×N   alloc_pages()
+                    │           │  │              │
+                    └─────┬─────┘  └───page table──┘
+                          ▼            (vmap_pte_range)
+                    alloc_pages() ─────────────┐
+                          │                    │
+                          ▼                    │
+                 ┌── order==0? ──┐              │
+                 ▼               ▼              │
+         Per-CPU Pages(PCP)  zone->lock          │
+         rmqueue_pcplist()  __rmqueue()          │
+                 │               │               │
+                 └───────┬───────┘               │
+                          ▼                       │
+                 BUDDY ALLOCATOR (zone->free_area[MAX_ORDER])
+                          │
+                          ▼
+               struct zone  (DMA / DMA32 / NORMAL / MOVABLE)
+                          │
+                          ▼
+               struct pglist_data  (contig_page_data — board không NUMA)
+                          │
+                          ▼
+                 PHYSICAL MEMORY (RAM banks qua memblock lúc boot)
+</pre>
+<div class="cap">Sơ đồ tổng — mọi nhánh trong sơ đồ đều có trace chi tiết (file:line) ở các mục tương ứng bên dưới. Board này: PCP luôn được dùng cho order-0 (vì <code class="sym">CONFIG_CMA</code> tắt), buddy có đúng 4 <code class="sym">migratetype</code> và <code class="sym">MAX_ORDER=11</code>.</div>
+</div>
+
+<h3>Hai nhánh cấp phát chính</h3>
+<div class="twrap"><table>
+<tr><th>kmalloc() pipeline</th><th>vmalloc() pipeline</th></tr>
+<tr><td>
+<pre style="margin:0;font-size:.8rem">kmalloc(size, gfp)
+  → SLUB per-CPU freelist (lock-free cmpxchg_double)
+  → (rỗng) node partial list (n->list_lock)
+  → (rỗng) allocate_slab()
+  → alloc_pages(flags, order)   ← buddy
+</pre></td><td>
+<pre style="margin:0;font-size:.8rem">vmalloc(size)
+  → alloc_vmap_area()  (rb-tree KVA)
+  → alloc_page() × N   ← buddy, mỗi page rời rạc
+  → map_kernel_range()
+      vmap_p4d/pud/pmd/pte_range()
+      → set_pte_at() → ARM64 MMU
+</pre></td></tr>
+</table></div>
+
+</section>
+
+<section class="topic" id="board-identity">
+<h2>0b. Board &amp; Kernel Identity — nền tảng "source of truth"</h2>
+<div class="topic-badges"><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead">Đây là bảng cấu hình board <b>thật</b> quyết định mọi hằng số/công thức xuất hiện trong tài liệu. Không suy đoán — mọi dòng đều lấy từ <code class="sym">arch/arm64/configs/EagleBK_defconfig</code> và <code class="sym">Makefile</code> gốc.</p>
+<div class="twrap"><table>
+<tr><th>Thuộc tính</th><th>Giá trị thật</th><th>Nguồn</th><th>Hệ quả xuyên suốt tài liệu</th></tr>
+<tr><td>Kernel version</td><td><code class="sym" data-idx="Linux 5.10.241">5.10.241</code></td><td><code>Makefile:2-4</code></td><td>Tên hàm khớp đúng 5.10 (không phải 5.4 hay 6.x — vd <code class="sym">__alloc_pages_nodemask()</code>, không phải <code class="sym">__alloc_pages_noprof()</code> của version rất mới)</td></tr>
+<tr><td>Page size</td><td><code class="sym">4KB</code> (<code class="sym">CONFIG_ARM64_4K_PAGES=y</code>)</td><td>defconfig:386</td><td>PAGE_SHIFT=12</td></tr>
+<tr><td>VA_BITS</td><td><code class="sym">39</code></td><td>defconfig:389-391</td><td><b>Chỉ 3 cấp page table thật: PGD→PMD→PTE</b> (PUD+P4D fold), xem mục 2</td></tr>
+<tr><td>PA_BITS</td><td><code class="sym">48</code></td><td>defconfig:392-393</td><td>idmap có thể cần thêm 1 cấp phụ vì PA&gt;VA, xem mục 3</td></tr>
+<tr><td>CONFIG_NUMA</td><td><b>not set</b></td><td>defconfig:402</td><td><code class="sym">contig_page_data</code> duy nhất, <code class="sym">NODES_SHIFT=0</code></td></tr>
+<tr><td>CONFIG_SPARSEMEM_VMEMMAP</td><td><code class="sym">y</code></td><td>defconfig:805-807</td><td><code class="sym">pfn_to_page()</code> = phép trừ con trỏ O(1) qua <code class="sym">vmemmap[]</code>, KHÔNG qua mem_section</td></tr>
+<tr><td>CONFIG_ZONE_DMA / DMA32</td><td>cả hai <code class="sym">y</code></td><td>defconfig:268-269</td><td>4 zone thật: DMA→DMA32→NORMAL→MOVABLE, không HIGHMEM</td></tr>
+<tr><td>CONFIG_SLUB / SLAB / SLOB</td><td>SLUB=y, còn lại tắt</td><td>defconfig:234-244</td><td>Mọi phân tích slab dùng <code class="sym">mm/slub.c</code>, không phải SLAB cũ</td></tr>
+<tr><td>CONFIG_CMA</td><td><b>not set</b></td><td>defconfig:828</td><td><code class="sym">mm/cma.c</code> KHÔNG compile; <code class="sym">MIGRATE_CMA</code> không tồn tại</td></tr>
+<tr><td>CONFIG_ARM_SMMU / _V3</td><td><b>not set</b></td><td>defconfig:3953-3954</td><td>Mọi DMA đi qua <code class="sym">dma_direct_*</code>, không qua IOMMU</td></tr>
+<tr><td>CONFIG_COMPACTION</td><td><code class="sym">y</code></td><td>defconfig:814</td><td>Direct compaction thật sự active trong slowpath</td></tr>
+<tr><td>FORCE_MAX_ZONEORDER</td><td><code class="sym">11</code></td><td>defconfig:429</td><td><code class="sym">MAX_ORDER=11</code> → block buddy lớn nhất = 2¹⁰ trang = 4MB</td></tr>
+</table></div>
+<div class="callout warn"><b class="label">Lưu ý phạm vi</b> Có 2 hook đặc thù Konica Minolta phát hiện trong <code class="sym">arm64_memblock_init()</code> (<code>arch/arm64/mm/init.c:334-340</code>): <code class="sym">warp_init_memblock()</code> (CONFIG_PM_WARP) và <code class="sym">thr_cmemdrvr_reserve_memory()</code> (CONFIG_CMEMDRV) — không có trong mainline arm64, được ghi chú riêng ở mục memblock.</div>
+</section>
+<section class="topic" id="va-space">
+<h2>1. ARM64 Virtual Address Space</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<h3>1.1 Concept</h3>
+<p>ARM64 dùng <b>hai thanh ghi TTBR song song</b> (TTBR0_EL1 cho user, TTBR1_EL1 cho kernel) thay vì 1 CR3 như x86-64. Kernel VA nằm ở nửa "cao" của không gian địa chỉ (canonical, bắt đầu <code class="sym">0xffff...</code>), user VA ở nửa thấp. Mọi hằng số layout (<code class="sym" data-idx="PAGE_OFFSET">PAGE_OFFSET</code>, <code class="sym" data-idx="VMALLOC_START">VMALLOC_START</code>, <code class="sym" data-idx="VMEMMAP_START">VMEMMAP_START</code>…) được tính bằng <b>công thức phụ thuộc <code class="sym">VA_BITS</code></b>, không phải số cố định.</p>
+
+<h3>1.2 Tại sao cần</h3>
+<p>Kernel cần: (a) ánh xạ toàn bộ RAM vật lý vào 1 vùng VA liên tục để truy cập trực tiếp (<b>linear/direct map</b>), (b) một vùng riêng cho <code class="sym">vmalloc()</code> (virtually contiguous, physically rời rạc), (c) một mảng <code class="sym">struct page</code> khổng lồ (<code class="sym">vmemmap</code>) để tra cứu O(1) từ PFN. Tất cả phải nằm gọn trong ngân sách VA hữu hạn (2<sup>VA_BITS</sup> mỗi nửa).</p>
+
+<h3>1.3 ARM64-specific behavior trên board (VA_BITS=39)</h3>
+<div class="diagram">
+<pre>
+arch/arm64/include/asm/memory.h — chuỗi macro thật (không phải số cứng):
+
+  VA_BITS            = CONFIG_ARM64_VA_BITS                    = 39
+  PAGE_OFFSET         = -(1 &lt;&lt; VA_BITS)                         (đầu linear map)
+  PAGE_END            = _PAGE_END(vabits_actual)                (cuối linear map, runtime)
+  KASAN_SHADOW_END     = _PAGE_END(VA_BITS_MIN)   [KASAN=n trên board → trùng PAGE_END]
+  BPF_JIT_REGION_START = KASAN_SHADOW_END          size 128MB
+  MODULES_VADDR        = BPF_JIT_REGION_END        size 128MB
+  VMALLOC_START         = MODULES_END        (pgtable.h:24)
+  VMALLOC_END           = -(PUD_SIZE + VMEMMAP_SIZE + SZ_64K)   (pgtable.h:25)
+  VMEMMAP_START          = -VMEMMAP_SIZE - SZ_2M
+  PCI_IO_START/END, FIXADDR_TOP  nằm giữa VMALLOC_END và VMEMMAP_START
+</pre>
+<div class="cap">Nguồn: <code>arch/arm64/include/asm/memory.h:33-57,65,169-170</code>; <code>arch/arm64/include/asm/pgtable.h:17-27</code>.</div>
+</div>
+
+<h4>Worked example — tính layout thật cho board (VA_BITS=39, KASAN off, 4K page)</h4>
+<div class="twrap"><table>
+<tr><th>Hằng số</th><th>Công thức</th><th>Giá trị (hex)</th></tr>
+<tr><td><code class="sym">PAGE_OFFSET</code></td><td><code>-(1&lt;&lt;39)</code></td><td><code>0xFFFFFF8000000000</code></td></tr>
+<tr><td><code class="sym">PAGE_END</code></td><td><code>-(1&lt;&lt;38)</code></td><td><code>0xFFFFFFC000000000</code></td></tr>
+<tr><td><code class="sym">BPF_JIT_REGION_END</code></td><td>+128MB</td><td><code>0xFFFFFFC008000000</code></td></tr>
+<tr><td><code class="sym">MODULES_END</code></td><td>+128MB</td><td><code>0xFFFFFFC010000000</code></td></tr>
+<tr><td><code class="sym">VMALLOC_START</code></td><td>= MODULES_END</td><td><code>0xFFFFFFC010000000</code></td></tr>
+<tr><td><code class="sym">VMALLOC_END</code></td><td>-(PUD_SIZE+VMEMMAP_SIZE+64K)</td><td>≈ <code>0xFFFFFFFEBFFF0000</code></td></tr>
+</table></div>
+<div class="callout warn"><b class="label">Not fully verified from source</b> <code class="sym">VMEMMAP_SIZE</code> phụ thuộc <code>sizeof(struct page)</code> (qua <code class="sym">STRUCT_PAGE_MAX_SHIFT</code>, <code>mm_types.h:246</code>) — giá trị "64 byte → VMEMMAP≈4GB" trong bảng trên là <b>suy đoán theo giá trị phổ biến</b>, chưa đọc offsetof đầy đủ struct page với mọi tổ hợp CONFIG trên board này. Công thức thì chính xác 100% từ source.</div>
+
+<h3>1.4 Bảng concept-mapping đầy đủ</h3>
+<div class="twrap"><table>
+<tr><th>Concept</th><th>ARM64 implementation</th><th>Source</th><th>Khác x86-64</th></tr>
+<tr><td>Kernel/user VA split</td><td>2 TTBR song song (TTBR1=kernel, TTBR0=user)</td><td><code>mmu_context.h:41-56</code></td><td>x86-64 dùng 1 CR3, tách bằng canonical hole (trước KPTI)</td></tr>
+<tr><td><code class="sym">__va()</code>/<code class="sym">__pa()</code></td><td><code>__phys_to_virt(x) = (x - PHYS_OFFSET) | PAGE_OFFSET</code> — fast path nếu trong linear map</td><td><code>memory.h:245-283</code></td><td>—</td></tr>
+<tr><td><code class="sym">__pa_symbol</code> (kernel image)</td><td>Dùng <code class="sym">kimage_voffset</code> thay vì PHYS_OFFSET — vì ảnh kernel có thể không map theo offset tuyến tính (KASLR)</td><td><code>memory.h:248,255,266</code></td><td>x86-64 không tách bạch 2 cơ chế này rõ như vậy</td></tr>
+<tr><td><code class="sym">TASK_SIZE</code></td><td><code>TASK_SIZE_64 = 1&lt;&lt;vabits_actual</code> = 512GB — <b>runtime</b>, không compile-time (hỗ trợ CPU 52-bit LVA)</td><td><code>processor.h:50,69</code></td><td>x86-64 TASK_SIZE thường cố định compile-time</td></tr>
+<tr><td>Memory types (Device/Normal)</td><td><code class="sym">MT_NORMAL=0 .. MT_DEVICE_GRE=6</code>, index vào MAIR_EL1</td><td><code>memory.h:134-153</code></td><td>x86 dùng MTRR/PAT — mô hình khác hẳn</td></tr>
+</table></div>
+</section>
+<section class="topic" id="page-tables">
+<h2>2. ARM64 Page Tables — PGD / PMD / PTE (3 cấp thật trên board)</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span><span class="badge pt">Page Table</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="callout pt"><b class="label">Phát hiện quan trọng nhất của chương này</b>
+<code>arch/arm64/Kconfig:314-321</code>: <code>default 3 if ARM64_4K_PAGES &amp;&amp; ARM64_VA_BITS_39</code> ⇒ <b><code class="sym">CONFIG_PGTABLE_LEVELS = 3</code></b> cho board này. KHÔNG được giả định ARM64 luôn có 4 cấp — điều đó chỉ đúng khi VA_BITS=48. Với VA_BITS=39: <b>PUD và P4D đều bị "fold"</b> (<code>include/asm-generic/pgtable-nopud.h</code>, <code>pgtable-nop4d.h</code>) — <code class="sym">pud_offset()</code>/<code class="sym">p4d_offset()</code> chỉ ép kiểu con trỏ, trả về đúng entry PGD ban đầu, không tạo bảng mới.</div>
+
+<div class="diagram">
+<pre>
+Virtual Address (39-bit dùng, 4KB page) — cây trang THẬT chỉ 3 cấp:
+
+ 63           39 38        30 29        21 20        12 11         0
++---------------+-----------+-----------+-----------+-------------+
+| sign-extend   | PGD idx(9)| PMD idx(9)| PTE idx(9)| page offset |
++---------------+-----------+-----------+-----------+-------------+
+      PGDIR_SHIFT=30 (1GB/entry, 512 entries)   ← "PUD" cấp này thực chất
+      PMD_SHIFT  =21 (2MB/entry, 512 entries)
+      PAGE_SHIFT =12 (4KB/entry, 512 entries)
+
+pgd_offset() ──► entry PGD (1GB window)
+   │  (PUD "ảo": pud_offset(p4d,addr) = (pud_t*)p4d — KHÔNG có bảng riêng)
+   ▼
+pmd_offset() ──► entry PMD (2MB window, có thể là block-mapping 2MB "section")
+   ▼
+pte_offset_kernel() ──► entry PTE (4KB page, cấp CUỐI luôn tồn tại thật)
+</pre>
+<div class="cap">Nguồn: <code>arch/arm64/include/asm/pgtable-hwdef.h:26,41,69-72</code>; <code>pgtable-types.h:27-53</code>; <code>include/asm-generic/pgtable-nopud.h:9,16,42</code>.</div>
+</div>
+
+<h3>Call-flow xây bảng trang kernel — <code class="sym" data-idx="__create_pgd_mapping alloc_init_pud">__create_pgd_mapping()</code></h3>
+<div class="flow">
+<div class="step"><code class="sym">__create_pgd_mapping()</code> <span style="color:var(--text-dim)">mmu.c:358</span> — lấy pgd entry đầu qua <code class="sym">pgd_offset_pgd()</code></div>
+<div class="step">loop mỗi 1GB PGD-window → <code class="sym">alloc_init_pud()</code> <span style="color:var(--text-dim)">mmu.c:299</span></div>
+<div class="step"><code class="sym">p4d_offset()</code> (fold → trả về chính pgdp) → nếu <code class="sym">p4d_none()</code>: <code class="sym">pgtable_alloc(PUD_SHIFT)</code></div>
+<div class="step"><code class="sym">use_1G_block()</code>? → <code class="sym">pud_set_huge()</code> (block mapping 1GB, chỉ khả dụng với 4K granule)</div>
+<div class="step">else → <code class="sym">alloc_init_cont_pmd()</code> → <code class="sym">init_pmd()</code> <span style="color:var(--text-dim)">mmu.c:213</span></div>
+<div class="step">mỗi PMD entry (2MB): section 2MB align? → <code class="sym">pmd_set_huge()</code>; else → <code class="sym">alloc_init_cont_pte()</code> → <code class="sym">init_pte()</code></div>
+<div class="step"><code class="sym">set_pte(ptep, pfn_pte(...))</code> <span style="color:var(--text-dim)">mmu.c:163</span> — ghi entry cuối cùng</div>
+</div>
+<p style="font-size:.82rem;color:var(--text-dim)">Lock: <code class="sym">alloc_init_pud()</code> giữ <code class="sym">mutex_lock(&amp;fixmap_lock)</code> khi <b>không</b> còn ở <code class="sym">SYSTEM_BOOTING</code> (runtime mapping — module load/ioremap/hotplug); lúc boot sớm single-CPU thì bỏ qua lock.</p>
+
+<h3>Function chi tiết</h3>
+<details class="func"><summary>pud_offset() — minh chứng "folded write" (mm-generic layer)</summary>
+<div class="fbody">
+<div class="kv"><b>File:Line</b><span><code>include/asm-generic/pgtable-nopud.h:42-46</code></span>
+<b>Purpose</b><span>Vì PUD fold vào P4D (mà P4D fold vào PGD trên board này), hàm KHÔNG đi xuống bảng con — chỉ ép kiểu con trỏ p4d thành pud, trỏ đúng entry PGD ban đầu.</span>
+<b>Caller</b><span><code class="sym">pmd_offset()</code> nhận tham số kiểu <code>pud_t*</code> nhưng dữ liệu thật vẫn nằm ở vùng nhớ PGD</span>
+<b>Failure path</b><span>Không có — luôn thành công vì không có "not found" khi bảng ảo</span></div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/asm-generic/pgtable-nopud.h:42-46</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline</span> pud_t *<span class="fn">pud_offset</span>(p4d_t *p4d, unsigned long address)
+{
+    <span class="kw">return</span> (pud_t *)p4d;
+}</pre></div>
+</div></details>
+
+<details class="func"><summary>set_pud() — ghi an toàn khi PUD bị fold vào swapper_pg_dir đang active</summary>
+<div class="fbody">
+<div class="kv"><b>File:Line</b><span><code>arch/arm64/include/asm/pgtable.h:610-625</code></span>
+<b>Purpose</b><span>Khi <code class="sym">pudp</code> nằm <b>trong</b> <code class="sym">swapper_pg_dir</code> (bảng đang active, TTBR1 trỏ vào), ghi trực tiếp có nguy cơ race với page-table walker phần cứng đang chạy → phải đi qua <code class="sym">set_swapper_pgd()</code> (kỹ thuật fixmap + spinlock).</span></div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/include/asm/pgtable.h:610-625</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline void</span> <span class="fn">set_pud</span>(pud_t *pudp, pud_t pud)
+{
+<span class="cm">#ifdef __PAGETABLE_PUD_FOLDED</span>
+    <span class="kw">if</span> (in_swapper_pgdir(pudp)) {
+        set_swapper_pgd((pgd_t *)pudp, __pgd(pud_val(pud)));
+        <span class="kw">return</span>;
+    }
+<span class="cm">#endif</span>
+    WRITE_ONCE(*pudp, pud);
+    <span class="kw">if</span> (pud_valid(pud)) { dsb(ishst); isb(); }
+}</pre></div>
+</div></details>
+
+<h3>Bảng concept-mapping</h3>
+<div class="twrap"><table>
+<tr><th>Concept</th><th>ARM64 (board VA39)</th><th>Source</th><th>Khác x86-64</th></tr>
+<tr><td>Số cấp trang thực tế</td><td>3: PGD→PMD→PTE, PUD+P4D folded</td><td>Kconfig:319</td><td>x86-64 luôn 4 cấp cố định (trừ 5-level PML5); ARM64 biến thiên theo VA_BITS+page size</td></tr>
+<tr><td>1GB block mapping</td><td><code class="sym">pud_set_huge()</code> khi align 1GB + 4K granule</td><td><code>mmu.c:1380-1392</code></td><td>x86-64 PDPE.PS=1 tương tự</td></tr>
+<tr><td>set_pte/set_pmd/set_pud</td><td>Ghi qua <code>WRITE_ONCE</code> + <code>dsb(ishst)/isb()</code></td><td><code>pgtable.h:254-266,548-563,610-625</code></td><td>x86 TSO mạnh hơn, không cần barrier tường minh mức này</td></tr>
+</table></div>
+</section>
+<section class="topic" id="mmu-init">
+<h2>3. MMU Init &amp; Context Switch — TTBR0/TTBR1, ASID, TCR/MAIR/SCTLR</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span><span class="badge pt">MMU</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="callout pt"><b class="label">Khám phá quan trọng</b> idmap có thể cần <b>4 cấp</b> dù <code class="sym">swapper_pg_dir</code> (kernel logical map) chỉ 3 cấp! Lý do: <code>PA_BITS=48</code> nhưng <code>VA_BITS=39</code> — nếu RAM vật lý nằm ở địa chỉ cao &gt;2³⁹, bảng idmap (VA=PA, dùng tạm lúc bật MMU) không đủ 39 bit VA để "chứa" chính địa chỉ vật lý của nó → kernel tự thêm 1 cấp phụ (<code>EXTRA_SHIFT/EXTRA_PTRS</code>, <code>head.S:356-364</code>, khối chỉ active khi <code>VA_BITS&lt;48</code>). <code>IDMAP_PGTABLE_LEVELS = ARM64_HW_PGTABLE_LEVELS(48) = 4</code> trong khi <code>SWAPPER_PGTABLE_LEVELS = CONFIG_PGTABLE_LEVELS-1 = 2</code> (early swapper, trước <code class="sym">paging_init()</code>). <b>Số cấp không đồng nhất giữa các loại bảng trang khác nhau trong cùng 1 kernel image.</b></div>
+
+<h3>TTBR0_EL1 vs TTBR1_EL1 — trả lời chính xác bằng source</h3>
+<div class="twrap"><table>
+<tr><th>Thanh ghi</th><th>Dùng cho gì</th><th>Nguồn</th></tr>
+<tr><td><code class="sym">TTBR0_EL1</code></td><td>Base bảng trang <b>user</b> (đổi mỗi lần <code class="sym">switch_mm()</code>), hoặc idmap/reserved tạm lúc boot</td><td><code>mmu_context.h:41-56</code>, <code>proc.S:369</code></td></tr>
+<tr><td><code class="sym">TTBR1_EL1</code></td><td>Base bảng trang <b>kernel</b> (<code class="sym">swapper_pg_dir</code>), gần như cố định suốt vòng đời hệ thống</td><td><code>mmu_context.h:137-163</code>, <code>proc.S:174,193</code></td></tr>
+</table></div>
+<p>Đặc biệt: <code>TCR_EL1.A1=1</code> (<code>proc.S:471</code>) ⇒ <b>ASID được lưu trong TTBR1, không phải TTBR0</b> — <code class="sym">cpu_do_switch_mm()</code> chỉ update field ASID của <code>ttbr1_el1</code>, base vẫn là <code class="sym">swapper_pg_dir</code>.</p>
+
+<details class="func"><summary>cpu_do_switch_mm() — nơi ASID thực sự nạp vào phần cứng</summary>
+<div class="fbody">
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/context.c:349-372</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">void</span> <span class="fn">cpu_do_switch_mm</span>(phys_addr_t pgd_phys, <span class="kw">struct</span> mm_struct *mm)
+{
+    unsigned long ttbr1 = read_sysreg(ttbr1_el1);
+    unsigned long asid = ASID(mm);
+    unsigned long ttbr0 = phys_to_ttbr(pgd_phys);
+
+    <span class="cm">/* Set ASID in TTBR1 since TCR.A1 is set */</span>
+    ttbr1 &amp;= ~TTBR_ASID_MASK;
+    ttbr1 |= FIELD_PREP(TTBR_ASID_MASK, asid);
+
+    write_sysreg(ttbr1, ttbr1_el1); isb();
+    write_sysreg(ttbr0, ttbr0_el1); isb();
+    post_ttbr_update_workaround();
+}</pre></div>
+<div class="kv"><b>Lock held</b><span>Không — caller <code class="sym">check_and_switch_context()</code> đã unlock <code class="sym">cpu_asid_lock</code> trước khi gọi (thao tác per-CPU, an toàn không cần lock chéo CPU)</span></div>
+</div></details>
+
+<details class="func"><summary>paging_init() — build bảng trang kernel chi tiết, thay swapper tạm bằng bản chính thức</summary>
+<div class="fbody">
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/mmu.c:750-766</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">void</span> __init <span class="fn">paging_init</span>(<span class="kw">void</span>)
+{
+    pgd_t *pgdp = pgd_set_fixmap(__pa_symbol(swapper_pg_dir));
+    map_kernel(pgdp);      <span class="cm">// map .text/.rodata/.init/.data đúng permission</span>
+    map_mem(pgdp);         <span class="cm">// map toàn bộ RAM (linear map) với PAGE_KERNEL</span>
+    pgd_clear_fixmap();
+    cpu_replace_ttbr1(lm_alias(swapper_pg_dir));
+    init_mm.pgd = swapper_pg_dir;
+    memblock_free(__pa_symbol(init_pg_dir), <span class="cm">/* free bảng tạm boot sớm */</span>
+              __pa_symbol(init_pg_end) - __pa_symbol(init_pg_dir));
+    memblock_allow_resize();
+}</pre></div>
+<div class="kv"><b>Failure path</b><span><code class="sym">early_pgtable_alloc()</code> gọi <code>panic("Failed to allocate page table page\n")</code> nếu <code class="sym">memblock_phys_alloc()</code> thất bại — <b>không có fallback</b>, panic thẳng.</span></div>
+</div></details>
+
+<h3>Call-flow: check_and_switch_context() — ASID allocation + TTBR switch</h3>
+<div class="flow">
+<div class="step"><code class="sym">switch_mm(prev,next,tsk)</code> — nếu <code>next==&amp;init_mm</code> → <code class="sym">cpu_set_reserved_ttbr0()</code>; return</div>
+<div class="step">else → <code class="sym">check_and_switch_context(next)</code> — fast path: cmpxchg_relaxed so <code>active_asids[cpu]</code>, khớp → bỏ qua cấp ASID mới</div>
+<div class="step">slow path: <code>raw_spin_lock_irqsave(&amp;cpu_asid_lock)</code> → generation không khớp → <code class="sym">new_context(mm)</code> → hết ASID → tăng <code class="sym">asid_generation</code>, <code class="sym">flush_context()</code></div>
+<div class="step">nếu CPU có cờ <code>tlb_flush_pending</code> → <code class="sym">local_flush_tlb_all()</code></div>
+<div class="step"><code>switch_mm_fastpath:</code> → <code class="sym">cpu_switch_mm()</code> → <code class="sym">cpu_set_reserved_ttbr0()</code> + <code class="sym">cpu_do_switch_mm()</code></div>
+</div>
+
+<h3>__cpu_setup() — cấu hình MAIR_EL1 / TCR_EL1 trước khi bật MMU</h3>
+<div class="kv"><b>File</b><span><code>arch/arm64/mm/proc.S:412-506</code></span>
+<b>Chạy trên</b><span>Mọi CPU (boot + secondary), trong section <code>.idmap.text</code></span>
+<b>Output</b><span>x0 = giá trị ghi vào SCTLR_EL1 (caller <code>head.S</code> mới thật sự <code>msr sctlr_el1, x0</code>)</span></div>
+<p style="font-size:.85rem">Điểm đáng chú ý: <code class="sym">TCR_ASID16</code> (dùng ASID 16-bit nếu CPU hỗ trợ), <code class="sym">TCR_A1</code> (chọn ASID nằm trong TTBR1), <code class="sym">TCR_HA</code> (bật nếu <code>CONFIG_ARM64_HW_AFDBM=y</code> — board <b>có</b> bật, cho phép CPU tự set dirty bit không cần page fault).</p>
+</section>
+
+<section class="topic" id="tlb">
+<h2>4. TLB — Broadcast Invalidation</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span><span class="badge pt">TLB</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead">Khác biệt kiến trúc lớn nhất so với x86: ARM64 có <b>TLBI broadcast bằng phần cứng</b> (<code>...IS</code> = Inner Shareable) — tự động lan tới mọi CPU trong domain, <b>không cần IPI</b> như x86 (nơi phải tự gửi interrupt rồi từng core tự <code>invlpg</code>).</p>
+
+<div class="twrap"><table>
+<tr><th>Concept</th><th>ARM64</th><th>Source</th></tr>
+<tr><td>Broadcast invalidation</td><td><code>TLBI ...IS</code> — tự broadcast, không IPI</td><td><code>tlbflush.h:230-244</code></td></tr>
+<tr><td>Theo ASID</td><td><code>tlbi aside1is, asid</code></td><td><code>tlbflush.h:246-255</code></td></tr>
+<tr><td>Theo range (ARMv8.4)</td><td><code>rvale1is/rvae1is</code> — xoá 1 dải trong 1 lệnh</td><td><code>tlbflush.h:136-160,328-359</code></td></tr>
+<tr><td>Kernel range flush</td><td>Loop <code>vaale1is</code> nếu range nhỏ, else <code class="sym">flush_tlb_all()</code></td><td><code>tlbflush.h:374-391</code></td></tr>
+<tr><td>Local (per-CPU) flush</td><td><code class="sym">local_flush_tlb_all()</code> — dùng khi rollover ASID generation</td><td><code>tlbflush.h:230-236</code></td></tr>
+</table></div>
+
+<details class="func"><summary>flush_tlb_kernel_range() — ngưỡng chuyển sang flush-all toàn bộ</summary>
+<div class="fbody">
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/include/asm/tlbflush.h:374-391</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline void</span> <span class="fn">flush_tlb_kernel_range</span>(unsigned long start, unsigned long end)
+{
+    <span class="kw">if</span> ((end - start) &gt; (MAX_TLBI_OPS * PAGE_SIZE)) {  <span class="cm">// MAX_TLBI_OPS=512 → ngưỡng 2MB</span>
+        flush_tlb_all();
+        <span class="kw">return</span>;
+    }
+    dsb(ishst);
+    <span class="kw">for</span> (addr = start; addr &lt; end; addr += 1 &lt;&lt; (PAGE_SHIFT - 12))
+        __tlbi(vaale1is, addr);
+    dsb(ish); isb();
+}</pre></div>
+<div class="kv"><b>Caller</b><span><code class="sym">update_mapping_prot()</code>, <code class="sym">unmap_hotplug_pte_range()</code>, <code class="sym">__set_fixmap()</code></span>
+<b>Rationale</b><span>Dải quá lớn (&gt;2MB) sẽ loop quá dài gây soft-lockup → chuyển thẳng flush toàn bộ TLB</span></div>
+</div></details>
+
+<div class="callout"><b class="label">KPTI ảnh hưởng flush_tlb_mm()</b> Board này bật <code>CONFIG_UNMAP_KERNEL_AT_EL0=y</code> (KPTI) ⇒ mỗi <code class="sym">mm</code> thực chất có <b>2 ASID</b> (kernel-visible + user-only) — <code class="sym">flush_tlb_mm()</code> gọi thêm <code class="sym">__tlbi_user()</code> để xoá cả hai (<code>tlbflush.h:246-255</code>).</div>
+</section>
+<section class="topic" id="pt-attrs">
+<h2>5. Page Table Attributes / Flags</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span><span class="badge pt">Page Table</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/include/asm/pgtable-prot.h:36-71</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">#define</span> _PROT_DEFAULT   (PTE_TYPE_PAGE | PTE_AF | PTE_SHARED)
+<span class="kw">#define</span> PROT_DEFAULT    (_PROT_DEFAULT | PTE_MAYBE_NG)
+<span class="kw">#define</span> PROT_NORMAL     (PROT_DEFAULT | PTE_PXN | PTE_UXN | PTE_WRITE | PTE_ATTRINDX(MT_NORMAL))
+
+<span class="kw">#define</span> PAGE_KERNEL       __pgprot(PROT_NORMAL)
+<span class="kw">#define</span> PAGE_KERNEL_RO    __pgprot((PROT_NORMAL &amp; ~PTE_WRITE) | PTE_RDONLY)
+<span class="kw">#define</span> PAGE_KERNEL_ROX   __pgprot((PROT_NORMAL &amp; ~(PTE_WRITE|PTE_PXN)) | PTE_RDONLY)
+<span class="kw">#define</span> PAGE_KERNEL_EXEC  __pgprot(PROT_NORMAL &amp; ~PTE_PXN)</pre></div>
+<p><code class="sym">PAGE_KERNEL</code> mặc định <b>luôn có <code>PTE_PXN|PTE_UXN</code></b> — mọi trang kernel mặc định KHÔNG thực thi được (data), phải tường minh bỏ <code>PTE_PXN</code> mới cho exec ở EL1. <code>PTE_UXN</code> <b>luôn giữ = 1</b> trong mọi biến thể <code>PAGE_KERNEL*</code> — user KHÔNG BAO GIỜ exec được trang kernel (khác x86 nơi phải dựa SMEP để đạt hiệu quả tương đương).</p>
+
+<h3>2 bit XN độc lập — PXN và UXN</h3>
+<div class="twrap"><table>
+<tr><th>Bit</th><th>Ý nghĩa</th><th>Khác x86</th></tr>
+<tr><td><code class="sym">PXN</code> (bit53)</td><td>Chặn thực thi ở EL1 (kernel)</td><td rowspan="2">x86-64 chỉ có <b>1</b> bit NX chung cho mọi privilege level — không tách được "cấm exec ở ring0 nhưng cho phép ring3" hay ngược lại</td></tr>
+<tr><td><code class="sym">UXN</code> (bit54)</td><td>Chặn thực thi ở EL0 (user)</td></tr>
+</table></div>
+
+<h3>Call-flow: mark_rodata_ro() — minh hoạ W^X 2 giai đoạn</h3>
+<div class="flow">
+<div class="step"><code class="sym">map_kernel()</code>: map <code>.rodata</code> bằng <code>PAGE_KERNEL</code> (RW, non-exec) <b>tạm thời</b> — cần ghi được lúc <code>apply_alternatives()</code>/exception-table setup chạy</div>
+<div class="step">Sau khi alternative-patching xong → <code class="sym">mark_rodata_ro()</code> gọi <code class="sym">update_mapping_prot(..., PAGE_KERNEL_RO)</code></div>
+<div class="step"><code class="sym">flush_tlb_kernel_range()</code> rồi <code class="sym">debug_checkwx()</code> kiểm tra không còn trang nào vừa Write vừa eXecute</div>
+</div>
+<p style="font-size:.85rem;color:var(--text-dim)">Đổi RW→RO là an toàn để làm "live" (không cần break-before-make) — verify bằng <code class="sym">pgattr_change_is_safe()</code> (<code>mmu.c:120-152</code>): mask cho phép đổi <code>PTE_PXN|PTE_RDONLY|PTE_WRITE|PTE_NG</code>, nhưng đổi <code>PTE_CONT</code> hoặc Non-Global→Global thì KHÔNG BAO GIỜ an toàn khi live → <code>BUG_ON</code>.</p>
+
+<h3>Device vs Normal memory attribute (MAIR index)</h3>
+<div class="twrap"><table>
+<tr><th>Macro</th><th>MAIR attribute</th><th>Dùng cho</th></tr>
+<tr><td><code class="sym">PROT_DEVICE_nGnRE</code></td><td>Device, non-Gathering non-Reordering Early-ack</td><td><code class="sym">ioremap()</code> mặc định — strict MMIO ordering</td></tr>
+<tr><td><code class="sym">PROT_NORMAL_NC</code></td><td>Normal memory, Non-Cacheable</td><td><code class="sym">ioremap_wc()</code> — framebuffer/DMA ring, cho phép gộp ghi</td></tr>
+<tr><td><code class="sym">MT_NORMAL(0)</code></td><td>Normal, Write-Back Cacheable</td><td>Mọi <code>PAGE_KERNEL*</code>, RAM thường</td></tr>
+</table></div>
+</section>
+
+<section class="topic" id="boot-memblock">
+<h2>6. Boot Memory Initialization &amp; memblock</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead"><b>memblock</b> là allocator duy nhất trước khi buddy sẵn sàng — bootmem allocator cũ (Linux 2.6-era, mô tả trong tài liệu Chapter 8) <b>đã bị loại bỏ hoàn toàn</b> khỏi kernel hiện đại, không còn file <code>bootmem.c</code> riêng, chỉ còn memblock.</p>
+
+<h3>Data structures</h3>
+<div class="twrap"><table>
+<tr><th>Struct</th><th>File:Line</th><th>Field chính</th></tr>
+<tr><td><code class="sym">struct memblock_region</code></td><td><code>include/linux/memblock.h:49-55</code></td><td><code>base, size, flags</code> — field <code>nid</code> chỉ tồn tại nếu <code>CONFIG_NEED_MULTIPLE_NODES</code> (board KHÔNG có field này)</td></tr>
+<tr><td><code class="sym">struct memblock_type</code></td><td><code>memblock.h:66-72</code></td><td><code>cnt, max, total_size, regions[], name</code> — "memory" hoặc "reserved"</td></tr>
+<tr><td><code class="sym">struct memblock</code></td><td><code>memblock.h:81-86</code></td><td><code>bottom_up, current_limit, memory, reserved</code></td></tr>
+</table></div>
+
+<h3>Boot flow thật (verify từng bước bằng source)</h3>
+<div class="diagram">
+<pre>
+start_kernel()                                    [init/main.c]
+ └─ setup_arch()                                   [init/main.c:1196]
+     ├─ arm64_memblock_init()                       [setup.c:331 → init.c:330-453]
+     │   ├─ memblock_remove(1&lt;&lt;PHYS_MASK_SHIFT,..)  :346  loại vùng &gt; PA_BITS
+     │   ├─ memblock_reserve(__pa_symbol(_text), _end-_text) :438  ← kernel image
+     │   ├─ (nếu initrd) memblock_reserve(base,size) :413
+     │   ├─ early_init_fdt_scan_reserved_mem()       :445  ← /reserved-memory DT
+     │   ├─ [CONFIG_PM_WARP]   warp_init_memblock()          :334-336  ★ BOARD-SPECIFIC
+     │   └─ [CONFIG_CMEMDRV]   thr_cmemdrvr_reserve_memory()  :338-340  ★ BOARD-SPECIFIC
+     ├─ paging_init()                                [setup.c:333]
+     └─ bootmem_init()                               [setup.c:343 → init.c:455-500]
+         ├─ arm64_numa_init()                        :467  (board không NUMA → node 0 duy nhất)
+         ├─ sparse_init()                             :484  → vmemmap_populate() thật
+         ├─ zone_sizes_init(min,max)                  :485  → free_area_init()
+         └─ dma_contiguous_reserve(arm64_dma_phys_limit) :490
+
+start_kernel() (tiếp)  → mm_init() → mem_init()      [init.c:572]
+ ├─ swiotlb_init(...)
+ ├─ set_max_mapnr(...)
+ └─ memblock_free_all()   ★ BUDDY ALLOCATOR SẴN SÀNG TỪ ĐÂY   [init.c:586 → memblock.c:1982]
+     ├─ reset_all_zones_managed_pages()
+     ├─ free_low_memory_core_early()
+     │    ├─ reserve_bootmem_region() cho từng reserved range (SetPageReserved)
+     │    └─ __free_memory_core() → __free_pages_memory() → memblock_free_pages()
+     │         → đưa vào zone-&gt;free_area[]
+     └─ totalram_pages_add(pages)
+</pre>
+<div class="cap"><code class="sym">memblock_free_all()</code> chính là "free_all_bootmem" tương đương — trong 5.10 nó nằm gọn trong <code>mm/memblock.c</code>.</div>
+</div>
+
+<h3>Function chi tiết</h3>
+<details class="func"><summary>memblock_free() — KHÔNG trả về buddy, chỉ "un-reserve"</summary>
+<div class="fbody">
+<div class="kv"><b>File:Line</b><span><code>mm/memblock.c:807-816</code></span>
+<b>Purpose</b><span>Gỡ 1 vùng khỏi <code>memblock.reserved</code>. Comment gốc dòng 804-805: <i>"The freeing memory will not be released to the buddy allocator."</i></span>
+<b>Callee</b><span><code class="sym">kmemleak_free_part_phys()</code>, <code class="sym">memblock_remove_range()</code></span></div>
+</div></details>
+<details class="func"><summary>memblock_free_all() — bàn giao toàn bộ vùng free cho buddy</summary>
+<div class="fbody">
+<div class="kv"><b>File:Line</b><span><code>mm/memblock.c:1982-1990</code></span>
+<b>Caller</b><span><code>arch/arm64/mm/init.c:586</code> (trong <code class="sym">mem_init()</code>)</span>
+<b>Return</b><span>Số trang thực sự được release cho buddy</span></div>
+</div></details>
+
+<div class="callout warn"><b class="label">Board-specific — không có trong mainline</b> <code>arch/arm64/mm/init.c:334-340</code>: 2 hook Konica Minolta gọi trong <code class="sym">arm64_memblock_init()</code> — <code class="sym">warp_init_memblock()</code> (CONFIG_PM_WARP) và <code class="sym">thr_cmemdrvr_reserve_memory()</code> (CONFIG_CMEMDRV, driver vendor reserve vùng nhớ riêng qua memblock). Cần lưu ý khi đối chiếu với tài liệu mainline arm64.</div>
+</section>
+<section class="topic" id="struct-page">
+<h2>7. struct page — Đại diện cho một physical page</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead"><code class="sym" data-idx="struct page">struct page</code> (<code>include/linux/mm_types.h:70-232</code>) là 1 <b>union đa mục đích</b> — 5 word chính có thể dùng tự do bởi người allocate qua <code class="sym">alloc_pages()</code>, tuỳ ngữ cảnh (page cache, SLUB, buddy free, compound page...). Không được giải thích field kiểu tĩnh — phải trace theo <b>ai đang sở hữu trang đó</b>.</p>
+
+<div class="twrap"><table>
+<tr><th>Field</th><th>Ý nghĩa</th></tr>
+<tr><td><code class="sym">flags</code></td><td>Atomic flags + zone/node encode (xem mục Zones)</td></tr>
+<tr><td><code class="sym">lru / mapping / index / private</code></td><td>Nhánh <b>page cache &amp; anonymous</b>: <code>lru</code> nằm trong active/inactive list (<code>pgdat-&gt;lru_lock</code>), <code>mapping</code> trỏ <code>address_space</code>, <code>private</code> dùng cho buffer_heads/swp_entry/buddy order tuỳ ngữ cảnh</td></tr>
+<tr><td><code class="sym">slab_cache / freelist / inuse:objects:frozen</code></td><td>Nhánh <b>SLAB/SLUB</b> — bitfield SLUB dùng <code>cmpxchg_double</code></td></tr>
+<tr><td><code class="sym">_mapcount</code></td><td>Số PTE đang map trang này (nếu mappable userspace)</td></tr>
+<tr><td><code class="sym">_refcount</code></td><td>Usage count — <b>KHÔNG dùng trực tiếp</b>, phải qua <code>include/linux/page_ref.h</code></td></tr>
+</table></div>
+
+<h3>Field nào đổi khi page vào/ra buddy allocator</h3>
+<div class="twrap"><table>
+<tr><th>Sự kiện</th><th>Function</th><th>Field bị đổi</th></tr>
+<tr><td>Page <b>free</b> (vào buddy)</td><td><code class="sym">free_pages_prepare()</code> <code>page_alloc.c:1233</code> → <code class="sym">__free_one_page()</code> <code>:1015</code></td><td><code>mapping=NULL</code>, <code>page_cpupid_reset_last()</code>, <code>reset_page_owner()</code>, <code>set_buddy_order(page,order)</code> — ghi order vào <code>page-&gt;private</code>, chèn vào <code>free_area[order].free_list[migratetype]</code></td></tr>
+<tr><td>Page <b>allocate</b> (ra khỏi buddy)</td><td><code class="sym">post_alloc_hook()</code> <code>:2296</code> → <code class="sym">prep_new_page()</code> <code>:2310</code></td><td><code>set_page_private(page,0)</code>, <code>set_page_refcounted()</code> (<code>_refcount=1</code>), <code>set_page_owner()</code></td></tr>
+<tr><td>SLUB dùng struct page</td><td><code class="sym">allocate_slab()</code> <code>slub.c:1750-1806</code></td><td><code>page-&gt;objects = oo_objects(oo)</code>, <code>page-&gt;slab_cache = s</code>, <code>page-&gt;freelist = start</code>, <code>page-&gt;frozen = 1</code></td></tr>
+<tr><td>Page cache thêm trang</td><td><code class="sym">__add_to_page_cache_locked()</code> <code>filemap.c:830-846</code></td><td><code>get_page(page)</code>, <code>page-&gt;mapping = mapping</code>, <code>page-&gt;index = offset</code></td></tr>
+</table></div>
+
+<div class="callout"><b class="label">Invariant khi free</b> <code class="sym">page_expected_state()</code>/<code class="sym">page_bad_reason()</code> (<code>page_alloc.c:1116-1154</code>) kiểm tra: <code>_mapcount==-1</code>, <code>mapping==NULL</code>, <code>page_ref_count(page)==0</code>, không còn cờ trong <code>PAGE_FLAGS_CHECK_AT_FREE</code> — vi phạm bất kỳ điều nào là bug nghiêm trọng.</div>
+
+<details class="func"><summary>__init_single_page() — khởi tạo lần đầu (memmap_init), KHÁC alloc/free runtime</summary>
+<div class="fbody">
+<div class="kv"><b>File:Line</b><span><code>mm/page_alloc.c:1468-1484</code></span>
+<b>Việc làm</b><span><code>mm_zero_struct_page(page)</code> zero toàn bộ struct; <code class="sym">set_page_links(page,zone,nid,pfn)</code> encode zone/node vào <code>flags</code>; <code>init_page_count()</code> set <code>_refcount=1</code>; <code>page_mapcount_reset()</code> set <code>_mapcount=-1</code>; <code>INIT_LIST_HEAD(&amp;page-&gt;lru)</code></span></div>
+</div></details>
+</section>
+
+<section class="topic" id="pfn-page">
+<h2>8. PFN ↔ struct page (SPARSEMEM_VMEMMAP thật trên board)</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="callout alloc"><b class="label">Kết luận verify từ source — KHÔNG suy đoán</b> Board bật <code>CONFIG_SPARSEMEM_VMEMMAP=y</code> ⇒ <code class="sym">pfn_to_page()</code>/<code class="sym">page_to_pfn()</code> là <b>phép cộng/trừ con trỏ O(1)</b>, KHÔNG tra <code class="sym">struct mem_section</code> như classic SPARSEMEM.</div>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/asm-generic/memory_model.h:51-56</span><button class="cb-copy">Copy</button></div>
+<pre><span class="cm">#elif defined(CONFIG_SPARSEMEM_VMEMMAP)</span>
+<span class="cm">/* memmap is virtually contiguous. */</span>
+<span class="kw">#define</span> __pfn_to_page(pfn)  (vmemmap + (pfn))
+<span class="kw">#define</span> __page_to_pfn(page) (unsigned long)((page) - vmemmap)</pre></div>
+
+<p><code class="sym">vmemmap</code> trên arm64: <code>#define vmemmap ((struct page *)VMEMMAP_START - (memstart_addr &gt;&gt; PAGE_SHIFT))</code> (<code>pgtable.h:27</code>) — offset bởi <code>memstart_addr</code> để <code>vmemmap[pfn]</code> luôn đúng vị trí bất kể pfn bắt đầu từ đâu.</p>
+
+<h3>Cấp phát thật cho mảng struct page — PMD 2MB block mapping</h3>
+<p><code class="sym">vmemmap_populate()</code> (<code>arch/arm64/mm/mmu.c:1146-1185</code>) dùng nhánh <b>section map</b> vì <code>ARM64_SWAPPER_USES_SECTION_MAPS=1</code> khi <code>CONFIG_ARM64_4K_PAGES=y</code> (<code>kernel-pgtable.h:20-21</code>): với mỗi <code>PMD_SIZE</code> (2MB) chưa map, <code class="sym">vmemmap_alloc_block_buf()</code> cấp 1 khối 2MB rồi <code class="sym">pmd_set_huge()</code> — ánh xạ bằng <b>PMD huge/section mapping</b>, không dùng PTE 4K rời rạc, tiết kiệm page table đáng kể cho mảng struct page khổng lồ.</p>
+
+<div class="diagram">
+<pre>
+bootmem_init() → sparse_init() → sparse_init_nid() → __populate_section_memmap()
+                                                          [mm/sparse-vmemmap.c:251-265]
+    start = (unsigned long) pfn_to_page(pfn)
+    vmemmap_populate(start, end, nid, altmap)  [arch/arm64/mm/mmu.c:1146]
+        └─ pmd_set_huge(...) ánh xạ 2MB block chứa struct page[]
+</pre>
+</div>
+
+<h3>pfn_valid() — vẫn cần struct mem_section, nhưng KHÔNG để tính địa chỉ page</h3>
+<p><code class="sym">pfn_valid()</code> (<code>arch/arm64/mm/init.c:244-272</code>) vẫn dùng <code>CONFIG_SPARSEMEM</code> classic để kiểm tra <b>section có tồn tại/present hay không</b> — vì SPARSEMEM_EXTREME+VMEMMAP không loại bỏ nhu cầu biết "section này có RAM thật hay không" (memmap có thể populate rồi nhưng PFN vẫn rơi vào lỗ hổng giữa các bank RAM). <code class="sym">struct mem_section</code> vẫn tồn tại (<code>mmzone.h:1225-1268</code>) nhưng chỉ cho vai trò "section presence bookkeeping", KHÔNG còn là đường tính địa chỉ <code>struct page</code>.</p>
+
+<div class="callout"><b class="label">Hệ quả trên page-&gt;flags</b> Vì board có cả <code>CONFIG_SPARSEMEM</code> và <code>CONFIG_SPARSEMEM_VMEMMAP</code>, macro <code>SECTION_IN_PAGE_FLAGS</code> (<code>include/linux/mm.h:1291-1293</code>) <b>KHÔNG được định nghĩa</b> → <code>page-&gt;flags</code> trên board này không cần dành bit cho section number.</div>
+</section>
+<section class="topic" id="zones-numa">
+<h2>9. Memory Zones trên ARM64 &amp; NUMA</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="diagram">
+<pre>
+enum zone_type (include/linux/mmzone.h:347-395) — nhánh áp dụng cho board:
+
+#ifdef CONFIG_ZONE_DMA
+    ZONE_DMA,        ← board: CÓ (CONFIG_ZONE_DMA=y)
+#endif
+#ifdef CONFIG_ZONE_DMA32
+    ZONE_DMA32,      ← board: CÓ (CONFIG_ZONE_DMA32=y)
+#endif
+    ZONE_NORMAL,     ← luôn có
+#ifdef CONFIG_HIGHMEM
+    ZONE_HIGHMEM,    ← board: KHÔNG (arm64 không có Kconfig HIGHMEM)
+#endif
+    ZONE_MOVABLE,    ← luôn có
+    __MAX_NR_ZONES
+
+⇒ Thứ tự zone THẬT trên board: DMA(0) → DMA32(1) → NORMAL(2) → MOVABLE(3), MAX_NR_ZONES=4
+</pre>
+</div>
+
+<h3>zone_sizes_init() — ranh giới zone thật, KHÔNG cố định 32-bit</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/init.c:220-242</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static void</span> __init <span class="fn">zone_sizes_init</span>(unsigned long min, unsigned long max)
+{
+    unsigned long max_zone_pfns[MAX_NR_ZONES] = {0};
+    phys_addr_t dma32_phys_limit = max_zone_phys(32);
+
+<span class="cm">#ifdef CONFIG_ZONE_DMA</span>
+    zone_dma_bits = min3(32U, dt_zone_dma_bits, acpi_zone_dma_bits);
+    arm64_dma_phys_limit = max_zone_phys(zone_dma_bits);
+    max_zone_pfns[ZONE_DMA] = PFN_DOWN(arm64_dma_phys_limit);
+<span class="cm">#endif</span>
+<span class="cm">#ifdef CONFIG_ZONE_DMA32</span>
+    max_zone_pfns[ZONE_DMA32] = PFN_DOWN(dma32_phys_limit);
+<span class="cm">#endif</span>
+    max_zone_pfns[ZONE_NORMAL] = max;
+    free_area_init(max_zone_pfns);
+}</pre></div>
+<p><code class="sym">zone_dma_bits</code> lấy <code>min3(32, dt_zone_dma_bits, acpi_zone_dma_bits)</code> — <b>từ Device Tree/ACPI thật</b>, không phải hằng số 32 cố định. <code>ZONE_DMA</code> phủ <code>[0, arm64_dma_phys_limit)</code>; <code>ZONE_DMA32</code> phủ phần còn lại tới giới hạn 32-bit; <code>ZONE_NORMAL</code> phủ phần còn lại.</p>
+
+<h3>Struct zone / pglist_data — field trọng yếu</h3>
+<div class="twrap"><table>
+<tr><th>Struct</th><th>Field</th><th>Ý nghĩa</th></tr>
+<tr><td rowspan="4"><code class="sym">struct zone</code><br><span style="color:var(--text-dim);font-size:.75rem">mmzone.h:428-576</span></td>
+<td><code>_watermark[NR_WMARK]</code></td><td>Ngưỡng MIN/LOW/HIGH cho reclaim</td></tr>
+<tr><td><code>free_area[MAX_ORDER]</code></td><td>Mảng free-list buddy (11 phần tử trên board)</td></tr>
+<tr><td><code>lock</code></td><td>spinlock bảo vệ <code>free_area</code></td></tr>
+<tr><td><code>pageset</code></td><td>Per-CPU page cache cho order-0 (PCP)</td></tr>
+<tr><td rowspan="2"><code class="sym">struct pglist_data</code><br><span style="color:var(--text-dim);font-size:.75rem">mmzone.h:706-809</span></td>
+<td><code>node_zones[MAX_NR_ZONES]</code></td><td>Mảng 4 zone thật (board này)</td></tr>
+<tr><td><code>node_mem_map</code></td><td>Chỉ tồn tại nếu <code>CONFIG_FLAT_NODE_MEM_MAP</code> (!SPARSEMEM) — <b>board KHÔNG có field này</b> vì dùng SPARSEMEM</td></tr>
+</table></div>
+
+<h3>page → zone → pgdat → node</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/mm.h:1468-1476</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline struct</span> zone *<span class="fn">page_zone</span>(<span class="kw">const struct</span> page *page)
+{
+    <span class="kw">return</span> &amp;NODE_DATA(page_to_nid(page))-&gt;node_zones[page_zonenum(page)];
+}
+<span class="kw">static inline</span> pg_data_t *<span class="fn">page_pgdat</span>(<span class="kw">const struct</span> page *page)
+{
+    <span class="kw">return</span> NODE_DATA(page_to_nid(page));
+}</pre></div>
+
+<h3>NUMA tắt trên board — contig_page_data</h3>
+<p>Board có <code>CONFIG_NUMA</code> <b>not set</b> → <code>CONFIG_NEED_MULTIPLE_NODES</code> cũng not set (<code>mm/Kconfig:87-89</code>).</p>
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/mmzone.h:987-991</span><button class="cb-copy">Copy</button></div>
+<pre><span class="cm">#ifndef CONFIG_NEED_MULTIPLE_NODES</span>
+<span class="kw">extern struct</span> pglist_data contig_page_data;
+<span class="kw">#define</span> NODE_DATA(nid)     (&amp;contig_page_data)
+<span class="kw">#define</span> NODE_MEM_MAP(nid)  mem_map
+<span class="cm">#else</span></pre></div>
+<p>Mọi <code>NODE_DATA(nid)</code> bất kể <code>nid</code> đều trả về con trỏ tới cùng 1 biến toàn cục <code>contig_page_data</code> (định nghĩa thật tại <code>mm/memblock.c:96-97</code>). Vì <code>NODES_SHIFT=0</code> (<code>include/linux/numa.h:6-12</code>) → <code class="sym">page_to_nid()</code> luôn trả <code>0</code>, trường NODE trong <code>page-&gt;flags</code> rộng 0 bit.</p>
+</section>
+<section class="topic" id="gfp-flags">
+<h2>10. GFP Flags trên ARM64</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="twrap"><table>
+<tr><th>Flag</th><th>Purpose (kernel-doc thật)</th><th>May sleep?</th><th>Reclaim</th><th>Zone restriction</th></tr>
+<tr><td><code class="sym" data-idx="GFP_ATOMIC">GFP_ATOMIC</code></td><td>"caller cannot reclaim or sleep and is high priority. Users are typically interrupt handlers"</td><td><b>No</b></td><td>kswapd wake, KHÔNG direct reclaim</td><td>—</td></tr>
+<tr><td><code class="sym" data-idx="GFP_KERNEL">GFP_KERNEL</code></td><td>"typical for kernel-internal allocations… requires ZONE_NORMAL or lower but can direct reclaim"</td><td>Yes</td><td>Direct + kswapd, IO+FS cho phép</td><td>ZONE_NORMAL hoặc thấp hơn</td></tr>
+<tr><td><code class="sym">GFP_NOWAIT</code></td><td>"should not stall for direct reclaim, start IO or use filesystem callback"</td><td><b>No</b></td><td>kswapd wake only</td><td>—</td></tr>
+<tr><td><code class="sym">GFP_NOIO</code></td><td>"direct reclaim để discard clean pages/slab pages không cần start physical IO"</td><td>Yes</td><td>Direct+kswapd, KHÔNG IO</td><td>—</td></tr>
+<tr><td><code class="sym">GFP_NOFS</code></td><td>"direct reclaim nhưng không dùng filesystem interface"</td><td>Yes</td><td>Direct+kswapd+IO, KHÔNG FS</td><td>—</td></tr>
+<tr><td><code class="sym">GFP_DMA</code></td><td>"exists for historical reasons and should be avoided where possible"</td><td>—</td><td>—</td><td><code>ZONE_DMA</code></td></tr>
+<tr><td><code class="sym">GFP_DMA32</code></td><td>"caller requires a 32-bit address"</td><td>—</td><td>—</td><td><code>ZONE_DMA32</code></td></tr>
+<tr><td><code class="sym">GFP_HIGHUSER</code></td><td>"userspace alloc, không cần direct access bởi kernel, không thể move khi đang dùng"</td><td>Yes</td><td>Full</td><td><code>OPT_ZONE_HIGHMEM</code> → <b>=ZONE_NORMAL trên arm64</b> (không có HIGHMEM)</td></tr>
+<tr><td><code class="sym">GFP_HIGHUSER_MOVABLE</code></td><td>"kernel không cần direct access… expected movable via reclaim/migration"</td><td>Yes</td><td>Full</td><td><code>ZONE_MOVABLE</code> cho phép</td></tr>
+<tr><td><code class="sym">GFP_TRANSHUGE_LIGHT</code></td><td>THP alloc, không wake kswapd/kcompactd khi fail, dùng trong page fault path</td><td><b>No</b> (reclaim bit đã bị xoá)</td><td>Không reclaim/compaction</td><td>—</td></tr>
+</table></div>
+
+<h3>ARM64 HIGHMEM — verify bằng grep thật, không suy đoán</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">grep result — Kconfig arm64</span><button class="cb-copy">Copy</button></div>
+<pre><span class="cm">$ grep -n "HIGHMEM" arch/arm64/Kconfig        → KHÔNG có kết quả
+$ grep -rn "CONFIG_HIGHMEM" arch/arm64/       → KHÔNG có kết quả
+$ find arch/arm64 -iname "*highmem*"          → KHÔNG có file (không có asm/highmem.h)
+$ grep -rln "^config HIGHMEM$" arch/*/Kconfig → chỉ arch/arm(32), arc, csky, microblaze,
+                                                  mips, powerpc, sparc, x86, xtensa
+                                                  (arm64 KHÔNG có trong danh sách)</span></pre></div>
+<p>Hệ quả trong <code>include/linux/gfp.h:360-364</code>: <code>#ifdef CONFIG_HIGHMEM → OPT_ZONE_HIGHMEM=ZONE_HIGHMEM; #else → OPT_ZONE_HIGHMEM=ZONE_NORMAL</code>. Trên board, <code>OPT_ZONE_HIGHMEM</code> luôn resolve thành <code>ZONE_NORMAL</code> — <code>GFP_HIGHUSER</code>/<code>GFP_HIGHUSER_MOVABLE</code> thực tế allocate từ <code>ZONE_NORMAL</code>. Phân tích đầy đủ ở mục <a href="#highmem">28 — HIGHMEM: Doc vs ARM64</a>.</p>
+
+<h3>Zone selection từ GFP flags — gfp_zone()</h3>
+<p><code class="sym">GFP_ZONE_TABLE</code> (<code>gfp.h:422-431</code>) mã hoá bảng fallback dựa trên 4 bit thấp gfp_t (<code>__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE</code>), thứ tự fallback: <code>MOVABLE⇒HIGHMEM⇒NORMAL⇒DMA32⇒DMA</code>. Trên board (cả <code>OPT_ZONE_DMA=ZONE_DMA</code> và <code>OPT_ZONE_DMA32=ZONE_DMA32</code> thật) → không fallback về NORMAL cho các cờ DMA.</p>
+</section>
+<section class="topic" id="buddy">
+<h2>11–12. Buddy Allocator</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead">CPU request memory → allocator nhận request → GFP mask được decode → zonelist được chọn → watermark được kiểm tra → PCP được kiểm tra → buddy được truy cập → <code>free_area/order/migratetype</code> được xử lý → <code>struct page</code> được cập nhật → page được trả về caller.</p>
+
+<h3>alloc_pages() call chain thật (5.10.241 — xác nhận tên hàm bằng grep)</h3>
+<div class="diagram">
+<pre>
+alloc_pages(gfp_mask, order)                    [gfp.h:555-558, !CONFIG_NUMA → board này]
+  └─ alloc_pages_node(numa_node_id(), gfp_mask, order)
+       └─ __alloc_pages_node(nid, gfp_mask, order)
+            └─ __alloc_pages(gfp_mask, order, nid)
+                 └─ __alloc_pages_nodemask(gfp_mask, order, preferred_nid, NULL)
+                        [ĐÂY LÀ TÊN HÀM THẬT 5.10.241 — mm/page_alloc.c:5031-5093
+                         KHÔNG PHẢI __alloc_pages_noprof() (tên đó chỉ có ở version rất mới)]
+                     │
+                     ├─ order &gt;= MAX_ORDER? → WARN_ON_ONCE, return NULL
+                     ├─ prepare_alloc_pages(...)
+                     ├─ FAST PATH: get_page_from_freelist(alloc_mask, order, alloc_flags, &amp;ac)
+                     │     └─ nếu có page → return ngay
+                     └─ SLOW PATH: __alloc_pages_slowpath(...)   [xem mục 15-16]
+</pre>
+</div>
+
+<h3>rmqueue() — PCP path vs Buddy path</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:3453-3521</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline struct</span> page *<span class="fn">rmqueue</span>(<span class="kw">struct</span> zone *preferred_zone, <span class="kw">struct</span> zone *zone,
+        unsigned int order, gfp_t gfp_flags, unsigned int alloc_flags, int migratetype)
+{
+    <span class="kw">if</span> (likely(order == 0)) {
+        <span class="cm">/* MIGRATE_MOVABLE pcplist có thể chứa page CMA — board không CMA nên luôn qua PCP */</span>
+        <span class="kw">if</span> (!IS_ENABLED(CONFIG_CMA) || alloc_flags &amp; ALLOC_CMA || migratetype != MIGRATE_MOVABLE) {
+            page = rmqueue_pcplist(preferred_zone, zone, gfp_flags, migratetype, alloc_flags);
+            <span class="kw">goto</span> out;
+        }
+    }
+    spin_lock_irqsave(&amp;zone-&gt;lock, flags);
+    <span class="kw">do</span> {
+        <span class="kw">if</span> (order &gt; 0 &amp;&amp; alloc_flags &amp; ALLOC_HARDER)
+            page = __rmqueue_smallest(zone, order, MIGRATE_HIGHATOMIC);
+        <span class="kw">if</span> (!page) page = __rmqueue(zone, order, migratetype, alloc_flags);
+    } <span class="kw">while</span> (page &amp;&amp; check_new_pages(page, order));
+    spin_unlock(&amp;zone-&gt;lock);
+}</pre></div>
+<div class="callout alloc"><b class="label">Board-specific</b> Vì <code>CONFIG_CMA</code> không set, <code>IS_ENABLED(CONFIG_CMA)=false</code> ⇒ điều kiện đầu LUÔN đúng ⇒ <b>mọi order-0 allocation trên board này luôn đi qua PCP path</b>, bất kể migratetype. Order&gt;0 luôn đi thẳng buddy dưới <code>zone-&gt;lock</code>.</div>
+
+<h3>Split — expand() / __rmqueue_smallest()</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:2191-2213</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline void</span> <span class="fn">expand</span>(<span class="kw">struct</span> zone *zone, <span class="kw">struct</span> page *page, <span class="kw">int</span> low, <span class="kw">int</span> high, <span class="kw">int</span> migratetype)
+{
+    unsigned long size = 1 &lt;&lt; high;
+    <span class="kw">while</span> (high &gt; low) {
+        high--; size &gt;&gt;= 1;
+        <span class="kw">if</span> (set_page_guard(zone, &amp;page[size], high, migratetype)) <span class="kw">continue</span>;
+        add_to_free_list(&amp;page[size], zone, high, migratetype);
+        set_buddy_order(&amp;page[size], high);
+    }
+}</pre></div>
+
+<h4>Trace từng bước split (PAGE_SIZE=4KB, order=3→0)</h4>
+<div class="diagram">
+<pre>
+Trước split: 1 block free order=3 tại [0x100000000..0x100008000)  (32KB)
+  expand(zone, page, low=0, high=3, migratetype); size = 1&lt;&lt;3 = 8 pages
+
+  [Lần 1] high: 3→2, size: 8→4
+     buddy-half tại +4 trang = +0x4000 → &amp;page[4]
+     add_to_free_list(&amp;page[4], order=2)  → free_area[2] nhận [0x100004000..0x100008000) 16KB
+
+  [Lần 2] high: 2→1, size: 4→2
+     buddy-half tại +2 trang = +0x2000 → &amp;page[2]
+     add_to_free_list(&amp;page[2], order=1)  → free_area[1] nhận [0x100002000..0x100004000) 8KB
+
+  [Lần 3] high: 1→0, size: 2→1
+     buddy-half tại +1 trang = +0x1000 → &amp;page[1]
+     add_to_free_list(&amp;page[1], order=0)  → free_area[0] nhận [0x100001000..0x100002000) 4KB
+
+  high==low(0) → dừng. page gốc &amp;page[0] tại 0x100000000, order-0, trả về caller.
+  (del_page_from_free_list chạy TRƯỚC expand nên page[0] đã bị gỡ khỏi free_area[3])
+</pre>
+</div>
+
+<h3>Merge — __free_one_page() — công thức tìm buddy chính xác</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/internal.h:175-196</span><button class="cb-copy">Copy</button></div>
+<pre><span class="cm">/* B2 = B1 ^ (1 &lt;&lt; O)   —   buddy của order O
+ * P  = B  &amp; ~(1 &lt;&lt; O)  —   parent order O+1 */</span>
+<span class="kw">static inline</span> unsigned long <span class="fn">__find_buddy_pfn</span>(unsigned long page_pfn, unsigned int order)
+{
+    <span class="kw">return</span> page_pfn ^ (1 &lt;&lt; order);
+}</pre></div>
+
+<h4>Trace merge (PAGE_SIZE=4KB)</h4>
+<div class="diagram">
+<pre>
+Page free có PFN P tương ứng 0x100000000, đang free ở order=0:
+
+order=0: buddy_pfn = P^1 → 0x100001000
+  page_is_buddy(...)? nếu buddy đang PageBuddy &amp;&amp; buddy_order==0 &amp;&amp; cùng zone → TRUE
+  → del_page_from_free_list(buddy) → combined_pfn=P → order++ → order=1
+  block hợp nhất [0x100000000..0x100002000) 8KB
+
+order=1: buddy_pfn = P^2
+  nếu buddy đó cũng free order=1 → merge tiếp → order=2
+  block hợp nhất [0x100000000..0x100004000) 16KB
+
+... tiếp tục tới khi buddy không hợp lệ HOẶC vượt max_order
+    max_order = min(MAX_ORDER-1, pageblock_order) = min(10,10) = 10  (board: cả 2 đều =10)
+
+done_merging: set_buddy_order(page, order_cuối); add_to_free_list(...)
+</pre>
+</div>
+<p><code class="sym">page_is_buddy()</code> kiểm tra: buddy đang <code>PageBuddy</code>, cùng order, cùng zone, <code>page_count(buddy)==0</code>. <span style="color:var(--c-warn)">Lưu ý board có vendor patch <code>CONFIG_KM_BIZHUB</code> (CQ:358608) thay <code>VM_BUG_ON_PAGE</code> bằng kiểm tra runtime <code>return false</code> thay vì crash.</span></p>
+
+<h3>Data structures</h3>
+<div class="twrap"><table>
+<tr><th>Struct/Macro</th><th>Nội dung thật trên board</th></tr>
+<tr><td><code class="sym">MAX_ORDER</code></td><td><code>CONFIG_FORCE_MAX_ZONEORDER=11</code> → orders 0..10, block lớn nhất = 2¹⁰ trang = <b>4MB</b></td></tr>
+<tr><td><code class="sym">pageblock_order</code></td><td><code>= MAX_ORDER-1 = 10</code> (vì <code>CONFIG_HUGETLB_PAGE</code> tắt) → <code>pageblock_nr_pages = 1024</code> trang = <b>4MB pageblock</b></td></tr>
+<tr><td><code class="sym">struct free_area</code></td><td><code>list_head free_list[MIGRATE_TYPES]; unsigned long nr_free;</code></td></tr>
+<tr><td><code class="sym">zone-&gt;lock</code></td><td>spinlock — "Primarily protects free_area"</td></tr>
+</table></div>
+
+<h3>Watermark — __zone_watermark_ok()</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:3626-3688</span><button class="cb-copy">Copy</button></div>
+<pre>min = mark;
+free_pages -= __zone_watermark_unusable_free(z, order, alloc_flags);
+<span class="kw">if</span> (alloc_flags &amp; ALLOC_HIGH)     min -= min / 2;
+<span class="kw">if</span> (alloc_harder) {
+    <span class="kw">if</span> (alloc_flags &amp; ALLOC_OOM) min -= min / 2;
+    <span class="kw">else</span>                        min -= min / 4;
+}
+<span class="kw">if</span> (free_pages &lt;= min + z-&gt;lowmem_reserve[highest_zoneidx]) <span class="kw">return false</span>;
+<span class="kw">if</span> (!order) <span class="kw">return true</span>;
+<span class="cm">/* order&gt;0: cần ít nhất 1 free page ở order phù hợp, duyệt MIGRATE_PCPTYPES
+   (board: CMA/ISOLATE #ifdef bị loại nên chỉ xét UNMOVABLE/MOVABLE/RECLAIMABLE + HIGHATOMIC) */</pre></div>
+</section>
+<section class="topic" id="migratetype">
+<h2>13. Migrate Types</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead">Buddy allocator hiện đại không chỉ dùng <code>free_area[order]</code> đơn thuần — mỗi order còn phân theo <b>migratetype</b>, vì page không thể di chuyển (unmovable) nếu trộn lẫn với page có thể di chuyển (movable) trong cùng 1 pageblock sẽ khiến pageblock đó vĩnh viễn không thể compact thành block lớn liền mạch.</p>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/mmzone.h:41-67</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">enum</span> migratetype {
+    MIGRATE_UNMOVABLE,
+    MIGRATE_MOVABLE,
+    MIGRATE_RECLAIMABLE,
+    MIGRATE_PCPTYPES,      <span class="cm">/* số type trên pcp lists */</span>
+    MIGRATE_HIGHATOMIC = MIGRATE_PCPTYPES,
+<span class="cm">#ifdef CONFIG_CMA</span>
+    MIGRATE_CMA,           <span class="cm">/* board: KHÔNG tồn tại — CONFIG_CMA=n */</span>
+<span class="cm">#endif</span>
+<span class="cm">#ifdef CONFIG_MEMORY_ISOLATION</span>
+    MIGRATE_ISOLATE,       <span class="cm">/* board: KHÔNG tồn tại — MEMORY_ISOLATION=n */</span>
+<span class="cm">#endif</span>
+    MIGRATE_TYPES
+};</pre></div>
+<div class="callout warn"><b class="label">Board thật chỉ có 4 migratetype</b> <code>MIGRATE_UNMOVABLE=0, MOVABLE=1, RECLAIMABLE=2, PCPTYPES=HIGHATOMIC=3, TYPES=4</code>. <code>MIGRATE_CMA</code>/<code>MIGRATE_ISOLATE</code> không tồn tại như hằng số — preprocessor loại bỏ hẳn, không phải "compile nhưng không dùng". <code>is_migrate_cma()</code> compile-time <code>false</code> → mọi <code>if(is_migrate_cma(...))</code> trong <code>page_alloc.c</code> là dead-code bị compiler loại (ví dụ dòng 884,1033,2884...).</div>
+
+<h3>Vì sao phân loại theo migratetype — trích comment thật</h3>
+<blockquote style="border-left:3px solid var(--border);margin:1rem 0;padding:.4rem 1rem;color:var(--text-dim);font-size:.85rem">"When we are falling back to another migratetype during allocation, try to steal extra free pages from the same pageblocks to satisfy further allocations, instead of polluting multiple pageblocks... fragmentation caused by [unmovable/reclaimable] allocations polluting movable pageblocks is worse than movable allocations stealing from unmovable/reclaimable pageblocks."
+<footer style="margin-top:.3rem;font-size:.72rem">— <code>can_steal_fallback()</code>, mm/page_alloc.c:2470-2481</footer></blockquote>
+
+<h3>Fallback — fallbacks[]</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:2365-2375</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static int</span> fallbacks[MIGRATE_TYPES][3] = {
+    [MIGRATE_UNMOVABLE]   = { MIGRATE_RECLAIMABLE, MIGRATE_MOVABLE,   MIGRATE_TYPES },
+    [MIGRATE_MOVABLE]     = { MIGRATE_RECLAIMABLE, MIGRATE_UNMOVABLE, MIGRATE_TYPES },
+    [MIGRATE_RECLAIMABLE] = { MIGRATE_UNMOVABLE,   MIGRATE_MOVABLE,   MIGRATE_TYPES },
+    <span class="cm">/* board: 2 hàng CMA/ISOLATE bị preprocessor loại, chỉ 3 hàng đầu compile */</span>
+};</pre></div>
+<p><code class="sym">__rmqueue_fallback()</code> (<code>2789-2865</code>) duyệt từ <code>MAX_ORDER-1</code> xuống, tìm <code class="sym">find_suitable_fallback()</code>, rồi <code class="sym">steal_suitable_fallback()</code> — có thể "steal" cả pageblock (<code>change_pageblock_range()</code>) nếu order lớn hoặc heuristic đủ điều kiện (free+alike pages ≥ nửa pageblock).</p>
+</section>
+
+<section class="topic" id="pcp">
+<h2>14. Per-CPU Page Allocator (PCP)</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/mmzone.h:319-338</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">struct</span> per_cpu_pages {
+    <span class="kw">int</span> count;               <span class="cm">/* số page hiện có */</span>
+    <span class="kw">int</span> high;                <span class="cm">/* ngưỡng cao, cần drain */</span>
+    <span class="kw">int</span> batch;               <span class="cm">/* kích thước gộp khi thêm/rút từ buddy */</span>
+    <span class="kw">struct</span> list_head lists[MIGRATE_PCPTYPES];
+};</pre></div>
+<p><code>pcp-&gt;lists[]</code> chỉ có <b>3</b> phần tử trên board (UNMOVABLE/MOVABLE/RECLAIMABLE) — KHÔNG có HIGHATOMIC/CMA/ISOLATE riêng trên PCP.</p>
+
+<h3>Allocate từ PCP — chạm buddy khi rỗng</h3>
+<div class="flow">
+<div class="step"><code class="sym">rmqueue_pcplist()</code> — <code>local_irq_save()</code> → lấy <code>pcp = &amp;this_cpu_ptr(zone-&gt;pageset)-&gt;pcp</code></div>
+<div class="step"><code class="sym">__rmqueue_pcplist()</code> — nếu <code>list_empty(list)</code>: gọi <code class="sym">rmqueue_bulk(zone, 0, pcp-&gt;batch, list, migratetype, alloc_flags)</code></div>
+<div class="step"><code class="sym">rmqueue_bulk()</code> — <code>spin_lock(&amp;zone-&gt;lock)</code> MỘT LẦN, loop <code>pcp-&gt;batch</code> lần gọi <code class="sym">__rmqueue()</code> (buddy core) liên tiếp — "Obtain a specified number of elements from the buddy allocator, all under a single hold of the lock, for efficiency"</div>
+<div class="step">Trả từng page từ list, <code>pcp-&gt;count--</code></div>
+</div>
+
+<h3>Free về PCP — trả về buddy khi vượt ngưỡng high</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:3197-3229 (free_unref_page_commit)</span><button class="cb-copy">Copy</button></div>
+<pre>pcp = &amp;this_cpu_ptr(zone-&gt;pageset)-&gt;pcp;
+list_add(&amp;page-&gt;lru, &amp;pcp-&gt;lists[migratetype]);
+pcp-&gt;count++;
+<span class="kw">if</span> (pcp-&gt;count &gt;= pcp-&gt;high) {
+    unsigned long batch = READ_ONCE(pcp-&gt;batch);
+    free_pcppages_bulk(zone, batch, pcp);   <span class="cm">// trả `batch` page về buddy, round-robin qua các migratetype</span>
+}</pre></div>
+
+<h3>Batch/High sizing</h3>
+<p><code class="sym">zone_batchsize()</code>: "PCP pools được set khoảng 1/1000 kích thước zone", <code>batch = zone_managed_pages(zone)/1024</code>, giới hạn tối đa 1MB, rồi <code>/4</code>, làm tròn về dạng <code>2^n - 1</code>. <code class="sym">pageset_set_batch()</code>: <b><code>pcp-&gt;high = 6*batch</code>, <code>pcp-&gt;batch = batch</code></b>.</p>
+<div class="callout warn"><b class="label">Not verified from source in this tree</b> Khái niệm "hot/cold page" của Chapter 8 cổ điển <b>không còn tồn tại</b> trong 5.10.241 — grep xác nhận không còn tham số <code>cold</code>/<code>hot</code> trong bất kỳ signature nào (<code>rmqueue</code>, <code>rmqueue_pcplist</code>, <code>free_unref_page</code>...). PCP hiện tại chỉ phân theo <code>migratetype</code>.</div>
+</section>
+<section class="topic" id="slowpath">
+<h2>15–16. Slowpath, Reclaim, Compaction, OOM</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge fail">Failure Path</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="diagram">
+<pre>
+                         alloc_pages()/alloc_pages_node()
+                                    │
+                         __alloc_pages_nodemask()  [page_alloc.c:5032]
+                                    │
+                    fast path: get_page_from_freelist()  (fail)
+                                    │
+                         __alloc_pages_slowpath()  [page_alloc.c:4689]
+              ┌─────────────────────┼─────────────────────────┐
+              │ wake_all_kswapds() [4753,4829] → wakeup_kswapd() [vmscan.c:3983]
+              │
+       (costly_order &gt;3 hoặc non-movable high-order?)
+              │ YES → __alloc_pages_direct_compact() TRƯỚC [4777]  ← compact trước reclaim!
+              │         → try_to_compact_pages() [compaction.c:2482]
+        get_page_from_freelist() retry [4848]  (fail, can_direct_reclaim, !PF_MEMALLOC)
+              ▼
+       __alloc_pages_direct_reclaim() [4861]
+              │   __perform_reclaim() → try_to_free_pages() [vmscan.c:3265]
+              │       → do_try_to_free_pages() [vmscan.c:3039]  (LRU scan thật)
+              │ (fail)
+              ▼
+       __alloc_pages_direct_compact() [4867]  ← LẦN 2, sau reclaim
+              │ (fail)
+              ▼
+   should_reclaim_retry() / should_compact_retry() → (retry) → goto retry (loop)
+              │ (không còn retry được)
+              ▼
+       __alloc_pages_may_oom() [4910] → out_of_memory() [oom_kill.c:1083]
+              │ (did_some_progress?) → goto retry
+              ▼ (no)
+            nopage: warn_alloc() → return NULL
+</pre>
+<div class="cap">Thứ tự THẬT (không suy đoán): với costly order, <b>compaction thử TRƯỚC reclaim</b> ("it's likely that we have enough base pages and don't need to reclaim" — comment 4764-4769). Trong vòng lặp retry chính, <b>reclaim trước, compaction sau</b>. <code class="sym">wake_all_kswapds()</code> gọi ở CẢ HAI vị trí để kswapd không "ngủ quên" trong lúc loop.</div>
+</div>
+
+<h3>Function chi tiết</h3>
+<details class="func"><summary>__alloc_pages_direct_reclaim() → __perform_reclaim() → try_to_free_pages()</summary>
+<div class="fbody">
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:4396-4452, mm/vmscan.c:3265-3306</span><button class="cb-copy">Copy</button></div>
+<pre><span class="fn">try_to_free_pages</span>(zonelist, order, gfp_mask, nodemask)
+{
+    <span class="kw">struct</span> scan_control sc = {
+        .nr_to_reclaim = SWAP_CLUSTER_MAX, .reclaim_idx = gfp_zone(gfp_mask),
+        .order = order, .priority = DEF_PRIORITY,
+        .may_writepage = !laptop_mode, .may_unmap = 1, .may_swap = 1,
+    };
+    <span class="kw">if</span> (throttle_direct_reclaim(...)) <span class="kw">return</span> 1;
+    nr_reclaimed = do_try_to_free_pages(zonelist, &amp;sc);  <span class="cm">// mm/vmscan.c:3039 — scan LRU thật</span>
+    <span class="kw">return</span> nr_reclaimed;
+}</pre></div>
+</div></details>
+
+<details class="func"><summary>__alloc_pages_direct_compact() → try_to_compact_pages()</summary>
+<div class="fbody">
+<div class="kv"><b>File</b><span><code>mm/page_alloc.c:4148-4203</code> (active vì <code>CONFIG_COMPACTION=y</code> trên board)</span>
+<b>Điều kiện chạy</b><span><code class="sym">gfp_compaction_allowed()</code>: <code>IS_ENABLED(CONFIG_COMPACTION) &amp;&amp; (gfp_mask &amp; __GFP_IO)</code></span>
+<b>Callee</b><span><code class="sym">try_to_compact_pages()</code> <code>mm/compaction.c:2482-2543</code> — duyệt zonelist, gọi <code class="sym">compact_zone_order()</code> mỗi zone</span></div>
+</div></details>
+
+<details class="func"><summary>__alloc_pages_may_oom() → out_of_memory()</summary>
+<div class="fbody">
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/page_alloc.c:4056-4140</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">if</span> (!mutex_trylock(&amp;oom_lock)) { *did_some_progress = 1; schedule_timeout_uninterruptible(1); <span class="kw">return</span> NULL; }
+page = get_page_from_freelist((gfp_mask|__GFP_HARDWALL) &amp; ~__GFP_DIRECT_RECLAIM, order,
+                               ALLOC_WMARK_HIGH|ALLOC_CPUSET, ac);
+<span class="kw">if</span> (page) <span class="kw">goto</span> out;
+<span class="kw">if</span> (current-&gt;flags &amp; PF_DUMPCORE) <span class="kw">goto</span> out;
+<span class="kw">if</span> (order &gt; PAGE_ALLOC_COSTLY_ORDER) <span class="kw">goto</span> out;
+<span class="kw">if</span> (out_of_memory(&amp;oc) || WARN_ON_ONCE(gfp_mask &amp; __GFP_NOFAIL)) { *did_some_progress = 1; ... }
+out: mutex_unlock(&amp;oom_lock); <span class="kw">return</span> page;</pre></div>
+<div class="kv"><b>Lock held</b><span><code>oom_lock</code> mutex giữ trong suốt hàm — "somebody else is making progress for us" nếu trylock fail</span></div>
+</div></details>
+</section>
+<section class="topic" id="slub">
+<h2>17. SLUB Allocator</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+<div class="callout alloc"><b class="label">Board dùng SLUB thật, không phải SLAB</b> <code>CONFIG_SLUB=y</code>, SLAB/SLOB tắt (<code>defconfig:237-239</code>). <code>arch/arm64/Kconfig:130,153</code> <code>select HAVE_ALIGNED_STRUCT_PAGE if SLUB</code> + <code>select HAVE_CMPXCHG_DOUBLE</code> ⇒ trên board này, fast path <code>cmpxchg_double</code> chạy bằng <b>CAS phần cứng thật</b> (CASP/LL-SC), không rơi vào fallback <code>slab_lock()</code>.</div>
+
+<h3>Struct kmem_cache_cpu — trái tim fast path</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/slub_def.h:42-52</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">struct</span> kmem_cache_cpu {
+    <span class="kw">void</span> **freelist;    <span class="cm">/* con trỏ object rảnh kế tiếp */</span>
+    unsigned long tid;    <span class="cm">/* transaction id — "phiên bản" chống ABA */</span>
+    <span class="kw">struct</span> page *page;   <span class="cm">/* slab đang active của CPU này */</span>
+<span class="cm">#ifdef CONFIG_SLUB_CPU_PARTIAL</span>
+    <span class="kw">struct</span> page *partial; <span class="cm">/* board: CÓ — slab frozen dự trữ riêng CPU */</span>
+<span class="cm">#endif</span>
+};</pre></div>
+
+<h3>Fast path alloc — slab_alloc_node() — hoàn toàn KHÔNG LOCK</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/slub.c:2812-2899</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">do</span> {
+    tid = this_cpu_read(s-&gt;cpu_slab-&gt;tid);
+    c = raw_cpu_ptr(s-&gt;cpu_slab);
+} <span class="kw">while</span> (IS_ENABLED(CONFIG_PREEMPTION) &amp;&amp; unlikely(tid != READ_ONCE(c-&gt;tid)));
+barrier();
+object = c-&gt;freelist; page = c-&gt;page;
+<span class="kw">if</span> (unlikely(!object || !page || !node_match(page, node))) {
+    object = __slab_alloc(s, gfpflags, node, addr, c);      <span class="cm">// SLOW PATH</span>
+} <span class="kw">else</span> {
+    <span class="kw">void</span> *next_object = get_freepointer_safe(s, object);
+    <span class="kw">if</span> (unlikely(!this_cpu_cmpxchg_double(
+            s-&gt;cpu_slab-&gt;freelist, s-&gt;cpu_slab-&gt;tid,
+            object, tid, next_object, next_tid(tid)))) {
+        <span class="kw">goto</span> redo;                                          <span class="cm">// CPU khác chen vào → retry</span>
+    }
+}</pre></div>
+<p>5 bước: (1) đọc <code>tid</code>+<code>c</code> an toàn dưới preemption; (2) <code>barrier()</code> ngăn compiler reorder; (3) điều kiện fast path: có object, có page, <code class="sym">node_match()</code> đúng (board không NUMA → luôn true); (4) <code>this_cpu_cmpxchg_double()</code> — double-word CAS nguyên tử trên <b>cả freelist lẫn tid cùng lúc</b>; (5) fail → <code>goto redo</code>. <b>Lock held: KHÔNG có lock nào</b> — đây là điểm cốt lõi thiết kế SLUB so với SLAB (dùng lock trung tâm).</p>
+
+<h3>Slow path — ___slab_alloc() — thứ tự ưu tiên thật</h3>
+<div class="flow">
+<div class="step">1. <code class="sym">slub_percpu_partial(c)</code> — per-CPU partial list — <b>không cần list_lock</b></div>
+<div class="step">2. <code class="sym">new_slab_objects()</code> → <code class="sym">get_partial()</code> → <code class="sym">get_partial_node()</code> — lấy từ <code>n-&gt;partial</code>, <b>cần <code>n-&gt;list_lock</code></b> (spin_lock)</div>
+<div class="step">3. <code class="sym">new_slab()</code> → <code class="sym">allocate_slab()</code> — cấp trang <b>mới hoàn toàn từ buddy allocator</b></div>
+</div>
+<p><code class="sym">get_freelist()</code> (2621-2643): lấy <code>page-&gt;freelist</code> "chính" (nơi free từ CPU khác dồn vào) và cmpxchg về freelist per-cpu — bước "refill" khi cpu freelist rỗng nhưng object khác đã được free vào page trong lúc chờ.</p>
+
+<h3>allocate_slab() → alloc_slab_page() → alloc_pages() — điểm nối buddy</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/slub.c:1613-1628</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline struct</span> page *<span class="fn">alloc_slab_page</span>(<span class="kw">struct</span> kmem_cache *s, gfp_t flags, <span class="kw">int</span> node,
+        <span class="kw">struct</span> kmem_cache_order_objects oo)
+{
+    unsigned int order = oo_order(oo);
+    <span class="kw">if</span> (node == NUMA_NO_NODE)
+        page = alloc_pages(flags, order);          <span class="cm">// <<< GỌI THẲNG BUDDY ALLOCATOR</span>
+    <span class="kw">else</span>
+        page = __alloc_pages_node(node, flags, order);
+    <span class="kw">return</span> page;
+}</pre></div>
+<p><code class="sym">allocate_slab()</code> thử <code>s-&gt;oo</code> (order "lý tưởng") trước; nếu fail → fallback <code>s-&gt;min</code> (order tối thiểu). Slab mới <b>luôn ở trạng thái <code>frozen=1</code></b> khi giao cho 1 CPU. <code>page-&gt;objects</code>, <code>page-&gt;slab_cache</code>, <code>page-&gt;freelist</code> được set ở đây (xem mục <a href="#struct-page">struct page</a>).</p>
+
+<h3>CPU Partial List — put_cpu_partial() / unfreeze_partials()</h3>
+<p><code class="sym">set_cpu_partial()</code> định số object mặc định giữ theo size object (<code>slub.c:3611-3641</code>): <code>size≥PAGE_SIZE→2</code>, <code>≥1024→6</code>, <code>≥256→13</code>, else <code>30</code>. Slow-path alloc ưu tiên lấy từ cpu-partial <b>trước</b> khi chạm <code>list_lock</code> — đây là lý do cpu-partial tồn tại: giảm tranh chấp lock giữa nhiều CPU.</p>
+
+<h3>Free path — kfree() → do_slab_free() → remote free</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/slub.c:3095-3139 (do_slab_free)</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">if</span> (likely(page == c-&gt;page)) {           <span class="cm">// LOCAL FREE — đúng cpu-slab hiện tại</span>
+    <span class="kw">void</span> **freelist = READ_ONCE(c-&gt;freelist);
+    set_freepointer(s, tail_obj, freelist);
+    <span class="kw">if</span> (unlikely(!this_cpu_cmpxchg_double(...))) <span class="kw">goto</span> redo;
+    <span class="cm">// THÀNH CÔNG: object nối vào ĐẦU c-&gt;freelist, KHÔNG chạm buddy, KHÔNG lock</span>
+} <span class="kw">else</span>
+    __slab_free(s, page, head, tail_obj, cnt, addr);   <span class="cm">// REMOTE FREE / slow path</span></pre></div>
+<div class="callout"><b class="label">Cơ chế remote free — điểm mấu chốt</b> <code class="sym">__slab_free()</code> (<code>2966-3078</code>) <b>không hề đụng tới <code>c-&gt;freelist</code>/<code>c-&gt;page</code> của bất kỳ CPU nào</b> — thao tác trực tiếp trên <code>page-&gt;freelist/counters</code> bằng <code class="sym">cmpxchg_double_slab()</code> (double-word CAS trên chính <code>struct page</code>). Vì vậy free từ CPU khác hoàn toàn an toàn: nếu slab đang là cpu-slab frozen của CPU khác thì chỉ counters đổi (không lock); nếu cần sửa list thì lấy <code>n-&gt;list_lock</code>. Đúng comment gốc header <code>mm/slub.c:97-104</code>: "Objects may be freed in the slab while it is frozen but slab_free will then skip the usual list operations."</div>
+
+<h3>Slab destroy → trả về buddy</h3>
+<div class="diagram">
+<pre>
+discard_slab() [1867] → free_slab() [1859] → __free_slab() [1828]
+    __ClearPageSlab(page); page-&gt;mapping = NULL;
+    __free_pages(page, order);   ★ TRẢ VỀ BUDDY — đối xứng với allocate_slab()→alloc_pages()
+
+Gọi discard_slab() từ 3 nơi:
+  1. __slab_free() [3077] — free khiến slab rỗng &amp;&amp; n-&gt;nr_partial &gt;= s-&gt;min_partial
+  2. deactivate_slab() [2294] — CPU trả cpu-slab, hoá ra rỗng
+  3. unfreeze_partials() [2365] — dồn cpu-partial về node, một số slab rỗng
+</pre>
+</div>
+</section>
+
+<section class="topic" id="kmalloc">
+<h2>18. kmalloc()</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<h3>Chọn cache — kmalloc_index()/kmalloc_type()</h3>
+<p>Board có <code>CONFIG_ZONE_DMA=y</code> → <code>NR_KMALLOC_TYPES</code> gồm 3 loại: <code class="sym">KMALLOC_NORMAL</code>, <code class="sym">KMALLOC_RECLAIM</code>, <code class="sym">KMALLOC_DMA</code>. <code class="sym">KMALLOC_SHIFT_HIGH = PAGE_SHIFT+1 = 13</code> trên arm64 4K-page ⇒ <b>kích thước tối đa dùng cache SLUB = 8192 byte</b> (<code>KMALLOC_MAX_CACHE_SIZE</code>). Lớn hơn → đi thẳng <code class="sym">kmalloc_large()</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/slab.h:538-558</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static</span> __always_inline <span class="kw">void</span> *<span class="fn">kmalloc</span>(size_t size, gfp_t flags)
+{
+    <span class="kw">if</span> (__builtin_constant_p(size)) {
+        <span class="kw">if</span> (size &gt; KMALLOC_MAX_CACHE_SIZE) <span class="kw">return</span> kmalloc_large(size, flags);
+        index = kmalloc_index(size);
+        <span class="kw">if</span> (!index) <span class="kw">return</span> ZERO_SIZE_PTR;
+        <span class="kw">return</span> kmem_cache_alloc_trace(kmalloc_caches[kmalloc_type(flags)][index], flags, size);
+    }
+    <span class="kw">return</span> __kmalloc(size, flags);   <span class="cm">// fallback nếu size không phải compile-time const</span>
+}</pre></div>
+
+<h3>kmalloc_large() — bypass SLUB hoàn toàn, gọi thẳng buddy</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/slab_common.c:826-846</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">void</span> *<span class="fn">kmalloc_order</span>(size_t size, gfp_t flags, unsigned int order)
+{
+    flags |= __GFP_COMP;
+    page = alloc_pages(flags, order);     <span class="cm">// GỌI THẲNG BUDDY — không qua SLUB cache nào</span>
+    ret = page_address(page);
+    <span class="kw">return</span> ret;
+}</pre></div>
+
+<h3>kfree() — đối xứng: phát hiện large-alloc để bypass SLUB</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/slub.c:4104-4127</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">void</span> <span class="fn">kfree</span>(<span class="kw">const void</span> *x)
+{
+    <span class="kw">if</span> (unlikely(ZERO_OR_NULL_PTR(x))) <span class="kw">return</span>;
+    page = virt_to_head_page(x);
+    <span class="kw">if</span> (unlikely(!PageSlab(page))) {      <span class="cm">// cấp bởi kmalloc_large()/alloc_pages()</span>
+        __free_pages(page, compound_order(page));   <span class="cm">// <<< THẲNG VỀ BUDDY</span>
+        <span class="kw">return</span>;
+    }
+    slab_free(page-&gt;slab_cache, page, object, NULL, 1, _RET_IP_);
+}</pre></div>
+
+<h3>Call-flow đầy đủ: kmalloc(64) → SLUB → alloc_pages() → buddy</h3>
+<div class="diagram">
+<pre>
+kmalloc(64, GFP_KERNEL)
+└─ index = kmalloc_index(64) = 6
+   └─ kmem_cache_alloc_trace(kmalloc_caches[KMALLOC_NORMAL][6], flags, 64)
+      └─ slab_alloc(s,...) → slab_alloc_node(s, gfpflags, NUMA_NO_NODE, addr)
+         ├─ FAST PATH: this_cpu_cmpxchg_double() thành công → trả object, KHÔNG chạm buddy
+         └─ SLOW PATH: __slab_alloc() → local_irq_save(); ___slab_alloc()
+            ├─ slub_percpu_partial(c)?  (CPU_PARTIAL, không cần list_lock)
+            ├─ get_partial_node()  (cần n-&gt;list_lock)
+            └─ allocate_slab() → alloc_slab_page() → alloc_pages(flags,order)  ★ BUDDY
+</pre>
+</div>
+</section>
+<section class="topic" id="compare-alloc">
+<h2>kmalloc vs alloc_pages vs vmalloc</h2>
+<div class="topic-badges"><span class="badge alloc">Memory Allocation</span><span class="badge src">SOURCE VERIFIED</span></div>
+<div class="twrap"><table>
+<tr><th>Tiêu chí</th><th><code class="sym">kmalloc</code> (SLUB, ≤8192B)</th><th><code class="sym">kmalloc_large</code>/<code class="sym">alloc_pages</code> trực tiếp</th><th><code class="sym">vmalloc</code></th></tr>
+<tr><td>Physically contiguous</td><td>Có (trong 1 page/compound page do SLUB cấp)</td><td>Có (1 compound page, order=get_order(size))</td><td><b>Không</b> — mỗi page cấp riêng lẻ</td></tr>
+<tr><td>Virtually contiguous</td><td>Có (trong linear map)</td><td>Có</td><td>Có (map qua page table vào <code>VMALLOC_START..END</code>)</td></tr>
+<tr><td>Layer gọi layer</td><td><code>kmalloc→kmem_cache_alloc_trace→slab_alloc→</code>cpu-slab/partial<code>→allocate_slab→alloc_pages</code></td><td><code>kmalloc→kmalloc_large→kmalloc_order→alloc_pages</code></td><td><code>vmalloc→__vmalloc_node_range→</code>vòng lặp <code>alloc_pages_node(...,0)→map_kernel_range</code></td></tr>
+<tr><td>Size class</td><td>8B .. 8192B (kmalloc_index bậc lũy thừa 2, +2 case đặc biệt 96/192B)</td><td>&gt;8192B tới <code>KMALLOC_MAX_SIZE</code></td><td>Không giới hạn theo class — giới hạn bởi vùng VA <code>VMALLOC_START..END</code> (~254GB trên board)</td></tr>
+<tr><td>Typical use</td><td>Object nhỏ, tần suất cao (struct kernel nội bộ)</td><td>Buffer trung-lớn cần physically contiguous (DMA không IOMMU)</td><td>Buffer rất lớn, không cần physically contiguous (module .data, driver buffer lớn)</td></tr>
+<tr><td>Trace file:line</td><td><code>mm/slub.c:1613-1628,1739-1817</code></td><td><code>mm/slab_common.c:826-846</code></td><td><code>mm/vmalloc.c:2507,2553,2626,2645</code></td></tr>
+</table></div>
+</section>
+<section class="topic" id="vmalloc">
+<h2>21. vmalloc() trên ARM64</h2>
+<div class="topic-badges"><span class="badge pt">Page Table</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<h3>Call-flow đầy đủ: vmalloc(size) → virtual area → physical pages → page table → VA</h3>
+<div class="diagram">
+<pre>
+vmalloc(size)                                          [mm/vmalloc.c:2645]
+ └─ __vmalloc_node(size, align=1, GFP_KERNEL, NUMA_NO_NODE, caller) [2611]
+     └─ __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
+                              gfp_mask, PAGE_KERNEL, vm_flags=0, node) [2553]
+         │
+         ├─ 1) size = PAGE_ALIGN(size); check ≤ totalram_pages()
+         │
+         ├─ 2) __get_vm_area_node()  [2062]
+         │      ├─ area = kzalloc_node(sizeof(struct vm_struct),...)
+         │      ├─ size += PAGE_SIZE  (guard page)
+         │      └─ alloc_vmap_area(size, align, start, end, node, gfp)  [1155]
+         │           ├─ find_vmap_lowest_match()  — duyệt rb-tree free_vmap_area_root
+         │           ├─ spin_lock(&amp;free_vmap_area_lock) / spin_lock(&amp;vmap_area_lock)
+         │           └─ insert_vmap_area(va, &amp;vmap_area_root,...)  — CÂY RB-TREE "busy"
+         │      => trả struct vm_struct* area (VÙNG VIRTUAL ĐÃ CẤP, CHƯA CÓ PHYSICAL PAGE)
+         │
+         └─ 3) __vmalloc_area_node(area, gfp_mask, PAGE_KERNEL, node)  [2472]
+                ├─ nr_pages = get_vm_area_size(area) &gt;&gt; PAGE_SHIFT
+                ├─ VÒNG LẶP CẤP TỪNG TRANG (không nhất thiết liên tục):  [2501-2518]
+                │    for (i=0;i&lt;nr_pages;i++)
+                │        page = alloc_page(gfp_mask) hoặc alloc_pages_node(node,gfp_mask,0);
+                │        area-&gt;pages[i] = page;
+                └─ map_kernel_range((ulong)area-&gt;addr, size, prot, pages)  [326]
+                     → vmap_p4d_range → vmap_pud_range → vmap_pmd_range → vmap_pte_range
+                          pte = pte_alloc_kernel_track(pmd, addr, mask)
+                          set_pte_at(&amp;init_mm, addr, pte, mk_pte(page, prot))
+                              → set_pte()  [arch/arm64/include/asm/pgtable.h:254]
+                => trả area-&gt;addr (VA đã map đầy đủ, PTE trỏ physical page thật)
+</pre>
+</div>
+
+<div class="callout warn"><b class="label">Xác nhận tên hàm thật (không đoán)</b> <b>KHÔNG có</b> <code>map_vm_area()</code> trong 5.10.241 (tên cũ hơn) — hàm build page-table thật tên là <b><code class="sym">map_kernel_range()</code></b>/<code class="sym">map_kernel_range_noflush()</code> (<code>mm/vmalloc.c:298,326</code>). Layer <code>p4d</code> vẫn <b>tồn tại trong source</b> (generic 4-level walker), nhưng trên board (<code>PGTABLE_LEVELS=3</code>) <code>p4d</code>/<code>pud</code> đều software-folded — không tốn bộ nhớ/bước walk phần cứng thật.</div>
+
+<h3>Bảng function chi tiết</h3>
+<details class="func"><summary>__vmalloc_node_range() — hàm lõi thật sự thực hiện toàn bộ allocate</summary>
+<div class="fbody">
+<div class="kv"><b>File</b><span><code>mm/vmalloc.c:2553-2590</code></span>
+<b>Caller</b><span><code>__vmalloc_node()</code>, <code>vmalloc_user()</code>, <code>arch/arm64/kernel/probes/kprobes.c:114</code> (cấp vùng thực thi kprobe)</span>
+<b>Lock held</b><span>Không trực tiếp — callee tự lock <code>vmap_area_lock</code>/<code>free_vmap_area_lock</code></span>
+<b>Failure path</b><span><code>goto fail</code> → <code class="sym">warn_alloc()</code> → return NULL</span></div>
+</div></details>
+<details class="func"><summary>alloc_vmap_area() — cấp KVA từ rb-tree free_vmap_area_root</summary>
+<div class="fbody">
+<div class="kv"><b>File</b><span><code>mm/vmalloc.c:1155-1269</code></span>
+<b>Lock held</b><span><code>free_vmap_area_lock</code> khi tìm/chỉnh free-tree, <code>vmap_area_lock</code> khi insert vào busy-tree</span>
+<b>Failure path</b><span><code>overflow:</code> gọi <code class="sym">purge_vmap_area_lazy()</code> rồi retry 1 lần; cuối cùng trả <code>-EBUSY</code></span></div>
+</div></details>
+</section>
+
+<section class="topic" id="vmalloc-pt">
+<h2>23. Page Table Mapping cho vmalloc</h2>
+<div class="topic-badges"><span class="badge pt">Page Table</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p>Số cấp bảng trang <b>phần cứng thật</b> trên board: chỉ 3 (PGD/PUD-folded/PMD/PTE — như mục <a href="#page-tables">2</a>). Hàm <code class="sym">vmap_p4d_range()</code>/<code class="sym">vmap_pud_range()</code> vẫn được gọi ở mức source (generic walker), nhưng <code class="sym">p4d_offset()</code>/<code class="sym">pud_offset()</code> chỉ trả lại <b>cùng con trỏ pgd</b>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">mm/vmalloc.c:192-224 (vmap_pte_range — nơi PTE thật được ghi)</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static int</span> <span class="fn">vmap_pte_range</span>(pmd_t *pmd, unsigned long addr, unsigned long end,
+        pgprot_t prot, <span class="kw">struct</span> page **pages, <span class="kw">int</span> *nr, pgtbl_mod_mask *mask)
+{
+    pte = pte_alloc_kernel_track(pmd, addr, mask);
+    <span class="kw">if</span> (!pte) <span class="kw">return</span> -ENOMEM;
+    <span class="kw">do</span> {
+        <span class="kw">struct</span> page *page = pages[*nr];
+        set_pte_at(&amp;init_mm, addr, pte, mk_pte(page, prot));
+        (*nr)++;
+    } <span class="kw">while</span> (pte++, addr += PAGE_SIZE, addr != end);
+    <span class="kw">return</span> 0;
+}</pre></div>
+
+<div class="callout pt"><b class="label">Không có huge-page mapping trong vmalloc path</b> Grep xác nhận <code>mm/vmalloc.c</code> <b>không gọi</b> <code class="sym">pud_set_huge()</code>/<code class="sym">pmd_set_huge()</code> — <code class="sym">vmalloc()</code> <b>luôn map ở granularity 4K</b> (PTE-level), kể cả vùng lớn. Ngược lại <code>mm/ioremap.c</code> (dùng cho <code class="sym">ioremap()</code>) CÓ gọi các hàm này khi kiến trúc hỗ trợ — xem mục <a href="#ioremap">29</a>.</div>
+</section>
+
+<section class="topic" id="vfree">
+<h2>vfree() / vunmap() — Free Path (LAZY TLB flush)</h2>
+<div class="topic-badges"><span class="badge pt">Page Table</span><span class="badge src">SOURCE VERIFIED</span></div>
+<div class="diagram">
+<pre>
+vfree(addr)                                            [mm/vmalloc.c:2345]
+ └─ __vunmap(addr, deallocate_pages=1)                  [2244]
+      ├─ area = find_vm_area(addr)
+      ├─ vm_remove_mappings(area,1)                     [2198]
+      │    └─ remove_vm_area()  → free_unmap_vmap_area()  [1438]
+      │         ├─ flush_cache_vunmap(...)
+      │         ├─ unmap_kernel_range_noflush(...)   → ptep_get_and_clear() từng PTE
+      │         │        (KHÔNG flush TLB ngay ở bước này)
+      │         └─ free_vmap_area_noflush(va)          [1417]
+      │              ├─ unlink_va(va, &amp;vmap_area_root)  (gỡ khỏi busy rb-tree)
+      │              ├─ llist_add(va, &amp;vmap_purge_list)  ★ LAZY FREE — KHÔNG trả free-tree ngay
+      │              └─ nếu vmap_lazy_nr &gt; lazy_max_pages(): try_purge_vmap_area_lazy()
+      │                    └─ flush_tlb_kernel_range() 1 LẦN cho TOÀN BỘ batch purge
+      └─ if (deallocate_pages):
+             for i in area-&gt;pages[]:  __free_pages(page, 0)   ★ TRẢ VỀ BUDDY ALLOCATOR
+             kfree(area)
+</pre>
+<div class="cap"><code class="sym">free_vmap_area_noflush()</code> (<code>1417-1433</code>) KHÔNG trả <code>vmap_area</code> về free rb-tree ngay — đẩy vào <code>vmap_purge_list</code>, chỉ khi tích luỹ đủ <code class="sym">lazy_max_pages()</code> (tỉ lệ <code>log2(num_online_cpus())*32MB</code>) mới <b>flush TLB một lần cho toàn bộ batch</b>. Tối ưu tránh flush TLB kernel range (broadcast SMP) mỗi lần <code>vfree()</code>.</div>
+</div>
+<p><code class="sym">vunmap()</code> gọi <code>__vunmap(addr, deallocate_pages=<b>0</b>)</code> — chỉ gỡ mapping, <b>KHÔNG</b> đụng <code>struct page</code> (vì <code class="sym">vmap()</code> không sở hữu các page, chỉ mượn từ caller).</p>
+</section>
+<section class="topic" id="highmem">
+<h2>28. HIGHMEM: Chapter 8 Concept → ARM64 Implementation → Historical Difference</h2>
+<div class="topic-badges"><span class="badge warn">Historical</span><span class="badge arch">ARM64</span><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead">Đây là phần dễ khiến người học ARM64 nhầm lẫn nhất nếu học HIGHMEM theo kiểu x86 32-bit. Không được bỏ qua — nhưng cũng không được áp dụng nguyên xi.</p>
+
+<h3>Vì sao HIGHMEM tồn tại (tài liệu cũ / x86-32)</h3>
+<p style="color:var(--text-dim)">Trên x86 32-bit, kernel VA chỉ có 1GB (thường <code>3G/1G split</code>), nhưng RAM vật lý có thể lên tới 4GB+ — không đủ chỗ để linear-map toàn bộ RAM vào kernel VA thường trực. HIGHMEM zone (&gt;896MB) phải được map "tạm" mỗi khi cần dùng, qua <code>kmap()</code> (dùng slot <code>PKMAP</code> cố định, cần lock) hoặc <code>kmap_atomic()</code> (per-CPU fixmap slot).</p>
+
+<h3>ARM64 hiện đại — verify bằng source, không suy đoán</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">grep result</span><button class="cb-copy">Copy</button></div>
+<pre><span class="cm">$ grep -n "HIGHMEM" arch/arm64/Kconfig   → KHÔNG có kết quả (không tồn tại symbol CONFIG_HIGHMEM trên arm64)</span></pre></div>
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/mmu.c:496-537 (map_mem)</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static void</span> __init <span class="fn">map_mem</span>(pgd_t *pgdp)
+{
+    <span class="cm">/* map all the memory banks */</span>
+    for_each_mem_range(i, &amp;start, &amp;end) {
+        __map_memblock(pgdp, start, end, pgprot_tagged(PAGE_KERNEL), flags);
+    }
+}</pre></div>
+<p><b>Mọi memblock RAM được map ngay lúc boot</b> vào linear map với <code>PAGE_KERNEL</code> — không có khái niệm "vùng RAM chưa map thường trực" như HIGHMEM x86-32. <code class="sym">zone_sizes_init()</code> chỉ set <code>max_zone_pfns[ZONE_DMA]</code>/<code>[ZONE_DMA32]</code>/<code>[ZONE_NORMAL]</code> — <b>không có <code>max_zone_pfns[ZONE_HIGHMEM]</code></b>.</p>
+
+<h3>kmap()/kunmap() trên arm64 — thoái hoá thành page_address()</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/highmem.h:137-159 (nhánh #else CONFIG_HIGHMEM — áp dụng cho arm64)</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline void</span> *<span class="fn">kmap</span>(<span class="kw">struct</span> page *page)
+{
+    might_sleep();
+    <span class="kw">return</span> page_address(page);     <span class="cm">// KHÔNG map/unmap gì cả</span>
+}
+<span class="kw">static inline void</span> *<span class="fn">kmap_atomic</span>(<span class="kw">struct</span> page *page)
+{
+    preempt_disable(); pagefault_disable();
+    <span class="kw">return</span> page_address(page);
+}</pre></div>
+<p><code>find arch/arm64 -iname "*highmem*"</code> → <b>không có kết quả</b> (arm64 không có <code>asm/highmem.h</code>). <code class="sym">page_address()</code> trên arm64 là macro compile-time trỏ thẳng <code class="sym">lowmem_page_address()</code> (<code>include/linux/mm.h:1567-1570</code>) — không cần bảng hash <code>page_address_htable</code> runtime như kiến trúc có HIGHMEM thật.</p>
+
+<h3>Bảng so sánh đầy đủ</h3>
+<div class="twrap"><table>
+<tr><th>Concept (tài liệu cũ / x86-32)</th><th>ARM64 hiện đại còn dùng?</th><th>Thay bằng gì</th><th>Bằng chứng source</th></tr>
+<tr><td><code>CONFIG_HIGHMEM</code> zone riêng (RAM &gt;896MB không map thường trực)</td><td><span class="badge fail">KHÔNG</span></td><td>Toàn bộ RAM nằm trong linear map <code>[PAGE_OFFSET,PAGE_END)</code></td><td><code>arch/arm64/Kconfig</code> không có HIGHMEM; <code>mmu.c:496-537 map_mem()</code></td></tr>
+<tr><td><code>kmap(page)</code> map tạm PKMAP slot, cần lock</td><td><span class="badge fail">KHÔNG</span></td><td><code>kmap()=page_address()</code>, tính trực tiếp từ linear map</td><td><code>include/linux/highmem.h:137-141</code></td></tr>
+<tr><td><code>kmap_atomic(page)</code> dùng per-CPU fixmap slot</td><td><span class="badge fail">KHÔNG</span></td><td><code>kmap_atomic()=page_address()</code>, chỉ <code>preempt_disable+pagefault_disable</code></td><td><code>highmem.h:154-159</code></td></tr>
+<tr><td><code>kunmap(page)</code> giải phóng PKMAP slot, có thể sleep/wait</td><td><span class="badge fail">KHÔNG</span></td><td>Gần như no-op (trừ <code>ARCH_HAS_FLUSH_ON_KUNMAP</code>, arm64 không định nghĩa)</td><td><code>highmem.h:147-152</code></td></tr>
+<tr><td><code>page_address()</code> tra bảng hash <code>page_address_htable</code></td><td><span class="badge fail">KHÔNG</span></td><td>Macro compile-time <code>lowmem_page_address()</code> — mọi page có VA cố định qua linear map</td><td><code>include/linux/mm.h:1567-1570</code></td></tr>
+<tr><td><code>ZONE_HIGHMEM</code> trong buddy allocator</td><td><span class="badge fail">KHÔNG tồn tại</span></td><td>Chỉ DMA/DMA32/NORMAL/MOVABLE</td><td><code>arch/arm64/mm/init.c:220-241</code></td></tr>
+<tr><td><code>__GFP_HIGHMEM</code> ảnh hưởng chọn zone</td><td>Cờ vẫn SET trong code generic nhưng <b>vô tác dụng thật trên arm64</b></td><td>không cần thay — chỉ là cờ generic kế thừa</td><td><code>mm/vmalloc.c:2480-2482</code></td></tr>
+</table></div>
+
+<div class="callout warn"><b class="label">Kết luận</b> ARM64 hiện đại KHÔNG dùng HIGHMEM kiểu x86-32/ARM32 cũ vì linear map (direct-mapped virtual address space, 2<sup>38</sup> byte trên board này) đủ lớn để cover toàn bộ RAM vật lý trên hệ 64-bit — đây không phải "tối ưu hoá", mà là hệ quả trực tiếp của việc VA space 64-bit lớn hơn nhiều bậc so với RAM thực tế.</div>
+</section>
+<section class="topic" id="ioremap">
+<h2>29. Memory-Mapped I/O — ioremap()</h2>
+<div class="topic-badges"><span class="badge pt">Page Table</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/ioremap.c:21-63 (__ioremap_caller)</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static void</span> __iomem *<span class="fn">__ioremap_caller</span>(phys_addr_t phys_addr, size_t size, pgprot_t prot, <span class="kw">void</span> *caller)
+{
+    phys_addr &amp;= PAGE_MASK;
+    <span class="kw">if</span> (WARN_ON(pfn_valid(__phys_to_pfn(phys_addr))))   <span class="cm">// ★ CẤM map RAM qua ioremap</span>
+        <span class="kw">return</span> NULL;
+    area = get_vm_area_caller(size, VM_IOREMAP, caller);  <span class="cm">// CÙNG allocator KVA với vmalloc()</span>
+    err = ioremap_page_range(addr, addr+size, phys_addr, prot);
+    <span class="kw">if</span> (err) { vunmap((<span class="kw">void</span> *)addr); <span class="kw">return</span> NULL; }
+    <span class="kw">return</span> (<span class="kw">void</span> __iomem *)(offset + addr);
+}</pre></div>
+<div class="callout pt"><b class="label">Ranh giới rõ ràng</b> Dòng <code>WARN_ON(pfn_valid(...))</code> <b>cấm</b> <code>ioremap()</code> map địa chỉ vật lý thuộc RAM (đã có trong linear map). RAM → linear map/<code class="sym">vmalloc()</code>; Device MMIO → <code class="sym">ioremap()</code>. <code class="sym">ioremap()</code> dùng lại <b>cùng bộ khung KVA allocator</b> (<code>vmap_area</code> rb-tree) với <code class="sym">vmalloc()</code>, chỉ khác: không <code>alloc_page()</code> (physical address cho trước), gọi <code class="sym">ioremap_page_range()</code> thay <code class="sym">map_kernel_range()</code>, và <code>prot</code> là Device memory attribute.</div>
+
+<h3>Các biến thể — macro thật</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/include/asm/io.h:170-171</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">#define</span> ioremap(addr,size)     __ioremap((addr),(size), __pgprot(PROT_DEVICE_nGnRE))
+<span class="kw">#define</span> ioremap_wc(addr,size)  __ioremap((addr),(size), __pgprot(PROT_NORMAL_NC))</pre></div>
+<p><code class="sym">ioremap_cache()</code> (<code>ioremap.c:85-94</code>): nếu <code>phys_addr</code> <b>là RAM hợp lệ</b> (<code>pfn_valid()</code> true) thì <b>KHÔNG</b> gọi <code>__ioremap_caller</code> mà trả thẳng <code>__phys_to_virt(phys_addr)</code> — xác nhận thêm nguyên tắc "RAM luôn qua linear map".</p>
+<div class="callout warn"><b class="label">Not verified from source in this tree</b> <code class="sym">ioremap_prot()</code> không tìm thấy định nghĩa riêng trong <code>arch/arm64/mm/ioremap.c</code> hoặc <code>asm/io.h</code> trong cây này — có thể do generic <code>&lt;asm-generic/io.h&gt;</code> cung cấp fallback, chưa xác minh trong phạm vi đọc.</div>
+
+<h3>Huge block mapping cho MMIO (khác vmalloc — vmalloc KHÔNG bao giờ huge)</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/mmu.c:1364-1378</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">int</span> __init <span class="fn">arch_ioremap_pud_supported</span>(<span class="kw">void</span>)
+{
+    <span class="cm">/* Only 4k granule supports level 1 block mappings.
+     * SW table walks can't handle removal of intermediate entries. */</span>
+    <span class="kw">return</span> IS_ENABLED(CONFIG_ARM64_4K_PAGES) &amp;&amp; !IS_ENABLED(CONFIG_PTDUMP_DEBUGFS);
+}</pre></div>
+<p>Trên board (<code>4K_PAGES=y</code>, <code>PTDUMP_DEBUGFS</code> not set) — cả <code class="sym">arch_ioremap_pud_supported()</code> và <code class="sym">arch_ioremap_pmd_supported()</code> trả <b>true</b> ⇒ <code class="sym">ioremap()</code> có thể tạo block mapping 1GB (PUD) hoặc 2MB (PMD) thay vì 4K PTE từng trang, nếu vùng MMIO đủ lớn &amp; align.</p>
+
+<h3>Call-flow</h3>
+<div class="diagram">
+<pre>
+ioremap(phys_addr, size)          [io.h:170]
+ └─ __ioremap(...) → __ioremap_caller(...)   [ioremap.c:21]
+      ├─ WARN_ON(pfn_valid(...))  — chặn map RAM
+      ├─ get_vm_area_caller(size, VM_IOREMAP, caller)   (chung allocator vmalloc)
+      └─ ioremap_page_range(addr, addr+size, phys_addr, prot)   [mm/ioremap.c:222]
+           for each PGD entry:
+             ioremap_p4d_range → (huge? no, p4d luôn false)
+              └─ ioremap_pud_range → ioremap_try_huge_pud() [nếu size==PUD_SIZE &amp; align] → pud_set_huge()
+                  └─ (không huge) ioremap_pmd_range → ioremap_try_huge_pmd() → pmd_set_huge()
+                      └─ (không huge) ioremap_pte_range → set_pte_at(&amp;init_mm, addr, pte, pfn_pte(pfn,prot))
+</pre>
+</div>
+</section>
+<section class="topic" id="dma">
+<h2>26. DMA API trên ARM64</h2>
+<div class="topic-badges"><span class="badge arch">ARM64</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="callout"><b class="label">arm64 không có implementation DMA riêng</b> <code>arch/arm64/mm/dma-mapping.c</code> chỉ 60 dòng, <b>5 hook</b> duy nhất: <code class="sym">arch_setup_dma_ops</code>, <code class="sym">arch_teardown_dma_ops</code>, <code class="sym">arch_sync_dma_for_device/cpu</code>, <code class="sym">arch_dma_prep_coherent</code>. Toàn bộ logic thật nằm ở <code>kernel/dma/*</code> (generic framework, dùng chung mọi kiến trúc).</p></div>
+
+<h3>Cache maintenance thật — assembly ARMv8</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">arch/arm64/mm/cache.S:219-244</span><button class="cb-copy">Copy</button></div>
+<pre>SYM_FUNC_START_PI(__dma_flush_area)       <span class="cm">; clean &amp; invalidate D/U line</span>
+    dcache_by_line_op civac, sy, x0, x1, x2, x3
+    ret
+SYM_FUNC_START_PI(__dma_map_area)         <span class="cm">; luôn "clean" (writeback) bất kể dir</span>
+    b   __dma_clean_area
+SYM_FUNC_START_PI(__dma_unmap_area)
+    cmp w2, #DMA_TO_DEVICE
+    b.ne __dma_inv_area                   <span class="cm">; nếu khác TO_DEVICE thì invalidate</span>
+    ret</pre></div>
+<p><code>dc civac</code>/<code>dc ivac</code>/<code>dc cvac</code> là <b>lệnh cache maintenance thật</b> của ARMv8-A — bằng chứng cache-coherency ops cho non-coherent DMA, không phải suy đoán.</p>
+
+<h3>Chọn đường direct vs IOMMU</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">kernel/dma/mapping.c:109-113</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static bool</span> <span class="fn">dma_go_direct</span>(<span class="kw">struct</span> device *dev, dma_addr_t mask, <span class="kw">const struct</span> dma_map_ops *ops)
+{
+    <span class="kw">if</span> (likely(!ops)) <span class="kw">return true</span>;
+    ...
+}</pre></div>
+<div class="callout warn"><b class="label">Board không dùng IOMMU</b> <code>CONFIG_ARM_SMMU</code>/<code>_V3</code> đều <b>tắt</b> (<code>defconfig:3953-3954</code>) dù hạ tầng IOMMU generic (<code>IOMMU_API/DMA</code>) được bật. Không device nào thật sự dùng <code>iommu_ops</code> — <code>dev-&gt;dma_ops</code> luôn <code>NULL</code> ⇒ <b>mọi DMA đi qua <code class="sym">dma_direct_*</code> path</b>.</div>
+
+<h3>dma_alloc_coherent() → dma_direct_alloc() → CMA (fail) → buddy</h3>
+<div class="diagram">
+<pre>
+dma_alloc_coherent(dev,size,&amp;handle,gfp)     [include/linux/dma-mapping.h:392]
+ └─ dma_alloc_attrs()                          [kernel/dma/mapping.c:421]
+     ├─ flag &amp;= ~(__GFP_DMA|__GFP_DMA32|__GFP_HIGHMEM)   ← driver KHÔNG cần tự chọn zone
+     ├─ ops=get_dma_ops(dev)==NULL trên board → dma_alloc_direct()==true
+     └─ dma_direct_alloc(dev,size,&amp;handle,flag,attrs)    [kernel/dma/direct.c:133]
+         └─ __dma_direct_alloc_pages(dev,size,gfp)         [direct.c:78]
+              ├─ gfp |= dma_direct_optimal_gfp_mask(dev, coherent_dma_mask, &amp;phys_limit)
+              ├─ page = dma_alloc_contiguous(dev,size,gfp)
+              │     └─ BOARD: stub → LUÔN NULL (CONFIG_DMA_CMA=n, xem mục CMA)
+              └─ page = alloc_pages_node(node, gfp, get_order(size))   ★ BUDDY ALLOCATOR
+         ├─ nếu (DMA_DIRECT_REMAP &amp;&amp; !dev_is_dma_coherent(dev)):
+         │      arch_dma_prep_coherent(page,size) → __dma_flush_area (cache.S)
+         │      dma_common_contiguous_remap(...)   — tạo mapping non-cacheable riêng (vmalloc space)
+         └─ else (device "dma-coherent" trong DT): ret=page_address(page) — dùng thẳng linear map
+</pre>
+</div>
+
+<h3>CPU VA / CPU PA / DMA address — KHÔNG mặc định bằng nhau</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">include/linux/dma-direct.h:20-50</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static inline</span> dma_addr_t <span class="fn">phys_to_dma_unencrypted</span>(<span class="kw">struct</span> device *dev, phys_addr_t paddr)
+{
+    <span class="kw">if</span> (dev-&gt;dma_range_map)
+        <span class="kw">return</span> translate_phys_to_dma(dev, paddr);   <span class="cm">// offset translation nếu có "dma-ranges" trong DT</span>
+    <span class="kw">return</span> paddr;                                <span class="cm">// mặc định: DMA address == phys address</span>
+}</pre></div>
+<div class="callout"><b class="label">Kết luận đề bài yêu cầu</b> Board KHÔNG dùng SMMU nên với phần lớn thiết bị (không có <code>dma-ranges</code> riêng trong DT), <code>dma_range_map==NULL</code> ⇒ <b>DMA address == physical address</b>. Cơ chế offset translation (<code>dma-ranges</code> DT, <code class="sym">dma_direct_set_offset()</code>) có sẵn trong tree nhưng cần DTS cụ thể khai báo mới kích hoạt. <span style="color:var(--c-warn)">Not verified from source in this tree: chưa xác nhận DTS thật của board EagleBK có node nào dùng dma-ranges hay không.</span></div>
+
+<h3>GFP_DMA/DMA32 zone — quyết định bởi implementation, không phải driver</h3>
+<div class="codebox"><div class="cb-head"><span class="cb-path">kernel/dma/direct.c:47-66</span><button class="cb-copy">Copy</button></div>
+<pre><span class="kw">static</span> gfp_t <span class="fn">dma_direct_optimal_gfp_mask</span>(<span class="kw">struct</span> device *dev, u64 dma_mask, u64 *phys_limit)
+{
+    u64 dma_limit = min_not_zero(dma_mask, dev-&gt;bus_dma_limit);
+    *phys_limit = dma_to_phys(dev, dma_limit);
+    <span class="kw">if</span> (*phys_limit &lt;= DMA_BIT_MASK(zone_dma_bits)) <span class="kw">return</span> GFP_DMA;
+    <span class="kw">if</span> (*phys_limit &lt;= DMA_BIT_MASK(32)) <span class="kw">return</span> GFP_DMA32;
+    <span class="kw">return</span> 0;
+}</pre></div>
+<p><code>zone_dma_bits</code> mặc định = <b>24</b> (<code>kernel/dma/direct.c:23</code>) — <code>ZONE_DMA</code> mặc định coi là vùng ≤16MB, kế thừa lịch sử ISA DMA x86. arm64 không override biến này trong tree đã duyệt.</p>
+</section>
+
+<section class="topic" id="cma">
+<h2>27. CMA — Contiguous Memory Allocator (TẮT trên board)</h2>
+<div class="topic-badges"><span class="badge warn">Not Active On Board</span><span class="badge src">SOURCE VERIFIED</span></div>
+
+<div class="callout fail"><b class="label">GHI RÕ theo yêu cầu — sâu hơn cả "area rỗng"</b> <code>arch/arm64/configs/EagleBK_defconfig:828</code> → <code># CONFIG_CMA is not set</code>. Đây <b>không chỉ</b> là "CMA area không được reserve" — nó là <b>toàn bộ code path CMA không compile ra object file</b>:
+<pre style="margin:.5rem 0 0;font-size:.8rem;background:transparent;color:inherit">CONFIG_CMA=n
+ → CONFIG_DMA_CMA không thể bật (phụ thuộc CMA)
+ → CONFIG_MEMORY_ISOLATION=n (chỉ được select bởi MEMORY_HOTPLUG/MEMORY_FAILURE/CMA — cả 3 đều tắt)
+ → CONFIG_CONTIG_ALLOC = (MEMORY_ISOLATION &amp;&amp; COMPACTION) || CMA = (n&amp;&amp;y)||n = n
+ → mm/cma.c KHÔNG compile (mm/Makefile:107 obj-$(CONFIG_CMA) += cma.o)
+ → alloc_contig_range()/alloc_contig_pages() trong mm/page_alloc.c cũng bị loại (#ifdef CONFIG_CONTIG_ALLOC, dòng 8554-8870)
+ → MIGRATE_CMA migratetype không tồn tại trong enum</pre>
+So với pattern V4L2 đã ghi nhận trước đây (code vẫn compile nhưng board không chạy runtime), CMA ở đây <b>"sâu" hơn</b>: không compile ra object file luôn.</div>
+
+<h3>Vì sao multimedia/camera cần contiguous memory — trích comment thật</h3>
+<blockquote style="border-left:3px solid var(--border);margin:1rem 0;padding:.4rem 1rem;color:var(--text-dim);font-size:.85rem">"Various devices on embedded systems have no scatter-getter and/or IO map support and require contiguous blocks of memory to operate. They include devices such as cameras, hardware video coders, etc. Such devices often require big memory buffers (a full HD frame is, for instance, more than 2 mega pixels large, i.e. more than 6 MB of memory), which makes mechanisms such as kmalloc() or alloc_page() ineffective."
+<footer style="margin-top:.3rem;font-size:.72rem">— kernel/dma/contiguous.c:9-36 (comment thật trong source, KHÔNG phải suy diễn)</footer></blockquote>
+
+<h3>cma_alloc() — 4 bước thuật toán (tham khảo, không chạy trên board)</h3>
+<div class="diagram">
+<pre>
+alloc_contig_range(start,end,migratetype=MIGRATE_CMA,gfp_mask)   [mm/page_alloc.c:8637]
+ 1. start_isolate_page_range()      — đánh dấu MIGRATE_ISOLATE toàn bộ pageblock
+ 2. __alloc_contig_migrate_range()  — isolate_migratepages_range() + migrate_pages() (di dời nội dung)
+ 3. test_pages_isolated()           — xác nhận toàn bộ vùng đã free &amp; isolated
+ 4. isolate_freepages_range()       — "rút" trang free ra khỏi buddy system
+ 5. free_contig_range() cho phần dư đầu/cuối không cần dùng
+ 6. undo_isolate_page_range()       — trả migratetype pageblock về MIGRATE_CMA/MOVABLE
+</pre>
+<div class="cap">Comment gốc (<code>page_alloc.c:8713-8714</code>): "we don't have to hold zone->lock here because pages are isolated" — điểm hay: buddy lock không cần giữ xuyên suốt vì page đã bị isolate trước.</div>
+</div>
+<div class="twrap"><table>
+<tr><th>Stub thay thế khi CONFIG_DMA_CMA=n</th><th>File</th></tr>
+<tr><td><code>dma_alloc_contiguous() { return NULL; }</code></td><td><code>include/linux/dma-map-ops.h:147-151</code> — chính stub này buộc <code class="sym">__dma_direct_alloc_pages()</code> luôn rơi về <code class="sym">alloc_pages_node()</code></td></tr>
+</table></div>
+</section>
+<section class="topic" id="real-traces">
+<h2>30. Real Code Traces — 5 bài trace thực tế</h2>
+<div class="topic-badges"><span class="badge src">SOURCE VERIFIED</span></div>
+<p class="lead">Mỗi case đi từ caller tới physical page/virtual mapping, dùng đúng tên hàm 5.10.241 đã verify ở các mục trên.</p>
+
+<div class="lab"><h4><span class="lk">CASE 1</span>alloc_pages(GFP_KERNEL, 0)</h4>
+<div class="diagram"><pre>
+alloc_pages(GFP_KERNEL,0) → alloc_pages_node() → __alloc_pages_node() → __alloc_pages()
+  → __alloc_pages_nodemask() [page_alloc.c:5031]
+    → get_page_from_freelist() → rmqueue()
+      order==0 &amp;&amp; !CONFIG_CMA trên board → rmqueue_pcplist()  [PCP path, xem mục 14]
+        local_irq_save() → pcp rỗng? → rmqueue_bulk(zone,0,pcp-&gt;batch,...) dưới 1 lần zone-&gt;lock
+          → __rmqueue() × batch  → __rmqueue_smallest() hoặc __rmqueue_fallback()
+        → trả 1 page từ pcp-&gt;lists[migratetype], pcp-&gt;count--
+      → prep_new_page()  → post_alloc_hook() (set _refcount=1, page-&gt;private=0)
+→ physical page thật, đã có sẵn linear-map VA qua page_address()/lowmem_page_address()
+</pre></div></div>
+
+<div class="lab"><h4><span class="lk">CASE 2</span>alloc_pages(GFP_KERNEL, order&gt;0) — higher-order</h4>
+<div class="diagram"><pre>
+alloc_pages(GFP_KERNEL,order) → ... → rmqueue()
+  order&gt;0 → BỎ QUA PCP, đi thẳng buddy: spin_lock_irqsave(&amp;zone-&gt;lock)
+    __rmqueue(zone,order,migratetype,alloc_flags)
+      __rmqueue_smallest(zone,order,migratetype)
+        for current_order=order..MAX_ORDER-1: tìm free_area[current_order] không rỗng
+        → del_page_from_free_list() → expand(zone,page,order,current_order,migratetype)
+             (SPLIT — xem mục 11-12, minh hoạ địa chỉ 0x100000000...)
+      (nếu không có) → __rmqueue_fallback()  (mục 13 — steal từ migratetype khác)
+  spin_unlock(&amp;zone-&gt;lock)
+</pre></div></div>
+
+<div class="lab"><h4><span class="lk">CASE 3</span>kmalloc(128, GFP_KERNEL)</h4>
+<div class="diagram"><pre>
+kmalloc(128,GFP_KERNEL) → index=kmalloc_index(128) → kmem_cache_alloc_trace(kmalloc_caches[NORMAL][idx],...)
+  → slab_alloc_node()
+    FAST PATH: this_cpu_cmpxchg_double() trên c-&gt;freelist/tid → THÀNH CÔNG → trả object, KHÔNG chạm buddy
+    (miss) SLOW PATH: ___slab_alloc()
+      1. slub_percpu_partial(c)?  2. get_partial_node() (n-&gt;list_lock)  3. allocate_slab()
+         → alloc_slab_page() → alloc_pages(flags,order)  ★ CHẠM BUDDY (như Case 1/2)
+→ object nằm trong slab page, physically+virtually contiguous
+</pre></div></div>
+
+<div class="lab"><h4><span class="lk">CASE 4</span>vmalloc(1MB)</h4>
+<div class="diagram"><pre>
+vmalloc(1MB) → __vmalloc_node() → __vmalloc_node_range(...,VMALLOC_START,VMALLOC_END,...)
+  → __get_vm_area_node() → alloc_vmap_area()  (rb-tree free_vmap_area_root, KHÔNG physical page nào cả)
+  → __vmalloc_area_node()
+       vòng lặp 256 lần (1MB/4KB): alloc_page(gfp_mask) — MỖI LẦN GỌI BUDDY RIÊNG, page RỜI RẠC
+       → map_kernel_range() → vmap_pmd_range() → vmap_pte_range()
+            set_pte_at(&amp;init_mm,addr,pte,mk_pte(page,PAGE_KERNEL)) → set_pte() [ARM64 MMU]
+→ VA liên tục trong [VMALLOC_START,VMALLOC_END), PTE-level mapping (4K, không huge)
+</pre></div></div>
+
+<div class="lab"><h4><span class="lk">CASE 5</span>dma_alloc_coherent()</h4>
+<div class="diagram"><pre>
+dma_alloc_coherent(dev,size,&amp;handle,GFP_KERNEL)
+  → dma_alloc_attrs() → dma_direct_alloc()  (board: ops==NULL, không IOMMU)
+    → __dma_direct_alloc_pages()
+         dma_alloc_contiguous() → stub NULL (CONFIG_CMA=n, xem mục 27)
+         → alloc_pages_node(node,gfp,get_order(size))  ★ BUDDY, KHÔNG QUA CMA
+    → (device non-coherent, DMA_DIRECT_REMAP=y trên board):
+         arch_dma_prep_coherent() → __dma_flush_area() [cache.S — dc civac]
+         dma_common_contiguous_remap() — tạo mapping non-cacheable riêng trong vmalloc space
+    → *dma_handle = phys_to_dma_direct(dev,page_to_phys(page))  == phys addr (không SMMU trên board)
+→ CPU VA (non-cacheable, remap riêng) + DMA address == phys address, cấp từ ZONE_DMA/DMA32 tuỳ coherent_dma_mask
+</pre></div></div>
+</section>
+<section class="topic" id="source-map">
+<h2>27. Source Code Map</h2>
+<div class="topic-badges"><span class="badge src">SOURCE VERIFIED</span></div>
+<div class="twrap"><table>
+<tr><th>Subsystem</th><th>File</th><th>Function chính</th><th>Struct chính</th></tr>
+<tr><td>Memblock</td><td><code>mm/memblock.c</code></td><td><code class="sym">memblock_add</code>, <code class="sym">memblock_reserve</code>, <code class="sym">memblock_alloc_try_nid</code>, <code class="sym">memblock_free_all</code></td><td><code>struct memblock</code>, <code>memblock_type</code>, <code>memblock_region</code></td></tr>
+<tr><td>ARM64 boot mem init</td><td><code>arch/arm64/mm/init.c</code></td><td><code class="sym">arm64_memblock_init</code>, <code class="sym">bootmem_init</code>, <code class="sym">zone_sizes_init</code>, <code class="sym">mem_init</code></td><td>—</td></tr>
+<tr><td>ARM64 MMU / page table build</td><td><code>arch/arm64/mm/mmu.c</code></td><td><code class="sym">paging_init</code>, <code class="sym">map_kernel</code>, <code class="sym">map_mem</code>, <code class="sym">__create_pgd_mapping</code>, <code class="sym">mark_rodata_ro</code></td><td>—</td></tr>
+<tr><td>ARM64 context switch/ASID</td><td><code>arch/arm64/mm/context.c</code></td><td><code class="sym">check_and_switch_context</code>, <code class="sym">new_context</code>, <code class="sym">flush_context</code></td><td>—</td></tr>
+<tr><td>ARM64 low-level setup</td><td><code>arch/arm64/mm/proc.S</code></td><td><code class="sym">__cpu_setup</code></td><td>—</td></tr>
+<tr><td>ARM64 page table headers</td><td><code>arch/arm64/include/asm/pgtable*.h</code>, <code>memory.h</code></td><td>—</td><td><code>pgd_t/pmd_t/pte_t</code>, macro PAGE_OFFSET/VMALLOC_*</td></tr>
+<tr><td>Page allocator (buddy/GFP/zone)</td><td><code>mm/page_alloc.c</code></td><td><code class="sym">__alloc_pages_nodemask</code>, <code class="sym">get_page_from_freelist</code>, <code class="sym">rmqueue</code>, <code class="sym">__rmqueue</code>, <code class="sym">expand</code>, <code class="sym">__free_one_page</code>, <code class="sym">__alloc_pages_slowpath</code></td><td><code>struct alloc_context</code></td></tr>
+<tr><td>Zone/node definitions</td><td><code>include/linux/mmzone.h</code></td><td>—</td><td><code>struct zone</code>, <code>struct pglist_data</code>, <code>enum zone_type</code>, <code>enum migratetype</code></td></tr>
+<tr><td>GFP flags</td><td><code>include/linux/gfp.h</code></td><td><code class="sym">gfp_zone</code></td><td>—</td></tr>
+<tr><td>Reclaim</td><td><code>mm/vmscan.c</code></td><td><code class="sym">try_to_free_pages</code>, <code class="sym">do_try_to_free_pages</code>, <code class="sym">wakeup_kswapd</code></td><td><code>struct scan_control</code></td></tr>
+<tr><td>Compaction</td><td><code>mm/compaction.c</code></td><td><code class="sym">try_to_compact_pages</code>, <code class="sym">compact_zone_order</code></td><td>—</td></tr>
+<tr><td>OOM killer</td><td><code>mm/oom_kill.c</code></td><td><code class="sym">out_of_memory</code></td><td><code>struct oom_control</code></td></tr>
+<tr><td>SLUB</td><td><code>mm/slub.c</code></td><td><code class="sym">slab_alloc_node</code>, <code class="sym">___slab_alloc</code>, <code class="sym">allocate_slab</code>, <code class="sym">__slab_free</code>, <code class="sym">discard_slab</code></td><td><code>struct kmem_cache</code>, <code>kmem_cache_cpu</code>, <code>kmem_cache_node</code></td></tr>
+<tr><td>kmalloc/slab common</td><td><code>mm/slab_common.c</code>, <code>include/linux/slab.h</code></td><td><code class="sym">kmalloc_slab</code>, <code class="sym">kmalloc_order</code>, <code class="sym">create_kmalloc_caches</code></td><td><code>kmalloc_caches[][]</code></td></tr>
+<tr><td>vmalloc</td><td><code>mm/vmalloc.c</code></td><td><code class="sym">vmalloc</code>, <code class="sym">__vmalloc_node_range</code>, <code class="sym">alloc_vmap_area</code>, <code class="sym">map_kernel_range</code>, <code class="sym">vfree</code></td><td><code>struct vm_struct</code>, <code>struct vmap_area</code></td></tr>
+<tr><td>ARM64 ioremap</td><td><code>arch/arm64/mm/ioremap.c</code></td><td><code class="sym">__ioremap_caller</code>, <code class="sym">ioremap_cache</code></td><td>—</td></tr>
+<tr><td>Generic ioremap page-table</td><td><code>mm/ioremap.c</code></td><td><code class="sym">ioremap_page_range</code>, <code class="sym">ioremap_try_huge_pud/pmd</code></td><td>—</td></tr>
+<tr><td>DMA generic API</td><td><code>kernel/dma/mapping.c</code></td><td><code class="sym">dma_alloc_attrs</code>, <code class="sym">dma_map_page_attrs</code></td><td>—</td></tr>
+<tr><td>DMA direct implementation</td><td><code>kernel/dma/direct.c</code></td><td><code class="sym">dma_direct_alloc</code>, <code class="sym">dma_direct_optimal_gfp_mask</code></td><td><code>struct bus_dma_region</code></td></tr>
+<tr><td>ARM64 DMA hooks</td><td><code>arch/arm64/mm/dma-mapping.c</code>, <code>cache.S</code></td><td><code class="sym">arch_setup_dma_ops</code>, <code class="sym">__dma_flush_area</code></td><td>—</td></tr>
+<tr><td>CMA (không compile trên board)</td><td><code>mm/cma.c</code>, <code>kernel/dma/contiguous.c</code></td><td><code class="sym">cma_alloc</code>, <code class="sym">cma_release</code>, <code class="sym">dma_alloc_contiguous</code></td><td><code>struct cma</code></td></tr>
+</table></div>
+</section>
+
+<section class="topic" id="debugging">
+<h2>34. Debugging / Observability</h2>
+<div class="topic-badges"><span class="badge src">SOURCE VERIFIED (nơi có trace)</span></div>
+<div class="dbg-grid">
+<div class="dbg-card"><code>/proc/buddyinfo</code><p>Số block free theo từng order, mỗi zone/node — quan sát trực tiếp buddy allocator (fragmentation).</p></div>
+<div class="dbg-card"><code>/proc/meminfo</code><p>Tổng quan RAM: MemFree, Slab, VmallocUsed…</p></div>
+<div class="dbg-card"><code>/proc/zoneinfo</code><p>Watermark (min/low/high), per-CPU pageset (pcp) từng zone — đối chiếu trực tiếp <code class="sym">struct zone</code> đã học.</p></div>
+<div class="dbg-card"><code>/proc/pagetypeinfo</code><p>Số block free theo <b>migratetype</b> mỗi order — quan sát fragmentation theo mobility (mục 13).</p></div>
+<div class="dbg-card"><code>/proc/slabinfo</code><p>Gate bởi <code>#if CONFIG_SLAB || CONFIG_SLUB_DEBUG</code> — board có <code>CONFIG_SLUB_DEBUG=y</code> nên endpoint này <b>thật sự đăng ký</b> (<code>mm/slab_common.c:1057-1062</code>).</p></div>
+<div class="dbg-card"><code>/sys/kernel/slab/&lt;cache&gt;/</code><p>Gate bởi <code>CONFIG_SYSFS</code> (board có) — mỗi <code>kmem_cache</code> có thư mục riêng, thuộc tính <code>cpu_partial</code>, <code>order</code>, <code>objs_per_slab</code> (<code>mm/slub.c:5694-5733</code>).</p></div>
+<div class="dbg-card"><code>slub_debug=...</code> (bootparam)</code><p>Board có <code>CONFIG_SLUB_DEBUG=y</code> nhưng <code>SLUB_DEBUG_ON</code> tắt → debug (redzone/poison/tracking) compile sẵn nhưng patch thành no-op qua static key <code class="sym">slub_debug_enabled</code>, chỉ bật khi có bootparam.</p></div>
+<div class="dbg-card"><code>page_owner</code> / <code>page_owner=on</code><p>Trace ai gọi <code class="sym">alloc_pages()</code> cho từng page — dùng <code class="sym">set_page_owner()</code> trong <code class="sym">post_alloc_hook()</code> (mục struct page).</p></div>
+<div class="dbg-card"><code>ftrace</code> — <code>trace_mm_page_alloc_zone_locked</code><p>Tracepoint thật gọi trong <code class="sym">__rmqueue()</code> — trace được từng lần page rời buddy.</p></div>
+<div class="dbg-card"><code>kmemleak</code><p><code class="sym">memblock_alloc*</code> và <code class="sym">kmalloc_order()</code> đều gọi <code class="sym">kmemleak_alloc*</code>/<code class="sym">kmemleak_alloc_phys</code> — theo dõi leak xuyên suốt allocator.</p></div>
+</div>
+</section>
+
+<section class="topic" id="labs">
+<h2>35. Hands-on Labs</h2>
+<div class="topic-badges"><span class="badge alloc">Practical</span></div>
+
+<div class="lab"><h4><span class="lk">LAB 01</span>Viết module gọi alloc_pages()</h4>
+<p><b>Objective:</b> in ra virtual address, physical address, PFN, order, page flags của trang vừa cấp.<br>
+<b>Steps:</b> gọi <code class="sym">alloc_pages(GFP_KERNEL, 2)</code> (order=2, 16KB) trong <code>module_init</code>; dùng <code class="sym">page_to_pfn()</code>, <code class="sym">page_address()</code>, <code class="sym">virt_to_phys()</code> để in các giá trị; nhớ <code class="sym">__free_pages(page, 2)</code> ở <code>module_exit</code>.<br>
+<b>What to learn:</b> quan hệ PFN↔struct page↔VA trên board có <code>SPARSEMEM_VMEMMAP</code> (mục 8).</p></div>
+
+<div class="lab"><h4><span class="lk">LAB 02</span>kmalloc() và relationship với SLUB</h4>
+<p><b>Objective:</b> gọi <code class="sym">kmalloc(200, GFP_KERNEL)</code> nhiều lần, quan sát <code>/sys/kernel/slab/kmalloc-256/</code> (200 byte rơi vào cache 256).<br>
+<b>Steps:</b> đọc <code>objs_per_slab</code>, <code>order</code> trước/sau; đối chiếu với <code class="sym">oo_objects()</code>/<code class="sym">oo_order()</code> đã học ở mục 17.</p></div>
+
+<div class="lab"><h4><span class="lk">LAB 03</span>Theo dõi buddy allocator trước/sau allocation</h4>
+<p><b>Objective:</b> so sánh <code>/proc/buddyinfo</code> trước và sau khi module cấp 1 block order=6 (256KB).<br>
+<b>Expected:</b> free count ở order=6 giảm 1, có thể order=7 giảm 1 và order=6 tăng 1 (do split) tuỳ trạng thái free_area lúc đó.</p></div>
+
+<div class="lab"><h4><span class="lk">LAB 04</span>vmalloc() và page-table mapping</h4>
+<p><b>Objective:</b> <code class="sym">vmalloc(2*1024*1024)</code> rồi in địa chỉ trả về — kiểm tra nó nằm trong <code>[VMALLOC_START, VMALLOC_END)</code> tính ở mục 1.<br>
+<b>Steps nâng cao:</b> bật <code>CONFIG_PTDUMP_DEBUGFS</code> (board hiện tắt) để dump page table thật qua <code>/sys/kernel/debug/kernel_page_tables</code> và xác nhận vùng vmalloc chỉ có PTE-level entries (không huge, mục 23).</p></div>
+
+<div class="lab"><h4><span class="lk">LAB 05</span>Theo dõi zone watermark</h4>
+<p><b>Objective:</b> đọc <code>/proc/zoneinfo</code>, so <code>nr_free_pages</code> với <code>min/low/high</code> watermark của <code>ZONE_NORMAL</code>. Viết vòng lặp cấp phát order=0 liên tục (GFP_ATOMIC, không sleep) tới khi watermark chạm <code>low</code> — quan sát <code class="sym">wakeup_kswapd()</code> có được gọi (qua ftrace) hay chưa.</p></div>
+
+<div class="lab"><h4><span class="lk">LAB 06</span>DMA allocation — quan sát non-coherent remap</h4>
+<p><b>Objective:</b> gọi <code class="sym">dma_alloc_coherent()</code> trong 1 platform driver dummy; so sánh địa chỉ CPU VA trả về với <code class="sym">page_address()</code> của cùng page — nếu khác nhau, đó là bằng chứng <code class="sym">dma_common_contiguous_remap()</code> đã tạo mapping non-cacheable riêng (mục 26).</p></div>
+
+<div class="lab"><h4><span class="lk">LAB 07</span>ftrace trace alloc_pages/kmalloc/vmalloc</h4>
+<p><b>Steps:</b> <code>echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer</code>; <code>echo __alloc_pages_nodemask &gt; set_graph_function</code>; bật tracing, kích hoạt allocation, đọc <code>trace</code> — đối chiếu call-flow thật với sơ đồ ở mục 11-12/15-16.</p></div>
+</section>
+<section class="topic" id="interview">
+<h2>Interview Questions</h2>
+<div class="topic-badges"><span class="badge src">Grounded in verified source</span></div>
+
+<div class="qa"><div class="q"><span>Tại sao <code>vmalloc()</code> virtually contiguous nhưng physically non-contiguous?</span><span class="arrow">▸</span></div>
+<div class="a">Vì <code class="sym">__vmalloc_area_node()</code> cấp <b>từng page riêng lẻ</b> bằng vòng lặp <code>alloc_page()</code>/<code>alloc_pages_node(node,gfp,0)</code> (<code>mm/vmalloc.c:2501-2518</code>) — mỗi lần gọi buddy độc lập, không đảm bảo liền kề vật lý. Sau đó <code class="sym">map_kernel_range()</code> xây page table để các page rời rạc đó "trông giống" 1 vùng VA liên tục qua <code>vmap_pte_range()</code>.</div></div>
+
+<div class="qa"><div class="q"><span>Tại sao Linux cần Per-CPU Pages (PCP)?</span><span class="arrow">▸</span></div>
+<div class="a">Giảm tranh chấp <code>zone-&gt;lock</code> giữa nhiều CPU cho allocation order-0 (phổ biến nhất). <code class="sym">rmqueue_bulk()</code> lấy <code>pcp-&gt;batch</code> page từ buddy dưới <b>1 lần lock duy nhất</b> rồi phát dần cho CPU đó — amortize chi phí lock, tăng cache locality vì mỗi CPU giữ page riêng.</div></div>
+
+<div class="qa"><div class="q"><span>Khác biệt GFP_KERNEL và GFP_ATOMIC?</span><span class="arrow">▸</span></div>
+<div class="a"><code>GFP_KERNEL = __GFP_RECLAIM|__GFP_IO|__GFP_FS</code> — có thể sleep, cho phép direct+kswapd reclaim, IO/FS. <code>GFP_ATOMIC = __GFP_HIGH|__GFP_ATOMIC|__GFP_KSWAPD_RECLAIM</code> — <b>không sleep</b>, chỉ wake kswapd (không direct reclaim), dùng watermark thấp hơn (<code>ALLOC_HIGH</code>: <code>min -= min/2</code>). Dùng GFP_ATOMIC trong interrupt handler vì không thể sleep ở đó.</div></div>
+
+<div class="qa"><div class="q"><span>ARM64 dịch địa chỉ ảo sang vật lý như thế nào? Trên board này có bao nhiêu cấp page table?</span><span class="arrow">▸</span></div>
+<div class="a">Board (VA_BITS=39, 4K page) có <code>CONFIG_PGTABLE_LEVELS=3</code> — chỉ PGD→PMD→PTE, PUD và P4D bị "fold" (software, không có bảng riêng, <code class="sym">pud_offset()</code>/<code class="sym">p4d_offset()</code> chỉ ép kiểu con trỏ). MMU đọc TTBR (0 cho user, 1 cho kernel) rồi walk 3 cấp thật, mỗi cấp 9 bit index (512 entries), cấp cuối cộng 12 bit page offset.</div></div>
+
+<div class="qa"><div class="q"><span>Điều gì xảy ra khi buddy allocator không thoả mãn được request?</span><span class="arrow">▸</span></div>
+<div class="a">Vào <code class="sym">__alloc_pages_slowpath()</code>: wake kswapd → (nếu costly order) thử compaction trước → retry fast path → direct reclaim (<code class="sym">try_to_free_pages()</code>) → direct compaction → retry loop (<code class="sym">should_reclaim_retry</code>/<code class="sym">should_compact_retry</code>) → cuối cùng <code class="sym">__alloc_pages_may_oom()</code> gọi <code class="sym">out_of_memory()</code>. Nếu vẫn fail → <code>warn_alloc()</code> → NULL.</div></div>
+
+<div class="qa"><div class="q"><span>Vì sao SLUB fast path không cần lock, còn SLAB (allocator cũ) cần?</span><span class="arrow">▸</span></div>
+<div class="a">SLUB dùng <code class="sym">this_cpu_cmpxchg_double()</code> — double-word CAS nguyên tử trên cả <code>freelist</code> lẫn <code>tid</code> cùng lúc, cho phép phát hiện "ai đó đã chen vào" mà không cần lock trung tâm. Trên board (arm64, <code>select HAVE_CMPXCHG_DOUBLE</code>) đây là CAS phần cứng thật (CASP/LL-SC). SLAB (không dùng trên board) dùng mô hình array-of-pointers per-CPU kiểu queue, cần lock khác.</div></div>
+
+<div class="qa"><div class="q"><span>Tại sao board này không dùng CONFIG_HIGHMEM dù đang chạy 32-bit-ish workload embedded?</span><span class="arrow">▸</span></div>
+<div class="a">HIGHMEM giải quyết vấn đề "kernel VA quá nhỏ so với RAM vật lý" (đặc trưng 32-bit, ~1GB kernel VA vs 4GB+ RAM). ARM64 là 64-bit — dù chỉ dùng VA_BITS=39 (512GB), vẫn thừa để linear-map toàn bộ RAM thực tế của board (thường vài GB) → không có nhu cầu HIGHMEM. arm64 Kconfig không có symbol này.</div></div>
+
+<div class="qa"><div class="q"><span>CMA là gì và tại sao board này không dùng được?</span><span class="arrow">▸</span></div>
+<div class="a">CMA cho phép reserve 1 vùng physically-contiguous lớn nhưng vẫn cho phép page trong đó dùng làm page cache/movable khi không có ai cần contiguous — dùng page migration để "đòi lại" khi cần. Board tắt <code>CONFIG_CMA</code> → <code>CONFIG_CONTIG_ALLOC=n</code> → <code>mm/cma.c</code> không compile, <code>MIGRATE_CMA</code> không tồn tại — mọi DMA coherent alloc rơi thẳng về buddy thường.</div></div>
+
+<div class="qa"><div class="q"><span>TTBR0 và TTBR1 khác nhau ra sao, và ASID nằm ở đâu trên board này?</span><span class="arrow">▸</span></div>
+<div class="a">TTBR0_EL1 = base bảng trang user (đổi mỗi <code class="sym">switch_mm()</code>). TTBR1_EL1 = base bảng trang kernel (<code>swapper_pg_dir</code>, gần như cố định). Vì <code>TCR_EL1.A1=1</code> trên board (<code>proc.S:471</code>), <b>ASID nằm trong field của TTBR1</b>, không phải TTBR0 — khác giả định mặc định của nhiều tài liệu.</div></div>
+</section>
+
+<section class="topic" id="flashcards">
+<h2>Quick Revision — Flashcards</h2>
+<div class="topic-badges"><span class="badge alloc">Click để lật</span></div>
+<div class="fc-grid">
+<div class="fc" data-q="struct page đại diện cho cái gì?" data-a="1 physical page frame — union đa mục đích tuỳ ai sở hữu (buddy/SLUB/page cache/compound)" data-showing="q">struct page đại diện cho cái gì?</div>
+<div class="fc" data-q="Board có bao nhiêu cấp page table thật?" data-a="3 cấp: PGD→PMD→PTE (PUD+P4D software-folded, vì VA_BITS=39)" data-showing="q">Board có bao nhiêu cấp page table thật?</div>
+<div class="fc" data-q="pfn_to_page() trên board này hoạt động thế nào?" data-a="O(1): vmemmap + pfn (SPARSEMEM_VMEMMAP), KHÔNG qua mem_section" data-showing="q">pfn_to_page() trên board này hoạt động thế nào?</div>
+<div class="fc" data-q="Vì sao vmalloc() cần page-table manipulation?" data-a="Vì các page cấp rời rạc (không physically contiguous) — cần page table để làm chúng 'trông giống' 1 vùng VA liên tục" data-showing="q">Vì sao vmalloc() cần page-table manipulation?</div>
+<div class="fc" data-q="MAX_ORDER trên board là bao nhiêu?" data-a="11 (CONFIG_FORCE_MAX_ZONEORDER=11) → block lớn nhất order=10 = 4MB" data-showing="q">MAX_ORDER trên board là bao nhiêu?</div>
+<div class="fc" data-q="Board có mấy zone thật? Kể tên." data-a="4: ZONE_DMA, ZONE_DMA32, ZONE_NORMAL, ZONE_MOVABLE (không HIGHMEM)" data-showing="q">Board có mấy zone thật? Kể tên.</div>
+<div class="fc" data-q="Migratetype nào KHÔNG tồn tại trên board?" data-a="MIGRATE_CMA và MIGRATE_ISOLATE (CONFIG_CMA=n, CONFIG_MEMORY_ISOLATION=n)" data-showing="q">Migratetype nào KHÔNG tồn tại trên board?</div>
+<div class="fc" data-q="Công thức tìm buddy của 1 page?" data-a="buddy_pfn = page_pfn ^ (1 << order)" data-showing="q">Công thức tìm buddy của 1 page?</div>
+<div class="fc" data-q="SLUB allocator dùng cơ chế gì để fast path không cần lock?" data-a="this_cpu_cmpxchg_double() — double-word CAS trên freelist+tid" data-showing="q">SLUB allocator dùng cơ chế gì để fast path không cần lock?</div>
+<div class="fc" data-q="kmalloc() lớn hơn bao nhiêu byte thì bypass SLUB?" data-a="> KMALLOC_MAX_CACHE_SIZE = 8192 byte (PAGE_SHIFT+1) trên board → gọi thẳng alloc_pages()" data-showing="q">kmalloc() lớn hơn bao nhiêu byte thì bypass SLUB?</div>
+<div class="fc" data-q="TLB invalidation trên ARM64 khác x86 ở điểm nào?" data-a="ARM64 có TLBI broadcast phần cứng (...IS), không cần gửi IPI như x86" data-showing="q">TLB invalidation trên ARM64 khác x86 ở điểm nào?</div>
+<div class="fc" data-q="ASID nằm trong TTBR0 hay TTBR1 trên board?" data-a="TTBR1 (vì TCR_EL1.A1=1)" data-showing="q">ASID nằm trong TTBR0 hay TTBR1 trên board?</div>
+</div>
+</section>
+<section class="topic" id="mental-model">
+<h2>ARM64 Linux Memory Management — Final Mental Model</h2>
+<div class="topic-badges"><span class="badge src">Master diagram — toàn bộ đã trace ở trên</span></div>
+<p class="lead">Sơ đồ lớn cuối cùng, gộp mọi nhánh đã học — dùng để tự kiểm tra: bạn có thể tự mở source và trace 1 allocation request từ API xuống tận page allocator, đồng thời hiểu chính xác ARM64 MMU và page-table mapping phía dưới hay chưa?</p>
+
+<div class="diagram arch">
+<pre>
+                                   ARM64 CPU
+                                      │
+                                     MMU  (TTBR0=user / TTBR1=kernel, ASID trong TTBR1 vì TCR.A1=1)
+                               ┌──────┴──────┐
+                               ▼             ▼
+                         User Mapping   Kernel Mapping
+                        (3 cấp: PGD→PMD→PTE)   │
+                          ┌──────────┬──────────┼───────────┬─────────────┐
+                          ▼          ▼          ▼           ▼             ▼
+                      Linear Map  vmalloc    vmemmap      fixmap      PCI I/O
+                    (PAGE_OFFSET   region   (struct page[]  (early     (nếu có)
+                     ..PAGE_END)  (KVA rb-   PMD 2MB block   mappings)
+                          │        tree)      mapping)
+                          ▼          │
+                    struct page ◄────┘ (pfn_to_page = vmemmap+pfn, O(1))
+                          │
+                          ▼
+                        ZONE   (DMA → DMA32 → NORMAL → MOVABLE)
+                          │
+                          ▼
+                  pg_data_t (contig_page_data — board không NUMA, node duy nhất)
+                          │
+                          ▼
+                  Per-CPU Pages (PCP)  ◄── order==0 luôn qua đây (CMA tắt)
+                          │
+                          ▼
+                     BUDDY ALLOCATOR  (free_area[MAX_ORDER=11], 4 migratetype)
+                          │
+                          ▼
+                    Physical Memory  (RAM banks, cấp qua memblock lúc boot)
+
+        Nhánh SLUB:                         Nhánh vmalloc:                Nhánh DMA:
+        kmalloc()                           vmalloc()                     dma_alloc_coherent()
+          │ fast path: cmpxchg_double         │                             │
+          │ (lock-free, per-CPU freelist)     ▼                             ▼
+          ▼                              virtual area (rb-tree)        dma_direct_alloc()
+        SLUB slow path                        │                             │
+          │ cpu-partial → node-partial         ▼                        dma_alloc_contiguous()
+          ▼                              alloc_page()×N (rời rạc)        → NULL (CMA tắt)
+        allocate_slab()                       │                             │
+          │                                    ▼                             ▼
+          ▼                              map_kernel_range()             alloc_pages_node()
+        alloc_pages()  ───────────────────────┴─────────────────────────────┘
+          │                                    │
+          ▼                                    ▼
+        BUDDY (như trên)                  ARM64 MMU (set_pte, dsb/isb)
+                                                │
+                                                ▼
+                                              TLB  (broadcast TLBI ...IS)
+
+        Reclaim/Compaction (khi buddy cạn):
+        watermark fail → wake kswapd → direct reclaim (vmscan.c) → direct compaction
+          (mm/compaction.c) → retry → OOM killer (mm/oom_kill.c) → panic nếu vẫn fail
+</pre>
+</div>
+
+<div class="callout src"><b class="label">Ghi chú tính toàn vẹn nguồn</b> Mọi nhánh trong sơ đồ trên đã được trace chi tiết với file:line cụ thể ở các mục tương ứng phía trên. Những chỗ ghi "Not verified from source in this tree" (VMEMMAP_SIZE chính xác, DTS thật của board, <code>ioremap_prot()</code>) được giữ nguyên minh bạch, không bị biến thành fact. Nghiên cứu dựa trên cây kernel thật <code>Kernel/K-S800/Src</code> (Linux 5.10.241) và cấu hình board thật <code>EagleBK_defconfig</code> — không phải giả định lý thuyết chung chung.</div>
+</section>
+
+</main>
+</div>
+
+<footer class="doc">
+  ARM64 Linux Kernel Memory Management Handbook — built from source-verified research against Linux 5.10.241 (arch/arm64), Konica Minolta bizhub S800 board tree (EagleBK_defconfig). Every claim is tagged <span class="badge src" style="vertical-align:middle">SOURCE VERIFIED</span>, <span class="badge warn" style="vertical-align:middle">INFERENCE</span> or marked "Not verified from source in this tree" — no call flow was invented. Cross-check any file:line against the tree before relying on it for production work.
+</footer>
+
+<script>
+(function(){
+  // ---------- theme ----------
+  var root=document.documentElement;
+  function applyStored(){
+    try{
+      var t=localStorage.getItem('mm-theme');
+      if(t==='dark'||t==='light') root.setAttribute('data-theme',t);
+    }catch(e){}
+  }
+  applyStored();
+  document.getElementById('themeToggle').addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme');
+    var next;
+    if(cur==='dark') next='light'; else if(cur==='light') next='dark';
+    else{
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      next = prefersDark ? 'light' : 'dark';
+    }
+    root.setAttribute('data-theme',next);
+    try{ localStorage.setItem('mm-theme',next); }catch(e){}
+  });
+
+  // ---------- mobile sidebar ----------
+  var sidebar=document.getElementById('sidebar');
+  document.getElementById('menuToggle').addEventListener('click',function(){
+    sidebar.classList.toggle('open');
+  });
+  sidebar.addEventListener('click',function(e){
+    if(e.target.tagName==='A') sidebar.classList.remove('open');
+  });
+
+  // ---------- reading progress ----------
+  var bar=document.getElementById('progressBar');
+  var pct=document.getElementById('progressPct');
+  function updateProgress(){
+    var h=document.documentElement;
+    var scrolled=h.scrollTop||document.body.scrollTop;
+    var height=(h.scrollHeight||document.body.scrollHeight)-h.clientHeight;
+    var p=height>0?Math.min(100,Math.max(0,(scrolled/height)*100)):0;
+    bar.style.width=p+'%';
+    pct.textContent=Math.round(p)+'%';
+  }
+  document.addEventListener('scroll',updateProgress,{passive:true});
+  updateProgress();
+
+  // ---------- active section highlight ----------
+  var navLinks=Array.prototype.slice.call(sidebar.querySelectorAll('a[href^="#"]'));
+  var sections=navLinks.map(function(a){return document.querySelector(a.getAttribute('href'));}).filter(Boolean);
+  function onScrollSpy(){
+    var pos=window.scrollY+90;
+    var current=null;
+    sections.forEach(function(s){ if(s && s.offsetTop<=pos) current=s; });
+    navLinks.forEach(function(a){a.classList.remove('active');});
+    if(current){
+      var link=sidebar.querySelector('a[href="#'+current.id+'"]');
+      if(link) link.classList.add('active');
+    }
+  }
+  document.addEventListener('scroll',onScrollSpy,{passive:true});
+  window.addEventListener('load',onScrollSpy);
+
+  // ---------- copy buttons ----------
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.cb-copy');
+    if(!btn) return;
+    var box=btn.closest('.codebox');
+    var code=box.querySelector('pre').innerText;
+    navigator.clipboard && navigator.clipboard.writeText(code).then(function(){
+      var old=btn.textContent; btn.textContent='Copied!';
+      setTimeout(function(){btn.textContent=old;},1200);
+    }).catch(function(){});
+  });
+
+  // ---------- QA accordion ----------
+  document.addEventListener('click',function(e){
+    var q=e.target.closest('.qa .q');
+    if(!q) return;
+    q.parentElement.classList.toggle('open');
+  });
+
+  // ---------- flashcards flip ----------
+  document.addEventListener('click',function(e){
+    var fc=e.target.closest('.fc');
+    if(!fc) return;
+    if(fc.dataset.showing==='a'){
+      fc.textContent=fc.dataset.q; fc.dataset.showing='q'; fc.classList.remove('flipped');
+    }else{
+      fc.textContent=fc.dataset.a; fc.dataset.showing='a'; fc.classList.add('flipped');
+    }
+  });
+
+  // ---------- search ----------
+  var idx=[];
+  function buildIndex(){
+    idx=[];
+    document.querySelectorAll('[data-idx]').forEach(function(el){
+      var terms=el.getAttribute('data-idx').split('|');
+      var sec=el.closest('section.topic');
+      var secTitle=sec?sec.querySelector('h2').textContent.trim():'';
+      terms.forEach(function(t){
+        if(t) idx.push({term:t.trim(), el:el, section:secTitle});
+      });
+    });
+  }
+  window.addEventListener('load',buildIndex);
+
+  var input=document.getElementById('searchInput');
+  var results=document.getElementById('searchResults');
+  function renderResults(list,q){
+    if(!list.length){ results.innerHTML='<div class="empty">No matches for "'+q+'"</div>'; results.classList.add('show'); return; }
+    results.innerHTML=list.slice(0,25).map(function(r){
+      return '<div class="res" data-target="'+r.el.id+'"><div>'+r.term+'</div><div class="path">'+r.section+'</div></div>';
+    }).join('');
+    results.classList.add('show');
+  }
+  input.addEventListener('input',function(){
+    var q=input.value.trim().toLowerCase();
+    if(!q){ results.classList.remove('show'); return; }
+    var matches=idx.filter(function(r){ return r.term.toLowerCase().indexOf(q)!==-1; });
+    var seen={}; var uniq=[];
+    matches.forEach(function(m){ var k=m.term+'@'+m.section; if(!seen[k]){seen[k]=1; uniq.push(m);} });
+    renderResults(uniq,q);
+  });
+  results.addEventListener('click',function(e){
+    var r=e.target.closest('.res');
+    if(!r) return;
+    var id=r.getAttribute('data-target');
+    var target=document.getElementById(id) || document.querySelector('[data-idtarget="'+id+'"]');
+    if(target){
+      var sec=target.closest('section.topic') || target;
+      sec.scrollIntoView({behavior:'smooth',block:'start'});
+      target.style.transition='background .3s';
+      var old=target.style.background;
+      target.style.background='var(--c-arch-bg)';
+      setTimeout(function(){target.style.background=old;},1500);
+    }
+    results.classList.remove('show');
+    input.value='';
+  });
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('#searchbox')) results.classList.remove('show');
+  });
+})();
+</script>
+</body>
+</html>

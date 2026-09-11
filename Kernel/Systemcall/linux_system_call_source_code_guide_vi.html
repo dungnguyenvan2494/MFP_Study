@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux System Call — Hướng Dẫn Source Code</title>
+<style>
+:root{
+  --bg:#0b0f17; --bg2:#0f1420; --panel:#121826; --panel2:#161d2e;
+  --border:#232b3d; --border2:#2c364c;
+  --text:#dbe2f0; --text-dim:#8a93a8; --text-faint:#5b6478;
+  --accent:#4fa3ff; --accent-dim:#2c6fc9;
+  --arm64:#4fa3ff; --generic:#3ecf8e; --x86:#e0b341; --vfs:#b385ff; --mm:#ff9d4d; --syscall:#ff6b6b; --vendor:#ff5fd1;
+  --code-bg:#0a0e17; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius:8px;
+  --maxw:1200px; --sbw:290px;
+}
+html[data-theme="light"]{
+  --bg:#f4f6fb; --bg2:#eceff6; --panel:#ffffff; --panel2:#f7f9fd;
+  --border:#dde3ef; --border2:#c9d2e5;
+  --text:#1a2233; --text-dim:#57607a; --text-faint:#8b93a8;
+  --code-bg:#0e1522;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15.5px;line-height:1.7;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3,h4{font-family:var(--sans);font-weight:700;line-height:1.3;color:var(--text);}
+h1{font-size:34px;}
+h2{font-size:27px;margin-top:0;border-bottom:1px solid var(--border);padding-bottom:12px;}
+h3{font-size:21px;color:var(--accent);}
+h4{font-size:16px;color:var(--text);}
+code,pre,.mono{font-family:var(--mono);}
+code.inline{background:var(--panel2);border:1px solid var(--border);padding:1px 6px;border-radius:4px;font-size:0.9em;color:#ffd479;}
+html[data-theme="light"] code.inline{color:#a15c00;}
+
+/* ---------- Header ---------- */
+header.top{
+  position:sticky;top:0;z-index:100;background:rgba(11,15,23,0.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+html[data-theme="light"] header.top{background:rgba(244,246,251,0.92);}
+.brand{display:flex;flex-direction:column;gap:2px;}
+.brand .t1{font-size:17px;font-weight:800;letter-spacing:0.3px;}
+.brand .t2{font-size:12.5px;color:var(--text-dim);}
+.hdr-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.pill{font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--border2);color:var(--text-dim);background:var(--panel2);white-space:nowrap;}
+.hdr-controls{display:flex;gap:8px;align-items:center;}
+.icon-btn{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px;font-family:var(--sans);}
+.icon-btn:hover{border-color:var(--accent);}
+#searchBox{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px;width:180px;font-family:var(--sans);}
+
+/* ---------- Layout ---------- */
+.layout{display:flex;max-width:1520px;margin:0 auto;align-items:flex-start;}
+nav.sidebar{
+  width:var(--sbw);flex-shrink:0;position:sticky;top:61px;max-height:calc(100vh - 61px);overflow-y:auto;
+  padding:18px 10px 60px 18px;border-right:1px solid var(--border);
+}
+nav.sidebar::-webkit-scrollbar{width:6px;}
+nav.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+nav.sidebar .navgroup{margin-bottom:2px;}
+nav.sidebar a{
+  display:block;padding:6px 10px;border-radius:6px;color:var(--text-dim);font-size:13.2px;
+  border-left:2px solid transparent;
+}
+nav.sidebar a:hover{background:var(--panel2);color:var(--text);text-decoration:none;}
+nav.sidebar a.active{background:var(--panel2);color:var(--accent);border-left:2px solid var(--accent);font-weight:600;}
+nav.sidebar .navnum{color:var(--text-faint);margin-right:6px;font-family:var(--mono);font-size:11px;}
+#sbToggle{display:none;}
+
+main{flex:1;min-width:0;max-width:var(--maxw);margin:0 auto;padding:28px 28px 120px;}
+
+/* ---------- Hero ---------- */
+.hero{background:linear-gradient(180deg,var(--panel) 0%,var(--bg2) 100%);border:1px solid var(--border);border-radius:14px;padding:34px 30px;margin-bottom:34px;}
+.hero h1{margin:0 0 8px;}<img src="Process_3_layer.png" alt="" style="max-width: 100%; height: auto;">
+.hero .sub{color:var(--text-dim);font-size:15px;margin-bottom:22px;}
+.pipeline{font-family:var(--mono);font-size:13px;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:2px;color:#9fd0ff;}
+.pipeline .step{padding:5px 14px;border-radius:6px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);}
+.pipeline .arrow{color:var(--text-faint);}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px;}
+.kpi{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.kpi .v{font-size:17px;font-weight:800;color:var(--accent);}
+.kpi .l{font-size:11.5px;color:var(--text-dim);margin-top:3px;}
+
+/* ---------- Sections ---------- */
+section{margin-bottom:52px;scroll-margin-top:75px;}
+section > .sec-badge{display:inline-block;margin-bottom:8px;}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:5px;letter-spacing:0.3px;}
+.b-arm64{background:rgba(79,163,255,0.15);color:var(--arm64);}
+.b-generic{background:rgba(62,207,142,0.15);color:var(--generic);}
+.b-x86{background:rgba(224,179,65,0.15);color:var(--x86);}
+.b-vfs{background:rgba(179,133,255,0.15);color:var(--vfs);}
+.b-mm{background:rgba(255,157,77,0.15);color:var(--mm);}
+.b-syscall{background:rgba(255,107,107,0.15);color:var(--syscall);}
+.b-vendor{background:rgba(255,95,209,0.15);color:var(--vendor);}
+.b-notverified{background:rgba(139,147,168,0.2);color:var(--text-dim);}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin:16px 0;}
+.card h4{margin-top:0;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:800px){.grid2{grid-template-columns:1fr;}}
+
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.6px;}
+th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;}
+th{background:var(--panel2);color:var(--text);font-weight:700;}
+td{color:var(--text-dim);}
+td code.inline, th code.inline{color:#ffd479;}
+.tablewrap{overflow-x:auto;}
+
+.callout{border-radius:10px;padding:14px 18px;margin:16px 0;border:1px solid var(--border2);background:var(--panel2);}
+.callout .ct{font-weight:700;font-size:13px;margin-bottom:6px;display:flex;gap:8px;align-items:center;}
+.callout.key{border-left:4px solid var(--generic);}
+.callout.warn{border-left:4px solid var(--x86);}
+.callout.src{border-left:4px solid var(--arm64);}
+.callout.model{border-left:4px solid var(--vfs);}
+.callout.vendor{border-left:4px solid var(--vendor);}
+
+.codebox{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:14px 0;}
+.codebox .cb-head{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);padding:7px 12px;font-family:var(--mono);font-size:12px;color:var(--text-dim);border-bottom:1px solid var(--border);}
+.codebox .cb-head .fn{color:#9fd0ff;}
+.codebox pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.6;color:#d3d9e6;}
+.codebox pre .c-kw{color:#ff8fb3;}
+.copy-btn{background:transparent;border:1px solid var(--border2);color:var(--text-dim);border-radius:4px;padding:2px 9px;cursor:pointer;font-size:11px;font-family:var(--sans);}
+.copy-btn:hover{color:var(--text);border-color:var(--accent);}
+details.codewrap{margin:14px 0;}
+details.codewrap summary{cursor:pointer;color:var(--text-dim);font-size:12.5px;padding:6px 0;list-style:none;}
+details.codewrap summary::-webkit-details-marker{display:none;}
+details.codewrap summary:before{content:"▶ ";color:var(--accent);}
+details.codewrap[open] summary:before{content:"▼ ";}
+
+.timeline{position:relative;padding-left:26px;border-left:2px solid var(--border2);margin:20px 0;}
+.tl-step{position:relative;margin-bottom:26px;}
+.tl-step::before{content:attr(data-n);position:absolute;left:-38px;top:0;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#04101f;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;}
+.tl-step h4{margin:0 0 8px;}
+
+.flowdiag{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:18px;overflow-x:auto;color:#c7d1e6;white-space:pre;}
+.flowdiag .n{color:#9fd0ff;}
+.flowdiag .arm{color:var(--arm64);}
+.flowdiag .vfs{color:var(--vfs);}
+.flowdiag .mm{color:var(--mm);}
+
+.checklist{list-style:none;padding:0;}
+.checklist li{padding:6px 0;border-bottom:1px dashed var(--border);color:var(--text-dim);}
+.checklist li:before{content:"☐ ";color:var(--accent);}
+
+.back-top{position:fixed;bottom:24px;right:24px;background:var(--accent);color:#04101f;border:none;border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.4);display:none;z-index:200;}
+footer{text-align:center;color:var(--text-faint);font-size:12.5px;padding:30px;border-top:1px solid var(--border);}
+mark{background:rgba(79,163,255,0.35);color:inherit;border-radius:2px;}
+
+@media(max-width:980px){
+  .layout{display:block;}
+  nav.sidebar{position:fixed;top:0;left:0;height:100vh;max-height:100vh;background:var(--bg);z-index:150;transform:translateX(-100%);transition:transform 0.2s;width:82vw;border-right:1px solid var(--border);padding-top:70px;}
+  nav.sidebar.open{transform:translateX(0);}
+  #sbToggle{display:inline-flex;}
+  main{padding:20px 16px 100px;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  #searchBox{width:120px;}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button class="icon-btn" id="sbToggle" onclick="document.querySelector('nav.sidebar').classList.toggle('open')">☰</button>
+    <div class="brand">
+      <div class="t1">Linux Kernel · Hướng Dẫn Source Code System Call</div>
+      <div class="t2">Userspace → CPU ARM64 → Kernel Entry → Syscall Dispatch → VFS → Memory → Exception → Return</div>
+    </div>
+  </div>
+  <div class="hdr-controls">
+    <input id="searchBox" placeholder="Tìm symbol/file…" oninput="doSearch(this.value)">
+    <button class="icon-btn" onclick="toggleTheme()">🌗</button>
+    <button class="icon-btn" onclick="toggleAllDetails()">⇕ Code</button>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="sidebar" id="sidebar">
+  <a href="#overview"><span class="navnum">01</span>Tổng quan</a>
+  <a href="#version-notice"><span class="navnum">—</span>Ghi chú Version &amp; BSP</a>
+  <a href="#book-mapping"><span class="navnum">02</span>Chapter 10 → Linux hiện đại</a>
+  <a href="#big-picture"><span class="navnum">03</span>Bức tranh tổng thể</a>
+  <a href="#arm64-entry"><span class="navnum">04</span>ARM64 Exception Entry</a>
+  <a href="#ptregs"><span class="navnum">05</span>pt_regs</a>
+  <a href="#syscall-number"><span class="navnum">06</span>Syscall Number</a>
+  <a href="#syscall-dispatch"><span class="navnum">07</span>Syscall Dispatch</a>
+  <a href="#syscall-define"><span class="navnum">08</span>SYSCALL_DEFINE</a>
+  <a href="#read-case"><span class="navnum">10</span>read()</a>
+  <a href="#write-case"><span class="navnum">11</span>write()</a>
+  <a href="#openat-case"><span class="navnum">12</span>openat()</a>
+  <a href="#fd-structures"><span class="navnum">13</span>Chuỗi File Descriptor</a>
+  <a href="#struct-file"><span class="navnum">17</span>struct file</a>
+  <a href="#vfs"><span class="navnum">23</span>VFS / file_operations</a>
+  <a href="#user-access"><span class="navnum">25</span>Truy cập User Memory</a>
+  <a href="#page-fault"><span class="navnum">29</span>Page Fault</a>
+  <a href="#exception-table"><span class="navnum">30</span>Exception Table / Fixup</a>
+  <a href="#syscall-return"><span class="navnum">32</span>Syscall Return</a>
+  <a href="#error-path"><span class="navnum">33</span>Error Path</a>
+  <a href="#locking"><span class="navnum">34</span>Locking</a>
+  <a href="#refcounting"><span class="navnum">35</span>Reference Counting</a>
+  <a href="#register-timeline"><span class="navnum">—</span>Timeline thanh ghi</a>
+  <a href="#complete-trace"><span class="navnum">36</span>Trace hoàn chỉnh</a>
+  <a href="#book-vs-kernel"><span class="navnum">37</span>Sách vs Kernel thật</a>
+  <a href="#misconceptions"><span class="navnum">—</span>Ngộ nhận thường gặp</a>
+  <a href="#vendor-notes"><span class="navnum">—</span>Vendor BSP Deltas</a>
+  <a href="#roadmap"><span class="navnum">38</span>Lộ trình đọc tiếp</a>
+  <a href="#self-test"><span class="navnum">39</span>Tự kiểm tra</a>
+  <a href="#source-index"><span class="navnum">—</span>Chỉ mục Source</a>
+</nav>
+
+<main id="main">
+
+<div class="hero">
+  <h1>SYSTEM CALL</h1>
+  <div class="sub">Từ Userspace → ARM64 → Kernel → VFS → Memory → Exception → Userspace — trace theo source code thật trên đĩa, không diễn giải theo kiểu sách giáo khoa.</div>
+  <div class="pipeline">
+    <div class="step">USERSPACE</div><div class="arrow">↓ syscall(fd, buf, count)</div>
+    <div class="step">SVC #0</div><div class="arrow">↓ exception đồng bộ, EL0→EL1</div>
+    <div class="step">ARM64 EXCEPTION ENTRY <span class="mono" style="color:var(--text-faint)">entry.S</span></div><div class="arrow">↓ kernel_entry, lưu thanh ghi</div>
+    <div class="step">PT_REGS</div><div class="arrow">↓ regs-&gt;regs[8] → syscallno</div>
+    <div class="step">SYSCALL DISPATCH <span class="mono" style="color:var(--text-faint)">syscall.c</span></div><div class="arrow">↓ sys_call_table[scno]</div>
+    <div class="step">SYSCALL IMPLEMENTATION <span class="mono" style="color:var(--text-faint)">__arm64_sys_*</span></div><div class="arrow">↓</div>
+    <div class="step">VFS <span class="mono" style="color:var(--text-faint)">vfs_read / vfs_write / do_filp_open</span></div><div class="arrow">↓</div>
+    <div class="step">FILESYSTEM / MEMORY</div><div class="arrow">↓ copy_to_user / copy_from_user</div>
+    <div class="step">RETURN <span class="mono" style="color:var(--text-faint)">x0 = ret</span></div><div class="arrow">↓</div>
+    <div class="step">ERET</div><div class="arrow">↓ EL1→EL0</div>
+    <div class="step">USERSPACE</div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v">ARM64</div><div class="l">Kiến trúc được trace</div></div>
+    <div class="kpi"><div class="v">Linux v5.10.241</div><div class="l">Version source tree thực tế</div></div>
+    <div class="kpi"><div class="v">Source-Driven</div><div class="l">Mọi khẳng định đều trích dẫn file:line</div></div>
+    <div class="kpi"><div class="v">End-to-End</div><div class="l">Trace đầy đủ read / write / openat</div></div>
+  </div>
+</div>
+
+<section id="overview">
+<span class="sec-badge"><span class="badge b-generic">GENERIC</span></span>
+<h2>01 · Tổng quan</h2>
+<p>System call là ranh giới được kiểm soát giữa một tiến trình userspace không có đặc quyền (EL0) và kernel (EL1). Tài liệu này không giải thích lại lý thuyết đó dài dòng — mục đích của nó là để bạn <strong>tự mở source code Linux kernel thật và trace</strong> từng dòng lệnh, xem điều gì thực sự xảy ra khi một tiến trình gọi <code class="inline">read(3, buffer, 100);</code>.</p>
+
+<div class="callout model">
+<div class="ct">🧠 MÔ HÌNH TƯ DUY — thứ thực sự đang được trace</div>
+<img src="SC_Flow.png" alt="" style="max-width: 100%; height: auto;">
+
+<p>Mỗi khẳng định trong tài liệu này đều được gắn nhãn:</p>
+<p>
+<span class="badge b-arm64">🔵 ARM64</span> đặc thù kiến trúc &nbsp;
+<span class="badge b-generic">🟢 GENERIC</span> code kernel độc lập kiến trúc &nbsp;
+<span class="badge b-x86">🟡 X86-ONLY</span> chỉ áp dụng cho ví dụ x86 cũ trong sách &nbsp;
+<span class="badge b-vfs">🟣 VFS</span> lớp filesystem &nbsp;
+<span class="badge b-mm">🟠 MM</span> quản lý bộ nhớ &nbsp;
+<span class="badge b-syscall">🔴 SYSCALL</span> hạ tầng syscall &nbsp;
+<span class="badge b-vendor">🟪 VENDOR</span> patch riêng của vendor/board, không phải upstream &nbsp;
+<span class="badge b-notverified">⚠ NOT VERIFIED</span> không thể xác nhận trong tree này
+</p>
+</section>
+
+<section id="version-notice">
+<h2>Ghi chú về Version &amp; Source Tree</h2>
+<div class="callout warn">
+<div class="ct">⚠️ QUAN TRỌNG — version tree thực tế khác với mục tiêu ban đầu</div>
+<p>Chapter 10 và yêu cầu nghiên cứu ban đầu nhắm tới <strong>Linux v5.4.x</strong>. Source tree kernel thực sự có trên máy này
+(<code class="inline">C:\Users\PC\Documents\IT6_Kernel\Kernel\K-S800\Src</code>) được xác nhận qua <code class="inline">Makefile</code> ở gốc là:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">Makefile</span><span>dòng 2-4</span></div><pre>VERSION = 5
+PATCHLEVEL = 10
+SUBLEVEL = 241</pre></div>
+<p>tức là <strong>Linux v5.10.241</strong>, kiến trúc <strong>arm64</strong>. Theo nguyên tắc nghiên cứu "dùng ĐÚNG version của source tree được cung cấp, không được âm thầm thay thế", <u>toàn bộ tài liệu này được viết dựa trên v5.10.241</u>, không phải v5.4.x. Ở bất kỳ chỗ nào hành vi của v5.4.x có thể khác, nó sẽ được đánh dấu rõ là <span class="badge b-x86">CHANGED</span>.</p>
+</div>
+<div class="callout vendor">
+<div class="ct">🟪 VENDOR BSP — đây không phải một tree mainline thuần túy</div>
+<p>Bằng chứng từ source code (config symbol, comment ticket, syscall được thêm vào) cho thấy tree này là một <strong>board-support package (BSP) của vendor</strong>, có vẻ dành cho một sản phẩm máy in đa năng "bizhub" của Konica Minolta (macro guard <code class="inline">CONFIG_KM_BIZHUB</code>, tham chiếu ticket như <code class="inline">OP_BTS-38744</code>, tag board <code class="inline">K-S800</code>). Nó đắp thêm các patch hành vi thật lên trên v5.10.241 gốc. Các patch này được đánh dấu inline xuyên suốt tài liệu bằng <span class="badge b-vendor">🟪 VENDOR</span> và được tổng hợp tại <a href="#vendor-notes">Vendor BSP Deltas</a>. Chúng thực sự quan trọng: ít nhất một patch thay đổi hành vi khi <code class="inline">copy_to_user()</code> thất bại (gửi <code class="inline">SIGSEGV</code> thay vì trả về số byte chưa copy được ở một nhánh code), và hai syscall tùy biến làm dịch chuyển <code class="inline">__NR_syscalls</code> từ giá trị gốc lên <strong>443</strong>.</p>
+</div>
+</section>
+
+<section id="book-mapping">
+<h2>02 · Bảng Ánh Xạ Chapter 10 → Linux Hiện Đại</h2>
+<div class="tablewrap"><table>
+<tr><th>Khái niệm Chapter 10</th><th>Khái niệm Linux hiện đại</th><th>Symbol trên Linux v5.10.241 ARM64</th><th>Source File</th><th>Trạng thái</th><th>Ghi chú</th></tr>
+<tr><td>POSIX API</td><td>libc wrapper bọc quanh một syscall</td><td><code class="inline">read()</code>, <code class="inline">write()</code>, <code class="inline">openat()</code> (glibc)</td><td>(ngoài kernel tree)</td><td><span class="badge b-generic">STILL VALID</span></td><td>libc đặt tham số vào x0-x5, syscall # vào x8, thực thi <code class="inline">svc #0</code>.</td></tr>
+<tr><td>System Call Handler</td><td>Exception vector + bộ dispatch bằng C</td><td><code class="inline">el0_sync</code> → <code class="inline">el0_sync_handler</code> → <code class="inline">el0_svc</code></td><td>arch/arm64/kernel/entry.S:696; entry-common.c:375,362</td><td><span class="badge b-arm64">ARM64</span></td><td>Entry point "system_call" của x86 trong sách được thay bằng chuỗi exception vector + handler của AArch64.</td></tr>
+<tr><td>System Call Service Routine</td><td>Entry point được sinh ra cho từng syscall</td><td><code class="inline">__arm64_sys_read</code> / <code class="inline">__arm64_sys_write</code> / <code class="inline">__arm64_sys_openat</code></td><td>được sinh bởi macro <code class="inline">SYSCALL_DEFINEn</code> tại file .c của syscall</td><td><span class="badge b-arm64">ARM64</span></td><td>Tên gọi <code class="inline">sys_read()</code> trơn trong sách không tồn tại như symbol thực sự được dispatch trên arm64 — xem §08.</td></tr>
+<tr><td>System Call Table</td><td>Mảng con trỏ hàm được đánh chỉ số theo syscall number</td><td><code class="inline">sys_call_table[__NR_syscalls]</code></td><td>arch/arm64/kernel/sys.c:58</td><td><span class="badge b-arm64">ARM64</span></td><td>Xác nhận thực sự tồn tại và được dùng — xem §06/§07.</td></tr>
+<tr><td>System Call Number</td><td>Hằng số <code class="inline">__NR_*</code>, truyền qua thanh ghi</td><td>x8 → <code class="inline">pt_regs-&gt;syscallno</code></td><td>include/uapi/asm-generic/unistd.h; arch/arm64/kernel/syscall.c:98</td><td><span class="badge b-arm64">ARM64</span></td><td><code class="inline">eax</code> của x86 trong sách chính là <code class="inline">x8</code> của ARM64.</td></tr>
+<tr><td>Vào/Ra System Call</td><td><code class="inline">svc #0</code> / <code class="inline">eret</code></td><td>macro <code class="inline">kernel_entry</code> / <code class="inline">kernel_exit</code></td><td>arch/arm64/kernel/entry.S</td><td><span class="badge b-arm64">ARM64</span></td><td><code class="inline">int $0x80</code>/<code class="inline">sysenter</code> trong sách → ARM64 <code class="inline">svc #0</code>/<code class="inline">eret</code>.</td></tr>
+<tr><td>Truyền tham số</td><td>Qua thanh ghi, không qua stack</td><td>x0-x5 = tham số, x8 = syscall number</td><td>arch/arm64/include/asm/syscall.h:66-74</td><td><span class="badge b-arm64">ARM64</span></td><td>Các thanh ghi x86 <code class="inline">ebx,ecx,edx,esi,edi,ebp</code> trong sách tương ứng về mặt khái niệm với x0-x5 của ARM64.</td></tr>
+<tr><td>Truy cập User Address Space</td><td><code class="inline">access_ok()</code> + các hàm copy</td><td><code class="inline">__range_ok()</code></td><td>arch/arm64/include/asm/uaccess.h:56-99</td><td><span class="badge b-arm64">ARM64</span></td><td>Vẫn là một phép kiểm tra range thật với <code class="inline">addr_limit</code> ở version này — không phải hàm rỗng.</td></tr>
+<tr><td><code class="inline">get_user()</code></td><td>Macro đọc một giá trị đơn từ user</td><td><code class="inline">__get_user</code> → <code class="inline">__get_user_error</code> → <code class="inline">__get_user_asm</code></td><td>arch/arm64/include/asm/uaccess.h:258-331</td><td><span class="badge b-arm64">ARM64</span></td><td>Inline asm + cơ chế fixup qua exception table, không phải một lời gọi hàm thông thường.</td></tr>
+<tr><td><code class="inline">put_user()</code></td><td>Macro ghi một giá trị đơn xuống user</td><td><code class="inline">__put_user</code> → <code class="inline">__put_user_asm</code></td><td>arch/arm64/include/asm/uaccess.h:333-404</td><td><span class="badge b-arm64">ARM64</span></td><td>Đối xứng với get_user.</td></tr>
+<tr><td><code class="inline">copy_from_user()</code></td><td>Copy hàng loạt user→kernel</td><td><code class="inline">_copy_from_user</code> → <code class="inline">raw_copy_from_user</code> → <code class="inline">__arch_copy_from_user</code></td><td>include/linux/uaccess.h:151-164; arch/arm64/lib/copy_from_user.S</td><td><span class="badge b-generic">GENERIC</span>+<span class="badge b-arm64">ARM64</span></td><td>Zero-fill phần đuôi đích khi copy thất bại/không trọn vẹn (uaccess.h:161-162).</td></tr>
+<tr><td><code class="inline">copy_to_user()</code></td><td>Copy hàng loạt kernel→user</td><td><code class="inline">_copy_to_user</code> → <code class="inline">raw_copy_to_user</code> → <code class="inline">__arch_copy_to_user</code></td><td>include/linux/uaccess.h:170-182; arch/arm64/lib/copy_to_user.S</td><td><span class="badge b-generic">GENERIC</span>+<span class="badge b-arm64">ARM64</span></td><td><span class="badge b-vendor">VENDOR</span> trong đường đi iov_iter của tree này — xem <a href="#vendor-notes">Vendor Deltas</a>.</td></tr>
+<tr><td><code class="inline">access_ok()</code></td><td>Kiểm tra hợp lệ range của con trỏ user</td><td>macro <code class="inline">__range_ok()</code></td><td>arch/arm64/include/asm/uaccess.h:63-98</td><td><span class="badge b-arm64">ARM64</span></td><td>Phép toán carry-flag không nhánh rẽ, so với <code class="inline">current_thread_info()-&gt;addr_limit</code>.</td></tr>
+<tr><td>Page Fault</td><td>Exception data/instruction abort</td><td><code class="inline">do_mem_abort()</code>, <code class="inline">do_translation_fault()</code>, <code class="inline">do_page_fault()</code></td><td>arch/arm64/mm/fault.c:725; 604; 456</td><td><span class="badge b-arm64">ARM64</span></td><td>Khái niệm "page fault handler" của x86 trong sách ánh xạ sang bảng dispatch fault dựa trên ESR_EL1 của ARM64.</td></tr>
+<tr><td>Exception Table</td><td>Bảng đã sắp xếp các cặp (lệnh-gây-fault, fixup)</td><td><code class="inline">struct exception_table_entry {int insn, fixup;}</code></td><td>arch/arm64/include/asm/extable.h:18-21</td><td><span class="badge b-arm64">ARM64</span></td><td>Cơ chế offset tương đối đơn giản trên v5.10 arm64 — KHÔNG phải cơ chế handler có kiểu (<code class="inline">EX_TYPE_*</code>) mà một số kernel mới hơn dùng.</td></tr>
+<tr><td>Fixup Code</td><td>Lệnh phục hồi nằm ngoài dòng chính</td><td><code class="inline">fixup_exception()</code>, section <code class="inline">.fixup</code>, macro <code class="inline">USER()</code></td><td>arch/arm64/mm/extable.c:9-22; asm/assembler.h:132-141</td><td><span class="badge b-arm64">ARM64</span></td><td>Ghi đè <code class="inline">regs-&gt;pc</code> thành địa chỉ fixup thay vì nhảy bằng phần cứng.</td></tr>
+<tr><td>Kernel Wrapper</td><td>Bộ sinh entry syscall đặc thù kiến trúc</td><td><code class="inline">__SYSCALL_DEFINEx</code> riêng của arm64</td><td>arch/arm64/include/asm/syscall_wrapper.h:51-73</td><td><span class="badge b-arm64">ARM64</span></td><td>Ghi đè macro generic trong include/linux/syscalls.h — xem §08.</td></tr>
+<tr><td>System Call Return</td><td>Giá trị trả về nằm trong thanh ghi, rồi <code class="inline">eret</code></td><td><code class="inline">syscall_set_return_value()</code> ghi vào <code class="inline">regs-&gt;regs[0]</code>; <code class="inline">kernel_exit</code> thực thi <code class="inline">eret</code></td><td>arch/arm64/include/asm/syscall.h:51-62; entry.S:290-387</td><td><span class="badge b-arm64">ARM64</span></td><td>Giá trị trả về âm trở thành <code class="inline">-errno</code>; libc đảo dấu và lưu vào <code class="inline">errno</code> — kernel không bao giờ trực tiếp đụng vào <code class="inline">errno</code> phía userspace.</td></tr>
+</table></div>
+</section>
+
+<section id="big-picture">
+<h2>03 · Bức Tranh Tổng Thể của System Call</h2>
+<p>Luồng thực thi end-to-end đã được xác nhận bằng source code, cho <code class="inline">read(3, buffer, 100)</code> trên tree v5.10.241 arm64 này (mỗi mũi tên đều có trích dẫn ở các phần tiếp theo):</p>
+<img src="SC_Big_picture.png" alt="" style="max-width: 100%; height: auto;">
+</section>
+
+<section id="arm64-entry">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>04 · ARM64 Exception Entry</h2>
+
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI</div>Hành vi phần cứng CPU và hành vi phần mềm Linux là hai lớp khác nhau. CPU chỉ biết cách (1) lưu ELR_EL1/SPSR_EL1/ESR_EL1, (2) chuyển EL0→EL1, và (3) nhảy tới địa chỉ mà VBAR_EL1 + offset trỏ tới. Mọi thứ sau cú nhảy đó — <code class="inline">pt_regs</code>, dispatch, <code class="inline">sys_call_table</code> — đều là phần mềm thuần túy, viết trong entry.S/entry-common.c/syscall.c.</div>
+
+<h3>Các thanh ghi CPU liên quan</h3>
+<div class="tablewrap"><table>
+<tr><th>Thanh ghi</th><th>Ý nghĩa</th><th>Được thiết lập bởi</th></tr>
+<tr><td><code class="inline">ELR_EL1</code></td><td>Exception Link Register — PC để quay về</td><td>Phần cứng CPU, khi vào exception (giữ địa chỉ lệnh ngay sau <code class="inline">svc #0</code>)</td></tr>
+<tr><td><code class="inline">SPSR_EL1</code></td><td>Saved Program Status Register — PSTATE tại thời điểm xảy ra exception</td><td>Phần cứng CPU</td></tr>
+<tr><td><code class="inline">ESR_EL1</code></td><td>Exception Syndrome Register — lý do xảy ra exception (trường EC, vd. <code class="inline">ESR_ELx_EC_SVC64</code>)</td><td>Phần cứng CPU</td></tr>
+<tr><td><code class="inline">VBAR_EL1</code></td><td>Vector Base Address Register — địa chỉ gốc của bảng vector exception gồm 16 mục</td><td>Linux, thiết lập một lần lúc boot: <code class="inline">__primary_switched</code></td></tr>
+<tr><td><code class="inline">SP_EL0</code> / <code class="inline">SP_EL1</code></td><td>Con trỏ stack riêng theo từng exception level</td><td>CPU tự động chuyển khi đổi EL; <code class="inline">kernel_entry</code> còn hoán đổi thêm <code class="inline">sp_el0</code>↔task struct</td></tr>
+</table></div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/head.S</span><span>dòng 421-433 (trích)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYM_FUNC_START_LOCAL(__primary_switched)
+	...
+	adr_l	x8, vectors			// nạp VBAR_EL1 bằng địa chỉ ảo
+	msr	vbar_el1, x8			// của bảng vector
+	isb</pre></div>
+
+<h3>Bảng vector</h3>
+<p>Một lệnh <code class="inline">svc #0</code> thực thi ở EL0 là một exception đồng bộ được đưa lên EL1 (chạy trên SP_EL1 / EL1h). Nó rơi vào slot <strong>"Synchronous 64-bit EL0"</strong> — slot thứ 8 trong 16 slot, mỗi slot 128 byte.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>dòng 557-575</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	.align	11
+SYM_CODE_START(vectors)
+	kernel_ventry	1, sync_invalid			// Synchronous EL1t
+	kernel_ventry	1, irq_invalid			// IRQ EL1t
+	kernel_ventry	1, fiq_invalid			// FIQ EL1t
+	kernel_ventry	1, error_invalid		// Error EL1t
+
+	kernel_ventry	1, sync				// Synchronous EL1h   ← fault ở chế độ kernel, kể cả fault uaccess (§29)
+	kernel_ventry	1, irq				// IRQ EL1h
+	kernel_ventry	1, fiq_invalid			// FIQ EL1h
+	kernel_ventry	1, error			// Error EL1h
+
+	kernel_ventry	0, sync				// Synchronous 64-bit EL0   ← SVC #0 rơi vào đây
+	kernel_ventry	0, irq				// IRQ 64-bit EL0
+	kernel_ventry	0, fiq_invalid			// FIQ 64-bit EL0
+	kernel_ventry	0, error			// Error 64-bit EL0</pre></div>
+<div class="callout warn"><div class="ct">🟪 GHI CHÚ VENDOR</div>Tree này thay thế có điều kiện slot "Error EL1h" bằng một handler <code class="inline">el1_ignore</code> của vendor dưới cờ <code class="inline">CONFIG_IGNORE_ASYNC_ABORT</code> (entry.S:566-570) — không có trong mainline v5.10.</div>
+
+<h3>kernel_entry: lưu thanh ghi vào pt_regs</h3>
+<p><code class="inline">kernel_ventry 0, sync</code> nhảy tới <code class="inline">el0_sync</code>, chạy ngay macro <code class="inline">kernel_entry</code> — đây chính là thời điểm x0-x29 trở thành các trường của <code class="inline">pt_regs</code>.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>dòng 189-203, 260-263 (trích macro kernel_entry)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	stp	x0, x1, [sp, #16 * 0]
+	stp	x2, x3, [sp, #16 * 1]
+	stp	x4, x5, [sp, #16 * 2]
+	stp	x6, x7, [sp, #16 * 3]
+	stp	x8, x9, [sp, #16 * 4]
+	stp	x10, x11, [sp, #16 * 5]
+	...
+	stp	x28, x29, [sp, #16 * 14]
+	...
+	.if	\el == 0
+	mov	w21, #NO_SYSCALL
+	str	w21, [sp, #S_SYSCALLNO]      // pt_regs->syscallno đặt trước bằng -1
+	.endif</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>dòng 696-701</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYM_CODE_START_LOCAL_NOALIGN(el0_sync)
+	kernel_entry 0
+	mov	x0, sp
+	bl	el0_sync_handler
+	b	ret_to_user
+SYM_CODE_END(el0_sync)</pre></div>
+<p>Sau <code class="inline">kernel_entry 0</code>, <code class="inline">sp</code> trỏ tới gốc của <code class="inline">struct pt_regs</code> vừa được dựng. <code class="inline">mov x0, sp</code> truyền <code class="inline">&amp;pt_regs</code> làm tham số đầu tiên (và duy nhất) vào hàm C <code class="inline">el0_sync_handler(struct pt_regs *regs)</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry-common.c</span><span>dòng 375-382, 362-366</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>asmlinkage void noinstr el0_sync_handler(struct pt_regs *regs)
+{
+	unsigned long esr = read_sysreg(esr_el1);
+
+	switch (ESR_ELx_EC(esr)) {
+	case ESR_ELx_EC_SVC64:
+		el0_svc(regs);
+		break;
+	...
+
+static void noinstr el0_svc(struct pt_regs *regs)
+{
+	enter_from_user_mode();
+	do_el0_svc(regs);
+}</pre></div>
+
+<div class="callout src"><div class="ct">🔍 SOURCE CODE — ranh giới CPU vs phần mềm</div>
+<strong>Phần cứng CPU</strong> đã làm: EL0→EL1, chụp ESR_EL1/ELR_EL1/SPSR_EL1, nhảy tới VBAR_EL1+offset.<br>
+<strong>Phần mềm Linux</strong> làm mọi thứ còn lại: <code class="inline">kernel_entry</code> lưu các GPR vào <code class="inline">pt_regs</code>, <code class="inline">el0_sync_handler</code> đọc <code class="inline">ESR_EL1</code> bằng C qua <code class="inline">read_sysreg()</code> rồi rẽ nhánh theo lớp exception.
+</div>
+</section>
+
+<section id="ptregs">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>05 · struct pt_regs</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/ptrace.h</span><span>dòng 173-200</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct pt_regs {
+	union {
+		struct user_pt_regs user_regs;
+		struct {
+			u64 regs[31];
+			u64 sp;
+			u64 pc;
+			u64 pstate;
+		};
+	};
+	u64 orig_x0;
+#ifdef __AARCH64EB__
+	u32 unused2;
+	s32 syscallno;
+#else
+	s32 syscallno;
+	u32 unused2;
+#endif
+	u64 orig_addr_limit;
+	u64 pmr_save;               /* chỉ hợp lệ khi ARM64_HAS_IRQ_PRIO_MASKING */
+	u64 stackframe[2];
+	u64 lockdep_hardirqs;       /* chỉ hợp lệ với một số exception EL1 */
+	u64 exit_rcu;
+};</pre></div>
+
+<div class="grid2">
+<div class="card"><h4>Ánh xạ thanh ghi → trường pt_regs</h4>
+<div class="tablewrap"><table>
+<tr><th>Thanh ghi</th><th>Trường pt_regs</th><th>Được thiết lập tại</th></tr>
+<tr><td>x0</td><td><code class="inline">regs[0]</code> (sau đó là <code class="inline">orig_x0</code>)</td><td><code class="inline">kernel_entry</code> stp (entry.S:189); <code class="inline">orig_x0 = regs[0]</code> trong <code class="inline">el0_svc_common</code> (syscall.c:98)</td></tr>
+<tr><td>x1..x5</td><td><code class="inline">regs[1..5]</code></td><td>chuỗi stp trong <code class="inline">kernel_entry</code></td></tr>
+<tr><td>x8</td><td><code class="inline">regs[8]</code>, sau đó copy sang <code class="inline">syscallno</code></td><td>stp trong <code class="inline">kernel_entry</code>; <code class="inline">syscallno = scno</code> trong <code class="inline">el0_svc_common</code> (syscall.c:99)</td></tr>
+<tr><td>x29/x30 (FP/LR)</td><td><code class="inline">regs[28..29]</code>/(LR xử lý riêng)</td><td><code class="inline">kernel_entry</code></td></tr>
+<tr><td>—</td><td><code class="inline">pc</code></td><td><code class="inline">mrs x22, elr_el1</code> → lưu lại (entry.S ~235-257)</td></tr>
+<tr><td>—</td><td><code class="inline">pstate</code></td><td><code class="inline">mrs x23, spsr_el1</code> → lưu lại</td></tr>
+</table></div>
+</div>
+<div class="card"><h4>Macro offset dùng trong asm</h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">arch/arm64/kernel/asm-offsets.c</span><span>dòng 52-76</span></div>
+<pre>DEFINE(S_X0,   offsetof(struct pt_regs, regs[0]));
+...
+DEFINE(S_LR,     offsetof(struct pt_regs, regs[30]));
+DEFINE(S_SP,     offsetof(struct pt_regs, sp));
+DEFINE(S_PSTATE, offsetof(struct pt_regs, pstate));
+DEFINE(S_PC,     offsetof(struct pt_regs, pc));
+DEFINE(S_SYSCALLNO, offsetof(struct pt_regs, syscallno));</pre></div>
+<p>Các hằng <code class="inline">S_*</code> này chính là thứ entry.S thực sự dùng (vd. <code class="inline">str w21, [sp, #S_SYSCALLNO]</code>) — mã assembly không bao giờ hard-code offset byte.</p>
+</div>
+</div>
+
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI — orig_x0 vs regs[0]</div><code class="inline">regs[0]</code> sẽ bị ghi đè bằng giá trị trả về của syscall trước khi <code class="inline">eret</code> (xem §32). <code class="inline">orig_x0</code> giữ lại giá trị tham số gốc, phục vụ ptrace/audit/mã restart-syscall cần biết x0 <em>trước khi</em> syscall chạy.</div>
+
+<div class="flowdiag">THANH GHI USERSPACE (x0..x5, x8)
+        ↓  chuỗi stp trong kernel_entry, entry.S:189-203
+    <span class="n">pt_regs.regs[0..8]</span>
+        ↓  el0_svc_common, syscall.c:98-99
+    <span class="n">pt_regs.orig_x0 / pt_regs.syscallno</span>
+        ↓  invoke_syscall, syscall.c:39
+    SYSCALL HANDLER  (__arm64_sys_read(const struct pt_regs *regs))</div>
+</section>
+
+<section id="syscall-number">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>06 · Syscall Number &amp; Table</h2>
+
+<h3>Định nghĩa __NR_*</h3>
+<p>ARM64 dùng bảng đánh số syscall <strong>generic</strong> (xác nhận qua <code class="inline">arch/arm64/include/asm/unistd.h:44-50</code> include <code class="inline">&lt;uapi/asm/unistd.h&gt;</code>, và file này include <code class="inline">&lt;asm-generic/unistd.h&gt;</code>).</p>
+<div class="codebox"><div class="cb-head"><span class="fn">include/uapi/asm-generic/unistd.h</span><span>dòng 183-184, 205-208</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define __NR_openat 56
+__SYSCALL(__NR_openat, sys_openat)
+...
+#define __NR_read 63
+__SYSCALL(__NR_read, sys_read)
+#define __NR_write 64
+__SYSCALL(__NR_write, sys_write)</pre></div>
+<div class="callout vendor"><div class="ct">🟪 GHI CHÚ VENDOR — __NR_syscalls không phải giá trị gốc</div>
+File <code class="inline">arch/arm64/include/uapi/asm/unistd.h</code> của tree này thêm hai syscall riêng của board trước khi include bảng generic:
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">arch/arm64/include/uapi/asm/unistd.h</span><span>dòng 28-39</span></div>
+<pre>#ifdef CONFIG_KM_SEMAPHORE /* sky_kudo */
+#define __NR_km_semaphore 441
+__SYSCALL(__NR_km_semaphore, sys_km_semaphore)
+#endif
+#ifdef CONFIG_KM_TICK
+#define __NR_km_tickget		442
+__SYSCALL(__NR_km_tickget, sys_km_tickget)
+#endif
+#include &lt;asm-generic/unistd.h&gt;</pre></div>
+và <code class="inline">include/uapi/asm-generic/unistd.h:870-871</code> định nghĩa lại tổng số:
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">include/uapi/asm-generic/unistd.h</span><span>dòng 870-871</span></div>
+<pre>#undef __NR_syscalls
+#define __NR_syscalls 443</pre></div>
+Vậy trong tree này <code class="inline">__NR_syscalls == 443</code>, không phải giá trị generic gốc — phép kiểm tra biên trong <code class="inline">invoke_syscall()</code> (§07) dùng con số đã bị vendor chỉnh sửa này.
+</div>
+
+<h3>sys_call_table — đúng, nó có thật và được dùng trên ARM64</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/sys.c</span><span>dòng 39-61</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>asmlinkage long sys_ni_syscall(void);
+
+asmlinkage long __arm64_sys_ni_syscall(const struct pt_regs *__unused)
+{
+	return sys_ni_syscall();
+}
+
+#undef __SYSCALL
+#define __SYSCALL(nr, sym)	asmlinkage long __arm64_##sym(const struct pt_regs *);
+#include &lt;asm/unistd.h&gt;
+
+#undef __SYSCALL
+#define __SYSCALL(nr, sym)	[nr] = __arm64_##sym,
+
+const syscall_fn_t sys_call_table[__NR_syscalls] = {
+	[0 ... __NR_syscalls - 1] = __arm64_sys_ni_syscall,
+#include &lt;asm/unistd.h&gt;
+};</pre></div>
+<p><code class="inline">&lt;asm/unistd.h&gt;</code> được include <strong>hai lần</strong>, mỗi lần <code class="inline">__SYSCALL</code> được định nghĩa lại — lần đầu để khai báo trước (forward-declare) mọi prototype <code class="inline">__arm64_sys_&lt;tên&gt;</code>, lần sau để sinh ra initializer chỉ định <code class="inline">[nr] = __arm64_sys_&lt;tên&gt;,</code>. Đây thuần túy là phép thay thế macro dạng text tại thời điểm biên dịch — <strong>không có header nào được sinh riêng</strong> (thư mục <code class="inline">arch/arm64/include/generated/</code> không tồn tại trong tree này), khác với script <code class="inline">syscalltbl.sh</code> chạy lúc build của x86.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/syscall.h</span><span>dòng 12-14</span></div>
+<pre>typedef long (*syscall_fn_t)(const struct pt_regs *regs);
+extern const syscall_fn_t sys_call_table[];</pre></div>
+<p>Có một <code class="inline">compat_sys_call_table</code> riêng, xây dựng tương tự, dành cho task compat 32-bit — <code class="inline">arch/arm64/kernel/sys32.c:132</code>.</p>
+</section>
+
+<section id="syscall-dispatch">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>07 · Syscall Dispatch</h2>
+<div class="flowdiag">x8 (thô)
+   ↓  stp trong kernel_entry → pt_regs.regs[8]
+<span class="n">do_el0_svc(regs)</span>          syscall.c:191
+   ↓  el0_svc_common(regs, regs->regs[8], __NR_syscalls, sys_call_table)
+<span class="n">el0_svc_common</span>            syscall.c:93
+   ↓  orig_x0=regs[0]; syscallno=scno; syscall_trace_enter() nếu có TIF work đang chờ
+<span class="n">invoke_syscall</span>            syscall.c:39
+   ↓  kiểm tra biên scno < __NR_syscalls, array_index_nospec()
+<span class="n">sys_call_table[scno]</span>      arch/arm64/kernel/sys.c:58
+   ↓
+<span class="n">__arm64_sys_read(regs)</span>    wrapper được sinh ra</div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/syscall.c</span><span>dòng 34-54</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static long __invoke_syscall(struct pt_regs *regs, syscall_fn_t syscall_fn)
+{
+	return syscall_fn(regs);
+}
+
+static void invoke_syscall(struct pt_regs *regs, unsigned int scno,
+			   unsigned int sc_nr,
+			   const syscall_fn_t syscall_table[])
+{
+	long ret;
+
+	if (scno &lt; sc_nr) {
+		syscall_fn_t syscall_fn;
+		syscall_fn = syscall_table[array_index_nospec(scno, sc_nr)];
+		ret = __invoke_syscall(regs, syscall_fn);
+	} else {
+		ret = do_ni_syscall(regs, scno);
+	}
+
+	syscall_set_return_value(current, regs, 0, ret);
+}</pre></div>
+<p><code class="inline">array_index_nospec()</code> là một chốt chặn cứng hóa chống Spectre-v1: dù <code class="inline">scno &lt; sc_nr</code> đã được kiểm tra, hàm này vẫn ép chỉ số dùng để truy cập bộ nhớ thực sự phải nằm trong biên, vô hiệu hóa việc đọc ngoài biên <code class="inline">sys_call_table</code> bằng thực thi suy đoán (speculative execution). Một <code class="inline">scno</code> ngoài biên — kể cả một số thực sự sai hoặc giá trị đặc biệt "bỏ qua syscall" của ptrace — sẽ rơi vào <code class="inline">do_ni_syscall()</code>, hàm này trả về <code class="inline">-ENOSYS</code> thông qua <code class="inline">sys_ni_syscall()</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/syscall.c</span><span>dòng 93-99, 191-195</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static void el0_svc_common(struct pt_regs *regs, int scno, int sc_nr,
+			   const syscall_fn_t syscall_table[])
+{
+	unsigned long flags = current_thread_info()-&gt;flags;
+
+	regs-&gt;orig_x0 = regs-&gt;regs[0];
+	regs-&gt;syscallno = scno;
+	...
+
+void do_el0_svc(struct pt_regs *regs)
+{
+	sve_user_discard();
+	el0_svc_common(regs, regs-&gt;regs[8], __NR_syscalls, sys_call_table);
+}</pre></div>
+<div class="callout warn"><div class="ct">⚠️ QUAN TRỌNG</div>Với đường đi compat 32-bit, <code class="inline">do_el0_svc_compat()</code> (syscall.c:198-202) dùng thanh ghi <strong>x7</strong>, không phải x8, làm thanh ghi chứa syscall number, theo đúng ABI của AArch32 — một khác biệt kiến trúc thực sự đáng nhớ nếu bạn trace một tiến trình compat (32-bit).</div>
+</section>
+
+<section id="syscall-define">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span> <span class="badge b-syscall">🔴 SYSCALL</span></span>
+<h2>08 · SYSCALL_DEFINE3 — Khai Triển Macro</h2>
+
+<h3>Chuỗi macro generic</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/syscalls.h</span><span>dòng 216, 223-225</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define SYSCALL_DEFINE3(name, ...) SYSCALL_DEFINEx(3, _##name, __VA_ARGS__)
+...
+#define SYSCALL_DEFINEx(x, sname, ...)				\
+	SYSCALL_METADATA(sname, x, __VA_ARGS__)			\
+	__SYSCALL_DEFINEx(x, sname, __VA_ARGS__)</pre></div>
+<p>Macro fallback generic <code class="inline">__SYSCALL_DEFINEx</code> (nếu dùng sẽ sinh ra một <code class="inline">sys_name()</code> kiểu x86 trơn) chỉ áp dụng khi <code class="inline">#ifndef __SYSCALL_DEFINEx</code>. Nhưng <code class="inline">syscalls.h:94</code> include <code class="inline">&lt;asm/syscall_wrapper.h&gt;</code> <em>trước khi</em> tới được điều kiện guard đó — nên trên arm64, phiên bản riêng của kiến trúc sẽ thắng.</p>
+
+<h3>Bản ghi đè của ARM64</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/syscall_wrapper.h</span><span>dòng 51-67, 13-16</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define __SYSCALL_DEFINEx(x, name, ...)						\
+	asmlinkage long __arm64_sys##name(const struct pt_regs *regs);		\
+	ALLOW_ERROR_INJECTION(__arm64_sys##name, ERRNO);			\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));		\
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));	\
+	asmlinkage long __arm64_sys##name(const struct pt_regs *regs)		\
+	{									\
+		return __se_sys##name(SC_ARM64_REGS_TO_ARGS(x,__VA_ARGS__));	\
+	}									\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))		\
+	{									\
+		long ret = __do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));	\
+		__MAP(x,__SC_TEST,__VA_ARGS__);					\
+		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));		\
+		return ret;							\
+	}									\
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+
+#define SC_ARM64_REGS_TO_ARGS(x, ...)				\
+	__MAP(x,__SC_ARGS					\
+	      ,,regs-&gt;regs[0],,regs-&gt;regs[1],,regs-&gt;regs[2]	\
+	      ,,regs-&gt;regs[3],,regs-&gt;regs[4],,regs-&gt;regs[5])</pre></div>
+
+<h3>Thứ thực sự được sinh ra cho read()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 672-675 (nguyên văn source)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+{
+	return ksys_read(fd, buf, count);
+}</pre></div>
+<img src="SC_read.png" alt="" style="max-width: 100%; height: auto;">
+<div class="callout warn"><div class="ct">⚠️ QUAN TRỌNG — sys_read KHÔNG PHẢI symbol được dispatch trên arm64</div>
+Macro <code class="inline">__SYSCALL_DEFINEx</code> generic (thứ sẽ sinh ra một hàm <code class="inline">sys_read()</code> trơn) không bao giờ được dùng, vì phiên bản riêng của arm64 được ưu tiên hơn nhờ thứ tự include. Một prototype <code class="inline">asmlinkage long sys_read(...)</code> vẫn tồn tại như một <em>khai báo</em> cho các nơi khác gọi tới (<code class="inline">include/linux/syscalls.h:493</code>), nhưng macro chỉ <em>định nghĩa</em> <code class="inline">__arm64_sys_read</code> / <code class="inline">__se_sys_read</code> / <code class="inline">__do_sys_read</code>. Nếu bạn grep binary hoặc System.map tìm <code class="inline">sys_read</code>, bạn sẽ không tìm thấy đoạn code thực sự chạy — hãy tìm <code class="inline">__arm64_sys_read</code>.
+</div>
+
+<h3>asmlinkage và __user</h3>
+<div class="grid2">
+<div class="card"><h4><code class="inline">asmlinkage</code></h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">include/linux/linkage.h</span><span>dòng 16-23</span></div>
+<pre>#ifdef __cplusplus
+#define CPP_ASMLINKAGE extern "C"
+#else
+#define CPP_ASMLINKAGE
+#endif
+#ifndef asmlinkage
+#define asmlinkage CPP_ASMLINKAGE
+#endif</pre></div>
+<p><code class="inline">asm/linkage.h</code> riêng của arm64 không định nghĩa lại macro này, nên trên arm64 <code class="inline">asmlinkage</code> đơn giản là rỗng (hoặc <code class="inline">extern "C"</code>) — khác với các kiến trúc lịch sử từng dùng nó để ép một quy ước gọi hàm dựa trên stack cụ thể.</p>
+</div>
+<div class="card"><h4><code class="inline">__user</code></h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">include/linux/compiler_types.h</span><span>dòng 29-36</span></div>
+<pre>#else /* __CHECKER__ */
+# define __kernel
+# ifdef STRUCTLEAK_PLUGIN
+#  define __user	__attribute__((user))
+# else
+#  define __user
+# endif</pre></div>
+<p>Trong một bản build bình thường nó biến mất hoàn toàn — nó tồn tại thuần túy để phục vụ phân tích tĩnh (đường <code class="inline">__CHECKER__</code> của sparse định nghĩa nó thành <code class="inline">__attribute__((noderef, address_space(__user)))</code>) để sparse có thể bắt lỗi một con trỏ kernel thô bị dereference như thể nó là user memory.</p>
+</div>
+</div>
+<div class="callout warn"><div class="ct">⚠️ NOT FOUND IN THIS VERSION</div>Một macro tên đúng là <code class="inline">__SC_COMP</code> không tồn tại trong <code class="inline">include/linux/syscalls.h</code> hay <code class="inline">arch/arm64/include/asm/syscall_wrapper.h</code> trong tree này. Tương đương cho compat là <code class="inline">COMPAT_SYSCALL_DEFINEx</code> (syscall_wrapper.h:20-33), sinh ra <code class="inline">__arm64_compat_sys_name</code>/<code class="inline">__se_compat_sys_name</code>/<code class="inline">__do_compat_sys_name</code> dùng cùng kỹ thuật ánh xạ thanh ghi.</div>
+</section>
+
+<section id="read-case">
+<span class="sec-badge"><span class="badge b-syscall">🔴 SYSCALL</span> <span class="badge b-vfs">🟣 VFS</span></span>
+<h2>10 · read() — Trace Source Đầy Đủ</h2>
+<p><code class="inline">read(fd, buf, count)</code> — case study chính. Mỗi bước dưới đây là một hàm có thật trong tree này, tại đúng file/dòng được trích dẫn.</p>
+
+<div class="timeline">
+<div class="tl-step" data-n="01"><h4>Userspace</h4><p>Tiến trình đang giữ một fd đã mở (vd. <code class="inline">fd=3</code>) và gọi <code class="inline">read(3, buffer, 100)</code> của libc.</p></div>
+
+<div class="tl-step" data-n="02"><h4>libc wrapper</h4><p>glibc đặt <code class="inline">fd</code> vào x0, <code class="inline">buffer</code> vào x1, <code class="inline">100</code> vào x2, và <code class="inline">__NR_read</code> (63) vào x8, rồi thực thi <code class="inline">svc #0</code>. (nằm ngoài kernel tree — không trích dẫn thêm.)</p></div>
+
+<div class="tl-step" data-n="03"><h4>ARM64 Exception Entry → pt_regs → Dispatch</h4><p>Xem đầy đủ tại §04-§07. Kết quả: <code class="inline">invoke_syscall()</code> gọi <code class="inline">sys_call_table[63]</code> = <code class="inline">__arm64_sys_read</code>.</p></div>
+
+<div class="tl-step" data-n="04"><h4>__arm64_sys_read → __do_sys_read → ksys_read</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 672-675, 636-670</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+{
+	return ksys_read(fd, buf, count);
+}</pre></div>
+<details class="codewrap"><summary>Toàn bộ thân hàm ksys_read() (kèm ghi chú vòng lặp retry CONFIG_KM_BIZHUB của vendor)</summary>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 636-670</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
+{
+	struct fd f = fdget_pos(fd);
+	ssize_t ret = -EBADF;
+
+	if (f.file) {
+		loff_t pos, *ppos = file_ppos(f.file);
+		if (ppos) {
+			pos = *ppos;
+			ppos = &amp;pos;
+		}
+		/* [VENDOR CONFIG_KM_BIZHUB: vòng lặp retry quanh vfs_read khi -EIO, đã lược bớt] */
+		ret = vfs_read(f.file, buf, count, ppos);
+		if (ret &gt;= 0 &amp;&amp; ppos)
+			f.file-&gt;f_pos = pos;
+		fdput_pos(f);
+	}
+	return ret;
+}</pre></div>
+</details>
+<p><strong>Caller:</strong> <code class="inline">__arm64_sys_read</code> (được sinh ra). <strong>Callee:</strong> <code class="inline">fdget_pos()</code>, <code class="inline">vfs_read()</code>, <code class="inline">fdput_pos()</code>. Nếu <code class="inline">fdget_pos()</code> trả về <code class="inline">f.file</code> là NULL (fd sai), giá trị khởi tạo <code class="inline">ret = -EBADF</code> ở đầu sẽ được giữ nguyên và trả về — đây chính xác là nguồn gốc lỗi <code class="inline">EBADF</code> của read(2).</p>
+</div>
+
+<div class="tl-step" data-n="05"><h4>fd → struct file: fdget_pos()</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/file.h</span><span>dòng 36-39, 63-76</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct fd {
+	struct file *file;
+	unsigned int flags;
+};
+...
+static inline struct fd fdget(unsigned int fd)
+{ return __to_fd(__fdget(fd)); }
+static inline struct fd fdget_pos(int fd)
+{ return __to_fd(__fdget_pos(fd)); }</pre></div>
+<p>Cài đặt hiện thực, <code class="inline">fs/file.c:1322-1382</code>: <code class="inline">__fget_light()</code> đi theo đường nhanh, không cần tăng refcount, nếu task chỉ có một luồng (<code class="inline">files-&gt;count == 1</code>) dùng <code class="inline">files_lookup_fd_raw()</code>; ngược lại rơi về <code class="inline">__fget()</code>, hàm này thực sự lấy một tham chiếu qua <code class="inline">get_file()</code> và gắn cờ <code class="inline">FDPUT_FPUT</code> để <code class="inline">fdput()</code> tương ứng biết cần gọi <code class="inline">fput()</code>. <code class="inline">fdget_pos()</code> còn khóa thêm <code class="inline">file-&gt;f_pos_lock</code> khi file cần khóa vị trí đọc/ghi (fd dùng chung hoặc là thư mục).</p>
+</div>
+
+<div class="tl-step" data-n="06"><h4>vfs_read()</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 489-518</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+	ssize_t ret;
+
+	if (!(file-&gt;f_mode &amp; FMODE_READ))
+		return -EBADF;
+	if (!(file-&gt;f_mode &amp; FMODE_CAN_READ))
+		return -EINVAL;
+	if (unlikely(!access_ok(buf, count)))
+		return -EFAULT;
+
+	ret = rw_verify_area(READ, file, pos, count);
+	if (ret)
+		return ret;
+	if (count &gt; MAX_RW_COUNT)
+		count =  MAX_RW_COUNT;
+
+	if (file-&gt;f_op-&gt;read)
+		ret = file-&gt;f_op-&gt;read(file, buf, count, pos);
+	else if (file-&gt;f_op-&gt;read_iter)
+		ret = new_sync_read(file, buf, count, pos);
+	else
+		ret = -EINVAL;
+	if (ret &gt; 0) {
+		fsnotify_access(file);
+		add_rchar(current, ret);
+	}
+	inc_syscr(current);
+	return ret;
+}</pre></div>
+<p>Đã xác nhận trong tree v5.10.241 này: cả hai kiểu file_operations trực tiếp (<code class="inline">f_op-&gt;read</code>) lẫn kiểu iter (<code class="inline">f_op-&gt;read_iter</code>) đều được hỗ trợ song song — việc gỡ bỏ thành viên trực tiếp chỉ xảy ra ở một version kernel sau này. Chú ý lời gọi <code class="inline">access_ok(buf, count)</code> ngay tại đây, ở lớp VFS, trước khi chạm vào filesystem (§25).</p>
+</div>
+
+<div class="tl-step" data-n="07"><h4>new_sync_read() → call_read_iter() → f_op-&gt;read_iter</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 417-433</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static ssize_t new_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+{
+	struct iovec iov = { .iov_base = buf, .iov_len = len };
+	struct kiocb kiocb;
+	struct iov_iter iter;
+	ssize_t ret;
+
+	init_sync_kiocb(&amp;kiocb, filp);
+	kiocb.ki_pos = (ppos ? *ppos : 0);
+	iov_iter_init(&amp;iter, READ, &amp;iov, 1, len);
+
+	ret = call_read_iter(filp, &amp;kiocb, &amp;iter);
+	BUG_ON(ret == -EIOCBQUEUED);
+	if (ppos)
+		*ppos = kiocb.ki_pos;
+	return ret;
+}</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>dòng 2038-2042</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline ssize_t call_read_iter(struct file *file, struct kiocb *kio,
+				     struct iov_iter *iter)
+{
+	return file-&gt;f_op-&gt;read_iter(kio, iter);
+}</pre></div>
+<p>Đây chính là nơi một dải byte phẳng đơn giản <code class="inline">(buf, count)</code> được bọc thành một <code class="inline">struct iov_iter</code> một-đoạn, để có thể đi qua cùng giao diện <code class="inline">read_iter</code> mà I/O có vector (<code class="inline">readv</code>) và io_uring cũng dùng.</p>
+</div>
+
+<div class="tl-step" data-n="08"><h4>Filesystem — ví dụ cụ thể: ext4</h4>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/ext4/file.c</span><span>dòng 1133-1149 (trích)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>const struct file_operations ext4_file_operations = {
+	.llseek		= ext4_llseek,
+	.read_iter	= ext4_file_read_iter,
+	.write_iter	= ext4_file_write_iter,
+	.iopoll		= iomap_dio_iopoll,
+	.unlocked_ioctl = ext4_ioctl,
+	.mmap		= ext4_file_mmap,
+	.open		= ext4_file_open,
+	.release	= ext4_release_file,
+	.fsync		= ext4_sync_file,
+	.splice_read	= generic_file_splice_read,
+	.splice_write	= iter_file_splice_write,
+};</pre></div>
+<p><code class="inline">ext4_file_read_iter()</code> (fs/ext4/file.c:118) kiểm tra tình trạng forced shutdown rồi ủy quyền cho các đường đi DAX/direct-I/O/buffered, cuối cùng chạm tới page cache qua <code class="inline">generic_file_read_iter()</code>. Đây là dynamic dispatch qua con trỏ hàm thực sự, được thiết lập tại thời điểm đăng ký filesystem — xem cơ chế chung ở §23.</p>
+</div>
+
+<div class="tl-step" data-n="09"><h4>copy_to_user() — page cache → buffer userspace</h4>
+<p>Sâu bên trong đường đi page-cache read, các byte được đưa vào buffer đích thông qua <code class="inline">copy_to_user()</code> → <code class="inline">raw_copy_to_user()</code> → <code class="inline">__arch_copy_to_user</code> (assembly arm64). Trace đầy đủ tại §25/§29/§30 (truy cập user, page fault, exception table). Trong tree vendor này, đường copy-out của <code class="inline">lib/iov_iter.c</code> đã bị patch — xem callout bên dưới và mục "Vendor BSP Deltas".</p>
+<div class="callout vendor"><div class="ct">🟪 GHI CHÚ VENDOR — copyout() là dead code trong tree này</div>
+<code class="inline">copy_page_to_iter_iovec()</code> của mainline v5.10 gọi một hàm phụ tên <code class="inline">copyout()</code> (vẫn còn đó, <code class="inline">lib/iov_iter.c:179-188</code>, không bị sửa) — nhưng trong tree này các nơi gọi nó đã bị thay bằng một hàm vendor <code class="inline">__copy_to_user_chk()</code> (lib/iov_iter.c:146-177, ticket <code class="inline">OP_BTS-38744</code>), hàm này vẫn làm <code class="inline">access_ok()</code>+<code class="inline">raw_copy_to_user()</code> như cũ nhưng <strong>gửi thẳng <code class="inline">SIGSEGV</code> cho task hiện tại</strong> khi thất bại, thay vì trả về số byte chưa copy được để caller tự chuyển thành <code class="inline">-EFAULT</code>. Đây là một khác biệt hành vi thật sự, có ý nghĩa — cần biết trước khi bạn trông đợi read(2) trả về <code class="inline">-EFAULT</code> cho một buffer sai trên chính board này.
+</div>
+</div>
+
+<div class="tl-step" data-n="10"><h4>Đường trả về</h4><p>Giá trị trả về của <code class="inline">read_iter</code> → <code class="inline">call_read_iter</code> → <code class="inline">new_sync_read</code> → <code class="inline">vfs_read</code> → <code class="inline">ksys_read</code> (cập nhật <code class="inline">f_pos</code>) → <code class="inline">__do_sys_read</code> → <code class="inline">__se_sys_read</code> → <code class="inline">__arm64_sys_read</code> → <code class="inline">invoke_syscall</code> → <code class="inline">syscall_set_return_value()</code> ghi vào <code class="inline">regs-&gt;regs[0]</code> → <code class="inline">ret_to_user</code> → <code class="inline">kernel_exit</code> → <code class="inline">eret</code> → x0 phía userspace. Chi tiết đầy đủ ở §32.</p></div>
+</div>
+
+<h3>Locking trong đường đi read</h3>
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI</div>Bản thân <code class="inline">vfs_read()</code> <strong>không khóa gì cả</strong> — xác nhận bằng cách đọc toàn bộ thân hàm (fs/read_write.c:489-518): không có <code class="inline">inode_lock</code>/<code class="inline">i_rwsem</code>/mutex/semaphore nào xuất hiện trong đó hay trong <code class="inline">new_sync_read()</code>. Mọi khóa ở phía đọc là chuyện nội bộ của filesystem/lớp page-cache, không phải của entry point VFS chung.</div>
+
+<h3>Tóm tắt error path của read()</h3>
+<div class="tablewrap"><table>
+<tr><th>Điều kiện</th><th>Kiểm tra ở đâu</th><th>Trả về</th></tr>
+<tr><td>fd sai/chưa mở</td><td><code class="inline">ksys_read</code>, giá trị <code class="inline">ret</code> mặc định khi <code class="inline">fdget_pos()</code> trả NULL file</td><td><code class="inline">-EBADF</code></td></tr>
+<tr><td>file không mở để đọc</td><td><code class="inline">vfs_read</code>: <code class="inline">!(f_mode &amp; FMODE_READ)</code></td><td><code class="inline">-EBADF</code></td></tr>
+<tr><td>loại file không đọc được (vd. file đặc biệt chỉ ghi)</td><td><code class="inline">vfs_read</code>: <code class="inline">!(f_mode &amp; FMODE_CAN_READ)</code></td><td><code class="inline">-EINVAL</code></td></tr>
+<tr><td>con trỏ/độ dài buffer không qua được kiểm tra range</td><td><code class="inline">vfs_read</code>: <code class="inline">!access_ok(buf, count)</code></td><td><code class="inline">-EFAULT</code></td></tr>
+<tr><td>count/vị trí âm hoặc tràn số</td><td><code class="inline">rw_verify_area()</code>, fs/read_write.c:379-415</td><td><code class="inline">-EINVAL</code> / <code class="inline">-EOVERFLOW</code></td></tr>
+<tr><td>không có cả <code class="inline">.read</code> lẫn <code class="inline">.read_iter</code></td><td><code class="inline">vfs_read</code></td><td><code class="inline">-EINVAL</code></td></tr>
+</table></div>
+<div class="callout warn"><div class="ct">⚠️ Không thể xảy ra qua read() thông thường</div><code class="inline">-ESPIPE</code> và <code class="inline">-EISDIR</code> tồn tại ở nơi khác trong <code class="inline">fs/read_write.c</code> (nhóm syscall định vị <code class="inline">pread64</code>/<code class="inline">sendfile</code>, và <code class="inline">generic_file_rw_checks()</code> dùng bởi <code class="inline">copy_file_range</code>) nhưng <strong>không</strong> thể xảy ra qua <code class="inline">ksys_read</code>/<code class="inline">vfs_read</code> với một lời gọi <code class="inline">read(2)</code> thông thường — đã xác nhận bằng cách đọc trực tiếp source, không suy đoán.</div>
+</section>
+
+<section id="write-case">
+<span class="sec-badge"><span class="badge b-syscall">🔴 SYSCALL</span> <span class="badge b-vfs">🟣 VFS</span></span>
+<h2>11 · write() — Trace Source</h2>
+<p>Về cấu trúc là hình ảnh phản chiếu của read(): <code class="inline">__arm64_sys_write</code> → <code class="inline">ksys_write</code> → <code class="inline">vfs_write</code> → <code class="inline">new_sync_write</code> → <code class="inline">call_write_iter</code> → <code class="inline">f_op-&gt;write_iter</code>.</p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 598-628</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+{
+	ssize_t ret;
+
+	if (!(file-&gt;f_mode &amp; FMODE_WRITE))
+		return -EBADF;
+	if (!(file-&gt;f_mode &amp; FMODE_CAN_WRITE))
+		return -EINVAL;
+	if (unlikely(!access_ok(buf, count)))
+		return -EFAULT;
+
+	ret = rw_verify_area(WRITE, file, pos, count);
+	if (ret)
+		return ret;
+	if (count &gt; MAX_RW_COUNT)
+		count =  MAX_RW_COUNT;
+	file_start_write(file);
+	if (file-&gt;f_op-&gt;write)
+		ret = file-&gt;f_op-&gt;write(file, buf, count, pos);
+	else if (file-&gt;f_op-&gt;write_iter)
+		ret = new_sync_write(file, buf, count, pos);
+	else
+		ret = -EINVAL;
+	if (ret &gt; 0) {
+		fsnotify_modify(file);
+		add_wchar(current, ret);
+	}
+	inc_syscw(current);
+	file_end_write(file);
+	return ret;
+}</pre></div>
+
+<h3>Khác biệt về locking so với read(): sb_start_write, không phải i_rwsem</h3>
+<p><code class="inline">vfs_write()</code> bọc lời gọi bằng <code class="inline">file_start_write()</code>/<code class="inline">file_end_write()</code> — đây là <strong>bảo vệ chống đóng băng (freeze)</strong>, không phải loại trừ lẫn nhau trên từng file:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>dòng 2937-2956</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline void file_start_write(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)-&gt;i_mode))
+		return;
+	sb_start_write(file_inode(file)-&gt;i_sb);
+}
+static inline void file_end_write(struct file *file)
+{
+	if (!S_ISREG(file_inode(file)-&gt;i_mode))
+		return;
+	__sb_end_write(file_inode(file)-&gt;i_sb, SB_FREEZE_WRITE);
+}</pre></div>
+<p>Khóa loại trừ ghi thực sự trên từng file (<code class="inline">inode-&gt;i_rwsem</code>) được lấy ở một lớp <em>bên dưới</em> <code class="inline">vfs_write</code>, bên trong <code class="inline">write_iter</code> của filesystem — vd. <code class="inline">generic_file_write_iter()</code>:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">mm/filemap.c</span><span>dòng 3488-3503</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>ssize_t generic_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
+{
+	struct file *file = iocb-&gt;ki_filp;
+	struct inode *inode = file-&gt;f_mapping-&gt;host;
+	ssize_t ret;
+
+	inode_lock(inode);                       /* down_write(&inode->i_rwsem) */
+	ret = generic_write_checks(iocb, from);
+	if (ret &gt; 0)
+		ret = __generic_file_write_iter(iocb, from);
+	inode_unlock(inode);
+
+	if (ret &gt; 0)
+		ret = generic_write_sync(iocb, ret);
+	return ret;
+}</pre></div>
+
+<div class="callout vendor"><div class="ct">🟪 GHI CHÚ VENDOR — ksys_write có can thiệp riêng của board</div>
+<code class="inline">ksys_write()</code> (fs/read_write.c:677-750) trong tree này thêm, trước khi gọi <code class="inline">vfs_write()</code> chuẩn: (1) một vòng lặp retry <code class="inline">-EIO</code> dưới cờ <code class="inline">CONFIG_KM_BIZHUB</code> (dòng 730-743), và (2) một cơ chế chặn ghi bảo vệ MBR cho <code class="inline">/dev/kmsda</code> ở offset dưới 512 byte (dòng 695-729). Cả hai đều không có trong mainline v5.10 — cả hai đều là phần cứng hóa riêng của máy in/board, không phải hành vi Linux thông thường.
+</div>
+</section>
+
+<section id="openat-case">
+<span class="sec-badge"><span class="badge b-syscall">🔴 SYSCALL</span> <span class="badge b-vfs">🟣 VFS</span></span>
+<h2>12 · openat() — End-to-End</h2>
+
+<div class="flowdiag"><span class="n">SYSCALL_DEFINE4(openat, dfd, filename, flags, mode)</span>   fs/open.c:1289
+   ↓
+<span class="n">do_sys_open()</span>                                        fs/open.c:1245
+   ↓  dựng một struct open_how, ủy quyền tiếp
+<span class="n">do_sys_openat2()</span>                                       fs/open.c:1216
+   ├─ <span class="n">get_unused_fd_flags()</span>   fs/file.c:940   → giữ trước một số fd nguyên (chỉ bitmap)
+   ├─ <span class="n">do_filp_open()</span>          fs/namei.c:3444 → phân giải đường dẫn
+   │     └─ path_openat()      fs/namei.c:3405 (static)
+   │          ├─ alloc_empty_file()  fs/file_table.c:134  → cấp phát struct file, f_count=1
+   │          └─ do_open() → do_dentry_open()  → callback f_op->open(), điền f_inode/f_mapping/f_op
+   ├─ <span class="n">fd_install(fd, f)</span>       fs/file.c:969   → công bố con trỏ file vào fdtable, tiêu thụ refcount
+   └─ fsnotify_open(f)
+   ↓
+trả fd về cho userspace</div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">fs/open.c</span><span>dòng 1216-1243</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static long do_sys_openat2(int dfd, const char __user *filename,
+			   struct open_how *how)
+{
+	struct open_flags op;
+	int fd = build_open_flags(how, &amp;op);
+	struct filename *tmp;
+
+	if (fd)
+		return fd;
+
+	tmp = getname(filename);
+	if (IS_ERR(tmp))
+		return PTR_ERR(tmp);
+
+	fd = get_unused_fd_flags(how-&gt;flags);
+	if (fd &gt;= 0) {
+		struct file *f = do_filp_open(dfd, tmp, &amp;op);
+		if (IS_ERR(f)) {
+			put_unused_fd(fd);
+			fd = PTR_ERR(f);
+		} else {
+			fsnotify_open(f);
+			fd_install(fd, f);
+		}
+	}
+	putname(tmp);
+	return fd;
+}</pre></div>
+<p>Chú ý thứ tự: <em>số hiệu</em> fd được giữ trước (bit trong bitmap được set) trước khi <code class="inline">do_filp_open()</code> chạy, nhưng ô con trỏ <code class="inline">fd[]</code> trong fdtable vẫn là NULL cho tới khi <code class="inline">fd_install()</code> chạy ở bước cuối cùng. Nếu phân giải đường dẫn thất bại, <code class="inline">put_unused_fd(fd)</code> giải phóng số fd đã giữ trước mà không bao giờ công bố một con trỏ nào.</p>
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI — openat2() cũng có trong tree này</div>v5.10 đã có sẵn syscall <code class="inline">openat2(2)</code> (được thêm vào upstream từ v5.6) song song với <code class="inline">openat(2)</code> — cả hai đều hội tụ về cùng <code class="inline">do_sys_openat2()</code>, xác nhận tại fs/open.c:1316-1339. <code class="inline">openat2</code> nhận trực tiếp một <code class="inline">struct open_how</code> do user cung cấp (qua <code class="inline">copy_struct_from_user()</code>), còn <code class="inline">openat</code> tự tổng hợp một cái từ các tham số phẳng <code class="inline">(flags, mode)</code> qua <code class="inline">build_open_how()</code>.</div>
+
+<h3>Số hiệu fd đến từ đâu</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/file.c</span><span>dòng 874-933 (trích, alloc_fd)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static int alloc_fd(unsigned start, unsigned end, unsigned flags)
+{
+	struct files_struct *files = current-&gt;files;
+	struct fdtable *fdt;
+	spin_lock(&amp;files-&gt;file_lock);
+repeat:
+	fdt = files_fdtable(files);
+	fd = start;
+	if (fd &lt; files-&gt;next_fd)
+		fd = files-&gt;next_fd;
+	if (fd &lt; fdt-&gt;max_fds)
+		fd = find_next_fd(fdt, fd);
+	error = -EMFILE;
+	if (fd &gt;= end)
+		goto out;
+	error = expand_files(files, fd);
+	if (error &lt; 0) goto out;
+	if (error) goto repeat;
+	if (start &lt;= files-&gt;next_fd)
+		files-&gt;next_fd = fd + 1;
+	__set_open_fd(fd, fdt);
+	if (flags &amp; O_CLOEXEC) __set_close_on_exec(fd, fdt);
+	else __clear_close_on_exec(fd, fdt);
+	error = fd;
+out:
+	spin_unlock(&amp;files-&gt;file_lock);
+	return error;
+}</pre></div>
+<p>Đoạn này chỉ set một bit trong <code class="inline">fdt-&gt;open_fds</code> — nó <strong>không</strong> ghi <code class="inline">fdt-&gt;fd[fd]</code>. Việc ghi con trỏ đó là nhiệm vụ của <code class="inline">fd_install()</code> (§13).</p>
+
+<h3>struct file được cấp phát ở đâu</h3>
+<div class="callout warn"><div class="ct">⚠️ NOT FOUND IN THIS VERSION</div><code class="inline">get_empty_filp()</code> (tên gọi ở một kernel cũ hơn) không tồn tại ở bất kỳ đâu trong tree này — đã xác nhận bằng tìm kiếm toàn bộ tree. Tên gọi trong v5.10.241 là <code class="inline">alloc_empty_file()</code>.</div>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/file_table.c</span><span>dòng 96-122 (__alloc_file, được alloc_empty_file gọi)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static struct file *__alloc_file(int flags, const struct cred *cred)
+{
+	struct file *f;
+	f = kmem_cache_zalloc(filp_cachep, GFP_KERNEL);
+	if (unlikely(!f))
+		return ERR_PTR(-ENOMEM);
+	f-&gt;f_cred = get_cred(cred);
+	...
+	atomic_long_set(&amp;f-&gt;f_count, 1);
+	rwlock_init(&amp;f-&gt;f_owner.lock);
+	spin_lock_init(&amp;f-&gt;f_lock);
+	mutex_init(&amp;f-&gt;f_pos_lock);
+	eventpoll_init_file(f);
+	f-&gt;f_flags = flags;
+	f-&gt;f_mode = OPEN_FMODE(flags);
+	return f;
+}</pre></div>
+<p>Đây chính xác là dòng nơi vòng đời refcount của một <code class="inline">struct file</code> bắt đầu: <code class="inline">atomic_long_set(&amp;f-&gt;f_count, 1)</code>, cấp phát từ slab cache <code class="inline">filp_cachep</code>.</p>
+</section>
+
+<section id="fd-structures">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>13 · Chuỗi Cấu Trúc Dữ Liệu File Descriptor</h2>
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI — ba object khác nhau, dễ nhầm lẫn</div>Một <code class="inline">fd</code> dạng số nguyên, một <code class="inline">struct file *</code>, và một <code class="inline">struct inode *</code> là ba object độc lập với vòng đời riêng biệt. Hai fd khác nhau (kể cả ở hai tiến trình khác nhau, qua <code class="inline">dup()</code> hay chia sẻ <code class="inline">files_struct</code>) có thể trỏ tới <em>cùng</em> một <code class="inline">struct file</code>; hai <code class="inline">struct file</code> khác nhau (từ hai lời gọi <code class="inline">open()</code> độc lập trên cùng một path) trỏ tới <em>cùng</em> một <code class="inline">struct inode</code> nhưng mỗi cái có <code class="inline">f_pos</code> riêng.</div>
+
+<img src="SC_file_Inode.png" alt="" style="max-width: 100%; height: auto;">
+
+<h3>struct files_struct</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fdtable.h</span><span>dòng 49-68</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct files_struct {
+	atomic_t count;
+	bool resize_in_progress;
+	wait_queue_head_t resize_wait;
+
+	struct fdtable __rcu *fdt;
+	struct fdtable fdtab;
+	spinlock_t file_lock ____cacheline_aligned_in_smp;
+	unsigned int next_fd;
+	unsigned long close_on_exec_init[1];
+	unsigned long open_fds_init[1];
+	unsigned long full_fds_bits_init[1];
+	struct file __rcu * fd_array[NR_OPEN_DEFAULT];
+};</pre></div>
+<p><code class="inline">count</code>: refcount trên chính <code class="inline">files_struct</code> (được chia sẻ giữa các pthread qua <code class="inline">CLONE_FILES</code>), không phải trên từng file riêng lẻ. <code class="inline">fdt</code>: con trỏ RCU tới <code class="inline">fdtable</code> đang hoạt động — các tiến trình nhỏ trỏ nó thẳng vào <code class="inline">fdtab</code> nhúng sẵn (dựa trên <code class="inline">fd_array[NR_OPEN_DEFAULT]</code>, 64 slot trên arm64) để tránh cấp phát heap; khi cần nhiều fd hơn, <code class="inline">expand_fdtable()</code> cấp phát một bảng lớn hơn và hoán đổi <code class="inline">fdt</code> bằng RCU. <code class="inline">file_lock</code> bảo vệ các bitmap và việc ghi vào ô <code class="inline">fd[]</code> khỏi việc open/close/dup/resize đồng thời.</p>
+
+<h3>struct fdtable</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fdtable.h</span><span>dòng 27-34</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct fdtable {
+	unsigned int max_fds;
+	struct file __rcu **fd;      /* mảng fd hiện hành */
+	unsigned long *close_on_exec;
+	unsigned long *open_fds;
+	unsigned long *full_fds_bits;
+	struct rcu_head rcu;
+};</pre></div>
+<div class="tablewrap"><table>
+<tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code class="inline">fd[]</code></td><td>bảng con trỏ <code class="inline">struct file*</code> thực sự, được bảo vệ bằng RCU</td></tr>
+<tr><td><code class="inline">max_fds</code></td><td>sức chứa hiện tại của instance fdtable này (tăng dần qua các lần resize; độc lập với <code class="inline">RLIMIT_NOFILE</code>, thứ mà <code class="inline">alloc_fd()</code> kiểm tra riêng)</td></tr>
+<tr><td><code class="inline">open_fds</code></td><td>bitmap: bit được set = số fd này đã được cấp (set bởi <code class="inline">alloc_fd()</code>, xóa khi close)</td></tr>
+<tr><td><code class="inline">close_on_exec</code></td><td>bitmap: bit được set = <code class="inline">O_CLOEXEC</code>/<code class="inline">FD_CLOEXEC</code> đang bật, được <code class="inline">execve()</code> tham chiếu</td></tr>
+<tr><td><code class="inline">full_fds_bits</code></td><td>bitmap cấp hai đánh dấu các "word" của <code class="inline">open_fds</code> đã đầy hoàn toàn, giúp <code class="inline">find_next_fd()</code> bỏ qua nguyên cả word đã hết chỗ</td></tr>
+</table></div>
+
+<h3>current → task_struct → files</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/sched.h</span><span>dòng 964-965</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	/* Open file information: */
+	struct files_struct		*files;</pre></div>
+<p>(Không trích dẫn toàn bộ <code class="inline">task_struct</code> — nó rất lớn và phần lớn không liên quan ở đây; đây là trường duy nhất cần quan tâm.) Được thiết lập lúc fork bởi <code class="inline">copy_files()</code> — hoặc chia sẻ (<code class="inline">CLONE_FILES</code>, vd. POSIX threads) hoặc copy riêng qua <code class="inline">dup_fd()</code>.</p>
+
+<h3>fd_install() — thời điểm fd và struct file* được liên kết</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/file.c</span><span>dòng 969-1000 (comment + thân hàm, đã rút gọn)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>/*
+ * This consumes the "file" refcount, so callers should treat it
+ * as if they had called fput(file).
+ */
+void fd_install(unsigned int fd, struct file *file)
+{
+	struct files_struct *files = current-&gt;files;
+	struct fdtable *fdt;
+
+	rcu_read_lock_sched();
+	...
+	smp_rmb();  /* đi cùng cặp với smp_wmb() trong expand_fdtable() */
+	fdt = rcu_dereference_sched(files-&gt;fdt);
+	BUG_ON(fdt-&gt;fd[fd] != NULL);
+	rcu_assign_pointer(fdt-&gt;fd[fd], file);
+	rcu_read_unlock_sched();
+}</pre></div>
+<p><code class="inline">BUG_ON(fdt-&gt;fd[fd] != NULL)</code> đề phòng đúng tình huống race dup2() mà comment phía trên hàm mô tả. Điều quan trọng: <strong>lời gọi này tiêu thụ luôn tham chiếu (reference)</strong> — sau <code class="inline">fd_install()</code>, fdtable sở hữu tham chiếu <code class="inline">f_count</code> đã được đặt bằng 1 từ trong <code class="inline">__alloc_file()</code>.</p>
+</section>
+
+<section id="struct-file">
+<span class="sec-badge"><span class="badge b-vfs">🟣 VFS</span></span>
+<h2>17 · struct file — Từng Trường Một</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>dòng 923-963 (các trường liên quan tới tài liệu này; một số trường đã lược bớt)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct file {
+	union { struct llist_node fu_llist; struct rcu_head fu_rcuhead; } f_u;
+	struct path		f_path;
+	struct inode		*f_inode;	/* cached value */
+	const struct file_operations	*f_op;
+
+	spinlock_t		f_lock;
+	enum rw_hint		f_write_hint;
+	atomic_long_t		f_count;
+	unsigned int 		f_flags;
+	fmode_t			f_mode;
+	struct mutex		f_pos_lock;
+	loff_t			f_pos;
+	struct fown_struct	f_owner;
+	const struct cred	*f_cred;
+	struct file_ra_state	f_ra;
+	u64			f_version;
+	void			*private_data;
+	struct address_space	*f_mapping;
+	errseq_t		f_wb_err;
+} __randomize_layout __attribute__((aligned(4)));</pre></div>
+<div class="tablewrap"><table>
+<tr><th>Trường</th><th>Kiểu</th><th>Trỏ tới / ý nghĩa</th></tr>
+<tr><td><code class="inline">f_path</code></td><td><code class="inline">struct path</code></td><td>{dentry, vfsmount} — vị trí của file đang mở này trong không gian tên</td></tr>
+<tr><td><code class="inline">f_inode</code></td><td><code class="inline">struct inode *</code></td><td>là một trường cache thật (KHÔNG phải macro suy ra từ <code class="inline">f_path.dentry-&gt;d_inode</code>) — <code class="inline">file_inode()</code> chỉ là <code class="inline">return f-&gt;f_inode;</code> (fs.h:1337-1340). Được đồng bộ bởi <code class="inline">do_dentry_open()</code>, fs/open.c:776.</td></tr>
+<tr><td><code class="inline">f_op</code></td><td><code class="inline">const struct file_operations *</code></td><td>vtable dynamic-dispatch — xem §23</td></tr>
+<tr><td><code class="inline">f_pos</code></td><td><code class="inline">loff_t</code></td><td>vị trí hiện tại trong file cho instance mở này (không chia sẻ giữa các lần open độc lập)</td></tr>
+<tr><td><code class="inline">f_mapping</code></td><td><code class="inline">struct address_space *</code></td><td>thông thường <code class="inline">== inode-&gt;i_mapping</code> — xem trường hợp khác biệt bên dưới</td></tr>
+<tr><td><code class="inline">f_count</code></td><td><code class="inline">atomic_long_t</code> (đúng nguyên văn, không phải <code class="inline">f_ref</code>)</td><td>bộ đếm tham chiếu — xem §35</td></tr>
+<tr><td><code class="inline">f_flags</code> / <code class="inline">f_mode</code></td><td><code class="inline">unsigned int</code> / <code class="inline">fmode_t</code></td><td>cờ mở file (<code class="inline">O_*</code>) và bitmask <code class="inline">FMODE_*</code> suy ra mà VFS kiểm tra (FMODE_READ, FMODE_CAN_READ, v.v.)</td></tr>
+</table></div>
+
+<h3>f_mapping vs inode-&gt;i_mapping — đã xác nhận, không suy đoán</h3>
+<p><strong>Trường hợp thông thường — bằng nhau, do gán trực tiếp:</strong></p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/open.c</span><span>dòng 776-777</span></div>
+<pre>f-&gt;f_inode = inode;
+f-&gt;f_mapping = inode-&gt;i_mapping;</pre></div>
+<p><strong>Trường hợp khác biệt đã xác nhận — file đặc biệt block device:</strong></p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/block_dev.c</span><span>dòng 1747-1758 (trích)</span></div>
+<pre>static int blkdev_open(struct inode * inode, struct file * filp)
+{
+	struct block_device *bdev;
+	...
+	bdev = bd_acquire(inode);
+	filp-&gt;f_mapping = bdev-&gt;bd_inode-&gt;i_mapping;
+	filp-&gt;f_wb_err = filemap_sample_wb_err(filp-&gt;f_mapping);
+	return blkdev_get(bdev, filp-&gt;f_mode, filp);
+}</pre></div>
+<p>Đoạn này <em>ghi đè</em> mapping mà <code class="inline">do_dentry_open()</code> vừa thiết lập, thay bằng mapping của inode block-device nội bộ dùng chung — nơi page cache thực sự của lớp block nằm ở đó, chung cho mọi lần mở device node này. <code class="inline">file-&gt;f_inode</code> vẫn trỏ tới inode của file đặc biệt, nhưng <code class="inline">file-&gt;f_mapping</code> lại trỏ tới nơi khác.</p>
+<div class="callout warn"><div class="ct">⚠️ NOT VERIFIED</div>Không tìm thấy trong <code class="inline">mm/swapfile.c</code> một dòng ghi đè <code class="inline">f_mapping</code> riêng cho swap file trong quá trình nghiên cứu này — đừng giả định điều đó tồn tại nếu chưa kiểm tra trực tiếp.</div>
+
+<h3>get_file() / fput()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>dòng 972-980</span></div>
+<pre>static inline struct file *get_file(struct file *f)
+{
+	atomic_long_inc(&amp;f-&gt;f_count);
+	return f;
+}
+#define file_count(x)	atomic_long_read(&amp;(x)-&gt;f_count)</pre></div>
+<p>Vòng đời đầy đủ và cơ chế dọn dẹp <code class="inline">fput()</code>/<code class="inline">__fput()</code> ở §35.</p>
+</section>
+
+<section id="vfs">
+<span class="sec-badge"><span class="badge b-vfs">🟣 VFS</span></span>
+<h2>23 · Dynamic Dispatch của VFS — file_operations</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/fs.h</span><span>dòng 1962-1979 (trích)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct file_operations {
+	struct module *owner;
+	loff_t (*llseek) (struct file *, loff_t, int);
+	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
+	ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
+	int (*iopoll)(struct kiocb *kiocb, bool spin);
+	int (*iterate) (struct file *, struct dir_context *);
+	int (*iterate_shared) (struct file *, struct dir_context *);
+	__poll_t (*poll) (struct file *, struct poll_table_struct *);
+	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+	int (*mmap) (struct file *, struct vm_area_struct *);
+	int (*open) (struct inode *, struct file *);
+	int (*flush) (struct file *, fl_owner_t id);
+	int (*release) (struct inode *, struct file *);
+	...
+};</pre></div>
+<p>Không có trường nào bị gỡ bỏ so với thời trước-iter: <code class="inline">.read</code>/<code class="inline">.write</code> và <code class="inline">.read_iter</code>/<code class="inline">.write_iter</code> cùng tồn tại trong định nghĩa struct ở version này (việc gỡ bỏ cặp trực tiếp xảy ra ở một version sau v5.10).</p>
+
+<h3>f_op được gán ở đâu</h3>
+<p>Việc gán xảy ra tại thời điểm đăng ký filesystem, dưới dạng một instance struct thật (không dựng động lúc chạy). Ví dụ cụ thể, ext4:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/ext4/file.c</span><span>dòng 1133-1149</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>const struct file_operations ext4_file_operations = {
+	.llseek		= ext4_llseek,
+	.read_iter	= ext4_file_read_iter,
+	.write_iter	= ext4_file_write_iter,
+	.mmap		= ext4_file_mmap,
+	.open		= ext4_file_open,
+	.release	= ext4_release_file,
+	.fsync		= ext4_sync_file,
+};</pre></div>
+<p>ext4 chỉ điền <code class="inline">.read_iter</code>/<code class="inline">.write_iter</code> — không có <code class="inline">.read</code>/<code class="inline">.write</code> — xác nhận cả hai cơ chế dispatch thực sự cùng tồn tại trong struct, nhưng mỗi filesystem chọn dùng một kiểu.</p>
+
+<div class="flowdiag">open()  →  inode-&gt;i_fop  (được filesystem thiết lập trong code tra cứu inode, vd. ext4_iget())
+             │
+             ▼
+do_dentry_open()   fs/open.c   →  f-&gt;f_op = fops_get(inode-&gt;i_fop);   ← đây là nơi gán
+             │
+             ▼
+<span class="vfs">syscall read()/write()  →  file-&gt;f_op-&gt;read_iter(...)</span>   ← đây là nơi gọi (call_read_iter, fs.h:2038-2042)</div>
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI — đây là dynamic dispatch thật, không phải ẩn dụ</div>Câu "VFS gọi filesystem" cụ thể nghĩa là: <code class="inline">struct file</code> giữ một con trỏ hàm thô (<code class="inline">f_op</code>) được copy từ <code class="inline">inode-&gt;i_fop</code> khi file được mở; <code class="inline">call_read_iter()</code> (fs.h:2038) là một hàm inline một dòng, toàn bộ thân hàm chỉ là <code class="inline">return file-&gt;f_op-&gt;read_iter(kio, iter);</code> — một lời gọi gián tiếp qua con trỏ đó, hệt như virtual dispatch của C++ nhưng không cần hỗ trợ từ compiler.</div>
+</section>
+
+<section id="user-access">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span> <span class="badge b-mm">🟠 MM</span></span>
+<h2>25 · Truy Cập Bộ Nhớ Kernel ↔ Userspace</h2>
+<img src="SC_Memory_Access_Flow.png" alt="" style="max-width: 100%; height: auto;">
+
+<p id="access-ok"><strong>Tại sao kernel không thể chỉ dùng <code class="inline">memcpy(kernel_buf, user_ptr, size)</code>:</strong> một con trỏ user là không đặc quyền và chưa được kiểm chứng — nó có thể trỏ ra ngoài vùng đã map của tiến trình, vào một khoảng trống chưa map, hoặc (nếu không có <code class="inline">access_ok</code>) thậm chí bị chế tác để alias vào các vùng chỉ dành cho kernel tùy theo trạng thái <code class="inline">TTBR0</code>/<code class="inline">addr_limit</code>. Một <code class="inline">memcpy</code> trơn không có sự bảo vệ của exception-table và không kiểm tra range — một con trỏ sai sẽ gây fault sâu bên trong kernel mà không có đường phục hồi, tức là oops/panic thay vì trả về gọn gàng <code class="inline">-EFAULT</code> cho tiến trình gọi.</p>
+
+<h3>access_ok()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>dòng 63-98</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>/*
+ * Test whether a block of memory is a valid user space address.
+ * (u65)addr + (u65)size &lt;= (u65)current-&gt;addr_limit + 1
+ */
+static inline unsigned long __range_ok(const void __user *addr, unsigned long size)
+{
+	unsigned long ret, limit = current_thread_info()-&gt;addr_limit;
+
+	__chk_user_ptr(addr);
+	asm volatile(
+	// A + B &lt;= C + 1 for all A,B,C, in four easy steps:
+	"	adds	%0, %3, %2\n"
+	"	csel	%1, xzr, %1, hi\n"
+	"	csinv	%0, %0, xzr, cc\n"
+	"	sbcs	xzr, %0, %1\n"
+	"	cset	%0, ls\n"
+	: "=&amp;r" (ret), "+r" (limit) : "Ir" (size), "0" (addr) : "cc");
+
+	return ret;
+}
+#define access_ok(addr, size)	__range_ok(addr, size)</pre></div>
+<div class="callout warn"><div class="ct">🔄 CHANGED so với kernel mới hơn</div>Tree v5.10.241 này vẫn dùng mô hình <strong>set_fs()</strong>/<strong>addr_limit</strong> kiểu cổ điển — <code class="inline">access_ok()</code> là một phép kiểm tra range thật, không nhánh rẽ, dựa trên carry-flag, so với <code class="inline">current_thread_info()-&gt;addr_limit</code>, KHÔNG phải một hàm giả lúc nào cũng trả về true. Bản tái cấu trúc mainline sau này gỡ bỏ hoàn toàn <code class="inline">set_fs()</code> (chỉ dựa vào cách ly phần cứng TTBR0) chưa được đưa vào nhánh này. Đừng giả định <code class="inline">access_ok()</code> là no-op trên kernel này.</div>
+<div class="callout warn"><div class="ct">⚠️ QUAN TRỌNG — access_ok() đảm bảo một DẢI ĐỊA CHỈ hợp lệ, không đảm bảo truy cập thành công</div>Qua được <code class="inline">access_ok()</code> chỉ có nghĩa con trỏ+độ dài nằm trong dải địa chỉ được phép (<code class="inline">addr_limit</code>). Nó không nói gì về việc mỗi trang trong dải đó có thực sự được map hay được map với quyền cần thiết hay không. Việc truy cập bộ nhớ <em>thực sự</em> vẫn có thể fault — đó chính xác là lý do cơ chế exception-table/fixup ở §29-30 tồn tại.</div>
+
+<h3 id="get_user">get_user() / put_user()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>dòng 302-312, 258-271 (đường đi mainline)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define __get_user_error(x, ptr, err)					\
+do {									\
+	__typeof__(*(ptr)) __user *__p = (ptr);				\
+	might_fault();							\
+	if (access_ok(__p, sizeof(*__p))) {				\
+		__p = uaccess_mask_ptr(__p);				\
+		__raw_get_user((x), __p, (err));			\
+	} else {							\
+		(x) = (__force __typeof__(x))0; (err) = -EFAULT;	\
+	}								\
+} while (0)
+
+#define __get_user_asm(instr, alt_instr, reg, x, addr, err, feature)	\
+	asm volatile(							\
+	"1:"ALTERNATIVE(instr "     " reg "1, [%2]\n",			\
+			alt_instr " " reg "1, [%2]\n", feature)		\
+	"2:\n"								\
+	"	.section .fixup, \"ax\"\n"				\
+	"3:	mov	%w0, %3\n"					\
+	"	mov	%1, #0\n"					\
+	"	b	2b\n"						\
+	"	.previous\n"						\
+	_ASM_EXTABLE(1b, 3b)						\
+	: "+r" (err), "=&amp;r" (x)						\
+	: "r" (addr), "i" (-EFAULT))</pre></div>
+<p>Nhãn <code class="inline">1:</code> chính là lệnh load thực sự. <code class="inline">_ASM_EXTABLE(1b, 3b)</code> đăng ký một mục exception-table ghép địa chỉ lệnh đó với nhãn fixup <code class="inline">3:</code> nằm ngoài dòng chính trong section <code class="inline">.fixup</code>, nơi đặt <code class="inline">err = -EFAULT</code> rồi nhảy về <code class="inline">2:</code>. <code class="inline">put_user()</code>/<code class="inline">__put_user_asm</code> có cấu trúc giống hệt, chỉ thay lệnh load bằng lệnh store.</p>
+
+<h3 id="copy-user">copy_from_user() / copy_to_user()</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">include/linux/uaccess.h</span><span>dòng 151-202</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline __must_check unsigned long
+_copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	unsigned long res = n;
+	might_fault();
+	if (!should_fail_usercopy() &amp;&amp; likely(access_ok(from, n))) {
+		instrument_copy_from_user(to, from, n);
+		res = raw_copy_from_user(to, from, n);
+	}
+	if (unlikely(res))
+		memset(to + (n - res), 0, res);
+	return res;
+}
+...
+static __always_inline unsigned long __must_check
+copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	if (likely(check_copy_size(to, n, false)))
+		n = _copy_from_user(to, from, n);
+	return n;
+}</pre></div>
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI — giá trị trả về là số byte, không bao giờ là errno</div><code class="inline">copy_from_user()</code>/<code class="inline">copy_to_user()</code> trả về số byte <strong>không</strong> copy được (0 = thành công hoàn toàn). Chúng không bao giờ trả về một errno âm. Khi thất bại toàn bộ (<code class="inline">access_ok</code> fail, hoặc toàn bộ phép copy bị fault), <code class="inline">res == n</code> và dòng "<code class="inline">memset(to + (n - res), 0, res)</code>" zero-fill toàn bộ đích. Khi fault giữa chừng, chỉ phần đuôi chưa copy được bị zero. <strong>Caller</strong> (vd. code wrapper syscall) có trách nhiệm chuyển giá trị khác 0 thành <code class="inline">-EFAULT</code> — kernel làm việc này một cách tường minh tại từng nơi gọi, ví dụ:</div>
+<div class="codebox"><div class="cb-head"><span class="fn">fs/read_write.c</span><span>dòng 1395-1396</span></div>
+<pre>if (unlikely(copy_from_user(&amp;pos, offset, sizeof(loff_t))))
+	return -EFAULT;</pre></div>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>dòng 419-427</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define raw_copy_from_user(to, from, n)					\
+({									\
+	unsigned long __acfu_ret;					\
+	uaccess_enable_not_uao();					\
+	__acfu_ret = __arch_copy_from_user((to),			\
+			      __uaccess_mask_ptr(from), (n));	\
+	uaccess_disable_not_uao();					\
+	__acfu_ret;							\
+})</pre></div>
+<p><code class="inline">__arch_copy_from_user</code>/<code class="inline">__arch_copy_to_user</code> là assembly viết tay, <code class="inline">arch/arm64/lib/copy_from_user.S</code> / <code class="inline">copy_to_user.S</code>, mỗi lệnh có thể gây fault được bọc trong macro <code class="inline">USER(nhãn, lệnh)</code>:</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/assembler.h</span><span>dòng 132-141</span></div>
+<pre>.macro		_asm_extable, from, to
+	.pushsection	__ex_table, "a"
+	.long		(\from - .), (\to - .)
+	.popsection
+.endm
+
+#define USER(l, x...)				\
+9999:	x;					\
+	_asm_extable	9999b, l</pre></div>
+<p>Cách dùng trong vòng lặp copy thực tế: <code class="inline">USER(9998f, ldtrb tmp1w, [srcin])</code> — đánh dấu lệnh load, đăng ký một mục exception-table trỏ tới nhãn phục hồi lỗi <code class="inline">9998f</code>, nơi tính toán và trả về số byte còn lại chưa copy được.</p>
+</section>
+
+<section id="page-fault">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span> <span class="badge b-mm">🟠 MM</span></span>
+<h2>29 · Page Fault Khi Gặp Con Trỏ User Sai</h2>
+<p>Khi <code class="inline">copy_from_user()</code>/<code class="inline">get_user()</code> chạm vào một địa chỉ user chưa map hoặc không có quyền, chính lệnh load/store bên trong hàm uaccess sẽ fault <em>trong khi CPU đang ở EL1</em> (chế độ kernel) — vì vòng lặp copy chạy trong kernel, dù địa chỉ đó là của userspace.</p>
+
+<h3>Cùng vector như mọi exception kernel khác</h3>
+<p>Đã xác nhận bằng source: fault này đi qua <strong>cùng vector đồng bộ EL1h</strong> dùng cho bất kỳ exception đồng bộ chế độ kernel nào (lệnh không hợp lệ, alignment fault, v.v.) — không có vector riêng cho "fault uaccess".</p>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>dòng 677-683</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	.align	6
+SYM_CODE_START_LOCAL_NOALIGN(el1_sync)
+	kernel_entry 1
+	mov	x0, sp
+	bl	el1_sync_handler
+	kernel_exit 1
+SYM_CODE_END(el1_sync)</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry-common.c</span><span>dòng 204-211, 112-122</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>asmlinkage void noinstr el1_sync_handler(struct pt_regs *regs)
+{
+	unsigned long esr = read_sysreg(esr_el1);
+	switch (ESR_ELx_EC(esr)) {
+	case ESR_ELx_EC_DABT_CUR:
+	case ESR_ELx_EC_IABT_CUR:
+		el1_abort(regs, esr);
+		break;
+	...
+
+static void noinstr el1_abort(struct pt_regs *regs, unsigned long esr)
+{
+	unsigned long far = read_sysreg(far_el1);
+	enter_from_kernel_mode(regs);
+	local_daif_inherit(regs);
+	far = untagged_addr(far);
+	do_mem_abort(far, esr, regs);
+	local_daif_mask();
+	exit_to_kernel_mode(regs);
+}</pre></div>
+<p><code class="inline">ESR_ELx_EC_DABT_CUR</code> = "Data Abort xảy ra mà không đổi Exception level" — chính xác là lớp cho một fault gây ra bởi <code class="inline">ldtr</code>/<code class="inline">str</code>/v.v. bên trong <code class="inline">copy_from_user</code>/<code class="inline">get_user</code> khi đã ở EL1.</p>
+
+<h3>Bảng dispatch fault (dựa trên ESR)</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/mm/fault.c</span><span>dòng 42-56, 663-674 (trích), 725-740</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct fault_info {
+	int (*fn)(unsigned long addr, unsigned int esr, struct pt_regs *regs);
+	int sig; int code; const char *name;
+};
+static inline const struct fault_info *esr_to_fault_info(unsigned int esr)
+{
+	return fault_info + (esr &amp; ESR_ELx_FSC);
+}
+...
+	{ do_translation_fault,	SIGSEGV, SEGV_MAPERR,	"level 1 translation fault" },
+	{ do_page_fault,	SIGSEGV, SEGV_ACCERR,	"level 1 permission fault"  },
+...
+void do_mem_abort(unsigned long addr, unsigned int esr, struct pt_regs *regs)
+{
+	const struct fault_info *inf = esr_to_fault_info(esr);
+	if (!inf-&gt;fn(addr, esr, regs))
+		return;
+	if (!user_mode(regs)) {
+		pr_alert("Unhandled fault at 0x%016lx\n", addr);
+		mem_abort_decode(esr);
+	}
+	arm64_notify_die(inf-&gt;name, regs, inf-&gt;sig, inf-&gt;code, (void __user *)addr, esr);
+}</pre></div>
+<p>Trường Fault Status Code (FSC) của ESR đánh chỉ số trực tiếp vào bảng <code class="inline">fault_info[]</code>, tách biệt translation fault (trang chưa map → <code class="inline">do_translation_fault</code>) khỏi access-flag/permission fault (<code class="inline">do_page_fault</code>).</p>
+
+<h3>Điểm quyết định của uaccess ở chế độ kernel</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/mm/fault.c</span><span>dòng 304-334 (__do_kernel_fault, trích)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static void __do_kernel_fault(unsigned long addr, unsigned int esr,
+			      struct pt_regs *regs)
+{
+	/*
+	 * Are we prepared to handle this kernel fault?
+	 * We are almost certainly not prepared to handle instruction faults.
+	 */
+	if (!is_el1_instruction_abort(esr) &amp;&amp; fixup_exception(regs))
+		return;
+	...
+	die_kernel_fault(msg, addr, esr, regs);
+}</pre></div>
+<p>Đây chính là dòng quyết định "kernel có bị crash hay phục hồi được hay không". Nếu <code class="inline">fixup_exception(regs)</code> tìm thấy một mục exception-table khớp, <code class="inline">regs-&gt;pc</code> được ghi đè và hàm trả về bình thường — fault được hấp thụ hoàn toàn, thực thi tiếp tục tại nhãn fixup với một mã lỗi đã được đặt (vd. <code class="inline">-EFAULT</code>). Chỉ khi không tìm thấy mục nào, nó mới rơi xuống <code class="inline">die_kernel_fault()</code> → oops/panic. Điều này được gọi tới từ nhãn <code class="inline">no_context:</code> của <code class="inline">do_page_fault()</code> và từ <code class="inline">do_bad_area()</code>.</p>
+<div class="callout src"><div class="ct">🔍 SOURCE CODE — phòng thủ nhiều lớp</div><code class="inline">do_page_fault()</code> còn xác minh thêm rằng PC gây fault thực sự nằm trong một hàm uaccess, thay vì tin tưởng bất kỳ fault chế độ kernel nào nhắm vào địa chỉ user:
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">arch/arm64/mm/fault.c</span><span>dòng 486-499 (trích)</span></div>
+<pre>if (is_ttbr0_addr(addr) &amp;&amp; is_el1_permission_fault(addr, esr, regs)) {
+	if (regs-&gt;orig_addr_limit == KERNEL_DS)
+		die_kernel_fault("access to user memory with fs=KERNEL_DS", ...);
+	if (is_el1_instruction_abort(esr))
+		die_kernel_fault("execution of user memory", ...);
+	if (!search_exception_tables(regs-&gt;pc))
+		die_kernel_fault("access to user memory outside uaccess routines", ...);
+}</pre></div>
+Nếu PC gây fault <em>không</em> nằm trong exception table (dòng: <code class="inline">!search_exception_tables(regs-&gt;pc)</code>), đây được coi là một lỗi kernel thật sự và sẽ panic, chứ không "fixup" ngầm cho code tùy tiện.</div>
+</section>
+
+<section id="exception-table">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>30 · Exception Table &amp; Fixup</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/extable.h</span><span>dòng 18-23, 46</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>struct exception_table_entry
+{
+	int insn, fixup;
+};
+#define ARCH_HAS_RELATIVE_EXTABLE
+...
+extern int fixup_exception(struct pt_regs *regs);</pre></div>
+<div class="callout warn"><div class="ct">🔄 CHANGED so với kernel mới hơn</div>v5.10 arm64 dùng <strong>cơ chế offset tương đối (insn/fixup) đơn giản</strong> — đã xác nhận: không có trường <code class="inline">handler</code>, không có macro <code class="inline">EX_TYPE_*</code>, không có <code class="inline">ex_handler_uaccess_err_zero</code> ở bất kỳ đâu trong header này (grep không ra kết quả). Cơ chế tổng quát hóa exception-table dạng handler có kiểu (dùng ở một số kiến trúc khác/kernel mới hơn) chưa được đưa vào arm64 ở version này.</div>
+
+<h3>fixup_exception() — toàn bộ hàm</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/mm/extable.c</span><span>dòng 9-22 (toàn bộ nội dung file)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>int fixup_exception(struct pt_regs *regs)
+{
+	const struct exception_table_entry *fixup;
+
+	fixup = search_exception_tables(instruction_pointer(regs));
+	if (!fixup)
+		return 0;
+
+	if (in_bpf_jit(regs))
+		return arm64_bpf_fixup_exception(fixup, regs);
+
+	regs-&gt;pc = (unsigned long)&amp;fixup-&gt;fixup + fixup-&gt;fixup;
+	return 1;
+}</pre></div>
+<p><code class="inline">search_exception_tables()</code> (code kernel generic, <code class="inline">lib/extable.c</code>) tìm kiếm nhị phân trong các section <code class="inline">__ex_table</code> đã sắp xếp (ảnh kernel gốc + module đã nạp) để tìm một mục có trường <code class="inline">insn</code> đã được relocate khớp với PC gây fault. Nếu tìm thấy, <code class="inline">fixup_exception()</code> giải mã offset tương đối <code class="inline">fixup</code> trở lại thành địa chỉ tuyệt đối và ghi thẳng vào <code class="inline">regs-&gt;pc</code> — nghĩa là lệnh tiếp theo CPU thực thi, sau khi handler exception đồng bộ này trả về và <code class="inline">eret</code> quay lại EL1, là đoạn code fixup, không phải PC+4 gốc.</p>
+
+<h3>Các mục __ex_table được dựng lên như thế nào</h3>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/uaccess.h</span><span>dòng 101-105 (biến thể C inline-asm)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>#define _ASM_EXTABLE(from, to)						\
+	"	.pushsection	__ex_table, \"a\"\n"			\
+	"	.align		3\n"					\
+	"	.long		(" #from " - .), (" #to " - .)\n"	\
+	"	.popsection\n"</pre></div>
+<p>Cả biến thể C-inline-asm (<code class="inline">_ASM_EXTABLE</code>, dùng trong <code class="inline">__get_user_asm</code>/<code class="inline">__put_user_asm</code>) lẫn biến thể assembly thuần (<code class="inline">_asm_extable</code>/<code class="inline">USER()</code>, dùng trong <code class="inline">copy_from_user.S</code>/<code class="inline">copy_to_user.S</code>) đều sinh ra cùng một bố cục linker section: một cặp offset 32-bit <em>tương đối</em> (lệnh-tới-mục-bảng, fixup-tới-mục-bảng) được đẩy vào section <code class="inline">__ex_table</code>. Linker gom và sắp xếp mọi mục như vậy từ mọi object đã biên dịch thành một bảng liên tục, có thể tìm kiếm theo PC — đây chính là <code class="inline">ARCH_HAS_RELATIVE_EXTABLE</code> đang hoạt động: offset tương đối giữ cho bản thân bảng độc lập vị trí (position-independent) và gọn nhẹ (8 byte/mục thay vì 16 byte cho con trỏ tuyệt đối 64-bit).</p>
+
+<img src="SC_Copy_from_user.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI — vì sao kernel không crash</div>Một con trỏ user sai truyền vào <code class="inline">copy_from_user</code> gây ra một exception CPU thật sự, giống hệt bất kỳ truy cập bộ nhớ không hợp lệ nào khác. Kernel không "kiểm tra con trỏ có an toàn không" trước theo cách né được fault — nó để fault xảy ra, bắt lấy nó thông qua cơ chế exception-table/fixup vì fault xảy ra tại một PC đã biết là nằm trong một hàm uaccess, rồi chuyển nó thành một <code class="inline">-EFAULT</code> trả về bình thường. Nếu cùng một truy cập sai đó xảy ra tại một PC <em>không</em> đăng ký trong <code class="inline">__ex_table</code>, <code class="inline">fixup_exception()</code> trả về 0 và kernel sẽ oops/panic — đây chính xác là cách kernel phân biệt giữa "một syscall nhận con trỏ sai" (có thể phục hồi) và "một lỗi kernel thật sự dereference rác" (không thể phục hồi).</div>
+</section>
+
+<section id="syscall-return">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>32 · Syscall Return</h2>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/include/asm/syscall.h</span><span>dòng 51-62</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>static inline void syscall_set_return_value(struct task_struct *task,
+					    struct pt_regs *regs,
+					    int error, long val)
+{
+	if (error)
+		val = error;
+	if (is_compat_thread(task_thread_info(task)))
+		val = lower_32_bits(val);
+	regs-&gt;regs[0] = val;
+}</pre></div>
+<p>Được gọi từ <code class="inline">invoke_syscall()</code> (syscall.c:53) ngay sau khi hàm syscall trả về — giá trị trả về của C được ghi thẳng vào <code class="inline">pt_regs-&gt;regs[0]</code>, chính xác là thứ sẽ trở thành x0 sau <code class="inline">eret</code>.</p>
+
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>dòng 757-774 (ret_to_user, trích)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>SYM_CODE_START_LOCAL(ret_to_user)
+	disable_daif
+	...
+	ldr	x19, [tsk, #TSK_TI_FLAGS]
+	and	x2, x19, #_TIF_WORK_MASK
+	cbnz	x2, work_pending          // xử lý signal, resched, v.v. trước
+finish_ret_to_user:
+	user_enter_irqoff
+	...
+	kernel_exit 0</pre></div>
+<div class="codebox"><div class="cb-head"><span class="fn">arch/arm64/kernel/entry.S</span><span>dòng 311, 344-346, 362-366 (macro kernel_exit, trích)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+<pre>	ldp	x21, x22, [sp, #S_PC]		// nạp ELR, SPSR
+	...
+	msr	elr_el1, x21			// thiết lập dữ liệu trả về
+	msr	spsr_el1, x22
+	ldp	x0, x1, [sp, #16 * 0]		// x0 <- pt_regs.regs[0] (giá trị trả về)
+	ldp	x2, x3, [sp, #16 * 1]
+	...
+	.if	\el == 0
+	ldr	lr, [sp, #S_LR]
+	add	sp, sp, #S_FRAME_SIZE		// khôi phục sp
+	eret					// EL1 -> EL0</pre></div>
+<img src="SC_system_call_return.png" alt="" style="max-width: 100%; height: auto;">
+<div class="callout warn"><div class="ct">⚠️ QUAN TRỌNG — kernel không bao giờ đụng vào errno phía userspace</div>Kernel chỉ đặt một giá trị <code class="inline">long</code> trơn vào x0 — một số âm nhỏ trong dải errno (vd. <code class="inline">-14</code> cho <code class="inline">-EFAULT</code>) khi thất bại, hoặc một kết quả không âm khi thành công. <strong>libc</strong> mới là bên kiểm tra x0 sau khi syscall trả về, và nếu nó nằm trong dải errno âm dành riêng, đảo dấu nó thành biến <code class="inline">errno</code> của thư viện C và trả về <code class="inline">-1</code> từ hàm wrapper. Source code kernel trong tree này xác nhận không có đoạn code nào ghi trực tiếp vào một symbol <code class="inline">errno</code> trong không gian địa chỉ của tiến trình gọi.</div>
+</section>
+
+<section id="error-path">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>33 · Tham Chiếu Error Path</h2>
+<p>Chỉ liệt kê những lỗi đã được xác nhận bằng cách đọc trực tiếp source — không thêm gì chỉ vì "thường thấy có".</p>
+<div class="tablewrap"><table>
+<tr><th>Lỗi</th><th>Syscall</th><th>Nguồn gốc (file:dòng)</th><th>Điều kiện</th></tr>
+<tr><td><code class="inline">EBADF</code></td><td>read/write</td><td><code class="inline">ksys_read</code>/<code class="inline">ksys_write</code>, giá trị <code class="inline">ret</code> mặc định; và cả <code class="inline">vfs_read</code>/<code class="inline">vfs_write</code></td><td><code class="inline">fdget_pos()</code> trả về NULL file, hoặc <code class="inline">!(f_mode &amp; FMODE_READ/WRITE)</code></td></tr>
+<tr><td><code class="inline">EINVAL</code></td><td>read/write</td><td><code class="inline">vfs_read</code>/<code class="inline">vfs_write</code>, fs/read_write.c</td><td><code class="inline">!(f_mode &amp; FMODE_CAN_READ/WRITE)</code>, hoặc không có cả <code class="inline">.read</code>/<code class="inline">.read_iter</code>; hoặc <code class="inline">rw_verify_area()</code> khi count âm/tràn số</td></tr>
+<tr><td><code class="inline">EFAULT</code></td><td>read/write</td><td><code class="inline">vfs_read</code>/<code class="inline">vfs_write</code>, fs/read_write.c:498,607</td><td><code class="inline">!access_ok(buf, count)</code>; sâu hơn, được lan truyền từ một copy_to_user/copy_from_user bị copy thiếu bên trong lớp iov_iter</td></tr>
+<tr><td><code class="inline">EOVERFLOW</code></td><td>read/write</td><td><code class="inline">rw_verify_area()</code>, fs/read_write.c:379-415</td><td><code class="inline">pos &lt; 0</code> và <code class="inline">count &gt;= -pos</code> (tràn số khi cộng position+count)</td></tr>
+<tr><td><code class="inline">EMFILE</code></td><td>openat</td><td><code class="inline">alloc_fd()</code>, fs/file.c</td><td><code class="inline">fd &gt;= end</code> (hết RLIMIT_NOFILE / bảng đầy)</td></tr>
+<tr><td><code class="inline">ENFILE</code></td><td>openat</td><td><code class="inline">alloc_empty_file()</code>, fs/file_table.c:134-164</td><td>số file đang mở toàn hệ thống đạt <code class="inline">files_stat.max_files</code></td></tr>
+<tr><td><code class="inline">ENOMEM</code></td><td>openat</td><td><code class="inline">__alloc_file()</code>, fs/file_table.c:96-122</td><td><code class="inline">kmem_cache_zalloc(filp_cachep,...)</code> thất bại</td></tr>
+<tr><td><code class="inline">ENOSYS</code></td><td>bất kỳ</td><td><code class="inline">do_ni_syscall()</code> qua <code class="inline">sys_ni_syscall()</code>, syscall.c</td><td><code class="inline">scno &gt;= __NR_syscalls</code> trong <code class="inline">invoke_syscall()</code></td></tr>
+</table></div>
+<div class="callout warn"><div class="ct">⚠️ Đã xác nhận KHÔNG thể xảy ra qua các syscall đang xét</div><code class="inline">-ESPIPE</code> chỉ tồn tại trong <code class="inline">fs/read_write.c</code> ở các syscall định vị (<code class="inline">pread64</code>/<code class="inline">pwrite64</code>/<code class="inline">sendfile</code>), không có trong <code class="inline">ksys_read</code>/<code class="inline">ksys_write</code>/<code class="inline">vfs_read</code>/<code class="inline">vfs_write</code>. <code class="inline">-EISDIR</code> chỉ tồn tại trong <code class="inline">generic_file_rw_checks()</code> (dùng bởi <code class="inline">copy_file_range</code>), không có trong đường đi read/write thông thường — một fd thư mục thường bị từ chối sớm hơn, ngay lúc <code class="inline">open()</code>.</div>
+</section>
+
+<section id="locking">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>34 · Concurrency &amp; Locking</h2>
+<div class="tablewrap"><table>
+<tr><th>Lock</th><th>Vị trí</th><th>Bảo vệ cái gì</th><th>Acquire</th><th>Release</th></tr>
+<tr><td><code class="inline">files_struct.file_lock</code> (spinlock)</td><td>include/linux/fdtable.h:56</td><td><code class="inline">next_fd</code>, các bitmap fd, phối hợp ghi <code class="inline">fd[]</code> khỏi resize/close/dup</td><td><code class="inline">alloc_fd()</code>, fs/file.c:882</td><td>cùng hàm, nhãn <code class="inline">out:</code></td></tr>
+<tr><td><code class="inline">file.f_pos_lock</code> (mutex)</td><td>trường trong include/linux/fs.h, khởi tạo trong <code class="inline">__alloc_file</code></td><td><code class="inline">file-&gt;f_pos</code> khi file có thể được chia sẻ/cần seek+read nguyên tử</td><td><code class="inline">fdget_pos()</code> qua <code class="inline">__fdget_pos()</code>, fs/file.c:1366-1376, chỉ khi <code class="inline">file_needs_f_pos_lock()</code></td><td><code class="inline">fdput_pos()</code> / <code class="inline">__f_unlock_pos()</code>, fs/file.c:1378-1381</td></tr>
+<tr><td><code class="inline">inode.i_rwsem</code> (rw-semaphore)</td><td>qua <code class="inline">inode_lock()</code>/<code class="inline">inode_unlock()</code>, include/linux/fs.h:779-786</td><td>tuần tự hóa các writer (và một số reader) trên cùng một inode</td><td>bên trong <code class="inline">write_iter</code> của filesystem, vd. <code class="inline">generic_file_write_iter()</code>, mm/filemap.c:3494</td><td>cùng hàm, dòng 3498</td></tr>
+<tr><td><code class="inline">sb-&gt;s_writers</code> (percpu rwsem, bảo vệ freeze)</td><td><code class="inline">sb_start_write()</code>/<code class="inline">__sb_end_write()</code></td><td>bảo vệ một lần ghi khỏi việc filesystem bị freeze đồng thời — <strong>không</strong> khỏi một writer khác</td><td><code class="inline">file_start_write()</code>, include/linux/fs.h:2937-2941, gọi từ <code class="inline">vfs_write()</code></td><td><code class="inline">file_end_write()</code>, fs.h:2951-2956</td></tr>
+<tr><td><code class="inline">inode.i_lock</code> (spinlock)</td><td>fs/inode.c</td><td>chuyển trạng thái <code class="inline">i_count</code>, <code class="inline">i_state</code></td><td><code class="inline">igrab()</code>/<code class="inline">iput()</code>, fs/inode.c:1375-1392, 1748-1765</td><td>cùng các hàm đó</td></tr>
+<tr><td>RCU</td><td>truy cập mảng <code class="inline">fdt-&gt;fd[]</code></td><td>đọc bảng fd không cần khóa trong khi writer dùng <code class="inline">rcu_assign_pointer</code>/<code class="inline">rcu_dereference_sched</code></td><td><code class="inline">fd_install()</code>, fs/file.c:975-989 (<code class="inline">rcu_read_lock_sched</code>)</td><td>cùng hàm</td></tr>
+</table></div>
+<div class="callout key"><div class="ct">💡 Ý TƯỞNG CỐT LÕI</div>Chú ý sự phân lớp: <code class="inline">vfs_read()</code>/<code class="inline">vfs_write()</code> ở lớp VFS chung <strong>không khóa gì trên inode khi đọc</strong>, và chỉ dùng percpu-rwsem bảo vệ freeze khi ghi. Khóa loại trừ lẫn nhau thật sự mà mọi người thường nghĩ tới (<code class="inline">i_rwsem</code>) nằm ở một lớp thấp hơn, bên trong <code class="inline">write_iter</code> riêng của từng filesystem — nghĩa là hành vi locking có thể khác nhau giữa các filesystem dù chúng đều được gọi qua cùng một entry point <code class="inline">vfs_write()</code>.</div>
+</section>
+
+<section id="refcounting">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>35 · Reference Counting</h2>
+<div class="grid2">
+<div class="card"><h4>struct file — f_count</h4>
+<div class="flowdiag">TẠO MỚI
+  __alloc_file()  fs/file_table.c:96
+  atomic_long_set(&f->f_count, 1)
+  ↓
+LẤY THAM CHIẾU
+  get_file()  include/linux/fs.h:972
+  atomic_long_inc(&f->f_count)
+  ↓
+SỬ DỤNG  (fd_install() tiêu thụ tham chiếu ban đầu;
+      fdget()/__fget() lấy+trả một tham chiếu qua FDPUT_FPUT)
+  ↓
+TRẢ THAM CHIẾU
+  fput() / fput_many()  fs/file_table.c:335-356
+  atomic_long_sub_and_test(refs, &file->f_count)
+  ↓ (chỉ khi về 0)
+GIẢI PHÓNG
+  __fput()  fs/file_table.c:255-300
+    -> f_op->release(inode, file)
+    -> dput(dentry), mntput(mnt)
+    -> file_free(file)</div>
+<p><code class="inline">fput()</code> trì hoãn việc dọn dẹp thực sự (<code class="inline">__fput()</code>) sang task-work hoặc delayed work — nó có thể sleep và không được phép chạy inline trong mọi ngữ cảnh gọi (vd. dưới một spinlock).</p>
+</div>
+<div class="card"><h4>struct inode — i_count</h4>
+<div class="codebox" style="margin:8px 0;"><div class="cb-head"><span class="fn">fs/inode.c</span><span>dòng 1375-1392, 1748-1765</span></div>
+<pre>struct inode *igrab(struct inode *inode)
+{
+	spin_lock(&amp;inode-&gt;i_lock);
+	if (!(inode-&gt;i_state &amp; (I_FREEING|I_WILL_FREE))) {
+		__iget(inode);
+		spin_unlock(&amp;inode-&gt;i_lock);
+	} else {
+		spin_unlock(&amp;inode-&gt;i_lock);
+		inode = NULL;
+	}
+	return inode;
+}
+
+void iput(struct inode *inode)
+{
+	if (!inode) return;
+retry:
+	if (atomic_dec_and_lock(&amp;inode-&gt;i_count, &amp;inode-&gt;i_lock)) {
+		if (inode-&gt;i_nlink &amp;&amp; (inode-&gt;i_state &amp; I_DIRTY_TIME)) {
+			atomic_inc(&amp;inode-&gt;i_count);
+			spin_unlock(&amp;inode-&gt;i_lock);
+			mark_inode_dirty_sync(inode);
+			goto retry;
+		}
+		iput_final(inode);
+	}
+}</pre></div>
+<p><code class="inline">i_count</code> đúng nguyên văn là một <code class="inline">atomic_t</code> (include/linux/fs.h:691). <code class="inline">igrab()</code> từ chối cấp tham chiếu cho một inode đang bị dọn dẹp (<code class="inline">I_FREEING</code>/<code class="inline">I_WILL_FREE</code>), trả về NULL thay vào đó.</p>
+</div>
+</div>
+<div class="callout warn"><div class="ct">⚠️ QUAN TRỌNG — refcount là theo từng object, đừng nhầm lẫn chúng</div><code class="inline">files_struct.count</code>, <code class="inline">file.f_count</code>, <code class="inline">dentry.d_lockref</code>, và <code class="inline">inode.i_count</code> là bốn bộ đếm <strong>độc lập</strong> trên bốn object độc lập. Đóng một fd (giảm một tham chiếu <code class="inline">f_count</code>) không nhất thiết giải phóng <code class="inline">struct file</code> (một fd khác từ <code class="inline">dup()</code> có thể vẫn giữ tham chiếu), và giải phóng <code class="inline">struct file</code> qua <code class="inline">__fput()</code> khi đó mới giảm một tham chiếu dentry (<code class="inline">dput()</code>) và gián tiếp một tham chiếu inode qua dentry đó — bản thân inode vẫn có thể được tham chiếu bởi các dentry khác hoặc bởi các holder trong kernel.</div>
+</section>
+
+<section id="register-timeline">
+<span class="sec-badge"><span class="badge b-arm64">🔵 ARM64</span></span>
+<h2>Timeline Thanh Ghi — read(3, buffer, 100)</h2>
+<img src="SC_Trace_end_to_end.png" alt="" style="max-width: 100%; height: auto;">
+</section>
+
+<section id="complete-trace">
+<span class="sec-badge"><span class="badge b-generic">🟢 GENERIC</span></span>
+<h2>36 · Trace End-to-End Hoàn Chỉnh</h2>
+<div class="flowdiag">read(3, buffer, 100)
+        ↓
+x0=3  x1=buffer  x2=100  x8=63(__NR_read)
+        ↓
+<span class="arm">svc #0</span>
+        ↓
+<span class="arm">CPU: EL0 → EL1, ESR_EL1/ELR_EL1/SPSR_EL1 được chụp lại</span>
+        ↓
+<span class="arm">vectors[] (entry.S:557) → kernel_ventry 0,sync → el0_sync (entry.S:696)</span>
+        ↓
+<span class="arm">kernel_entry 0 → pt_regs được dựng trên kernel stack</span>
+        ↓
+<span class="arm">el0_sync_handler → el0_svc → do_el0_svc (entry-common.c / syscall.c:191)</span>
+        ↓
+<span class="n">el0_svc_common → invoke_syscall → sys_call_table[63]</span>  (syscall.c:39-99)
+        ↓
+<span class="n">__arm64_sys_read(regs) → __se_sys_read → __do_sys_read → ksys_read(3,buffer,100)</span>
+        ↓
+fd=3 được phân giải:
+   <span class="n">current → task_struct.files → files_struct.fdt → fdtable.fd[3] → struct file*</span>
+        ↓
+<span class="vfs">vfs_read(file, buffer, 100, &pos)</span>  — access_ok(), rw_verify_area()
+        ↓
+<span class="vfs">file->f_op->read_iter  (vd. ext4_file_read_iter)</span>  — dynamic dispatch, §23
+        ↓
+<span class="vfs">filesystem / page cache</span>
+        ↓
+<span class="mm">copy_to_user(buffer, kernel_page_data, n)</span>
+        ↓ (nếu buffer sai)
+   <span class="arm">translation fault → vector đồng bộ EL1h → do_mem_abort → fixup_exception()</span>  §29-30
+        ↓ (dù đi đường nào)
+giá trị trả về (số byte đọc được, hoặc -EFAULT/-EBADF/...)
+        ↓
+<span class="n">syscall_set_return_value(): pt_regs.regs[0] = ret</span>
+        ↓
+<span class="arm">ret_to_user → kernel_exit 0 → eret</span>
+        ↓
+EL0, x0 = giá trị trả về
+        ↓
+userspace (libc chuyển x0 âm thành errno)</div>
+<p>Mỗi nút ở trên đều liên kết tới một phần có trích dẫn đầy đủ: <a href="#arm64-entry">§04</a>, <a href="#ptregs">§05</a>, <a href="#syscall-dispatch">§07</a>, <a href="#read-case">§10</a>, <a href="#fd-structures">§13</a>, <a href="#vfs">§23</a>, <a href="#user-access">§25</a>, <a href="#page-fault">§29</a>, <a href="#exception-table">§30</a>, <a href="#syscall-return">§32</a>.</p>
+</section>
+
+<section id="book-vs-kernel">
+<span class="sec-badge"><span class="badge b-x86">🟡</span> <span class="badge b-arm64">🔵</span></span>
+<h2>37 · Sách vs Kernel Thật</h2>
+<div class="tablewrap"><table>
+<tr><th>Chapter 10 (x86, khoảng thời v2.6)</th><th>Linux v5.10.241 ARM64 (tree này)</th><th>Khác biệt</th></tr>
+<tr><td><code class="inline">int $0x80</code> / <code class="inline">sysenter</code></td><td><code class="inline">svc #0</code></td><td><span class="badge b-x86">X86 ONLY</span> — lệnh trap hoàn toàn khác; ARM64 luôn dùng <code class="inline">SVC</code> cho syscall AArch64 EL0→EL1.</td></tr>
+<tr><td>syscall number trong <code class="inline">eax</code></td><td>syscall number trong <code class="inline">x8</code></td><td><span class="badge b-arm64">ARM64 EQUIVALENT</span> — cùng vai trò, khác thanh ghi.</td></tr>
+<tr><td>tham số trong <code class="inline">ebx,ecx,edx,esi,edi,ebp</code></td><td>tham số trong <code class="inline">x0-x5</code></td><td><span class="badge b-arm64">ARM64 EQUIVALENT</span></td></tr>
+<tr><td>entry point <code class="inline">system_call</code> nguyên khối (asm x86)</td><td>bảng <code class="inline">vectors[]</code> → <code class="inline">el0_sync</code> → <code class="inline">el0_sync_handler</code> → <code class="inline">el0_svc</code> → <code class="inline">do_el0_svc</code></td><td><span class="badge b-x86">CHANGED</span> — mô hình exception của ARM64 là bảng vector + định tuyến theo từng EL/từng lớp, không phải một cổng trap duy nhất.</td></tr>
+<tr><td><code class="inline">sys_read()</code> được xem là "cái" hiện thực read</td><td><code class="inline">__arm64_sys_read()</code> mới là symbol được dispatch; <code class="inline">sys_read</code> chỉ là một khai báo</td><td><span class="badge b-arm64">CHANGED</span> — <code class="inline">__SYSCALL_DEFINEx</code> riêng của arm64 (syscall_wrapper.h:51) ghi đè macro generic; xem §08.</td></tr>
+<tr><td>bảng syscall được mô tả chung chung là "một mảng"</td><td><code class="inline">const syscall_fn_t sys_call_table[__NR_syscalls]</code> có thật, dựng bằng cách include <code class="inline">&lt;asm/unistd.h&gt;</code> hai lần với macro <code class="inline">__SYSCALL</code> được định nghĩa lại</td><td><span class="badge b-arm64">ARM64</span> — xác nhận vẫn có thật và đang được dùng; không có header sinh riêng.</td></tr>
+<tr><td><code class="inline">access_ok()</code> được trình bày như một phép kiểm tra range cố định</td><td>vẫn là một phép kiểm tra range thật, không nhánh rẽ, dựa trên carry-flag, so với <code class="inline">addr_limit</code> ở version này</td><td><span class="badge b-generic">STILL VALID</span> cho version này — các kernel mainline sau này đã gỡ bỏ hoàn toàn <code class="inline">set_fs()</code>/<code class="inline">addr_limit</code>, điều CHƯA xảy ra ở đây.</td></tr>
+<tr><td>khái niệm "exception table" chung chung</td><td><code class="inline">struct exception_table_entry {int insn, fixup;}</code>, cơ chế offset tương đối đơn giản</td><td><span class="badge b-arm64">ARM64</span> — cùng cơ chế khái niệm như sách mô tả, hiện thực cụ thể của arm64 đã được xác nhận; không phải biến thể handler có kiểu mới hơn.</td></tr>
+<tr><td>"kernel đặt errno"</td><td>kernel chỉ ghi một giá trị âm vào x0 (<code class="inline">pt_regs-&gt;regs[0]</code>); libc chuyển nó thành <code class="inline">errno</code></td><td><span class="badge b-generic">STILL VALID</span> — nếu đọc kỹ, sách đã mô tả đúng điều này; đáng nhắc lại vì đây là điểm dễ bị hiểu sai.</td></tr>
+</table></div>
+</section>
+
+<section id="misconceptions">
+<h2>Những Ngộ Nhận Thường Gặp</h2>
+<div class="card"><h4>❌ fd == struct file*</h4><p><strong>Sai.</strong> Một <code class="inline">fd</code> chỉ là một chỉ số nguyên vào mảng <code class="inline">current-&gt;files-&gt;fdt-&gt;fd[]</code>. <strong>Đúng:</strong> fd được tra cứu qua <code class="inline">fdget()</code>/<code class="inline">fdget_pos()</code> để lấy ra <code class="inline">struct file *</code> thực sự. Nhiều fd khác nhau (qua <code class="inline">dup()</code>) có thể trỏ tới cùng một <code class="inline">struct file*</code>. <em>Bằng chứng:</em> <code class="inline">struct fd { struct file *file; unsigned int flags; };</code> (include/linux/file.h:36-39) — số fd và con trỏ file rõ ràng là hai kiểu khác nhau, được truyền đi cùng nhau.</p></div>
+<div class="card"><h4>❌ struct file == inode</h4><p><strong>Sai.</strong> <code class="inline">struct file</code> đại diện cho một <em>instance mở</em> (với <code class="inline">f_pos</code>, <code class="inline">f_flags</code> riêng); <code class="inline">struct inode</code> đại diện cho object nằm trên đĩa, được chia sẻ bởi mọi instance mở và mọi dentry gọi tên nó. <em>Bằng chứng:</em> hai lời gọi <code class="inline">open()</code> độc lập trên cùng một path cấp phát hai <code class="inline">struct file</code> riêng biệt (qua <code class="inline">alloc_empty_file()</code>, mỗi lần <code class="inline">f_count=1</code> mới) nhưng đều trỏ tới cùng một con trỏ <code class="inline">f_inode</code> đã cache.</p></div>
+<div class="card"><h4>❌ access_ok() đảm bảo truy cập bộ nhớ sẽ thành công</h4><p><strong>Sai.</strong> Nó chỉ xác nhận dải địa chỉ nằm trong <code class="inline">addr_limit</code> — một phép kiểm tra range, không phải kiểm tra mapping. <strong>Đúng:</strong> lệnh load/store thực sự vẫn có thể fault (trang chưa map, lỗi quyền) — đây chính xác là lý do cơ chế exception-table/fixup (§30) tồn tại — xem callout tường minh ở §25.</p></div>
+<div class="card"><h4>❌ kernel trực tiếp đặt errno phía userspace</h4><p><strong>Sai.</strong> <code class="inline">syscall_set_return_value()</code> (asm/syscall.h:51-62) chỉ ghi vào <code class="inline">pt_regs-&gt;regs[0]</code>, một thanh ghi trơn. Không có đường code nào trong kernel ghi vào một symbol tên <code class="inline">errno</code> trong không gian địa chỉ của tiến trình gọi — việc chuyển đổi đó hoàn toàn là việc của libc, sau khi <code class="inline">eret</code>.</p></div>
+<div class="card"><h4>❌ một syscall luôn chỉ là một hàm C đơn giản</h4><p><strong>Sai.</strong> Chỉ riêng <code class="inline">SYSCALL_DEFINE3(read, ...)</code> đã khai triển thành ba hàm riêng biệt trên arm64 (<code class="inline">__arm64_sys_read</code>, <code class="inline">__se_sys_read</code>, <code class="inline">__do_sys_read</code>, §08) trước khi chạm tới <code class="inline">ksys_read</code>/<code class="inline">vfs_read</code>/<code class="inline">read_iter</code> của filesystem — hơn năm lời gọi hàm thật sự trước khi đụng tới một byte dữ liệu.</p></div>
+<div class="card"><h4>❌ cơ chế bảng syscall giống hệt nhau trên x86 và ARM64</h4><p><strong>Sai</strong> — ngay cả quy ước đặt tên cũng đã khác. Trên arm64, macro khai triển <code class="inline">SYSCALL_DEFINEx</code> sinh ra <code class="inline">__arm64_sys_&lt;tên&gt;</code> nhận một tham số duy nhất <code class="inline">const struct pt_regs *</code> (arch/arm64/include/asm/syscall_wrapper.h:51-67); chữ ký C nhiều tham số kiểu <code class="inline">sys_&lt;tên&gt;(a,b,c)</code> mà sách mô tả là quy ước kiểu x86 mà arm64 chủ động ghi đè bằng <code class="inline">__SYSCALL_DEFINEx</code> riêng của nó.</p></div>
+</section>
+
+<section id="vendor-notes">
+<span class="sec-badge"><span class="badge b-vendor">🟪 VENDOR</span></span>
+<h2>Vendor BSP Deltas — K-S800 / Konica Minolta "bizhub"</h2>
+<p>Tổng hợp tại đây để tham khảo. Không cái nào trong số này là hành vi Linux upstream — tất cả đều là patch riêng của board/sản phẩm, phát hiện được trong quá trình trace chính source tree này, và đã được nêu inline ở các phần tương ứng bên trên.</p>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Delta</th><th>Vị trí</th><th>Hiệu ứng</th></tr>
+<tr><td>1</td><td>Hai syscall bổ sung: <code class="inline">km_semaphore</code> (441), <code class="inline">km_tickget</code> (442)</td><td>arch/arm64/include/uapi/asm/unistd.h:28-39</td><td><code class="inline">__NR_syscalls</code> trở thành <strong>443</strong> thay vì giá trị generic gốc — ảnh hưởng tới phép kiểm tra biên trong <code class="inline">invoke_syscall()</code>.</td></tr>
+<tr><td>2</td><td>Vòng lặp retry-khi-EIO của <code class="inline">CONFIG_KM_BIZHUB</code> quanh <code class="inline">vfs_read()</code>/<code class="inline">vfs_write()</code></td><td>fs/read_write.c: <code class="inline">ksys_read</code> ~651-661, <code class="inline">ksys_write</code> ~730-743</td><td>Một lần đọc/ghi trả về <code class="inline">-EIO</code> sẽ được âm thầm thử lại (kèm <code class="inline">msleep(200)</code>) tối đa <code class="inline">SYSCALL_RETRY_COUNT</code> lần trước khi lỗi được trả về cho userspace.</td></tr>
+<tr><td>3</td><td>Chặn ghi bảo vệ MBR cho <code class="inline">/dev/kmsda</code></td><td>fs/read_write.c: <code class="inline">ksys_write</code>, dòng ~695-729</td><td>Các lần ghi vào device node đó ở offset dưới 512 byte bị chặn — logic bảo vệ storage độc quyền, không phải hành vi Linux thông thường.</td></tr>
+<tr><td>4</td><td><code class="inline">__copy_to_user_chk()</code> thay thế các nơi gọi <code class="inline">copyout()</code></td><td>lib/iov_iter.c:146-177 (ticket <code class="inline">OP_BTS-38744</code>); bản thân <code class="inline">copyout()</code> (dòng 179) giờ là dead code</td><td>Một lần copy-user thất bại trong đường đi copy-out của iovec sẽ gửi thẳng <code class="inline">SIGSEGV</code> cho task hiện tại, thay vì trả về số byte chưa copy được để caller tự chuyển thành <code class="inline">-EFAULT</code>. <strong>Thay đổi có ý nghĩa hành vi quan sát được của read(2) khi gặp buffer sai, trên chính board này.</strong></td></tr>
+<tr><td>5</td><td><code class="inline">CONFIG_KM_DEBUG_COPYUSER</code></td><td>arch/arm64/include/asm/uaccess.h (các biến thể raw_copy_to/from_user)</td><td>Thêm các cảnh báo <code class="inline">WARN(in_atomic(), ...)</code> quanh các hàm copy — chỉ phục vụ debug/chẩn đoán, không đổi hành vi ở đường thành công.</td></tr>
+<tr><td>6</td><td><code class="inline">CONFIG_IGNORE_ASYNC_ABORT</code> / <code class="inline">el1_ignore</code></td><td>arch/arm64/kernel/entry.S:566-570</td><td>Thay thế cách xử lý slot vector "Error EL1h" — không có trong mainline v5.10.</td></tr>
+<tr><td>7</td><td>Hook <code class="inline">CONFIG_KM_FDTRACE</code> trong <code class="inline">fd_install()</code></td><td>fs/file.c: <code class="inline">fd_install()</code>, gần dòng 1000</td><td>Gọi <code class="inline">fdtrace_open(fd, file)</code> — một hook tracer/instrument việc mở fd, chỉ bổ sung thêm, không đổi ngữ nghĩa bảng fd.</td></tr>
+</table></div>
+</section>
+
+<section id="roadmap">
+<h2>38 · Lộ Trình Đọc Source Tiếp Theo</h2>
+<div class="flowdiag">SYSTEM CALL          (bạn đang ở đây — tài liệu này)
+      ↓
+ARM64 EXCEPTION      arch/arm64/kernel/entry.S, entry-common.c — đọc tiếp nếu mô hình thanh ghi/exception level chưa thật sự nhuần nhuyễn
+      ↓
+VFS                  fs/read_write.c, fs/open.c, fs/namei.c, fs/file_table.c, fs/file.c
+      ↓
+FILE DESCRIPTOR      include/linux/fdtable.h, include/linux/fs.h (struct file/inode/dentry)
+      ↓
+PAGE CACHE           mm/filemap.c (generic_file_read_iter, generic_file_write_iter)
+      ↓
+MEMORY MANAGEMENT    mm/memory.c, arch/arm64/mm/fault.c, arch/arm64/mm/mmu.c
+      ↓
+FILESYSTEM           fs/ext4/ (hoặc bất kỳ fs cụ thể nào) — xem một filesystem thật điền file_operations/inode_operations ra sao
+      ↓
+BLOCK LAYER          block/*.c, fs/block_dev.c
+      ↓
+DEVICE DRIVER        drivers/... — nơi lớp block cuối cùng chạm tới thiết bị lưu trữ thật của bạn</div>
+<div class="tablewrap"><table>
+<tr><th>Chủ đề</th><th>Vì sao nên đọc tiếp</th><th>File chính</th><th>Struct chính</th><th>Kiến thức tiên quyết</th></tr>
+<tr><td>Mô hình exception ARM64 đầy đủ</td><td>§04-07 giả định bạn đã chấp nhận nền tảng EL0/EL1/bảng vector; hãy đào sâu thêm IRQ/FIQ/debug exception</td><td>arch/arm64/kernel/entry.S, entry-common.c, arch/arm64/kernel/traps.c</td><td>pt_regs, struct fault_info</td><td>không cần — tài liệu này đủ làm nền</td></tr>
+<tr><td>Nội bộ page cache</td><td>§10 dừng lại ở "chạm tới page cache" — logic cấp phát/tra cứu/readahead trang thực sự nằm ở đây</td><td>mm/filemap.c, mm/readahead.c</td><td>struct address_space, struct page</td><td>chuỗi struct file/inode (§13/§17)</td></tr>
+<tr><td>Quản lý bộ nhớ / bảng trang</td><td>Hiểu "translation fault" (§29) thực sự nghĩa là gì ở cấp độ bảng trang</td><td>mm/memory.c, arch/arm64/mm/mmu.c, arch/arm64/mm/fault.c</td><td>struct mm_struct, struct vm_area_struct, pgd/pud/pmd/pte</td><td>phần page fault (§29) trong tài liệu này</td></tr>
+<tr><td>Một filesystem cụ thể (ext4)</td><td>Xem hiện thực <code class="inline">.read_iter</code>/<code class="inline">.write_iter</code>/<code class="inline">.open</code> thật đằng sau vtable ở §23</td><td>fs/ext4/file.c, fs/ext4/inode.c</td><td>struct ext4_inode_info</td><td>dynamic dispatch của VFS (§23)</td></tr>
+<tr><td>Block layer</td><td>Nơi các lần đọc bị page-cache-miss thực sự trở thành yêu cầu I/O phần cứng</td><td>block/blk-core.c, fs/block_dev.c</td><td>struct bio, struct request, struct block_device</td><td>đường I/O của một filesystem cụ thể</td></tr>
+</table></div>
+</section>
+
+<section id="self-test">
+<h2>39 · Tự Kiểm Tra — Tôi Có Tự Trace Được Không?</h2>
+<p>Tiến trình thực thi <code class="inline">read(3, buffer, 100);</code> — bạn có trả lời được hết những câu sau đây từ source, mà không cần đọc lại tài liệu này không?</p>
+<ul class="checklist">
+<li>x0 là gì? x1 là gì? x2 là gì? x8 là gì?</li>
+<li>Điều gì xảy ra với CPU ngay sau <code class="inline">svc #0</code> — thanh ghi nào được set, bởi phần cứng, trước khi bất kỳ code Linux nào chạy?</li>
+<li>Nó rơi vào slot vector exception nào, và vì sao chính xác là slot đó (chứ không phải "Synchronous EL1h")?</li>
+<li><code class="inline">pt_regs</code> thực sự được dựng ở đâu, từng lệnh một?</li>
+<li>Syscall được dispatch từ <code class="inline">pt_regs-&gt;regs[8]</code> tới một con trỏ hàm cụ thể như thế nào?</li>
+<li>Hàm nào thực sự chạy — và tại sao nó không có tên đúng là <code class="inline">sys_read</code>?</li>
+<li><code class="inline">fd=3</code> trở thành một <code class="inline">struct file*</code> bằng cách nào — hãy nêu tên mọi cấu trúc trung gian?</li>
+<li><code class="inline">f_op</code> là gì, và nó được gán ở đâu?</li>
+<li>VFS quyết định giữa <code class="inline">.read</code> và <code class="inline">.read_iter</code> như thế nào?</li>
+<li>Kernel truy cập <code class="inline">buffer</code> ở userspace bằng cách nào — nêu chính xác chuỗi macro/hàm?</li>
+<li>Điều gì xảy ra nếu <code class="inline">buffer</code> là một con trỏ không hợp lệ — trace exception CPU cho tới khi ra được errno trả về?</li>
+<li>Exception table biết cách fixup lệnh gây fault nào như thế nào?</li>
+<li>Giá trị trả về của syscall được lưu ở đâu trước khi <code class="inline">eret</code>?</li>
+<li>CPU quay về EL0 bằng cách nào, và điều đó phụ thuộc vào ba thanh ghi hệ thống nào?</li>
+</ul>
+<div class="callout key"><div class="ct">🧠 Nếu câu nào ở trên còn lung lay</div>Quay lại phần tương ứng qua sidebar — mỗi câu trả lời ở trên đều có một chuỗi trích dẫn (file + dòng + code trích dẫn) ở đâu đó trong tài liệu này.</div>
+</section>
+
+<section id="source-index">
+<h2>Chỉ Mục Source Code</h2>
+<div class="tablewrap"><table>
+<tr><th>Symbol / Struct</th><th>File</th><th>Nhóm</th><th>Liên quan</th></tr>
+<tr><td><code class="inline">vectors</code></td><td>arch/arm64/kernel/entry.S:557</td><td>ARM64 entry</td><td>kernel_ventry, el0_sync, el1_sync</td></tr>
+<tr><td><code class="inline">kernel_entry</code> / <code class="inline">kernel_exit</code></td><td>arch/arm64/kernel/entry.S:185-288, 290-387</td><td>ARM64 entry</td><td>pt_regs, offset S_*</td></tr>
+<tr><td><code class="inline">el0_sync_handler</code> / <code class="inline">el0_svc</code></td><td>arch/arm64/kernel/entry-common.c:375, 362</td><td>ARM64 entry</td><td>do_el0_svc</td></tr>
+<tr><td><code class="inline">el1_sync_handler</code> / <code class="inline">el1_abort</code></td><td>arch/arm64/kernel/entry-common.c:204, 112</td><td>ARM64 entry / fault</td><td>do_mem_abort</td></tr>
+<tr><td><code class="inline">do_el0_svc</code> / <code class="inline">el0_svc_common</code> / <code class="inline">invoke_syscall</code></td><td>arch/arm64/kernel/syscall.c:191, 93, 39</td><td>Syscall dispatch</td><td>sys_call_table</td></tr>
+<tr><td><code class="inline">sys_call_table</code></td><td>arch/arm64/kernel/sys.c:58</td><td>Syscall dispatch</td><td>syscall_fn_t</td></tr>
+<tr><td><code class="inline">struct pt_regs</code></td><td>arch/arm64/include/asm/ptrace.h:173</td><td>Trạng thái thanh ghi</td><td>asm-offsets.c</td></tr>
+<tr><td><code class="inline">SYSCALL_DEFINEx</code> / <code class="inline">__SYSCALL_DEFINEx</code> (arm64)</td><td>include/linux/syscalls.h:223; arch/arm64/include/asm/syscall_wrapper.h:51</td><td>Macro syscall</td><td>__arm64_sys_*, __se_sys_*, __do_sys_*</td></tr>
+<tr><td><code class="inline">ksys_read</code> / <code class="inline">ksys_write</code></td><td>fs/read_write.c:636, 677</td><td>VFS entry</td><td>fdget_pos, vfs_read, vfs_write</td></tr>
+<tr><td><code class="inline">vfs_read</code> / <code class="inline">vfs_write</code></td><td>fs/read_write.c:489, 598</td><td>VFS</td><td>new_sync_read, new_sync_write, rw_verify_area</td></tr>
+<tr><td><code class="inline">call_read_iter</code> / <code class="inline">call_write_iter</code></td><td>include/linux/fs.h:2038-2048</td><td>VFS dispatch</td><td>file_operations</td></tr>
+<tr><td><code class="inline">do_sys_openat2</code></td><td>fs/open.c:1216</td><td>Đường open</td><td>get_unused_fd_flags, do_filp_open, fd_install</td></tr>
+<tr><td><code class="inline">alloc_empty_file</code> / <code class="inline">__alloc_file</code></td><td>fs/file_table.c:134, 96</td><td>Cấp phát file</td><td>filp_cachep, f_count</td></tr>
+<tr><td><code class="inline">fd_install</code> / <code class="inline">alloc_fd</code></td><td>fs/file.c:969, 874</td><td>Bảng FD</td><td>fdtable, files_struct</td></tr>
+<tr><td><code class="inline">struct files_struct</code> / <code class="inline">struct fdtable</code></td><td>include/linux/fdtable.h:49, 27</td><td>Bảng FD</td><td>task_struct.files</td></tr>
+<tr><td><code class="inline">struct file</code></td><td>include/linux/fs.h:923</td><td>Object VFS</td><td>f_op, f_mapping, f_count</td></tr>
+<tr><td><code class="inline">struct dentry</code> / <code class="inline">struct inode</code> / <code class="inline">struct super_block</code></td><td>include/linux/dcache.h:89; include/linux/fs.h:617, 1456</td><td>Object VFS</td><td>d_lockref, i_count</td></tr>
+<tr><td><code class="inline">access_ok</code> / <code class="inline">__range_ok</code></td><td>arch/arm64/include/asm/uaccess.h:63-98</td><td>Truy cập user</td><td>addr_limit</td></tr>
+<tr><td><code class="inline">get_user</code> / <code class="inline">put_user</code></td><td>arch/arm64/include/asm/uaccess.h:258-404</td><td>Truy cập user</td><td>_ASM_EXTABLE</td></tr>
+<tr><td><code class="inline">copy_from_user</code> / <code class="inline">copy_to_user</code></td><td>include/linux/uaccess.h:151-202</td><td>Truy cập user</td><td>raw_copy_from_user, __arch_copy_from_user</td></tr>
+<tr><td><code class="inline">struct exception_table_entry</code> / <code class="inline">fixup_exception</code></td><td>arch/arm64/include/asm/extable.h:18; arch/arm64/mm/extable.c:9</td><td>Exception table</td><td>search_exception_tables</td></tr>
+<tr><td><code class="inline">do_mem_abort</code> / <code class="inline">__do_kernel_fault</code></td><td>arch/arm64/mm/fault.c:725, 304</td><td>Page fault</td><td>fault_info[], esr_to_fault_info</td></tr>
+<tr><td><code class="inline">syscall_set_return_value</code></td><td>arch/arm64/include/asm/syscall.h:51</td><td>Syscall return</td><td>pt_regs.regs[0]</td></tr>
+</table></div>
+</section>
+
+</main>
+</div>
+
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<footer>Linux Kernel System Call Source Code Guide (bản dịch tiếng Việt) · Xây dựng từ source thật tại K-S800/Src, Linux v5.10.241, arm64 · Tạo để học offline — không phụ thuộc bên ngoài.</footer>
+
+<script>
+function toggleTheme(){
+  const html=document.documentElement;
+  const cur=html.getAttribute('data-theme');
+  html.setAttribute('data-theme', cur==='light'?'dark':'light');
+}
+function toggleAllDetails(){
+  const all=document.querySelectorAll('details.codewrap');
+  const anyClosed=Array.from(all).some(d=>!d.open);
+  all.forEach(d=>d.open=anyClosed);
+}
+function copyCode(btn){
+  const pre=btn.closest('.codebox').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(()=>{
+    const old=btn.textContent; btn.textContent='Đã copy!'; setTimeout(()=>btn.textContent=old,1200);
+  });
+}
+function doSearch(q){
+  q=q.trim().toLowerCase();
+  document.querySelectorAll('mark.search-hit').forEach(m=>{
+    const parent=m.parentNode; parent.replaceChild(document.createTextNode(m.textContent),m); parent.normalize();
+  });
+  if(!q || q.length<2) return;
+  const walker=document.createTreeWalker(document.getElementById('main'),NodeFilter.SHOW_TEXT,null);
+  let node; const targets=[];
+  while(node=walker.nextNode()){
+    if(node.parentElement.closest('script,style')) continue;
+    if(node.textContent.toLowerCase().includes(q)) targets.push(node);
+  }
+  let first=null;
+  targets.forEach(n=>{
+    const idx=n.textContent.toLowerCase().indexOf(q);
+    if(idx===-1) return;
+    const span=document.createElement('span');
+    const before=n.textContent.slice(0,idx), match=n.textContent.slice(idx,idx+q.length), after=n.textContent.slice(idx+q.length);
+    span.appendChild(document.createTextNode(before));
+    const mk=document.createElement('mark'); mk.className='search-hit'; mk.textContent=match;
+    span.appendChild(mk);
+    span.appendChild(document.createTextNode(after));
+    n.parentNode.replaceChild(span,n);
+    if(!first) first=mk;
+  });
+  if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+}
+// active nav highlight
+const links=document.querySelectorAll('nav.sidebar a');
+const secs=Array.from(document.querySelectorAll('main section[id]'));
+function onScroll(){
+  let cur=secs[0];
+  for(const s of secs){ if(s.getBoundingClientRect().top-90<=0) cur=s; }
+  links.forEach(l=>l.classList.toggle('active', cur && l.getAttribute('href')==='#'+cur.id));
+  document.getElementById('backTop').style.display = window.scrollY>500 ? 'block':'none';
+}
+window.addEventListener('scroll',onScroll); onScroll();
+document.querySelectorAll('nav.sidebar a').forEach(a=>a.addEventListener('click',()=>{
+  document.querySelector('nav.sidebar').classList.remove('open');
+}));
+</script>
+</body>
+</html>

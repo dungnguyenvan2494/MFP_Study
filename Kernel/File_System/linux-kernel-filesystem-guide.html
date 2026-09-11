@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux Kernel File System — Deep Source Code Guide</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#11161d; --panel:#151b23; --border:#26303b;
+  --text:#c9d1d9; --text-dim:#8b949e; --heading:#e6edf3;
+  --accent:#58a6ff; --accent2:#7ee787; --warn:#f0883e; --danger:#ff7b72; --purple:#d2a8ff;
+  --code-bg:#0a0e14; --tag-syscall:#58a6ff; --tag-vfs:#7ee787; --tag-fs:#f2cc60; --tag-mm:#d2a8ff;
+  --tag-block:#ffa657; --tag-driver:#ff7b72; --tag-hw:#8b949e;
+  font-family:'JetBrains Mono','Cascadia Code','Fira Code',Consolas,'SF Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+body{font-size:14.5px;line-height:1.65;}
+h1,h2,h3,h4{color:var(--heading);font-weight:600;letter-spacing:.2px;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+code{font-family:inherit;background:rgba(110,118,129,.15);padding:1px 5px;border-radius:4px;color:#ffa657;}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;padding:0;color:#c9d1d9;}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13px;}
+th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top;}
+th{background:var(--bg2);color:var(--heading);}
+tr:nth-child(even){background:rgba(255,255,255,.02);}
+
+/* ---- layout ---- */
+#topbar{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,#0f141b,#0d1117);border-bottom:1px solid var(--border);padding:14px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+#topbar .title h1{font-size:17px;margin:0;color:var(--heading);}
+#topbar .title .sub{color:var(--text-dim);font-size:12px;margin-top:2px;}
+#topbar .meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;}
+.badge{border:1px solid var(--border);border-radius:20px;padding:4px 11px;color:var(--accent2);background:rgba(126,231,135,.06);white-space:nowrap;}
+.badge.warn{color:var(--warn);border-color:#5a3a1a;background:rgba(240,136,62,.08);}
+#search{background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;width:230px;font-family:inherit;font-size:12.5px;}
+#search:focus{outline:1px solid var(--accent);}
+
+#shell{display:flex;align-items:flex-start;}
+#sidebar{position:sticky;top:64px;height:calc(100vh - 64px);width:270px;flex:0 0 270px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg2);padding:14px 0 60px;}
+#sidebar .grp-label{color:var(--text-dim);font-size:10.5px;text-transform:uppercase;letter-spacing:1px;padding:14px 18px 6px;}
+#sidebar a.nav-item{display:block;padding:6px 18px;color:var(--text);font-size:12.8px;border-left:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#sidebar a.nav-item:hover{background:rgba(88,166,255,.08);text-decoration:none;}
+#sidebar a.nav-item.active{border-left-color:var(--accent);background:rgba(88,166,255,.12);color:var(--accent);}
+#sidebar a.nav-item.hidden{display:none;}
+
+main{flex:1 1 auto;min-width:0;padding:34px 44px 120px;max-width:1000px;}
+section.chapter{padding-top:10px;margin-bottom:70px;border-top:1px solid var(--border);}
+section.chapter:first-of-type{border-top:none;}
+.chap-head{padding-top:22px;margin-bottom:18px;}
+.chap-num{color:var(--text-dim);font-size:13px;}
+.chap-head h2{font-size:24px;margin:4px 0 8px;}
+.chap-meta{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
+.stars{color:#f2cc60;letter-spacing:2px;}
+.prereq a{margin-right:8px;}
+
+/* ---- diagram box ---- */
+.diagram{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:16px 18px;overflow-x:auto;margin:16px 0;}
+.diagram pre{border:none;background:none;padding:0;margin:0;}
+
+/* ---- callouts ---- */
+.box{border-radius:8px;padding:13px 16px;margin:16px 0;border-left:4px solid var(--accent);background:rgba(88,166,255,.06);}
+.box-title{font-weight:700;font-size:12.5px;margin-bottom:6px;color:var(--heading);}
+.box.key{border-color:var(--accent2);background:rgba(126,231,135,.06);}
+.box.warn{border-color:var(--danger);background:rgba(255,123,114,.07);}
+.box.mental{border-color:var(--purple);background:rgba(210,168,255,.07);}
+.box.flow{border-color:var(--warn);background:rgba(240,136,62,.07);}
+.box.debug{border-color:#39c5cf;background:rgba(57,197,207,.07);}
+.box.source{border-color:#f2cc60;background:rgba(242,204,96,.07);}
+
+/* ---- function doc box ---- */
+.fbox{border:1px solid var(--border);border-radius:8px;margin:18px 0;overflow:hidden;}
+.fbox .fhead{background:linear-gradient(180deg,#1b2330,#151b23);padding:10px 16px;border-bottom:1px solid var(--border);}
+.fbox .fhead .fname{color:var(--accent2);font-size:14.5px;font-weight:700;}
+.fbox .fhead .floc{color:var(--text-dim);font-size:11.5px;margin-top:3px;}
+.fbox .fbody{padding:4px 16px 14px;}
+.fbox dl{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;margin:10px 0;}
+.fbox dt{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding-top:2px;}
+.fbox dd{margin:0;font-size:13px;}
+
+/* ---- tags ---- */
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-right:4px;letter-spacing:.4px;}
+.tag.syscall{background:rgba(88,166,255,.15);color:var(--tag-syscall);}
+.tag.vfs{background:rgba(126,231,135,.15);color:var(--tag-vfs);}
+.tag.fs{background:rgba(242,204,96,.15);color:var(--tag-fs);}
+.tag.mm{background:rgba(210,168,255,.15);color:var(--tag-mm);}
+.tag.block{background:rgba(255,166,87,.15);color:var(--tag-block);}
+.tag.driver{background:rgba(255,123,114,.15);color:var(--tag-driver);}
+.tag.hw{background:rgba(139,148,158,.15);color:var(--tag-hw);}
+
+/* ---- misc ---- */
+details{border:1px solid var(--border);border-radius:8px;margin:14px 0;padding:0;background:var(--panel);}
+details summary{cursor:pointer;padding:10px 16px;color:var(--accent);font-size:12.5px;font-weight:600;}
+details[open] summary{border-bottom:1px solid var(--border);}
+details .inner{padding:14px 16px;}
+.codehdr{color:var(--text-dim);font-size:11px;padding-bottom:6px;border-bottom:1px dashed var(--border);margin-bottom:8px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:820px){.grid2{grid-template-columns:1fr;}}
+.chapfoot{margin-top:26px;padding-top:14px;border-top:1px dashed var(--border);font-size:12.5px;color:var(--text-dim);}
+.chapfoot a{margin-right:14px;}
+mark{background:rgba(242,204,96,.35);color:inherit;border-radius:2px;}
+.toc-mini{columns:2;font-size:12.5px;}
+.toc-mini a{display:block;padding:2px 0;}
+#backtop{position:fixed;bottom:22px;right:26px;background:var(--panel);border:1px solid var(--border);color:var(--accent);border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;z-index:60;}
+#backtop:hover{background:var(--accent);color:#0d1117;}
+.center{text-align:center;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:var(--bg2);}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:6px;}
+@media(max-width:900px){#sidebar{display:none;}main{padding:24px 18px;}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="title">
+    <h1>Linux Kernel File System — Deep Source Code Guide</h1>
+    <div class="sub">From System Call → VFS → Filesystem → Page Cache → Block Layer → Driver → Hardware</div>
+  </div>
+  <div class="meta">
+    <span class="badge">Kernel: Linux 5.10.241</span>
+    <span class="badge">Source Tree: Kernel/K-S800/Src/</span>
+    <span class="badge warn">Target originally requested: 5.4.302 — see version note in §01</span>
+  </div>
+  <input id="search" type="text" placeholder="🔍 search: inode, dentry, openat, ext4, bio ...">
+</div>
+
+<div id="shell">
+<nav id="sidebar">
+  <div class="grp-label">Foundations</div>
+  <a class="nav-item" href="#c01" data-kw="overview architecture big picture layers">01 · Overview</a>
+  <a class="nav-item" href="#c02" data-kw="vfs virtual filesystem switch abstraction">02 · VFS Architecture</a>
+  <a class="nav-item" href="#c03" data-kw="core data structures file inode dentry path superblock">03 · Core Data Structures</a>
+  <a class="nav-item" href="#c04" data-kw="file descriptor fd files_struct fdtable fget fput">04 · File Descriptor</a>
+  <a class="nav-item" href="#c05" data-kw="pathname lookup path_openat link_path_walk walk_component">05 · Pathname Lookup</a>
+  <a class="nav-item" href="#c06" data-kw="dentry dcache d_lookup d_alloc dput hash">06 · Dentry &amp; Dcache</a>
+  <a class="nav-item" href="#c07" data-kw="inode iget_locked iput evict inode cache">07 · Inode</a>
+  <a class="nav-item" href="#c08" data-kw="superblock mount vfsmount namespace">08 · Superblock &amp; Mount</a>
+  <a class="nav-item" href="#c09" data-kw="file_operations inode_operations super_operations address_space_operations">09 · File Operations</a>
+
+  <div class="grp-label">Syscalls end to end</div>
+  <a class="nav-item" href="#c10" data-kw="openat open do_filp_open path_openat">10 · openat()</a>
+  <a class="nav-item" href="#c11" data-kw="read vfs_read page cache hit miss">11 · read()</a>
+  <a class="nav-item" href="#c12" data-kw="write vfs_write dirty page writeback">12 · write()</a>
+  <a class="nav-item" href="#c13" data-kw="mmap do_mmap page fault vm_area_struct">13 · mmap()</a>
+  <a class="nav-item" href="#c14" data-kw="ioctl unlocked_ioctl">14 · ioctl()</a>
+  <a class="nav-item" href="#c15" data-kw="create ext4_create O_CREAT">15 · create()</a>
+  <a class="nav-item" href="#c16" data-kw="unlink ext4_unlink link count">16 · unlink()</a>
+  <a class="nav-item" href="#c17" data-kw="rename ext4_rename2">17 · rename()</a>
+  <a class="nav-item" href="#c18" data-kw="getdents readdir iterate_dir">18 · getdents()</a>
+  <a class="nav-item" href="#c19" data-kw="fsync fdatasync vfs_fsync durability">19 · fsync()</a>
+
+  <div class="grp-label">Memory &amp; I/O path</div>
+  <a class="nav-item" href="#c20" data-kw="page cache address_space filemap xarray">20 · Page Cache</a>
+  <a class="nav-item" href="#c21" data-kw="writeback dirty balance_dirty_pages flusher">21 · Writeback</a>
+  <a class="nav-item" href="#c22" data-kw="ext4 extents block group inode table">22 · ext4</a>
+  <a class="nav-item" href="#c23" data-kw="jbd2 journal transaction commit">23 · JBD2 Journal</a>
+  <a class="nav-item" href="#c24" data-kw="block layer bio request blk-mq submit_bio">24 · Block Layer</a>
+  <a class="nav-item" href="#c25" data-kw="device driver nvme scsi request_queue">25 · Device Driver</a>
+
+  <div class="grp-label">Special filesystems</div>
+  <a class="nav-item" href="#c26" data-kw="procfs proc cpuinfo seq_file">26 · procfs</a>
+  <a class="nav-item" href="#c27" data-kw="sysfs kobject kernfs">27 · sysfs</a>
+  <a class="nav-item" href="#c28" data-kw="tmpfs shmem ram filesystem">28 · tmpfs</a>
+  <a class="nav-item" href="#c29" data-kw="overlayfs union mount container">29 · overlayfs</a>
+
+  <div class="grp-label">Practice</div>
+  <a class="nav-item" href="#c30" data-kw="debugging strace ftrace perf bpftrace labs">30 · Debugging + Labs</a>
+  <a class="nav-item" href="#c31" data-kw="mental model summary complete">31 · Complete Mental Model</a>
+</nav>
+
+<main id="main">
+
+<!-- ============================================================ -->
+<section class="chapter" id="c01">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 01</div>
+  <h2>Linux Filesystem at a Glance</h2>
+  <div class="chap-meta"><span class="stars">★☆☆☆☆</span><span class="prereq">Prerequisites: none — start here</span></div>
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠ VERSION NOTE — đọc trước khi dùng tài liệu này</div>
+Tài liệu gốc yêu cầu phân tích <b>Linux 5.4.302</b>. Workspace này (<code>IT6_Kernel</code>) chỉ có sẵn source thật của
+<b>Linux 5.10.241</b> (đường dẫn <code>Kernel/K-S800/Src/</code>, xác nhận từ <code>Makefile</code>: <code>VERSION=5 PATCHLEVEL=10 SUBLEVEL=241</code>).
+Theo nguyên tắc "ưu tiên source code thật, không bịa", toàn bộ function name / call graph / field struct trong tài liệu này được
+<b>verify trực tiếp bằng grep trên source 5.10.241</b>, không phải 5.4.302. Khác biệt đáng chú ý so với 5.4 được đánh dấu bằng box
+"⚠ VERSION DIFFERENCE" tại đúng vị trí liên quan (mount API dùng <code>fs_context</code> từ 5.2, <code>do_sys_openat2()</code> wrapper từ 5.6,
+<code>address_space_operations.readahead()</code> thay <code>readpages()</code> từ 5.8+, v.v).
+</div>
+
+<p>VFS (Virtual File System) là lớp trừu tượng trung tâm cho phép Linux hỗ trợ hàng chục filesystem khác nhau
+(ext4, xfs, btrfs, tmpfs, procfs, NFS...) đằng sau một tập API thống nhất: <code>open/read/write/close/stat/...</code>.
+Không có VFS, mỗi syscall sẽ phải biết cách nói chuyện với từng filesystem cụ thể — không thể mở rộng được.
+VFS giải quyết bài toán này bằng <b>polymorphism kiểu C</b>: mỗi object (file, inode, dentry, super_block) mang theo
+một bảng con trỏ hàm (<code>*_operations</code>) do filesystem cụ thể cài đặt; VFS chỉ gọi qua con trỏ, không biết —
+và không cần biết — mình đang nói chuyện với ext4 hay tmpfs.</p>
+
+<img src="VFS_Diagram.png" alt="" style="max-width: 100%; height: auto;">
+
+<table>
+<tr><th>Layer</th><th>Vai trò</th><th>Ví dụ source</th><th>Không làm gì</th></tr>
+<tr><td class="tag syscall" style="display:table-cell">SYSCALL</td><td>Copy tham số từ user → kernel, validate fd, gọi hàm VFS</td><td><code>fs/open.c</code>, <code>fs/read_write.c</code></td><td>Không biết filesystem cụ thể</td></tr>
+<tr><td class="tag vfs" style="display:table-cell">VFS</td><td>Định nghĩa object model chung + pathname resolution + dispatch qua <code>*_operations</code></td><td><code>fs/namei.c</code>, <code>fs/dcache.c</code>, <code>fs/inode.c</code></td><td>Không biết on-disk layout</td></tr>
+<tr><td class="tag fs" style="display:table-cell">FILESYSTEM</td><td>Cài đặt on-disk layout thật (block group, extent, journal...) hoặc synthetic (procfs sinh dữ liệu từ kernel state)</td><td><code>fs/ext4/*.c</code></td><td>Không biết block device thật sự nằm ở đâu / driver nào</td></tr>
+<tr><td class="tag mm" style="display:table-cell">PAGE CACHE</td><td>Cache nội dung file trong RAM theo đơn vị <code>page</code>, tránh I/O lặp lại</td><td><code>mm/filemap.c</code></td><td>Không biết filesystem semantics (extent, journal)</td></tr>
+<tr><td class="tag block" style="display:table-cell">BLOCK LAYER</td><td>Gộp/xếp hàng I/O request (<code>bio</code> → <code>request</code>), scheduling (blk-mq)</td><td><code>block/blk-core.c</code>, <code>block/blk-mq.c</code></td><td>Không biết file, inode, filesystem gì cả — chỉ biết sector</td></tr>
+<tr><td class="tag driver" style="display:table-cell">DRIVER</td><td>Dịch <code>request</code> thành lệnh phần cứng thật (NVMe command, SCSI CDB...)</td><td><code>drivers/nvme/host/core.c</code></td><td>Không biết filesystem/VFS</td></tr>
+</table>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+Mỗi layer chỉ biết layer ngay dưới nó thông qua một <b>interface hẹp và ổn định</b> (function pointer table hoặc struct chuẩn hoá:
+<code>bio</code>, <code>request</code>). Đây là lý do bạn có thể thay ext4 bằng btrfs, hoặc thay HDD bằng NVMe, mà không phải sửa VFS.
+Việc trace một filesystem operation thực chất là việc <b>đi theo chuỗi con trỏ hàm này từ trên xuống dưới</b>.
+</div>
+
+<div class="chapfoot">
+NEXT SOURCE FILES: <a href="#c02">fs/namei.c</a> · <a href="#c03">include/linux/fs.h</a> · <a href="#c03">include/linux/dcache.h</a><br>
+THIS CHAPTER ENABLES: <a href="#c02">02 VFS Architecture</a>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c02">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 02</div>
+  <h2>VFS Architecture</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c01">01 Overview</a></span></div>
+</div>
+
+<p>VFS không phải là một filesystem — nó không lưu dữ liệu trên disk. Nó là một <b>tập object model + registry</b> sống
+hoàn toàn trong RAM, đóng vai trò trung gian bắt buộc giữa syscall và filesystem thật. Ba lý do VFS tồn tại:</p>
+<ol>
+<li><b>Tính đa dạng filesystem</b> — kernel phải hỗ trợ hàng chục filesystem (ext4, xfs, btrfs, vfat, nfs, tmpfs, procfs...) qua một API duy nhất.</li>
+<li><b>Namespace thống nhất</b> — mọi filesystem được mount vào một cây thư mục duy nhất bắt đầu từ <code>/</code>, bất kể nó nằm trên disk, RAM, hay mạng.</li>
+<li><b>Cache tập trung</b> — dcache (dentry cache) và inode cache là cơ chế <i>chung cho mọi filesystem</i>, filesystem không phải tự cài lại logic cache pathname.</li>
+</ol>
+
+<div class="diagram"><pre>
+struct file_system_type          ← đăng ký bởi mỗi filesystem (register_filesystem())
+        │  .mount()
+        ▼
+struct super_block                ← một filesystem đã MOUNT (một instance)
+        │  .s_root
+        ▼
+struct dentry  ←──────┐            ← một pathname component đã resolve
+        │  .d_inode    │ .d_parent / .d_subdirs (cây dentry)
+        ▼               │
+struct inode            │          ← metadata của 1 file/thư mục (có thể có N dentry trỏ tới — hard link)
+        │  .i_mapping
+        ▼
+struct address_space               ← cache nội dung file (page cache) của inode này
+</pre></div>
+
+<table>
+<tr><th>Object VFS</th><th>Đại diện cho</th><th>File header</th></tr>
+<tr><td><code>struct file_system_type</code></td><td>Một <i>loại</i> filesystem (vd "ext4") — không phải instance đã mount</td><td><code>include/linux/fs.h</code></td></tr>
+<tr><td><code>struct super_block</code></td><td>Một filesystem <i>đã được mount</i> (instance)</td><td><code>include/linux/fs.h</code></td></tr>
+<tr><td><code>struct inode</code></td><td>Metadata của một file/dir/device node, độc lập với tên</td><td><code>include/linux/fs.h</code></td></tr>
+<tr><td><code>struct dentry</code></td><td>Một pathname component đã resolve, ánh xạ tên → inode</td><td><code>include/linux/dcache.h</code></td></tr>
+<tr><td><code>struct file</code></td><td>Một <i>open file instance</i> (fd), giữ vị trí đọc/ghi hiện tại</td><td><code>include/linux/fs.h</code></td></tr>
+<tr><td><code>struct address_space</code></td><td>Page cache của một inode</td><td><code>include/linux/fs.h</code></td></tr>
+<tr><td><code>struct vfsmount</code></td><td>Một điểm mount trong mount tree</td><td><code>include/linux/mount.h</code></td></tr>
+</table>
+
+<div class="box mental">
+<div class="box-title">🧠 MENTAL MODEL</div>
+Nghĩ về VFS như một <b>interface Java/abstract class trong C</b>: mỗi struct object (<code>file</code>, <code>inode</code>, <code>super_block</code>,
+<code>address_space</code>) mang theo một con trỏ tới bảng hàm ảo (<code>f_op</code>, <code>i_op</code>, <code>s_op</code>, <code>a_ops</code>).
+Khi VFS gọi <code>file->f_op->read_iter(...)</code>, nó đang gọi "virtual method" — implementation thật nằm ở ext4, tmpfs, hay bất kỳ
+filesystem nào cài đặt struct <code>file</code> đó.
+</div>
+
+<div class="chapfoot">
+NEXT SOURCE FILES: <a href="#c03">include/linux/fs.h</a> · <a href="#c06">fs/dcache.c</a> · <a href="#c07">fs/inode.c</a><br>
+THIS CHAPTER ENABLES: <a href="#c03">03 Core Data Structures</a>, mọi chương sau
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c03">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 03</div>
+  <h2>Core Data Structures</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c02">02 VFS</a></span></div>
+</div>
+
+<p>Đây là bản đồ struct quan trọng nhất trong toàn bộ VFS. Mọi chương sau đều tham chiếu ngược lại chương này.</p>
+
+<div class="diagram"><pre>
+current (struct task_struct)
+     │  .files
+     ▼
+struct files_struct
+     │  .fdt → struct fdtable  (mảng fd → struct file*)
+     ▼   fd = 3
+struct file                                    ← 1 OPEN FILE INSTANCE (mỗi open() 1 cái mới)
+     │
+     ├── f_path ──────┬── dentry ──── d_inode ──┐
+     │                └── vfsmount              │
+     ├── f_inode  (cached, trỏ thẳng inode) ─────┤
+     ├── f_op     (file_operations, do fs cài)   │
+     ├── f_pos    (vị trí đọc/ghi hiện tại)      │
+     ├── f_mapping ── trỏ address_space          │
+     └── f_count  (atomic_long_t refcount)       ▼
+                                          struct inode        ← METADATA (không phụ thuộc tên)
+                                                │
+                                                ├── i_sb ──── struct super_block ──── filesystem
+                                                ├── i_op     (inode_operations)
+                                                ├── i_mapping ── struct address_space  (page cache)
+                                                ├── i_ino, i_mode, i_size, i_nlink, i_uid/i_gid, i_atime/i_mtime/i_ctime
+                                                └── i_count  (atomic_t refcount, qua igrab/iput)
+</pre></div>
+
+<table>
+<tr><th>Object</th><th>Purpose</th><th>Lifetime</th><th>Field quan trọng (verify từ source 5.10.241)</th></tr>
+<tr><td><code>struct file</code><br><span class="tag vfs">VFS</span></td><td>Một open-file instance — trạng thái riêng của MỘT lần open, không phải của file trên disk</td><td>Từ <code>open()</code> tới <code>close()</code>/cuối cùng <code>fput()</code></td><td><code>f_path</code>, <code>f_inode</code>, <code>f_op</code>, <code>f_pos</code>, <code>f_mode</code>, <code>f_flags</code>, <code>f_count</code>, <code>f_mapping</code>, <code>f_ra</code> (readahead state)</td></tr>
+<tr><td><code>struct inode</code><br><span class="tag vfs">VFS</span></td><td>Metadata của 1 file vật lý — độc lập với tên gọi</td><td>Nằm trong inode cache tới khi bị evict (0 dentry alias &amp; 0 reference)</td><td><code>i_mode</code>, <code>i_uid/i_gid</code>, <code>i_ino</code>, <code>i_nlink</code>, <code>i_size</code>, <code>i_op</code>, <code>i_sb</code>, <code>i_mapping</code>, <code>i_state</code>, <code>i_rwsem</code></td></tr>
+<tr><td><code>struct dentry</code><br><span class="tag vfs">VFS</span></td><td>Ánh xạ 1 tên (component pathname) → 1 inode, node trong cây thư mục trong RAM</td><td>Sống trong dcache, có thể bị reclaim khi hết reference (LRU)</td><td><code>d_name</code>, <code>d_inode</code>, <code>d_parent</code>, <code>d_sb</code>, <code>d_lockref</code>, <code>d_flags</code>, <code>d_op</code></td></tr>
+<tr><td><code>struct path</code><br><span class="tag vfs">VFS</span></td><td>Vị trí tuyệt đối trong toàn bộ mount namespace = dentry + mount nó thuộc về</td><td>Tham chiếu tạm (đi kèm <code>path_get()</code>/<code>path_put()</code>)</td><td><code>dentry</code>, <code>mnt</code> (<code>include/linux/path.h</code>)</td></tr>
+<tr><td><code>struct super_block</code><br><span class="tag vfs">VFS</span></td><td>Một filesystem instance đã mount</td><td>Từ mount tới umount</td><td><code>s_root</code>, <code>s_op</code>, <code>s_type</code>, <code>s_bdev</code>, <code>s_magic</code>, <code>s_maxbytes</code>, <code>s_blocksize</code></td></tr>
+<tr><td><code>struct address_space</code><br><span class="tag mm" style="display:inline-block">MM</span></td><td>Page cache của 1 inode (hoặc của block device)</td><td>Gắn với inode/bdev</td><td><code>host</code>, <code>i_pages</code> (xarray chứa page/folio), <code>a_ops</code>, <code>nrpages</code></td></tr>
+</table>
+
+<div class="grid2">
+<div class="box warn">
+<div class="box-title">⚠ COMMON MISCONCEPTION</div>
+<b>"struct file là file trên disk"</b> — sai. <code>struct file</code> chỉ tồn tại trong RAM khi có tiến trình mở file đó.
+Hai <code>open()</code> khác nhau trên cùng một file tạo ra <b>hai <code>struct file</code> khác nhau</b> (hai <code>f_pos</code> độc lập),
+nhưng cả hai đều trỏ tới <b>cùng một</b> <code>struct inode</code>.
+</div>
+<div class="box warn">
+<div class="box-title">⚠ COMMON MISCONCEPTION</div>
+<b>"1 file = 1 dentry"</b> — sai với hard link. Nhiều <code>dentry</code> (nhiều tên, có thể ở nhiều thư mục khác nhau) có thể
+cùng trỏ tới <b>một</b> <code>inode</code> (<code>i_nlink &gt; 1</code>). Xem <a href="#c16">chương 16 unlink()</a>.
+</div>
+</div>
+
+<table>
+<tr><th>So sánh</th><th>inode</th><th>dentry</th><th>file</th></tr>
+<tr><td>Đại diện cho</td><td>Nội dung + metadata vật lý</td><td>Một cái tên trỏ tới inode</td><td>Một phiên mở cụ thể</td></tr>
+<tr><td>Có thể có nhiều instance cho cùng 1 file?</td><td>Không (1 file = 1 inode, trừ multi-device)</td><td>Có (hard link)</td><td>Có (mở nhiều lần)</td></tr>
+<tr><td>Còn tồn tại khi unlink hết tên?</td><td>Tồn tại tới khi <code>i_nlink==0 &amp;&amp; i_count==0</code></td><td>Bị gỡ (negative hoặc unhashed)</td><td>Vẫn hoạt động bình thường nếu đang mở</td></tr>
+<tr><td>Có <code>f_pos</code> (offset đọc/ghi)?</td><td>Không</td><td>Không</td><td>Có</td></tr>
+<tr><td>Cache tương ứng</td><td>inode cache</td><td>dentry cache (dcache)</td><td>không cache riêng — sống theo fd</td></tr>
+</table>
+
+<div class="chapfoot">
+NEXT SOURCE FILES: <a href="#c04">fs/file_table.c</a> · <a href="#c06">fs/dcache.c</a> · <a href="#c07">fs/inode.c</a> · <a href="#c08">fs/super.c</a><br>
+THIS CHAPTER ENABLES: <a href="#c04">04</a>–<a href="#c09">09</a>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c04">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 04</div>
+  <h2>File Descriptor</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c03">03 Core structs</a></span></div>
+</div>
+
+<p>Một <b>fd</b> (file descriptor, số nguyên nhỏ) là chỉ số vào một mảng riêng của process, KHÔNG phải con trỏ vào struct file trực tiếp
+— lớp gián tiếp này cho phép mỗi process có bảng fd độc lập trong khi vẫn share cùng <code>struct file</code> nếu <code>dup()</code>/<code>fork()</code>.</p>
+
+<div class="diagram"><pre>
+task_struct (process)
+     │ files
+     ▼
+struct files_struct
+     │ fdt  (RCU-protected pointer, cho phép resize)
+     ▼
+struct fdtable
+     │ fd[]  ── mảng con trỏ struct file*, index = fd number
+     │ open_fds  ── bitmap fd đang mở
+     ▼
+fd=3 ──► struct file ──► f_path ──► dentry ──► inode
+</pre></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">get_unused_fd_flags()</div><div class="floc">Source: fs/file.c &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Tìm 1 slot trống trong <code>fdtable</code> của process hiện tại, đánh dấu đã dùng trong <code>open_fds</code> bitmap, KHÔNG gắn <code>struct file</code> vào — chỉ "đặt chỗ".</dd>
+<dt>Caller</dt><dd><code>do_sys_openat2()</code> (fs/open.c) — gọi trước khi path lookup hoàn tất, để tránh leak fd nếu bị lỗi giữa chừng.</dd>
+<dt>Callee</dt><dd><code>alloc_fd()</code></dd>
+<dt>Output</dt><dd>Số fd &gt;= 0, hoặc -EMFILE nếu vượt <code>RLIMIT_NOFILE</code>.</dd>
+<dt>Next step</dt><dd><code>do_filp_open()</code> để lấy <code>struct file*</code> thật, sau đó <code>fd_install()</code>.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">fd_install()</div><div class="floc">Source: fs/file.c &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Gắn <code>struct file*</code> đã mở thành công vào slot fd đã được <code>get_unused_fd_flags()</code> đặt chỗ trước đó — publish nó cho userspace thấy qua <code>fd</code>.</dd>
+<dt>Caller</dt><dd><code>do_sys_openat2()</code>, sau khi <code>do_filp_open()</code> trả về thành công.</dd>
+<dt>Reference counting</dt><dd>Không tăng refcount thêm — <code>struct file</code> vừa alloc đã có refcount 1, giờ chuyển quyền sở hữu (ownership transfer) cho fdtable.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">fget() / fput()</div><div class="floc">Source: fs/file.c, fs/file_table.c &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd><code>fget(fd)</code>: tra <code>fdtable</code> theo fd, <b>tăng</b> <code>f_count</code>, trả về <code>struct file*</code> an toàn dùng ngoài giữ fd lock (dùng bởi mọi syscall thao tác trên fd: read/write/ioctl/...). <code>fput(file)</code>: giảm <code>f_count</code>, nếu về 0 thì free qua <code>file_free()</code> (RCU-delayed).</dd>
+<dt>Locking</dt><dd><code>fget()</code> dùng RCU read-side + <code>atomic_long_inc_not_zero()</code> để tránh race với <code>close()</code> đang giải phóng file ở CPU khác.</dd>
+<dt>Reference counting</dt><dd><code>f_count</code> là <code>atomic_long_t</code> — tăng ở mọi <code>fget()</code>/<code>dup()</code>, giảm ở mọi <code>fput()</code>/<code>close()</code>. Khi về 0: gọi <code>f_op-&gt;release()</code>, giải phóng dentry/mnt reference qua <code>path_put()</code>.</dd>
+</dl></div></div>
+
+<div class="box">
+<div class="box-title">⚙ INTERNAL FLOW — vòng đời fd từ open() tới close()</div>
+<pre>open()
+ → get_unused_fd_flags()      [đặt chỗ số fd, chưa có file]
+ → do_filp_open()             [tạo struct file, f_count=1]
+ → fd_install(fd, file)       [gắn file vào slot fd]
+ → trả fd cho userspace
+...
+read(fd,...)/write(fd,...)
+ → fdget()/fget_light()       [tăng f_count tạm thời hoặc mượn RCU]
+ → dùng file->f_op->...
+ → fdput()                    [trả lại, không nhất thiết giảm f_count nếu dùng light variant]
+...
+close(fd)
+ → __close_fd()  → filp_close() → fput(file)
+ → nếu f_count về 0: f_op->flush(), f_op->release(), dput(dentry), mntput(mnt), file_free()</pre>
+</div>
+
+<table>
+<tr><th>fd vs file vs inode</th><th>fd</th><th>struct file</th><th>struct inode</th></tr>
+<tr><td>Scope</td><td>Riêng từng process (per-fdtable)</td><td>Riêng từng lần <code>open()</code> (có thể share qua dup/fork)</td><td>Global trong kernel, share qua mọi opener</td></tr>
+<tr><td>Chứa gì</td><td>Chỉ 1 số nguyên (index)</td><td><code>f_pos</code>, <code>f_flags</code>, <code>f_op</code></td><td>Metadata vật lý của file</td></tr>
+</table>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c05">fs/namei.c</a> · <a href="#c10">fs/open.c</a> &nbsp;|&nbsp; THIS CHAPTER ENABLES: <a href="#c10">10 openat()</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c05">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 05</div>
+  <h2>Pathname Lookup</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c04">04</a>, <a href="#c06">06 Dcache</a>, <a href="#c07">07 Inode</a></span></div>
+</div>
+
+<p>Đây là cơ chế biến một chuỗi ký tự như <code>"/home/user/test.txt"</code> thành <code>struct path { dentry, vfsmount }</code>.
+Kernel đi qua từng component (<code>home</code>, <code>user</code>, <code>test.txt</code>) một, mỗi bước tra dcache trước — chỉ chạm filesystem thật khi cache miss.</p>
+
+<div class="diagram"><pre>
+"/home/user/test.txt"
+        │
+        ▼
+path_lookupat()  (fs/namei.c:2331)         ← entry point pathname resolution
+        │
+        ▼
+path_init()                                 ← xác định điểm bắt đầu: '/' → root, tương đối → cwd
+        │
+        ▼
+link_path_walk()  (fs/namei.c:2113)         ← vòng lặp chính, tách từng component bằng '/'
+        │
+        │  với mỗi component:
+        ▼
+walk_component()
+        │
+        ▼
+lookup_fast()  (fs/namei.c:1465)  ─────── HIT ──► có ngay dentry (RCU hoặc ref-walk)
+        │ MISS
+        ▼
+__lookup_slow()  (fs/namei.c:1529)
+        │
+        ▼
+inode->i_op->lookup()                       ← gọi VÀO filesystem cụ thể (vd ext4_lookup())
+        │
+        ▼
+d_alloc() + d_add()                         ← tạo dentry mới, gắn vào dcache, gắn inode
+</pre></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">link_path_walk()</div><div class="floc">Source: fs/namei.c:2113 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Duyệt toàn bộ pathname, tách theo <code>/</code>, gọi <code>walk_component()</code> cho từng phần trừ phần cuối cùng (last component được xử lý riêng tuỳ flag <code>LOOKUP_PARENT</code>).</dd>
+<dt>Caller</dt><dd><code>path_lookupat()</code>, <code>path_openat()</code>, <code>path_mountpoint()</code>.</dd>
+<dt>Callee</dt><dd><code>walk_component()</code> → <code>lookup_fast()</code>/<code>__lookup_slow()</code>; xử lý <code>.</code>, <code>..</code>; theo symlink qua <code>get_link()</code>.</dd>
+<dt>Important structs</dt><dd><code>struct nameidata</code> — mang trạng thái duyệt hiện tại (path hiện tại, depth symlink, flags).</dd>
+<dt>Locking</dt><dd>Ưu tiên chạy trong <b>RCU-walk mode</b> (không lock, không tăng refcount — nhanh); rơi về <b>ref-walk mode</b> (có lock, có refcount) khi gặp trường hợp không an toàn cho RCU (vd cần block, cần theo symlink phức tạp).</dd>
+<dt>Error paths</dt><dd><code>-ENOENT</code> (component không tồn tại), <code>-ENOTDIR</code> (component giữa đường không phải thư mục), <code>-ELOOP</code> (quá nhiều symlink — giới hạn <code>MAXSYMLINKS</code>).</dd>
+<dt>Next step</dt><dd>Component cuối cùng → trả về <code>struct path</code> hoàn chỉnh cho caller (vd <code>path_openat()</code>).</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">lookup_fast()</div><div class="floc">Source: fs/namei.c:1465 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Tra dcache cho 1 component, cố gắng tìm dentry đã có sẵn trong RAM — đường đi nhanh (fast path), không chạm filesystem.</dd>
+<dt>Callee</dt><dd><code>__d_lookup_rcu()</code> (RCU-walk) hoặc <code>__d_lookup()</code> (ref-walk) — xem <a href="#c06">chương 06</a>.</dd>
+<dt>Output</dt><dd>Dentry nếu hit (có thể là <i>negative dentry</i> — biết chắc file không tồn tại, cũng là 1 dạng "hit"); <code>NULL</code>/lỗi nếu miss.</dd>
+<dt>Next step</dt><dd>Hit → dùng ngay dentry đó, tiếp tục component kế. Miss → <code>__lookup_slow()</code>.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">__lookup_slow()</div><div class="floc">Source: fs/namei.c:1529 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span> → <span class="tag fs" style="display:inline">FS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Dcache miss — phải hỏi filesystem thật: có tên component này trong thư mục cha không?</dd>
+<dt>Callee</dt><dd><code>parent_inode->i_op->lookup(dir, dentry, flags)</code> — vd <code>ext4_lookup()</code> đọc directory block/htree trên disk (qua page cache/buffer cache), tìm entry khớp tên, rồi <code>iget_locked()</code> nạp/tạo inode tương ứng.</dd>
+<dt>Important structs</dt><dd>Tạo <code>struct dentry</code> mới (negative trước, rồi <code>d_add()</code> gắn inode nếu tìm thấy) qua <code>d_alloc_parallel()</code>.</dd>
+<dt>Locking</dt><dd><code>inode-&gt;i_rwsem</code> (đọc) trên thư mục cha để tránh race với create/unlink song song.</dd>
+<dt>Next step</dt><dd>Dentry mới được <code>d_add()</code> vào dcache — lần lookup sau cùng tên sẽ hit fast path.</dd>
+</dl></div></div>
+
+<div class="grid2">
+<div class="box flow">
+<div class="box-title">⚙ absolute vs relative path</div>
+<code>path_init()</code> chọn điểm bắt đầu: bắt đầu bằng <code>/</code> → <code>task-&gt;fs-&gt;root</code>; ngược lại → <code>task-&gt;fs-&gt;pwd</code> (cwd) hoặc <code>dfd</code> (với <code>*at()</code> syscalls như <code>openat</code>). <code>chdir()</code> chỉ đổi <code>fs-&gt;pwd</code>, không đổi filesystem thật.
+</div>
+<div class="box flow">
+<div class="box-title">⚙ symlink vs hard link</div>
+Symlink: một <i>inode riêng</i> (<code>S_ISLNK</code>) chứa chuỗi path đích — <code>get_link()</code> trả về path đó, <code>link_path_walk()</code> lặp lại resolution trên path mới. Hard link: <b>không có inode riêng</b> — chỉ là một dentry/tên khác trỏ vào <i>cùng</i> inode (<code>i_nlink++</code>). Xem <a href="#c16">16 unlink()</a>.
+</div>
+</div>
+
+<div class="box mental">
+<div class="box-title">🧠 MENTAL MODEL — mount namespace &amp; struct path</div>
+Một pathname không resolve thành 1 dentry đơn — nó resolve thành <code>struct path { dentry, vfsmount }</code>, vì trên đường đi có thể
+băng qua <b>ranh giới mount</b> (vd <code>/home</code> là 1 mount point riêng). <code>path_init()</code>/<code>link_path_walk()</code> tự động
+"nhảy" qua mount point (<code>follow_mount()</code>), nên với người dùng, cây thư mục trông liền mạch dù thực chất là nhiều filesystem ghép lại.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c06">fs/dcache.c</a> · <a href="#c07">fs/inode.c</a> · <a href="#c08">fs/namespace.c</a> &nbsp;|&nbsp; THIS CHAPTER ENABLES: <a href="#c10">open()</a>, <a href="#c19">stat()</a>, <a href="#c16">unlink()</a>, <a href="#c17">rename()</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c06">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 06</div>
+  <h2>Dentry &amp; Dcache</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c03">03</a></span></div>
+</div>
+
+<p>Dcache là bảng hash toàn cục ánh xạ <code>(parent dentry, tên)</code> → <code>dentry</code>, giúp tránh phải hỏi lại filesystem
+mỗi lần resolve cùng một pathname. Không có dcache, MỖI lần <code>open()</code> đều phải đọc directory block từ disk — cực kỳ chậm.</p>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">d_lookup() / __d_lookup()</div><div class="floc">Source: fs/dcache.c:2335 / 2365 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Tra bảng hash dcache toàn cục theo <code>(parent, qstr name)</code>, trả về dentry nếu có, tăng reference count của nó.</dd>
+<dt>Locking</dt><dd><code>__d_lookup()</code> dùng <code>rcu_read_lock()</code> để duyệt hash chain không khoá, chỉ lock (<code>dentry-&gt;d_lockref.lock</code>) đúng candidate để verify tên khớp và tăng refcount an toàn (seqlock retry nếu bị race).</dd>
+<dt>Output</dt><dd>Dentry với refcount +1 (caller phải <code>dput()</code> sau khi dùng xong), hoặc <code>NULL</code>.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">d_alloc() / d_alloc_parallel()</div><div class="floc">Source: fs/dcache.c:1791, 2540 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Cấp phát 1 <code>struct dentry</code> mới (chưa có inode — "negative"), gắn vào <code>d_parent-&gt;d_subdirs</code>. <code>d_alloc_parallel()</code> còn xử lý trường hợp nhiều thread cùng lookup 1 tên song song (in-lookup hash) để không tạo trùng.</dd>
+<dt>Caller</dt><dd><code>__lookup_slow()</code> khi dcache miss.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">d_add() / d_instantiate()</div><div class="floc">Source: fs/dcache.c:2702 / 1976 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Gắn <code>inode</code> vào 1 dentry vừa alloc (biến negative dentry thành positive) — <code>d_instantiate()</code> thêm dentry vào <code>inode-&gt;i_dentry</code> alias list; <code>d_add()</code> = <code>d_instantiate()</code> + rehash vào bảng hash toàn cục để lookup sau tìm thấy.</dd>
+<dt>Caller</dt><dd>Filesystem's <code>-&gt;lookup()</code>, <code>-&gt;create()</code>, <code>-&gt;mkdir()</code>, sau khi gọi <code>iget_locked()</code>/tạo inode mới.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">dput()</div><div class="floc">Source: fs/dcache.c:864 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Giảm reference count của dentry. Về 0 → KHÔNG free ngay — đưa vào <b>LRU list</b> để có thể tái sử dụng nếu lookup lại sớm (đây là lý do dcache "nhanh" ngay cả sau khi không còn ai giữ reference).</dd>
+<dt>Reference counting</dt><dd><code>d_lockref</code> (kết hợp spinlock + count, tối ưu hoá bằng cmpxchg cho trường hợp không tranh chấp).</dd>
+<dt>Next step</dt><dd>Dưới áp lực bộ nhớ, shrinker (<code>prune_dcache_sb()</code>) sẽ evict dentry ở cuối LRU → gọi <code>iput()</code> trên inode liên quan.</dd>
+</dl></div></div>
+
+<div class="diagram"><pre>
+pathname component
+       │
+       ▼
+   d_lookup() / lookup_fast()
+       │
+   ┌───┴────┐
+   ▼        ▼
+  HIT      MISS
+   │        │
+   │        ▼
+   │   inode->i_op->lookup()   (chạm filesystem thật)
+   │        │
+   │        ▼
+   │   d_alloc() + d_add()      (cache lại cho lần sau)
+   │        │
+   └────┬───┘
+        ▼
+   dentry sẵn sàng dùng
+</pre></div>
+
+<table>
+<tr><th>3 loại cache dễ nhầm</th><th>dentry cache (dcache)</th><th>inode cache</th><th>page cache</th></tr>
+<tr><td>Cache cái gì</td><td>Ánh xạ tên → inode</td><td>Metadata inode (không cần đọc lại từ disk)</td><td>Nội dung file (data bytes)</td></tr>
+<tr><td>Key</td><td>(parent dentry, tên)</td><td>(super_block, số inode)</td><td>(address_space, page index)</td></tr>
+<tr><td>Struct</td><td><code>struct dentry</code></td><td><code>struct inode</code></td><td><code>struct page</code>/folio trong <code>i_pages</code></td></tr>
+<tr><td>Hit tránh được gì</td><td>Đọc lại directory block</td><td>Đọc lại inode table trên disk</td><td>Đọc lại data block trên disk</td></tr>
+</table>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA — negative dentry</div>
+Dcache còn cache cả việc "KHÔNG tồn tại": nếu <code>open("/tmp/khong_co.txt")</code> thất bại, kernel tạo 1 <b>negative dentry</b>
+(<code>d_inode == NULL</code>). Lần <code>open()</code> sau cùng tên sẽ hit ngay ở dcache và trả <code>-ENOENT</code> mà KHÔNG cần hỏi lại filesystem.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c07">fs/inode.c</a> · <a href="#c05">fs/namei.c</a> &nbsp;|&nbsp; THIS CHAPTER ENABLES: <a href="#c05">05 Pathname Lookup</a>, <a href="#c16">16 unlink()</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c07">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 07</div>
+  <h2>Inode</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c03">03</a>, <a href="#c06">06</a></span></div>
+</div>
+
+<p><code>struct inode</code> là "sự thật" về một file — mọi thứ ngoại trừ tên của nó. Field xác nhận từ <code>include/linux/fs.h:617</code>:
+<code>i_mode</code>, <code>i_uid/i_gid</code>, <code>i_op</code>, <code>i_sb</code>, <code>i_mapping</code>, <code>i_ino</code>, <code>i_nlink</code> (chỉ đọc trực tiếp — sửa qua
+<code>set_nlink()/inc_nlink()/drop_nlink()</code>), <code>i_rdev</code>, <code>i_size</code>, <code>i_atime/i_mtime/i_ctime</code>, <code>i_blocks</code>, <code>i_state</code>, <code>i_rwsem</code>.</p>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">iget_locked()</div><div class="floc">Source: fs/inode.c:1256 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Tra inode cache theo <code>(super_block, ino)</code>. Có sẵn → trả về (tăng <code>i_count</code>). Chưa có → cấp phát inode mới ở trạng thái <code>I_NEW</code> (khoá), trả về để filesystem tự điền field từ on-disk inode.</dd>
+<dt>Caller</dt><dd>Filesystem's <code>-&gt;lookup()</code> (vd <code>ext4_iget()</code> gọi qua <code>iget_locked()</code>).</dd>
+<dt>Callee</dt><dd><code>alloc_inode()</code> → <code>sb-&gt;s_op-&gt;alloc_inode()</code> (cho phép fs cấp phát struct lớn hơn bọc lấy <code>struct inode</code>, vd <code>ext4_inode_info</code>).</dd>
+<dt>Next step</dt><dd>Nếu inode mới: filesystem điền field từ disk rồi gọi <code>unlock_new_inode()</code> để bỏ cờ <code>I_NEW</code>, các lookup khác đang chờ được đánh thức.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">iput()</div><div class="floc">Source: fs/inode.c:1748 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Giảm <code>i_count</code>. Về 0: nếu <code>i_nlink == 0</code> (đã bị unlink hết tên) → gọi <code>evict()</code> ngay để xoá cả metadata lẫn dữ liệu trên disk; nếu còn <code>i_nlink &gt; 0</code> → giữ trong inode cache (LRU) để tái dùng.</dd>
+<dt>Callee</dt><dd><code>evict()</code> (fs/inode.c:589) → <code>sb-&gt;s_op-&gt;evict_inode()</code> (vd <code>ext4_evict_inode()</code> giải phóng block thật, ghi transaction giải phóng vào JBD2).</dd>
+<dt>Next step</dt><dd><code>evict()</code> xong → <code>destroy_inode()</code> free vùng nhớ struct inode.</dd>
+</dl></div></div>
+
+<div class="diagram"><pre>
+filesystem lookup
+      │
+      ▼
+  iget_locked()  ── inode cache HIT ──► trả về, i_count++
+      │ MISS
+      ▼
+  alloc_inode()  (I_NEW)
+      │
+      ▼
+  fs điền field từ on-disk inode (ext4_iget đọc inode table)
+      │
+      ▼
+  unlock_new_inode()
+      │
+      ▼
+  ACTIVE (i_count > 0, dùng bình thường)
+      │
+      │  iput() lặp lại, i_count → 0
+      ▼
+  i_nlink == 0 ? ──YES──► evict()  ──► s_op->evict_inode() ──► free block trên disk ──► destroy_inode()
+      │ NO
+      ▼
+  giữ trong inode LRU cache (chưa free, có thể tái dùng nếu lookup lại)
+</pre></div>
+
+<div class="box warn">
+<div class="box-title">⚠ COMMON MISCONCEPTION</div>
+"inode number là duy nhất toàn hệ thống" — sai, chỉ duy nhất <b>trong cùng 1 super_block</b>. Hai file trên hai
+filesystem/partition khác nhau hoàn toàn có thể trùng <code>i_ino</code>. Định danh thật sự duy nhất là cặp <code>(st_dev, st_ino)</code>.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c08">fs/super.c</a> · <a href="#c22">fs/ext4/inode.c</a> &nbsp;|&nbsp; THIS CHAPTER ENABLES: <a href="#c16">16 unlink()</a>, <a href="#c22">22 ext4</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c08">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 08</div>
+  <h2>Superblock &amp; Mount</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c02">02</a></span></div>
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠ VERSION DIFFERENCE — mount API</div>
+Từ Linux 5.2, mount không còn dùng <code>file_system_type-&gt;mount()</code> gọi trực tiếp theo kiểu cũ mà đi qua
+<b><code>struct fs_context</code></b> (RFC "new mount API", <code>fs_context_for_mount()</code> → <code>vfs_get_tree()</code>). Đây chính là những gì
+verify được trong 5.10.241 (<code>fs/namespace.c:994, 2976, 2997</code>). Tài liệu về Linux 5.4 sớm mô tả API cũ
+(<code>get_sb()</code>/<code>mount()</code> trả trực tiếp <code>dentry*</code>) vẫn còn tương thích ở 5.4, nhưng 5.10 đã dùng cơ chế context-based này.
+</div>
+
+<div class="diagram"><pre>
+mount("/dev/sda1", "/mnt", "ext4", ...)
+      │
+      ▼
+SYSCALL_DEFINE5(mount, ...)   (fs/namespace.c:3525)
+      │
+      ▼
+do_mount()   (fs/namespace.c:3331)
+      │
+      ▼
+do_new_mount()  (fs/namespace.c:2950)
+      │
+      ├── fs_context_for_mount(type, sb_flags)   ← tra file_system_type theo tên "ext4"
+      │
+      ├── vfs_get_tree(fc)                        ← gọi fc->ops->get_tree() = ext4_get_tree()
+      │        │
+      │        ▼
+      │   ext4_fill_super()                       ← đọc ext4 superblock từ disk (block 0/1),
+      │        │                                      dựng struct super_block, tạo root inode + root dentry
+      │        ▼
+      │   struct super_block  { s_root, s_op = &ext4_sops, s_bdev, ... }
+      │
+      ▼
+do_new_mount_fc()  → vfs_create_mount(fc)  → gắn super_block vào struct vfsmount
+      │
+      ▼
+graft vfsmount vào mount tree tại mountpoint "/mnt"  (attach_mnt / graft_tree)
+</pre></div>
+
+<table>
+<tr><th>Struct</th><th>Vai trò</th></tr>
+<tr><td><code>struct file_system_type</code></td><td>Đăng ký 1 filesystem driver (vd ext4) — có <code>.name</code>, <code>.init_fs_context</code>/<code>.mount</code>, đăng ký qua <code>register_filesystem()</code></td></tr>
+<tr><td><code>struct fs_context</code></td><td>(kernel mới) Gói tham số mount lại + trạng thái trong quá trình dựng super_block, thay cho việc truyền tham số rời rạc</td></tr>
+<tr><td><code>struct super_block</code></td><td>1 filesystem instance đã mount, có <code>s_root</code> trỏ dentry gốc</td></tr>
+<tr><td><code>struct vfsmount</code></td><td>1 điểm gắn (mount point) trong <b>mount tree</b> — 1 super_block có thể được mount ở NHIỀU nơi (bind mount) → nhiều <code>vfsmount</code> cùng trỏ 1 <code>super_block</code></td></tr>
+<tr><td>mount namespace</td><td>Toàn bộ mount tree của 1 process/container (<code>struct mnt_namespace</code>) — cho phép container thấy cây mount khác nhau</td></tr>
+</table>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+<code>struct path</code> = <code>{dentry, vfsmount}</code> chứ không chỉ <code>dentry</code>, chính vì <b>1 super_block/dentry có thể được nhìn thấy
+qua nhiều mount điểm khác nhau</b> (bind mount). VFS cần biết "đang đứng ở mount nào" để resolve đúng <code>..</code> khi đi qua ranh giới mount.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c22">fs/ext4/super.c</a> · <a href="#c09">include/linux/fs.h (super_operations)</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c09">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 09</div>
+  <h2>File Operations — Bảng hàm ảo</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c02">02</a>–<a href="#c08">08</a></span></div>
+</div>
+
+<p>4 bảng "virtual method table" điều khiển toàn bộ hành vi của một filesystem. Field verify từ
+<code>include/linux/fs.h</code> (5.10.241).</p>
+
+<div class="grid2">
+<pre><code>// include/linux/fs.h — struct file_operations (trích)
+struct file_operations {
+    ssize_t (*read_iter)(struct kiocb *, struct iov_iter *);
+    ssize_t (*write_iter)(struct kiocb *, struct iov_iter *);
+    int (*iterate_shared)(struct file *, struct dir_context *);
+    __poll_t (*poll)(struct file *, struct poll_table_struct *);
+    long (*unlocked_ioctl)(struct file *, unsigned int, unsigned long);
+    int (*mmap)(struct file *, struct vm_area_struct *);
+    int (*open)(struct inode *, struct file *);
+    int (*release)(struct inode *, struct file *);
+    int (*fsync)(struct file *, loff_t, loff_t, int datasync);
+    ...
+};</code></pre>
+<pre><code>// include/linux/fs.h — struct inode_operations (trích)
+struct inode_operations {
+    struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
+    int (*create)(struct inode *, struct dentry *, umode_t, bool);
+    int (*link)(struct dentry *, struct inode *, struct dentry *);
+    int (*unlink)(struct inode *, struct dentry *);
+    int (*mkdir)(struct inode *, struct dentry *, umode_t);
+    int (*rmdir)(struct inode *, struct dentry *);
+    int (*rename)(struct inode *, struct dentry *,
+                  struct inode *, struct dentry *, unsigned int);
+    int (*getattr)(const struct path *, struct kstat *, u32, unsigned int);
+    ...
+};</code></pre>
+</div>
+<div class="grid2">
+<pre><code>// struct super_operations (trích)
+struct super_operations {
+    struct inode *(*alloc_inode)(struct super_block *);
+    void (*destroy_inode)(struct inode *);
+    int (*write_inode)(struct inode *, struct writeback_control *);
+    void (*evict_inode)(struct inode *);
+    void (*put_super)(struct super_block *);
+    int (*sync_fs)(struct super_block *, int wait);
+    int (*statfs)(struct dentry *, struct kstatfs *);
+};</code></pre>
+<pre><code>// struct address_space_operations (trích, 5.10 có cả readpages CŨ và readahead MỚI)
+struct address_space_operations {
+    int (*readpage)(struct file *, struct page *);
+    int (*readpages)(struct file *, struct address_space *,
+                      struct list_head *, unsigned nr_pages);   // legacy
+    void (*readahead)(struct readahead_control *);              // mới, 5.8+
+    int (*writepage)(struct page *, struct writeback_control *);
+    int (*writepages)(struct address_space *, struct writeback_control *);
+    int (*write_begin)(...); int (*write_end)(...);
+    int (*direct_IO)(struct kiocb *, struct iov_iter *);
+};</code></pre>
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠ VERSION DIFFERENCE</div>
+<code>readahead()</code> (nhận <code>struct readahead_control*</code>, xử lý nhiều trang cùng lúc hiệu quả hơn) được thêm ở 5.8, dần thay thế
+<code>readpages()</code>. 5.10.241 có cả 2 hook trong struct nhưng ext4 (<code>fs/ext4/inode.c:3328</code>) đã dùng
+<code>ext4_mpage_readpages()</code> gọi qua đường <code>readahead</code>-style path. Trên 5.4, chỉ có <code>readpages()</code>.
+</div>
+
+<p>Ví dụ thực tế từ ext4 (đã verify bằng grep):</p>
+<table>
+<tr><th>Table</th><th>ext4 instance</th><th>File</th><th>Hàm quan trọng</th></tr>
+<tr><td><code>file_operations</code></td><td><code>ext4_file_operations</code></td><td>fs/ext4/file.c:1133</td><td><code>ext4_file_read_iter</code>, <code>ext4_file_write_iter</code>, <code>ext4_file_mmap</code></td></tr>
+<tr><td><code>inode_operations</code> (file)</td><td><code>ext4_file_inode_operations</code></td><td>fs/ext4/file.c:1156</td><td><code>ext4_setattr</code>, <code>ext4_getattr</code></td></tr>
+<tr><td><code>inode_operations</code> (dir)</td><td><code>ext4_dir_inode_operations</code></td><td>fs/ext4/namei.c:4282</td><td><code>ext4_create</code>, <code>ext4_lookup</code>, <code>ext4_unlink</code>, <code>ext4_mkdir</code>, <code>ext4_rename2</code></td></tr>
+<tr><td><code>super_operations</code></td><td><code>ext4_sops</code></td><td>fs/ext4/super.c</td><td><code>ext4_alloc_inode</code>, <code>ext4_evict_inode</code>, <code>ext4_sync_fs</code></td></tr>
+</table>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c10">10 openat()</a> · <a href="#c22">22 ext4</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c10">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 10</div>
+  <h2>openat() — Full Source Trace</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c04">04</a>, <a href="#c05">05</a>, <a href="#c09">09</a></span></div>
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠ VERSION DIFFERENCE</div>
+5.10.241 có thêm <code>openat2()</code>/<code>do_sys_openat2()</code> (từ 5.6, syscall mở rộng an toàn hơn openat, chống symlink-attack
+qua <code>struct open_how</code>). <code>open()</code>/<code>openat()</code> classic vẫn tồn tại và <b>gọi vào cùng <code>do_sys_openat2()</code></b> nội bộ
+(<code>fs/open.c:1245 do_sys_open() → do_sys_openat2()</code>) — verify trực tiếp từ source.
+</div>
+
+<div class="diagram"><pre>
+USERSPACE:  fd = open("/home/test.txt", O_RDONLY);
+      │
+      ▼
+SYSCALL_DEFINE3(open, filename, flags, mode)      fs/open.c:1252    [SYSCALL]
+      │
+      ▼
+do_sys_open(AT_FDCWD, filename, flags, mode)       fs/open.c:1245    [SYSCALL]
+      │
+      ▼
+do_sys_openat2(dfd, filename, &open_how)           fs/open.c:1216    [SYSCALL]
+      │
+      ├── build_open_flags(how, &op)                fs/open.c:1040   [SYSCALL]  dịch O_* → struct open_flags
+      ├── getname(filename)                                          [SYSCALL]  copy pathname từ userspace
+      ├── get_unused_fd_flags(how->flags)            fs/file.c        [VFS]      đặt chỗ fd — xem ch.04
+      │
+      ▼
+do_filp_open(dfd, pathname, &op)                    fs/namei.c:3444  [VFS]
+      │
+      ▼
+path_openat(&nd, op, flags)                         fs/namei.c:3405  [VFS]
+      │
+      ├── path_init()                                                [VFS]  điểm bắt đầu (root/cwd/dfd)
+      ├── link_path_walk()                           fs/namei.c:2113 [VFS]  resolve tới thư mục cha — xem ch.05
+      ├── lookup_open() / do_last()                                  [VFS]  resolve component cuối, xử lý O_CREAT
+      │        │
+      │        ├── nếu O_CREAT và chưa tồn tại → inode->i_op->create()   [FS]   vd ext4_create() — xem ch.15
+      │        └── permission check: inode_permission()                 [VFS]
+      │
+      ▼
+vfs_open(path, file)                                                 [VFS]
+      │
+      ▼
+do_dentry_open(file, inode, NULL)                                    [VFS]
+      │
+      ├── file->f_op = inode->i_fop     (gắn bảng hàm ext4_file_operations)  [FS]
+      ├── file->f_mapping = inode->i_mapping
+      └── file->f_op->open(inode, file)   (nếu fs cài, vd ext4_file_open())  [FS]
+      │
+      ▼
+struct file*  hoàn chỉnh, trả về do_sys_openat2()
+      │
+      ▼
+fd_install(fd, file)                                fs/file.c        [SYSCALL]
+      │
+      ▼
+return fd;   ──────────────────────────────────────────────────────► USERSPACE
+</pre></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">do_filp_open()</div><div class="floc">Source: fs/namei.c:3444 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Điểm vào chung cho mọi mở file có pathname (kể cả nội bộ kernel, không chỉ syscall) — thiết lập <code>nameidata</code>, retry nếu path walk gặp race (báo <code>-ECHILD</code>/cần rơi về ref-walk).</dd>
+<dt>Input</dt><dd><code>dfd</code> (base fd cho relative path), <code>struct filename *pathname</code>, <code>struct open_flags *op</code> (đã dịch từ O_* flags).</dd>
+<dt>Callee</dt><dd><code>path_openat()</code> — có thể gọi lại tối đa vài lần nếu RCU-walk thất bại giữa chừng (<code>LOOKUP_REVAL</code> retry loop).</dd>
+<dt>Output</dt><dd><code>struct file*</code> đã mở hoàn chỉnh, hoặc <code>ERR_PTR(-Exxx)</code>.</dd>
+<dt>Error paths</dt><dd><code>-ENOENT</code>, <code>-EACCES</code> (permission), <code>-EEXIST</code> (O_CREAT|O_EXCL trên file đã có), <code>-ELOOP</code>.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">path_openat()</div><div class="floc">Source: fs/namei.c:3405 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Toàn bộ logic mở 1 file theo path: resolve thư mục cha, xử lý component cuối (tạo mới nếu O_CREAT, mở nếu đã tồn tại), cấp phát <code>struct file</code>, gọi vào filesystem để hoàn tất open.</dd>
+<dt>Callee</dt><dd><code>alloc_empty_file()</code> (cấp phát <code>struct file</code> trống), <code>link_path_walk()</code>, <code>do_last()</code> (nội bộ: xử lý atomic_open nếu fs hỗ trợ — 1 lần gọi filesystem vừa lookup vừa create, tránh TOCTOU), <code>vfs_open()</code>.</dd>
+<dt>Important structs</dt><dd><code>struct nameidata nd</code> (trạng thái duyệt), <code>struct path</code> (kết quả).</dd>
+<dt>Next step</dt><dd><code>vfs_open()</code> → <code>do_dentry_open()</code>.</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">do_dentry_open()</div><div class="floc">Source: fs/open.c &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Gắn <code>struct file</code> vào dentry/inode đã resolve: copy <code>inode-&gt;i_fop</code> vào <code>file-&gt;f_op</code>, set <code>f_mapping = inode-&gt;i_mapping</code>, gọi <code>f_op-&gt;open()</code> nếu filesystem có cài (cơ hội cuối để fs làm việc riêng, vd kiểm tra thêm hoặc khởi tạo <code>private_data</code>).</dd>
+<dt>Important structs</dt><dd>Đây là điểm nối chính thức giữa <b>VFS generic</b> và <b>filesystem cụ thể</b>: từ đây trở đi mọi <code>read()</code>/<code>write()</code> trên <code>fd</code> này sẽ đi qua <code>file-&gt;f_op</code> của ext4/tmpfs/...</dd>
+<dt>Reference counting</dt><dd>Nếu <code>f_op-&gt;open()</code> thất bại: rollback — <code>fput_light</code>/giải phóng file, giảm reference dentry/inode đã lấy.</dd>
+</dl></div></div>
+
+<div class="box mental">
+<div class="box-title">🧠 MENTAL MODEL</div>
+<code>open()</code> có 2 việc hoàn toàn tách biệt: (1) <b>tìm/tạo</b> object đích trong cây filesystem — việc của
+<code>path_openat</code>/pathname lookup (ch.05); (2) <b>khởi tạo phiên làm việc</b> (struct file) trên object đó — việc của
+<code>do_dentry_open</code>. Việc 1 có thể re-dùng dcache; việc 2 luôn tạo <code>struct file</code> mới, không cache.
+</div>
+
+<h3>Bảng: mỗi hàm thuộc layer nào</h3>
+<table>
+<tr><th>Function</th><th>Layer</th><th>File</th></tr>
+<tr><td><code>SYSCALL_DEFINE3(open,...)</code>, <code>do_sys_open()</code>, <code>do_sys_openat2()</code>, <code>build_open_flags()</code>, <code>get_unused_fd_flags()</code>, <code>fd_install()</code></td><td><span class="tag syscall" style="display:inline">SYSCALL glue</span></td><td>fs/open.c</td></tr>
+<tr><td><code>do_filp_open()</code>, <code>path_openat()</code>, <code>link_path_walk()</code>, <code>vfs_open()</code>, <code>do_dentry_open()</code></td><td><span class="tag vfs" style="display:inline">VFS</span></td><td>fs/namei.c, fs/open.c</td></tr>
+<tr><td><code>inode-&gt;i_op-&gt;create()</code> = <code>ext4_create()</code>, <code>file-&gt;f_op-&gt;open()</code></td><td><span class="tag fs" style="display:inline">FILESYSTEM</span></td><td>fs/ext4/namei.c, fs/ext4/file.c</td></tr>
+</table>
+
+<div class="box">
+<div class="box-title">Interview questions</div>
+<ol style="margin:0;padding-left:20px">
+<li>Tại sao <code>open()</code> phải giữ cả <code>dentry</code> lẫn <code>vfsmount</code> trong <code>struct file</code> (qua <code>f_path</code>), không chỉ dentry?</li>
+<li><code>O_CREAT|O_EXCL</code> phải atomic — kernel đảm bảo điều này ở đâu, bằng cách nào (gợi ý: <code>i_rwsem</code> trên thư mục cha, hoặc <code>-&gt;atomic_open()</code>)?</li>
+<li>Sự khác biệt giữa RCU-walk và ref-walk trong <code>path_openat</code>, và khi nào phải fallback?</li>
+</ol>
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c11">fs/read_write.c</a> · <a href="#c15">15 create()</a> &nbsp;|&nbsp; SEE ALSO: <a href="#c04">04</a>, <a href="#c05">05</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c11">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 11</div>
+  <h2>read() — Full Source Trace</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c10">10</a>, <a href="#c20">20 Page Cache</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+USERSPACE:  n = read(fd, buf, 4096);
+      │
+      ▼
+SYSCALL_DEFINE3(read, fd, buf, count)     fs/read_write.c:672     [SYSCALL]
+      │
+      ▼
+ksys_read(fd, buf, count)                  fs/read_write.c:636     [SYSCALL]
+      │
+      ├── fdget_pos(fd)                                            [SYSCALL]  lấy struct file an toàn
+      ▼
+vfs_read(file, buf, count, &pos)           fs/read_write.c:489     [VFS]
+      │
+      ├── rw_verify_area()                                         [VFS]  kiểm tra quyền/khoảng offset
+      ▼
+file->f_op->read_iter  đã set?  ──YES──►  new_sync_read()          fs/read_write.c:417   [VFS]  wrap iovec quanh buf, gọi read_iter
+      │                                          │
+      │NO (f_op->read cũ)                        ▼
+      ▼                                   file->f_op->read_iter(kiocb, iter)   = ext4_file_read_iter()   [FILESYSTEM]
+   file->f_op->read(...)  (hiếm ở fs hiện đại)
+                                                  │
+                                                  ▼
+                                     generic_file_read_iter()  (mm/filemap.c)   [MM/PAGE CACHE]
+                                                  │
+                                                  ▼
+                                     generic_file_buffered_read()  mm/filemap.c:2189   [MM]
+                                                  │
+                                        ┌─────────┴──────────┐
+                                        ▼                    ▼
+                                  PAGE CACHE HIT       PAGE CACHE MISS
+                                        │                    │
+                                        │                    ▼
+                                        │            a_ops->readahead() / ->readpage()  = ext4_mpage_readpages()   [FILESYSTEM]
+                                        │                    │
+                                        │                    ▼
+                                        │            ext4_map_blocks()  (LBA logic → extent tree)   fs/ext4/inode.c:539  [FILESYSTEM]
+                                        │                    │
+                                        │                    ▼
+                                        │            bio alloc + submit_bio()  fs/ext4/readpage.c:366  [BLOCK]
+                                        │                    │
+                                        │                    ▼
+                                        │            blk-mq → device driver → HARDWARE → interrupt/completion
+                                        │                    │
+                                        │                    ▼
+                                        │            trang được nạp vào page cache, đánh dấu Uptodate
+                                        └─────────┬──────────┘
+                                                   ▼
+                                     copy_page_to_iter()  → copy_to_user()          [MM]
+      │
+      ▼
+return count đã đọc ─────────────────────────────────────────────────────► USERSPACE
+</pre></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">vfs_read()</div><div class="floc">Source: fs/read_write.c:489 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Điểm vào chung cho mọi read có buffer đơn (không phải readv), validate quyền đọc (<code>FMODE_READ</code>), gọi vào filesystem-specific read path.</dd>
+<dt>Callee</dt><dd><code>rw_verify_area()</code>; sau đó <code>file-&gt;f_op-&gt;read()</code> nếu có, else <code>new_sync_read()</code> wrap <code>read_iter</code>.</dd>
+<dt>Locking</dt><dd>Không tự lock gì thêm — filesystem tự quản lý lock trên inode (vd ext4 dùng <code>i_rwsem</code> ở chế độ đọc cho phép nhiều reader song song).</dd>
+</dl></div></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">generic_file_buffered_read()</div><div class="floc">Source: mm/filemap.c:2189 &nbsp;|&nbsp; Subsystem: <span class="tag mm" style="display:inline">MM / Page Cache</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Đây là "trái tim" của read: với mỗi trang trong khoảng offset cần đọc, tra <code>address_space-&gt;i_pages</code> (xarray) xem trang đã có trong page cache chưa.</dd>
+<dt>Data flow</dt><dd>HIT: kiểm tra <code>PageUptodate</code>, nếu có → copy thẳng. MISS/not-uptodate: kích hoạt readahead (<code>page_cache_sync_readahead()</code>/<code>ondemand_readahead()</code>) rồi gọi <code>a_ops-&gt;readahead()</code> hoặc <code>-&gt;readpage()</code> của filesystem, block chờ I/O hoàn tất (<code>wait_on_page_locked()</code>), rồi mới copy.</dd>
+<dt>Important structs</dt><dd><code>struct page</code>/folio trong <code>address_space-&gt;i_pages</code>; <code>struct file_ra_state</code> (trong <code>struct file</code>) lưu trạng thái readahead (điều chỉnh kích thước prefetch theo pattern truy cập tuần tự/ngẫu nhiên).</dd>
+<dt>Next step</dt><dd><code>copy_page_to_iter()</code> đưa dữ liệu ra <code>iov_iter</code> đích (thường là user buffer qua <code>copy_to_user</code>).</dd>
+</dl></div></div>
+
+<div class="grid2">
+<div class="box flow">
+<div class="box-title">CACHE HIT</div>
+<pre>read()
+  ↓
+generic_file_buffered_read()
+  ↓
+tìm thấy page, PageUptodate
+  ↓
+copy_page_to_iter() → copy_to_user()
+  ↓
+return ngay, KHÔNG chạm block layer</pre>
+</div>
+<div class="box flow">
+<div class="box-title">CACHE MISS</div>
+<pre>read()
+  ↓
+generic_file_buffered_read()
+  ↓
+không có trang / chưa Uptodate
+  ↓
+a_ops->readahead()  (ext4_mpage_readpages)
+  ↓
+ext4_map_blocks()  (LBA → extent → physical block)
+  ↓
+bio_alloc() + submit_bio()
+  ↓
+blk-mq → driver → HARDWARE
+  ↓
+interrupt → bio->bi_end_io() → unlock_page(), SetPageUptodate
+  ↓
+copy_page_to_iter() → copy_to_user()</pre>
+</div>
+</div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+Với cache HIT, <code>read()</code> KHÔNG bao giờ chạm tới block layer/driver/hardware — toàn bộ thời gian nằm trong
+<code>generic_file_buffered_read()</code> đọc RAM. Đây là lý do đọc file lần 2 luôn nhanh hơn lần đầu rất nhiều — không phải vì
+disk "nhớ", mà vì Linux giữ nguyên page trong RAM cho tới khi bị reclaim.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c20">mm/filemap.c</a> · <a href="#c24">block/blk-core.c</a> &nbsp;|&nbsp; SEE ALSO: <a href="#c20">20</a>, <a href="#c22">22</a>, <a href="#c24">24</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c12">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 12</div>
+  <h2>write() — Full Source Trace</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c11">11</a>, <a href="#c21">21 Writeback</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+USERSPACE:  write(fd, buf, 4096);
+      │
+      ▼
+SYSCALL_DEFINE3(write,...)  fs/read_write.c:752     [SYSCALL]
+      ▼
+ksys_write()   fs/read_write.c:677                   [SYSCALL]
+      ▼
+vfs_write()    fs/read_write.c:598                   [VFS]
+      ▼
+new_sync_write()  fs/read_write.c:520 → file->f_op->write_iter()   [VFS]
+      ▼
+ext4_file_write_iter()   fs/ext4/file.c:652           [FILESYSTEM]
+      ▼
+ext4_buffered_write_iter()   fs/ext4/file.c:258        [FILESYSTEM]
+      ▼
+generic_perform_write()   mm/filemap.c:3295            [MM/PAGE CACHE]
+      │
+      ├── a_ops->write_begin()  = ext4_write_begin()    [FILESYSTEM]  chuẩn bị page (đọc trước nếu partial write + block chưa map)
+      ├── copy_page_from_iter() (copy dữ liệu từ user buffer vào page trong RAM)   [MM]
+      └── a_ops->write_end()    = ext4_write_end()       [FILESYSTEM]  đánh dấu page DIRTY, cập nhật i_size
+      ▼
+return ngay cho userspace — DỮ LIỆU HIỆN CHỈ NẰM TRONG PAGE CACHE (RAM), CHƯA XUỐNG DISK
+      .
+      .   (sau này, độc lập, kernel writeback thread ghi xuống)
+      ▼
+[BACKGROUND]  wb_workfn() → write_cache_pages() → a_ops->writepages() = ext4_writepages()   [FILESYSTEM]
+      ▼
+ext4_map_blocks() + bio  →  submit_bio()   [BLOCK]  →  driver  →  HARDWARE
+</pre></div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">generic_perform_write()</div><div class="floc">Source: mm/filemap.c:3295 &nbsp;|&nbsp; Subsystem: <span class="tag mm" style="display:inline">MM</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Vòng lặp copy dữ liệu từ user buffer vào page cache theo từng "chunk" khớp page boundary, uỷ quyền cho filesystem chuẩn bị/kết thúc mỗi page qua <code>write_begin</code>/<code>write_end</code> — đây là nơi filesystem có cơ hội chèn logic riêng (ext4: đảm bảo block đã được map/allocate, có thể mở transaction JBD2 nếu cần).</dd>
+<dt>Callee</dt><dd><code>a_ops-&gt;write_begin()</code>, <code>copy_page_from_iter_atomic()</code>, <code>a_ops-&gt;write_end()</code>, <code>balance_dirty_pages_ratelimited()</code> (throttle writer nếu quá nhiều dirty page tích luỹ — xem ch.21).</dd>
+<dt>Data flow</dt><dd>Dữ liệu: user buffer → page trong <code>address_space-&gt;i_pages</code> (RAM). KHÔNG có I/O disk nào xảy ra trong hàm này.</dd>
+<dt>Next step</dt><dd>Page được đánh dấu <code>PageDirty</code> — sẽ được writeback thread ghi xuống sau (ch.21), hoặc ghi ngay nếu caller mở với <code>O_SYNC</code>/gọi <code>fsync()</code> sau.</dd>
+</dl></div></div>
+
+<div class="box warn">
+<div class="box-title">⚠ COMMON MISCONCEPTION</div>
+<b>"write() thành công nghĩa là dữ liệu đã an toàn trên disk"</b> — SAI. <code>write()</code> mặc định (không có <code>O_SYNC</code>/<code>O_DIRECT</code>)
+chỉ đảm bảo dữ liệu đã nằm trong <b>page cache</b> (RAM) và đã đánh dấu dirty. Nếu mất điện ngay sau đó, dữ liệu này CÓ THỂ MẤT.
+Để đảm bảo dữ liệu thật sự trên disk, phải gọi <a href="#c19"><code>fsync()</code></a> hoặc mở file với <code>O_SYNC</code>.
+</div>
+
+<table>
+<tr><th>API</th><th>Đảm bảo gì</th><th>Chi phí</th></tr>
+<tr><td><code>write()</code></td><td>Dữ liệu vào page cache (RAM), đánh dấu dirty</td><td>Rẻ — không I/O đồng bộ</td></tr>
+<tr><td><code>fsync(fd)</code></td><td>Toàn bộ dirty page + metadata của file này đã ghi + <code>flush cache</code> của device</td><td>Đắt — chờ I/O thật</td></tr>
+<tr><td><code>fdatasync(fd)</code></td><td>Giống fsync nhưng có thể bỏ qua metadata không ảnh hưởng đọc lại (vd mtime)</td><td>Rẻ hơn fsync một chút</td></tr>
+<tr><td><code>sync()</code></td><td>Toàn bộ dirty page + inode của MỌI filesystem đã mount</td><td>Đắt nhất, ảnh hưởng toàn hệ thống</td></tr>
+</table>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c21">mm/page-writeback.c</a> · <a href="#c19">fs/sync.c</a> &nbsp;|&nbsp; SEE ALSO: <a href="#c19">19</a>, <a href="#c21">21</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c13">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 13</div>
+  <h2>mmap()</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+addr = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+      │
+      ▼
+SYSCALL_DEFINE6(mmap_pgoff,...)   mm/mmap.c:1652        [SYSCALL]
+      ▼
+ksys_mmap_pgoff()   mm/mmap.c:1602                       [SYSCALL]
+      ▼
+do_mmap()   mm/mmap.c:1412                                [MM]
+      │
+      ├── kiểm tra quyền qua file->f_op->mmap  (ext4: ext4_file_mmap — chỉ set vm_ops, KHÔNG đọc data ngay)
+      ├── tạo struct vm_area_struct (VMA), gắn vm_ops = generic_file_vm_ops (ánh xạ tới filemap_fault)
+      ▼
+mmap_region()  → chèn VMA vào mm->mmap_tree của process
+      │
+      ▼
+return addr  ────────────────────────────────────────────► USERSPACE  (chưa có trang nào được nạp!)
+
+      .   (khi thực sự truy cập bộ nhớ đó lần đầu)
+      ▼
+CPU page fault → do_page_fault() (arch-specific) → handle_mm_fault() → __do_fault()
+      ▼
+vma->vm_ops->fault()  =  filemap_fault()   (mm/filemap.c)                [MM]
+      ▼
+tìm/nạp page từ PAGE CACHE — CHÍNH LÀ address_space của inode, giống hệt read()
+      (miss thì đi xuống filesystem → bio → block layer → driver, y như đọc file)
+      ▼
+map page đó vào page table của process (không copy — SHARED với page cache)
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+<code>mmap()</code> KHÔNG đọc file ngay lập tức — nó chỉ tạo một ánh xạ địa chỉ ảo (VMA) và đăng ký "khi fault vào vùng này thì gọi hàm nào".
+Dữ liệu chỉ thật sự được nạp (qua đúng con đường page cache như <code>read()</code>) khi CPU sinh page fault lần đầu chạm vào trang đó — đây
+gọi là <b>lazy loading</b>. Với <code>MAP_SHARED</code>, trang trong bộ nhớ của process CHÍNH LÀ trang trong page cache — ghi vào vùng mmap này
+tương đương ghi trực tiếp vào page cache (giống hiệu ứng <code>write()</code>, cũng cần <code>msync()</code>/writeback để xuống disk thật).
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c20">mm/filemap.c</a> · <a href="#c21">mm/page-writeback.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c14">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 14</div>
+  <h2>ioctl()</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c09">09</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+ioctl(fd, request, arg)
+      ▼
+SYSCALL_DEFINE3(ioctl,...)   fs/ioctl.c        [SYSCALL]
+      ▼
+do_vfs_ioctl()   fs/ioctl.c                     [VFS]  xử lý các lệnh "generic" chung cho mọi fd
+      │   (FIONBIO, FIOCLEX, FIGETBSZ, FS_IOC_GETFLAGS...)
+      │
+      │  không phải lệnh generic?
+      ▼
+file->f_op->unlocked_ioctl(file, cmd, arg)      [FILESYSTEM / DRIVER]
+</pre></div>
+
+<p>Khác biệt cốt lõi so với <code>read/write</code>: <b>ioctl không có API thống nhất</b> — mỗi filesystem/driver tự định nghĩa
+<code>cmd</code> nào làm gì. VFS chỉ generic hoá một tập lệnh rất nhỏ (thao tác trên fd nói chung), phần còn lại đi thẳng xuống
+<code>f_op-&gt;unlocked_ioctl</code> mà VFS <b>không biết ý nghĩa</b> của <code>cmd</code>/<code>arg</code>.</p>
+
+<div class="box warn">
+<div class="box-title">⚠ COMMON MISCONCEPTION</div>
+"ioctl luôn nguy hiểm/không an toàn type" — không hẳn. Nhiều ioctl filesystem-level (như <code>FS_IOC_GETFLAGS</code> lấy cờ
+immutable/append-only của ext4) rất an toàn và structured; điều nguy hiểm là driver-level ioctl với <code>arg</code> là con trỏ
+tự do, không được kernel validate kiểu dữ liệu như syscall thường.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c22">fs/ext4/ioctl.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c15">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 15</div>
+  <h2>create() — open() với O_CREAT</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c10">10</a>, <a href="#c06">06</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+open("test.txt", O_CREAT | O_WRONLY, 0644);
+      ▼
+path_openat()  → do_last()   fs/namei.c                        [VFS]
+      │
+      ├── link_path_walk()  resolve tới THƯ MỤC CHA               [VFS]
+      ├── lookup_fast()/lookup_open()  component cuối "test.txt"  [VFS]
+      │         │  negative dentry (chưa tồn tại) + O_CREAT
+      │         ▼
+      ├── inode_permission()  kiểm tra quyền WRITE trên thư mục cha [VFS]
+      ▼
+parent_inode->i_op->create(parent_inode, dentry, mode, ...)
+      = ext4_create()   fs/ext4/namei.c:2717                    [FILESYSTEM]
+      │
+      ├── ext4_new_inode_start_handle()  mở JBD2 transaction      [FILESYSTEM+JBD2]
+      ├── __ext4_new_inode()  cấp 1 inode number trống từ inode bitmap của block group  [FILESYSTEM]
+      ├── ext4_add_entry()  ghi directory entry MỚI "test.txt" → inode number vào block thư mục cha  [FILESYSTEM]
+      ├── d_instantiate(dentry, inode)  gắn inode mới vào dentry (đang negative → thành positive)   [VFS]
+      ▼
+ext4_journal_stop()  đóng transaction — commit vào journal (không nhất thiết xuống disk ngay, xem ch.23)
+</pre></div>
+
+<table>
+<tr><th>Phân biệt</th><th>inode creation</th><th>dentry creation</th><th>directory entry</th></tr>
+<tr><td>Ý nghĩa</td><td>Cấp 1 số inode mới + khởi tạo metadata trong inode table (on-disk, qua <code>__ext4_new_inode</code>)</td><td>Object trong RAM ánh xạ tên → inode (qua <code>d_instantiate</code>, chỉ VFS/dcache)</td><td>Bản ghi <code>(tên, số inode)</code> ghi vào block dữ liệu của thư mục cha trên disk (qua <code>ext4_add_entry</code>)</td></tr>
+<tr><td>Ai làm</td><td>Filesystem (ext4)</td><td>VFS</td><td>Filesystem (ext4)</td></tr>
+<tr><td>Tồn tại ở đâu</td><td>Disk (inode table) + inode cache (RAM)</td><td>Chỉ RAM (dcache)</td><td>Disk (directory block) — chính là thứ <code>ls</code> đọc qua <code>getdents</code></td></tr>
+</table>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c23">fs/jbd2/transaction.c</a> · <a href="#c22">22 ext4</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c16">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 16</div>
+  <h2>unlink()</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c06">06</a>, <a href="#c07">07</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+unlink("test.txt");
+      ▼
+SYSCALL_DEFINE1(unlink,...)   fs/namei.c              [SYSCALL]
+      ▼
+do_unlinkat()   fs/namei.c                             [VFS]
+      │
+      ├── path resolve tới THƯ MỤC CHA + dentry của "test.txt"     [VFS] — xem ch.05
+      ├── inode_permission() trên thư mục cha (cần quyền WRITE+EXEC trên dir, KHÔNG cần quyền trên chính file)  [VFS]
+      ▼
+vfs_unlink(parent_inode, dentry, ...)                              [VFS]
+      ▼
+parent_inode->i_op->unlink(parent_inode, dentry) = ext4_unlink()   fs/ext4/namei.c:3369   [FILESYSTEM]
+      │
+      ├── ext4_delete_entry()   xoá directory entry khỏi block thư mục cha (trên disk)     [FILESYSTEM]
+      ├── drop_nlink(inode)     giảm inode->i_nlink                                        [VFS/FILESYSTEM]
+      ├── nếu i_nlink == 0: ext4_orphan_add()  đưa inode vào orphan list của JBD2 journal
+      │        (đảm bảo: nếu crash trước khi giải phóng xong block, lần mount sau sẽ tự dọn — recovery)
+      ▼
+d_delete(dentry)  gỡ dentry ra khỏi dcache (hoặc chuyển thành negative)                     [VFS]
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA — vì sao process A vẫn đọc được file sau khi process B unlink()</div>
+<pre>
+process A:  fd = open("test.txt")     →  struct file A giữ 1 reference TỚI INODE
+                                          (qua f_inode / dentry->d_inode), i_count++
+
+process B:  unlink("test.txt")        →  chỉ xoá DIRECTORY ENTRY (tên) + drop_nlink()
+                                          inode->i_nlink về 0, NHƯNG inode->i_count VẪN > 0
+                                          (vì process A còn giữ struct file trỏ tới nó)
+                                          → ext4 CHƯA giải phóng block dữ liệu thật
+
+process A:  read(fd, ...)             →  vẫn đọc được bình thường — filesystem/inode vẫn "sống"
+                                          trong RAM, dữ liệu vẫn còn trên disk
+
+process A:  close(fd)                 →  fput() → i_count-- → về 0
+                                          → iput() thấy i_nlink==0 && i_count==0
+                                          → evict() → ext4_evict_inode() → GIẢI PHÓNG BLOCK THẬT trên disk
+</pre>
+Chuỗi quan hệ: <code>filename → dentry → inode → struct file</code>. <code>unlink()</code> chỉ cắt đứt mắt xích ĐẦU TIÊN
+(<code>filename → dentry</code>). Mắt xích <code>dentry(process A) → inode</code> và <code>inode → struct file(process A)</code>
+không bị ảnh hưởng, vì chúng được giữ bằng reference count độc lập, không phụ thuộc tên.
+</div>
+
+<div class="box">
+<div class="box-title">Lab thực tế — quan sát hiện tượng "deleted but in use"</div>
+<pre>$ ./myprog &         # process mở 1 file rồi sleep
+$ ls -li test.txt
+$ rm test.txt
+$ ls -li test.txt              # báo "No such file" — directory entry đã mất
+$ df -h .                      # dung lượng KHÔNG giảm — block chưa giải phóng
+$ ls -l /proc/&lt;pid&gt;/fd/        # vẫn thấy "test.txt (deleted)" — fd vẫn trỏ inode sống
+$ kill %1                      # process đóng fd → evict_inode() → df giảm ngay</pre>
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c07">fs/inode.c (evict)</a> · <a href="#c23">fs/jbd2 (orphan list)</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c17">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 17</div>
+  <h2>rename()</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c16">16</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+rename("a.txt", "b.txt");
+      ▼
+do_renameat2()   fs/namei.c                                     [VFS]
+      │  resolve CẢ HAI path: old parent+dentry, new parent+dentry
+      ├── lock_rename()  khoá CẢ HAI thư mục cha theo thứ tự cố định (tránh deadlock AB-BA)   [VFS]
+      ▼
+vfs_rename(...)                                                 [VFS]
+      ▼
+old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry, flags) = ext4_rename2()
+      fs/ext4/namei.c:4254                                       [FILESYSTEM]
+      │
+      ├── nếu new_dentry đã tồn tại (positive): xử lý như unlink ngầm trên "b.txt" cũ trước
+      ├── ext4_add_entry()  thêm entry "b.txt" trỏ tới CÙNG inode number
+      ├── ext4_delete_entry()  xoá entry "a.txt"
+      ├── nếu là rename qua thư mục khác: cập nhật ".." trong thư mục con (nếu old là dir)
+      ▼
+d_move(old_dentry, new_dentry)  cập nhật dcache: dentry giữ nguyên, chỉ đổi tên/parent    [VFS]
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+<code>rename()</code> trong cùng 1 filesystem <b>KHÔNG copy dữ liệu</b> — chỉ thao tác trên directory entry (metadata), vì vậy nó là
+<b>atomic</b> theo góc nhìn userspace (POSIX đảm bảo: tại mọi thời điểm, "b.txt" hoặc trỏ file cũ hoặc trỏ file mới, không bao giờ
+"nửa vời"). <code>d_move()</code> đảm bảo <code>struct dentry</code> trong RAM vẫn là CÙNG MỘT object, chỉ cập nhật <code>d_name</code>/<code>d_parent</code>
+— nên fd đang mở của "a.txt" không bị ảnh hưởng, vẫn hoạt động, chỉ là path hiển thị của nó (qua <code>/proc/pid/fd</code>) đổi thành "b.txt".
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c06">fs/dcache.c (d_move)</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c18">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 18</div>
+  <h2>getdents() / ls</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c07">07</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+getdents64(fd, buf, count);
+      ▼
+SYSCALL_DEFINE3(getdents64,...)   fs/readdir.c:354          [SYSCALL]
+      ▼
+iterate_dir(file, &ctx)   fs/readdir.c:40                    [VFS]
+      │  kiểm tra file->f_mode có FMODE_LSEEK/dir hợp lệ, tự cập nhật f_pos giữa các lần gọi
+      ▼
+file->f_op->iterate_shared(file, ctx)  =  ext4_readdir()   fs/ext4/dir.c    [FILESYSTEM]
+      │
+      ▼
+đọc trực tiếp directory block (qua page cache/buffer head), với mỗi entry gọi
+      ctx->actor(ctx, name, len, pos, ino, d_type)  = filldir64()   fs/readdir.c   [VFS]
+      │
+      ▼
+filldir64() copy entry vào buffer userspace theo format struct linux_dirent64
+</pre></div>
+
+<p>Khác biệt quan trọng với <code>read()</code>: <code>getdents</code> KHÔNG đi qua <code>generic_file_read_iter</code>/page-cache-theo-byte-offset
+thông thường — nó dùng cơ chế <b>callback</b> (<code>dir_context.actor</code>) vì cấu trúc thư mục trên disk (entry có độ dài thay đổi) không
+map trực tiếp 1-1 với buffer userspace như file thường.</p>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c22">fs/ext4/dir.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c19">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 19</div>
+  <h2>fsync()</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c12">12</a>, <a href="#c21">21</a>, <a href="#c23">23</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+fsync(fd);
+      ▼
+SYSCALL_DEFINE1(fsync,...)   fs/sync.c:232           [SYSCALL]
+      ▼
+vfs_fsync(file, datasync=0)   fs/sync.c:214           [VFS]
+      ▼
+file->f_op->fsync(file, start, end, datasync) = ext4_sync_file()   fs/ext4/fsync.c:129   [FILESYSTEM]
+      │
+      ├── filemap_write_and_wait_range()  ép writeback NGAY (không đợi flusher thread), CHỜ tới khi bio hoàn tất  [MM+BLOCK]
+      ├── nếu inode có transaction JBD2 chưa commit: jbd2_complete_transaction() / jbd2_journal_commit_transaction()  [JBD2]
+      ▼
+blkdev_issue_flush()  gửi lệnh FLUSH/FUA xuống device — đảm bảo dữ liệu đã qua khỏi write cache CỦA CHÍNH Ổ ĐĨA  [BLOCK→DRIVER→HW]
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+<code>fsync()</code> là điểm nối 3 lớp writeback riêng biệt phải đồng bộ: (1) page cache → disk (data), (2) transaction JBD2 chưa
+commit → journal (metadata), (3) write cache của chính ổ cứng/SSD → NAND/platter thật (hardware flush). Thiếu 1 trong 3, dữ liệu
+vẫn có thể mất khi mất điện dù ứng dụng đã gọi <code>fsync()</code> — đây là lý do 1 số filesystem/driver phải hỗ trợ đúng lệnh FLUSH.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c23">fs/jbd2/commit.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c20">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 20</div>
+  <h2>Page Cache</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c03">03</a></span></div>
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠ VERSION DIFFERENCE</div>
+Trong 5.10, page cache đang trong quá trình chuyển từ <code>struct page</code> sang <code>struct folio</code> (hoàn tất ở các bản sau
+5.16+). 5.10.241 vẫn chủ yếu dùng <code>struct page</code> trực tiếp; index vào <code>address_space</code> qua <b><code>xarray</code></b>
+(<code>i_pages</code>) — đây bản thân đã là thay đổi so với <code>radix_tree</code> cũ hơn dùng ở kernel &lt; 4.20.
+</div>
+
+<div class="diagram"><pre>
+Application
+      │  read()/write()/mmap()
+      ▼
+     VFS
+      │
+      ▼
+struct address_space (của 1 inode)
+      │  i_pages: xarray  (index = page offset trong file, tính theo đơn vị PAGE_SIZE)
+      ├── HIT  → page đã có, PageUptodate → dùng ngay
+      └── MISS → a_ops->readahead()/readpage()
+                        │
+                        ▼
+                    Filesystem  (ext4_mpage_readpages)
+                        │
+                        ▼
+                       BIO  → block layer → driver → hardware
+</pre></div>
+
+<table>
+<tr><th>Field <code>struct address_space</code> (verify include/linux/fs.h:458)</th><th>Ý nghĩa</th></tr>
+<tr><td><code>host</code></td><td>Trỏ ngược lại <code>inode</code> sở hữu page cache này</td></tr>
+<tr><td><code>i_pages</code></td><td><code>struct xarray</code> — cây lưu con trỏ <code>page*</code> theo index (thay <code>radix_tree_root</code> cũ)</td></tr>
+<tr><td><code>a_ops</code></td><td><code>address_space_operations</code> — do filesystem cài (readahead/writepage/write_begin...)</td></tr>
+<tr><td><code>nrpages</code></td><td>Số trang hiện có trong cache của address_space này</td></tr>
+<tr><td><code>gfp_mask</code></td><td>Flag cấp phát trang cho address_space này (vd <code>GFP_HIGHUSER_MOVABLE</code>)</td></tr>
+</table>
+
+<div class="box mental">
+<div class="box-title">🧠 MENTAL MODEL — page cache là "tấm gương" của cả read lẫn write</div>
+<code>read()</code> VÀ <code>write()</code> VÀ <code>mmap()</code> đều đi qua <b>cùng một</b> <code>address_space</code> của inode — đây là lý do
+nếu process A <code>write()</code> rồi process B <code>read()</code> ngay lập tức (chưa writeback), B vẫn thấy dữ liệu mới nhất: cả hai đang
+thao tác trên cùng các trang RAM, không phải hai bản sao.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c21">mm/page-writeback.c</a> · <a href="#c11">fs/read_write.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c21">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 21</div>
+  <h2>Writeback</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+write() đánh dấu page DIRTY
+      │
+      ▼
+balance_dirty_pages_ratelimited()   mm/page-writeback.c    [MM]
+      │  nếu tổng dirty page toàn hệ thống vượt ngưỡng (dirty_ratio) → BLOCK writer
+      │  cho tới khi writeback giảm bớt (throttle ngược để tránh OOM/flood I/O)
+      ▼
+[BACKGROUND KERNEL THREAD]  bdi writeback worker (mỗi block device 1 "wb")
+      ▼
+wb_workfn()  →  wb_do_writeback()  →  writeback_sb_inodes()                [MM]
+      ▼
+write_cache_pages()   mm/page-writeback.c                                  [MM]
+      │  duyệt các trang dirty của address_space theo thứ tự offset
+      ▼
+a_ops->writepages() = ext4_writepages()   fs/ext4/inode.c:2702             [FILESYSTEM]
+      │
+      ├── ext4_map_blocks()  đảm bảo block đã allocate (có thể mở JBD2 transaction nếu delayed allocation)
+      ├── gộp nhiều page liên tiếp thành 1 bio lớn (mpage — multi-page I/O, giảm số lượng I/O request)
+      ▼
+submit_bio()   →   BLOCK LAYER   →   DRIVER   →   HARDWARE
+</pre></div>
+
+<table>
+<tr><th>Hàm</th><th>Vai trò</th></tr>
+<tr><td><code>balance_dirty_pages()</code></td><td>Cơ chế "phanh ngược áp lực" — nếu ghi nhanh hơn disk có thể tiêu hoá, block chính writer để tránh dirty page chiếm hết RAM</td></tr>
+<tr><td><code>wb_workfn()</code></td><td>Hàm chính của kernel worker thread định kỳ ghi dirty page xuống — chạy độc lập, KHÔNG do syscall nào trực tiếp gọi</td></tr>
+<tr><td><code>write_cache_pages()</code></td><td>Vòng lặp generic duyệt dirty page trong 1 address_space, gọi callback <code>writepage</code> cho từng trang (hoặc filesystem tự làm việc này trong <code>writepages</code> để gộp I/O hiệu quả hơn)</td></tr>
+</table>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+Writeback có 3 cơ chế kích hoạt độc lập: (1) <b>định kỳ</b> (dirty_writeback_centisecs, mặc định 5s) — dọn dần; (2) <b>áp lực bộ nhớ</b>
+(dirty_ratio/dirty_background_ratio vượt ngưỡng) — dọn gấp, có thể throttle writer; (3) <b>tường minh</b> — <code>fsync()</code>/<code>sync()</code>/
+<code>msync()</code> ép ghi ngay. Đây là lý do <code>write()</code> "nhanh" (không đợi disk) nhưng hệ thống vẫn tự bảo vệ khỏi mất dữ liệu quá lâu.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c24">block/blk-core.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c22">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 22</div>
+  <h2>ext4</h2>
+  <div class="chap-meta"><span class="stars">★★★★★</span><span class="prereq">Requires: <a href="#c02">02</a>–<a href="#c09">09</a>, <a href="#c20">20</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+ext4 on-disk layout (giản lược)
+┌──────────┬─────────────┬─────────────┬─────────────┬─── ... ───┐
+│ Boot     │ Block Group 0│ Block Group 1│ Block Group 2│           │
+│ (1 block)│              │              │              │           │
+└──────────┴─────────────┴─────────────┴─────────────┴───────────┘
+   mỗi Block Group chứa:
+   ┌───────────┬──────────┬──────────┬───────────┬──────────────┐
+   │ Superblock│ Group Desc│ Block    │ Inode     │ Inode Table  │  Data blocks
+   │ (copy, có │           │ Bitmap   │ Bitmap    │ (metadata    │  (nội dung thật
+   │ redundancy)│          │          │          │  từng inode) │   + directory entries)
+   └───────────┴──────────┴──────────┴───────────┴──────────────┘
+</pre></div>
+
+<table>
+<tr><th>Khái niệm</th><th>Ý nghĩa</th><th>Source</th></tr>
+<tr><td>Superblock (ext4)</td><td>Metadata toàn filesystem: tổng block, block size, số inode, trạng thái mount — <b>khác</b> <code>struct super_block</code> VFS (VFS super_block bọc lấy dữ liệu này qua <code>ext4_fill_super</code>)</td><td>fs/ext4/super.c</td></tr>
+<tr><td>Block group</td><td>Chia disk thành các vùng nhỏ, mỗi vùng tự quản lý bitmap/inode table riêng — giảm phân mảnh, tăng locality</td><td>fs/ext4/balloc.c, ialloc.c</td></tr>
+<tr><td>Inode table</td><td>Mảng các <code>struct ext4_inode</code> on-disk — inode number = index vào bảng này (offset theo block group)</td><td>fs/ext4/ialloc.c</td></tr>
+<tr><td>Extent</td><td>Thay vì con trỏ block rời rạc (kiểu ext2 cũ), ext4 dùng <b>extent tree</b>: 1 extent mô tả 1 dải block liên tiếp <code>(logical_start, length, physical_start)</code> — hiệu quả hơn nhiều cho file lớn liên tục</td><td>fs/ext4/extents.c, ext4_extents.h</td></tr>
+<tr><td>Directory</td><td>Nội dung là danh sách <code>(tên, inode_number, file_type)</code>, có thể dùng HTree (hash B-tree) nếu thư mục lớn để lookup nhanh O(log n)</td><td>fs/ext4/dir.c, namei.c</td></tr>
+<tr><td>Journal</td><td>Vùng riêng (hoặc file ẩn) ghi log các thay đổi metadata TRƯỚC khi ghi thật — xem <a href="#c23">chương 23</a></td><td>fs/jbd2/</td></tr>
+</table>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">ext4_map_blocks()</div><div class="floc">Source: fs/ext4/inode.c:539 &nbsp;|&nbsp; Subsystem: <span class="tag fs" style="display:inline">FILESYSTEM</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Hàm trung tâm dịch <code>(inode, logical block number)</code> → <code>physical block number</code> trên disk, dùng chung cho cả đường đọc lẫn ghi. Đi qua extent tree (<code>ext4_ext_map_blocks</code>) để tìm hoặc cấp phát extent phù hợp.</dd>
+<dt>Caller</dt><dd><code>ext4_mpage_readpages()</code> (đọc), <code>ext4_writepages()</code> (ghi), <code>ext4_getblk()</code>.</dd>
+<dt>Important structs</dt><dd><code>struct ext4_map_blocks</code> (input/output: logical block, length, flag), <code>struct ext4_extent</code> (1 node của extent tree).</dd>
+<dt>Next step</dt><dd>Có physical block → xây <code>struct bio</code> trỏ đúng sector, <code>submit_bio()</code>.</dd>
+</dl></div></div>
+
+<div class="diagram"><pre>
+VFS
+ ↓
+ext4  (ext4_file_read_iter / ext4_file_write_iter — fs/ext4/file.c)
+ ↓
+ext4 inode  (struct ext4_inode_info bọc struct inode)
+ ↓
+extent tree  (ext4_map_blocks — logical→physical)
+ ↓
+buffer_head/bio  (fs/ext4/page-io.c, readpage.c)
+ ↓
+JBD2  (nếu là ghi metadata — mở transaction trước khi sửa)
+ ↓
+block layer (submit_bio)
+</pre></div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c23">fs/jbd2/transaction.c</a> · <a href="#c24">block/blk-core.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c23">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 23</div>
+  <h2>JBD2 — Journaling</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c22">22</a></span></div>
+</div>
+
+<p>JBD2 (Journaling Block Device v2) giải quyết bài toán <b>metadata consistency khi crash giữa chừng</b>: một thao tác như
+<code>create()</code> cần sửa NHIỀU block khác nhau (inode bitmap, inode table, directory block) — nếu crash sau khi ghi block 1
+nhưng trước block 2, filesystem rơi vào trạng thái không nhất quán. JBD2 buộc mọi thay đổi metadata phải ghi vào <b>journal</b>
+(log tuần tự, ghi nhanh) trước, rồi mới "checkpoint" (ghi thật) vào vị trí cuối cùng — nếu crash giữa chừng, lần mount sau
+replay journal để hoàn tất hoặc rollback toàn bộ transaction, không bao giờ để lại trạng thái nửa vời.</p>
+
+<div class="diagram"><pre>
+ext4 (vd ext4_create())
+      ▼
+jbd2__journal_start(journal, nblocks, ...)   fs/jbd2/transaction.c:473      [JBD2]
+      │  mở 1 "handle" — bắt đầu tham gia vào transaction hiện tại (hoặc tạo mới)
+      ▼
+với mỗi buffer sắp sửa:
+jbd2_journal_get_write_access(handle, bh)    fs/jbd2/transaction.c:1209     [JBD2]
+      │  đăng ký ý định sửa buffer này — JBD2 tạo bản sao "frozen" nếu cần
+      ▼
+    (ext4 sửa nội dung buffer trong RAM bình thường)
+      ▼
+jbd2_journal_dirty_metadata(handle, bh)      fs/jbd2/transaction.c:1464     [JBD2]
+      │  đánh dấu buffer này thuộc transaction, sẽ được ghi vào journal khi commit
+      ▼
+jbd2_journal_stop(handle)                     fs/jbd2/transaction.c:1805    [JBD2]
+      │  kết thúc phần tham gia của handle này (transaction có thể vẫn mở cho handle khác)
+      .
+      .  (độc lập, theo định kỳ hoặc khi cần — vd trước checkpoint hoặc do fsync ép)
+      ▼
+jbd2_journal_commit_transaction()             fs/jbd2/commit.c              [JBD2]
+      │  ghi TOÀN BỘ block đã sửa trong transaction vào vùng JOURNAL (tuần tự, nhanh)
+      │  ghi commit record cuối cùng — đánh dấu transaction "hoàn tất, có thể replay"
+      ▼
+[Sau đó, có thể trễ] checkpoint: ghi các block đó từ journal vào VỊ TRÍ THẬT trên disk
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+Journal biến N lần ghi rải rác (chậm, seek nhiều) thành 1 lần ghi tuần tự vào vùng journal (nhanh) + ghi lại sau (có thể gộp/trễ).
+Đây là lý do ext4 với journaling <b>không nhất thiết chậm hơn</b> ext2 không journal cho workload ghi nhiều metadata — trade-off là
+double-write (ghi 2 lần: journal rồi checkpoint) đổi lấy consistency đảm bảo.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c24">block/blk-core.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c24">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 24</div>
+  <h2>Block Layer</h2>
+  <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+Filesystem (ext4/readpage.c, page-io.c)
+      ▼
+struct bio  { bi_iter (sector + size), bi_end_io, bio_vec[] (danh sách page vật lý) }
+      ▼
+submit_bio(bio)   block/blk-core.c:1071                      [BLOCK]
+      ▼
+submit_bio_noacct(bio)   block/blk-core.c:1036                [BLOCK]
+      │  áp policy chung: kiểm tra giới hạn queue, có thể split bio nếu quá lớn cho device
+      ▼
+request_queue của gendisk đích  (blk-mq)                       [BLOCK]
+      │
+      ├── blk_mq_get_request()   cấp 1 struct request, gắn bio vào (hoặc merge vào request đã có)
+      ├── I/O scheduler (mq-deadline / kyber / bfq / none)   sắp xếp thứ tự request theo policy
+      ▼
+blk_mq_dispatch_rq_list()  →  driver->queue_rq()               [DRIVER]
+      ▼
+Device driver dịch struct request thành lệnh phần cứng thật (NVMe submission queue entry / SCSI CDB / MMC command)
+      ▼
+HARDWARE thực thi, hoàn tất → INTERRUPT
+      ▼
+driver hoàn tất request → blk_mq_complete_request() → bio->bi_end_io() gọi ngược lên filesystem
+</pre></div>
+
+<table>
+<tr><th>So sánh</th><th><code>struct page</code></th><th><code>struct bio</code></th><th><code>struct request</code></th></tr>
+<tr><td>Tầng</td><td>MM / Page cache</td><td>Block layer (submit)</td><td>Block layer (sau khi vào queue, có thể gộp nhiều bio)</td></tr>
+<tr><td>Đơn vị</td><td>1 trang RAM (thường 4KB)</td><td>1 yêu cầu I/O — có thể gồm nhiều trang không liên tục trong RAM nhưng liên tục trên disk (<code>bio_vec[]</code>)</td><td>1 hoặc nhiều <code>bio</code> đã gộp (merge), sẵn sàng gửi tới driver</td></tr>
+<tr><td>Biết gì về file?</td><td>Có (qua <code>page-&gt;mapping</code>)</td><td>Không — chỉ biết sector + buffer RAM</td><td>Không</td></tr>
+<tr><td>Struct verify</td><td>—</td><td><code>include/linux/blk_types.h:203</code></td><td><code>include/linux/blkdev.h</code></td></tr>
+</table>
+
+<div class="box mental">
+<div class="box-title">🧠 MENTAL MODEL — ranh giới "mù thông tin"</div>
+Ngay khi filesystem gọi <code>submit_bio()</code>, mọi ngữ cảnh filesystem (inode nào, offset nào trong file nào) biến mất khỏi tầm nhìn
+của block layer — block layer chỉ thấy <code>(sector, length, buffer)</code>. Đây chính là ranh giới cho phép cùng 1 block layer phục vụ
+ext4, xfs, btrfs, hay raw disk access — nó hoàn toàn filesystem-agnostic.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c25">drivers/nvme/host/core.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c25">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 25</div>
+  <h2>Device Driver</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c24">24</a></span></div>
+</div>
+
+<div class="diagram"><pre>
+read()
+ ↓  [SYSCALL/VFS]
+ext4 (ext4_file_read_iter → ext4_mpage_readpages)
+ ↓  [FILESYSTEM]
+page cache miss → ext4_map_blocks()
+ ↓
+bio  →  submit_bio()
+ ↓  [BLOCK]
+blk-mq  →  request_queue của thiết bị đích
+ ↓  [BLOCK]
+driver->queue_rq()   (NVMe: nvme_queue_rq, SCSI: scsi_queue_rq, MMC: mmc_queue tương tự)
+ ↓  [DRIVER]
+lệnh phần cứng thật (NVMe submission queue entry ghi vào vòng SQ, doorbell register)
+ ↓  [HARDWARE]
+controller đọc NAND/platter, DMA dữ liệu thẳng vào buffer RAM đã chỉ định trong bio
+ ↓
+INTERRUPT khi hoàn tất  →  driver ISR  →  blk_mq_complete_request()
+ ↓  [DRIVER→BLOCK]
+bio->bi_end_io()  →  đánh dấu page Uptodate, unlock_page()
+ ↓  [MM]
+generic_file_buffered_read() đang chờ được đánh thức → copy_to_user()
+ ↓
+USERSPACE nhận được byte dữ liệu
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+"Một byte dữ liệu từ disk đi vào userspace buffer như thế nào?" — câu trả lời: KHÔNG có bước copy filesystem→buffer trung gian
+nào cả. DMA từ hardware ghi thẳng vào trang RAM đã được page cache cấp phát sẵn (trang đó nằm trong <code>bio_vec</code> của bio); bước
+cuối cùng chỉ là <code>copy_to_user()</code> từ trang đó (kernel space) sang buffer thật của process (user space) — đây là copy duy nhất
+trong toàn bộ hành trình (trừ khi dùng <code>O_DIRECT</code>, lúc đó bỏ qua page cache, DMA thẳng vào buffer user luôn).
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c30">30 Debugging</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c26">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 26</div>
+  <h2>procfs — filesystem không có disk</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c09">09</a></span></div>
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠ COMMON MISCONCEPTION</div>
+"Mọi filesystem đều đọc từ block device" — SAI. procfs/sysfs/tmpfs là <b>pseudo/synthetic/RAM filesystem</b> — không có
+<code>s_bdev</code> nào cả. VFS layer (dentry/inode/file) vẫn hoạt động y hệt; điều khác biệt duy nhất nằm ở <code>a_ops</code>/<code>f_op</code>:
+thay vì đọc block từ disk, hàm <code>read</code> của chúng <b>sinh dữ liệu ngay tại chỗ</b> từ kernel state đang có trong RAM.
+</div>
+
+<div class="diagram"><pre>
+cat /proc/cpuinfo
+      ▼
+read(fd, buf, count)
+      ▼
+VFS: vfs_read() → file->f_op->read_iter
+      ▼
+seq_read_iter()   (fs/seq_file.c — cơ chế "seq_file" dùng chung bởi rất nhiều file /proc)
+      ▼
+proc file's ->show() callback  (vd cpuinfo: cpuinfo_proc_show(), duyệt per_cpu cpuinfo data)
+      ▼
+đọc TRỰC TIẾP struct cpuinfo_x86 / kernel data structures đang có trong RAM — KHÔNG có bio, KHÔNG có block layer
+      ▼
+seq_file format text ngay lúc đọc → copy_to_user()
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+procfs không "lưu trữ" gì — mỗi lần <code>read()</code> là một lần <b>tính toán lại</b> nội dung từ trạng thái kernel hiện tại. Đây là lý do
+<code>cat /proc/meminfo</code> hai lần liên tiếp có thể ra số khác nhau ngay lập tức — không có "file cũ" nào bị cache.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c27">fs/sysfs, fs/kernfs/file.c</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c27">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 27</div>
+  <h2>sysfs</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c26">26</a></span></div>
+</div>
+
+<p>sysfs (<code>/sys/class/...</code>) là "bề mặt" trực quan hoá <b>device model</b> (<code>struct kobject</code>/<code>struct device</code>)
+ra thành cây thư mục. Nó được cài đặt trên nền <b>kernfs</b> — một framework pseudo-filesystem dùng chung, tách phần "VFS glue"
+(kernfs) khỏi phần "biết ý nghĩa dữ liệu" (sysfs attribute show/store callback).</p>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">kernfs_fop_read_iter()</div><div class="floc">Source: fs/kernfs/file.c:238 &nbsp;|&nbsp; Subsystem: <span class="tag fs" style="display:inline">FILESYSTEM</span></div></div>
+<div class="fbody"><dl>
+<dt>Purpose</dt><dd>Hàm <code>read_iter</code> chung cho MỌI file sysfs — gọi ngược vào <code>kernfs_ops-&gt;seq_show</code> (thường là sysfs attribute's <code>-&gt;show()</code>) để sinh nội dung text từ trạng thái device thật trong RAM, rồi copy ra userspace.</dd>
+<dt>Data flow</dt><dd>Không có disk, không có page cache theo nghĩa file thường — nội dung sinh động (ephemeral) mỗi lần đọc.</dd>
+</dl></div></div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c28">28 tmpfs</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c28">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 28</div>
+  <h2>tmpfs</h2>
+  <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
+</div>
+
+<p>tmpfs (nền tảng cho <code>/dev/shm</code>, hầu hết <code>/tmp</code> hiện đại) là filesystem sống <b>hoàn toàn trong page cache</b> —
+implementation nằm ở <code>mm/shmem.c</code>, không phải <code>fs/</code>, vì bản chất nó gần với quản lý bộ nhớ hơn là filesystem thật.</p>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA</div>
+Với ext4, page cache là <b>bản sao tạm thời</b> của dữ liệu — nguồn sự thật nằm trên disk. Với tmpfs, page cache
+<b>CHÍNH LÀ</b> nguồn sự thật — không có "disk" nào bên dưới để writeback tới (trừ khi bị swap ra). Vì vậy tmpfs không có
+<code>-&gt;writepage()</code> ghi xuống disk thật — <code>shmem_writepage()</code> chỉ swap-out nếu áp lực bộ nhớ, không phải writeback bình thường.
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c29">29 overlayfs</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c29">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 29</div>
+  <h2>overlayfs</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c08">08</a></span></div>
+</div>
+
+<p>overlayfs (nền tảng container image layer — Docker/containerd) ghép 2+ filesystem thành 1 view thống nhất:
+<b>lowerdir</b> (read-only, có thể nhiều lớp chồng) + <b>upperdir</b> (read-write) + <b>workdir</b> (vùng làm việc nội bộ).</p>
+
+<div class="diagram"><pre>
+lookup "/merged/file.txt"
+      ▼
+overlayfs lookup: kiểm tra upperdir trước
+      │
+      ├── có trong upperdir → dùng trực tiếp (đã copy-up hoặc tạo mới ở đây)
+      │
+      └── không có → tìm trong lowerdir (theo thứ tự layer)
+                 │
+                 └── found → trả về, đọc THẲNG từ lowerdir (không copy nếu chỉ đọc)
+</pre></div>
+
+<div class="box key">
+<div class="box-title">💡 KEY IDEA — copy-up</div>
+Khi ghi vào 1 file chỉ tồn tại ở <b>lowerdir</b> (read-only), overlayfs thực hiện <b>copy-up</b>: copy toàn bộ file đó sang
+<b>upperdir</b> trước, rồi mới cho phép ghi — lowerdir không bao giờ bị sửa. Đây là cơ chế cho phép nhiều container share
+chung 1 base image (lowerdir) mà vẫn cách ly ghi của từng container (upperdir riêng).
+</div>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c30">30 Debugging</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c30">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 30</div>
+  <h2>Debugging + Hands-on Labs</h2>
+  <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: mọi chương trước</span></div>
+</div>
+
+<div class="box debug">
+<div class="box-title">🐛 Cheat sheet công cụ</div>
+<table style="margin:0">
+<tr><th>Công cụ</th><th>Dùng để</th><th>Lệnh mẫu</th></tr>
+<tr><td><code>strace</code></td><td>Xem syscall + tham số + kết quả (userspace boundary)</td><td><code>strace -e trace=openat,read,write ./test</code></td></tr>
+<tr><td><code>ftrace</code></td><td>Trace function call bên trong kernel (function/function_graph tracer)</td><td><code>echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer</code></td></tr>
+<tr><td><code>trace-cmd</code></td><td>Frontend tiện lợi cho ftrace, ghi/replay trace session</td><td><code>trace-cmd record -p function_graph -g vfs_read ./test</code></td></tr>
+<tr><td><code>perf</code></td><td>Profiling (sampling), đo hotpath thật sự tốn CPU/thời gian</td><td><code>perf record -e block:block_rq_issue -a</code></td></tr>
+<tr><td><code>printk</code>/<code>dynamic_debug</code></td><td>Log tường minh trong source, bật/tắt theo file:line không cần recompile</td><td><code>echo 'file namei.c +p' &gt; /sys/kernel/debug/dynamic_debug/control</code></td></tr>
+<tr><td><code>bpftrace</code></td><td>Trace động, không cần patch kernel, dùng cho production</td><td><code>bpftrace -e 'kprobe:vfs_read { printf("%s\n", comm); }'</code></td></tr>
+</table>
+</div>
+
+<div class="diagram"><pre>
+userspace observation (strace/bpftrace output)
+        ↓
+syscall  (số hiệu + tham số)
+        ↓
+kernel source  (tìm SYSCALL_DEFINEn tương ứng — tra include/uapi hoặc grep)
+        ↓
+function  (theo call graph đã học ở chương 10-19)
+        ↓
+subsystem  (VFS / filesystem / MM / block)
+</pre></div>
+
+<h3>12 Labs</h3>
+
+<details><summary>Lab 1 — open file</summary><div class="inner">
+<b>Goal:</b> Quan sát syscall thật của <code>open()</code>.<br>
+<b>Command:</b> <code>strace -e trace=openat -f -- cat /etc/hostname</code><br>
+<b>Expected:</b> Thấy <code>openat(AT_FDCWD, "/etc/hostname", O_RDONLY) = 3</code><br>
+<b>Syscalls:</b> <code>openat</code> · <b>Kernel functions:</b> <code>do_sys_openat2 → do_filp_open → path_openat</code> (xem <a href="#c10">ch.10</a>)<br>
+<b>Source files:</b> fs/open.c, fs/namei.c<br>
+<b>Questions:</b> Vì sao <code>strace</code> hiện <code>openat</code> ngay cả khi chương trình gọi hàm libc <code>open()</code>?
+</div></details>
+
+<details><summary>Lab 2 — read file (quan sát cache hit/miss)</summary><div class="inner">
+<b>Goal:</b> So sánh thời gian đọc lần 1 vs lần 2.<br>
+<b>Command:</b> <code>echo 3 &gt; /proc/sys/vm/drop_caches; time cat bigfile &gt; /dev/null; time cat bigfile &gt; /dev/null</code><br>
+<b>Expected:</b> Lần 2 nhanh hơn đáng kể — page cache hit.<br>
+<b>Kernel functions:</b> <code>generic_file_buffered_read()</code> (xem <a href="#c11">ch.11</a>)<br>
+<b>Observe:</b> <code>vmstat 1</code> cột <code>bi</code> (block in) chỉ tăng ở lần 1.
+</div></details>
+
+<details><summary>Lab 3 — write file (quan sát writeback trễ)</summary><div class="inner">
+<b>Goal:</b> Thấy <code>write()</code> không xuống disk ngay.<br>
+<b>Command:</b> <code>dd if=/dev/zero of=test.bin bs=1M count=100; grep Dirty /proc/meminfo</code><br>
+<b>Expected:</b> <code>Dirty:</code> tăng ngay sau <code>dd</code>, giảm dần sau vài giây (writeback thread).<br>
+<b>Kernel functions:</b> <code>generic_perform_write → balance_dirty_pages_ratelimited</code> (xem <a href="#c12">ch.12</a>, <a href="#c21">ch.21</a>)
+</div></details>
+
+<details><summary>Lab 4 — create file</summary><div class="inner">
+<b>Goal:</b> Thấy inode creation + directory entry.<br>
+<b>Command:</b> <code>strace -e trace=openat touch newfile.txt</code><br>
+<b>Kernel functions:</b> <code>ext4_create → __ext4_new_inode → ext4_add_entry</code> (xem <a href="#c15">ch.15</a>)
+</div></details>
+
+<details><summary>Lab 5 — unlink file (deleted but in use)</summary><div class="inner">
+Xem lab chi tiết ở <a href="#c16">chương 16</a> — mở file, unlink, quan sát <code>/proc/&lt;pid&gt;/fd/</code> và <code>df</code>.
+</div></details>
+
+<details><summary>Lab 6 — rename file</summary><div class="inner">
+<b>Command:</b> <code>strace -e trace=renameat2 mv a.txt b.txt</code><br>
+<b>Kernel functions:</b> <code>do_renameat2 → vfs_rename → ext4_rename2</code> (xem <a href="#c17">ch.17</a>)
+</div></details>
+
+<details><summary>Lab 7 — mmap file</summary><div class="inner">
+<b>Goal:</b> Quan sát page fault khi mmap.<br>
+<b>Command:</b> viết chương trình nhỏ <code>mmap()</code> rồi đọc 1 byte, chạy với <code>strace -e trace=mmap,openat</code>, quan sát <code>/proc/&lt;pid&gt;/smaps</code>.<br>
+<b>Kernel functions:</b> <code>do_mmap → filemap_fault</code> (xem <a href="#c13">ch.13</a>)
+</div></details>
+
+<details><summary>Lab 8 — mount filesystem</summary><div class="inner">
+<b>Command:</b> <code>strace -f mount -t tmpfs tmpfs /mnt</code><br>
+<b>Kernel functions:</b> <code>do_mount → do_new_mount → vfs_get_tree</code> (xem <a href="#c08">ch.08</a>)
+</div></details>
+
+<details><summary>Lab 9 — fsync</summary><div class="inner">
+<b>Command:</b> <code>strace -e trace=write,fsync -T ./test_fsync</code> — so sánh thời gian <code>write</code> (nhanh) vs <code>fsync</code> (chậm hơn hẳn, cột <code>&lt;seconds&gt;</code> cuối dòng strace).<br>
+<b>Kernel functions:</b> xem <a href="#c19">chương 19</a>
+</div></details>
+
+<details><summary>Lab 10 — inspect /proc</summary><div class="inner">
+<b>Command:</b> <code>strace -e trace=openat,read cat /proc/cpuinfo</code> — không thấy syscall block I/O nào cả.<br>
+Xem <a href="#c26">chương 26</a>.
+</div></details>
+
+<details><summary>Lab 11 — inspect /sys</summary><div class="inner">
+<b>Command:</b> <code>cat /sys/class/net/eth0/mtu</code>, thử <code>echo</code> để đổi giá trị (nếu có quyền) — quan sát effect ngay lập tức trên trạng thái kernel thật.<br>
+Xem <a href="#c27">chương 27</a>.
+</div></details>
+
+<details><summary>Lab 12 — inspect /dev</summary><div class="inner">
+<b>Command:</b> <code>ls -l /dev/sda; stat /dev/sda</code> — chú ý major/minor number (<code>i_rdev</code>) thay vì kích thước file thật.<br>
+<b>Discuss:</b> device node trong <code>/dev</code> chỉ là 1 dentry+inode đặc biệt (<code>S_ISBLK</code>) — <code>open()</code> nó KHÔNG đi qua filesystem chứa dữ liệu, mà đi thẳng vào <code>def_blk_fops</code> rồi tới driver của chính block device đó (khác hẳn open 1 file thường trên ext4 nằm TRÊN device này).
+</div></details>
+
+<div class="chapfoot">NEXT SOURCE FILES: <a href="#c31">31 Complete Mental Model</a></div>
+</section>
+
+<!-- ============================================================ -->
+<section class="chapter" id="c31">
+<div class="chap-head">
+  <div class="chap-num">CHAPTER 31</div>
+  <h2>Complete Mental Model</h2>
+  <div class="chap-meta"><span class="stars">★★★★★</span><span class="prereq">Tổng hợp toàn bộ 30 chương trước</span></div>
+</div>
+
+<div class="diagram"><pre>
+                                USERSPACE
+                                    │
+                                    ▼
+                                SYSCALL
+                                    │
+                ┌───────────────────┴───────────────────┐
+                │                                        │
+                ▼                                        ▼
+              OPEN                                      READ
+                │                                        │
+                ▼                                        ▼
+               VFS                                      VFS
+                │                                        │
+                ▼                                        ▼
+        PATHNAME LOOKUP                            FILE OBJECT (f_op, f_pos)
+        (link_path_walk)                                 │
+                │                                        ▼
+                ▼                                   PAGE CACHE (address_space)
+             DCACHE                                      │
+        (d_lookup fast path)                       ┌─────┴─────┐
+                │                                   ▼           ▼
+                ▼                                 HIT         MISS
+             INODE                              (copy_to_    (readahead/
+        (iget_locked)                             user)        readpage)
+                │                                   │           │
+                ▼                                   │           ▼
+          FILESYSTEM ─────────────────────────────┐ │          BIO
+        (ext4_lookup/create)                       │ │           │
+                │                                  │ │           ▼
+                ▼                                  │ │     BLOCK LAYER
+              EXT4                                 │ │     (blk-mq, request)
+        (extent tree, block group)                 │ │           │
+                │                                  │ │           ▼
+                ▼                                  │ └────►  DEVICE DRIVER
+              JBD2                                 │               │
+        (transaction, journal)                     │               ▼
+                │                                  │         HARDWARE
+                └──────────────────────────────────┴───────────────┘
+                                    │
+                                    ▼
+                              DEVICE DRIVER
+                                    │
+                                    ▼
+                               HARDWARE
+</pre></div>
+
+<div class="box mental">
+<div class="box-title">🧠 Ví dụ đầy đủ — <code>read("/home/test.txt")</code> từ đầu đến cuối</div>
+<ol style="padding-left:20px;margin:8px 0">
+<li><b>Nếu chưa có fd:</b> <code>open()</code> → <code>do_filp_open</code> → <code>path_openat</code> → <code>link_path_walk</code> resolve từng component
+qua <b>dcache</b> (<code>lookup_fast</code>/<code>d_lookup</code>), cache miss thì hỏi <b>ext4</b> qua <code>ext4_lookup → iget_locked</code> nạp <b>inode</b>
+từ inode table → tạo <code>struct file</code>, gắn <code>f_op = ext4_file_operations</code>, trả <code>fd</code>.</li>
+<li><b><code>read(fd, buf, 4096)</code>:</b> <code>vfs_read → ext4_file_read_iter → generic_file_read_iter → generic_file_buffered_read</code>.</li>
+<li>Tra <code>address_space-&gt;i_pages</code> của inode này ở offset tương ứng.</li>
+<li><b>Cache HIT:</b> trang đã <code>Uptodate</code> → <code>copy_page_to_iter → copy_to_user</code>. Xong, không chạm block layer.</li>
+<li><b>Cache MISS:</b> gọi <code>ext4_mpage_readpages → ext4_map_blocks</code> đi qua <b>extent tree</b> dịch logical block → physical block
+trên disk → dựng <code>bio</code> trỏ đúng sector → <code>submit_bio</code>.</li>
+<li><b>Block layer:</b> <code>submit_bio_noacct</code> → vào <code>request_queue</code> (blk-mq), có thể merge với request khác đang chờ, I/O
+scheduler sắp xếp thứ tự.</li>
+<li><b>Driver:</b> <code>queue_rq()</code> dịch thành lệnh NVMe/SCSI/MMC thật, ghi vào submission queue của controller.</li>
+<li><b>Hardware:</b> controller đọc NAND/platter, DMA thẳng dữ liệu vào trang RAM đã cấp sẵn trong <code>bio_vec</code>.</li>
+<li><b>Interrupt:</b> driver ISR → <code>blk_mq_complete_request</code> → <code>bio-&gt;bi_end_io</code> → đánh dấu trang <code>Uptodate</code>,
+<code>unlock_page</code>, đánh thức reader đang chờ trong <code>generic_file_buffered_read</code>.</li>
+<li><b>Copy cuối cùng:</b> <code>copy_page_to_iter → copy_to_user</code> — đây là lần copy DUY NHẤT trong toàn hành trình.</li>
+</ol>
+</div>
+
+<div class="box key">
+<div class="box-title">💡 Tổng kết 1 câu cho mỗi layer</div>
+<table style="margin:8px 0">
+<tr><td><b>VFS</b></td><td>Object model + dispatch qua con trỏ hàm, filesystem-agnostic</td></tr>
+<tr><td><b>Filesystem (ext4)</b></td><td>Dịch (inode, offset logic) ↔ (block group, extent, block vật lý thật trên disk)</td></tr>
+<tr><td><b>Page cache</b></td><td>Cache nội dung theo trang RAM, che giấu độ trễ disk khỏi read/write path</td></tr>
+<tr><td><b>Block layer</b></td><td>Gộp/xếp hàng I/O theo sector, filesystem-agnostic, driver-agnostic</td></tr>
+<tr><td><b>Driver</b></td><td>Dịch request generic thành lệnh phần cứng cụ thể của 1 loại thiết bị</td></tr>
+</table>
+</div>
+
+<p class="center" style="margin-top:40px;color:var(--text-dim)">— Hết. Toàn bộ function name/struct field/call graph trong tài liệu này đã verify trực tiếp bằng <code>grep</code> trên source thật Linux 5.10.241 tại <code>Kernel/K-S800/Src/</code>. —</p>
+
+</section>
+
+</main>
+</div>
+
+<div id="backtop" title="Về đầu trang">↑</div>
+
+<script>
+// active section highlight
+const links = Array.from(document.querySelectorAll('#sidebar a.nav-item'));
+const sections = links.map(a => document.querySelector(a.getAttribute('href')));
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = '#' + e.target.id;
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === id));
+    }
+  });
+}, {rootMargin: '-15% 0px -70% 0px', threshold: 0});
+sections.forEach(s => s && io.observe(s));
+
+// search filters sidebar
+const search = document.getElementById('search');
+search.addEventListener('input', () => {
+  const q = search.value.trim().toLowerCase();
+  links.forEach(a => {
+    const hay = (a.textContent + ' ' + (a.dataset.kw||'')).toLowerCase();
+    a.classList.toggle('hidden', q.length > 0 && !hay.includes(q));
+  });
+});
+search.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const first = links.find(a => !a.classList.contains('hidden'));
+    if (first) { window.location.hash = first.getAttribute('href'); }
+  }
+});
+
+document.getElementById('backtop').addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
+</script>
+</body>
+</html>

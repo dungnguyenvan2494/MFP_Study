@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux ARM64 Scheduler Internals — Deep Source Code Study</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#11161d; --panel:#151b23; --border:#26303b;
+  --text:#c9d1d9; --text-dim:#8b949e; --heading:#e6edf3;
+  --accent:#58a6ff; --accent2:#7ee787; --warn:#f0883e; --danger:#ff7b72; --purple:#d2a8ff; --teal:#39c5cf; --gold:#f2cc60;
+  --code-bg:#0a0e14;
+  font-family:'JetBrains Mono','Cascadia Code','Fira Code',Consolas,'SF Mono',monospace;
+}
+:root[data-theme="light"]{
+  --bg:#f6f8fa; --bg2:#eef1f4; --panel:#ffffff; --border:#d0d7de;
+  --text:#24292f; --text-dim:#57606a; --heading:#1b1f24;
+  --accent:#0969da; --accent2:#116329; --warn:#9a5b12; --danger:#cf222e; --purple:#8250df; --teal:#0f7b8a; --gold:#7d5c00;
+  --code-bg:#f0f2f5;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+body{font-size:14.5px;line-height:1.65;}
+h1,h2,h3,h4{color:var(--heading);font-weight:600;letter-spacing:.2px;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+code{font-family:inherit;background:rgba(110,118,129,.15);padding:1px 5px;border-radius:4px;color:var(--warn);}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;font-size:12.8px;line-height:1.55;}
+pre code{background:none;padding:0;color:var(--text);}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13px;}
+th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top;}
+th{background:var(--bg2);color:var(--heading);}
+tr:nth-child(even){background:rgba(127,127,127,.04);}
+.tblwrap{overflow-x:auto;margin:14px 0;}
+.tblwrap table{margin:0;}
+
+#topbar{position:sticky;top:0;z-index:50;background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+#topbar .title h1{font-size:16.5px;margin:0;color:var(--heading);}
+#topbar .title .sub{color:var(--text-dim);font-size:11.5px;margin-top:2px;}
+#topbar .meta{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;align-items:center;}
+.badge{border:1px solid var(--border);border-radius:20px;padding:4px 10px;color:var(--accent2);background:rgba(126,231,135,.06);white-space:nowrap;}
+.badge.warn{color:var(--warn);border-color:#5a3a1a;background:rgba(240,136,62,.08);}
+#search{background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 9px;width:200px;font-family:inherit;font-size:12px;}
+#search:focus{outline:1px solid var(--accent);}
+.btn{background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+
+#shell{display:flex;align-items:flex-start;}
+#sidebar{position:sticky;top:60px;height:calc(100vh - 60px);width:275px;flex:0 0 275px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg2);padding:12px 0 60px;}
+#sidebar .grp-label{color:var(--text-dim);font-size:10.5px;text-transform:uppercase;letter-spacing:1px;padding:14px 18px 6px;}
+#sidebar a.nav-item{display:block;padding:5px 18px;color:var(--text);font-size:12.5px;border-left:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#sidebar a.nav-item:hover{background:rgba(88,166,255,.08);text-decoration:none;}
+#sidebar a.nav-item.active{border-left-color:var(--accent);background:rgba(88,166,255,.12);color:var(--accent);}
+#sidebar a.nav-item.hidden{display:none;}
+
+main{flex:1 1 auto;min-width:0;padding:30px 40px 120px;max-width:1020px;}
+section.chapter{padding-top:10px;margin-bottom:60px;border-top:1px solid var(--border);}
+section.chapter:first-of-type{border-top:none;}
+.chap-head{padding-top:20px;margin-bottom:16px;}
+.chap-num{color:var(--text-dim);font-size:12.5px;}
+.chap-head h2{font-size:22px;margin:4px 0 8px;}
+.chap-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);margin-bottom:8px;}
+
+.diagram{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:14px 0;}
+.diagram pre{border:none;background:none;padding:0;margin:0;font-size:12.3px;}
+
+.box{border-radius:8px;padding:12px 15px;margin:14px 0;border-left:4px solid var(--accent);background:rgba(88,166,255,.06);}
+.box-title{font-weight:700;font-size:11.5px;margin-bottom:6px;color:var(--heading);letter-spacing:.3px;}
+.box.key{border-color:var(--accent2);background:rgba(126,231,135,.06);}
+.box.warn{border-color:var(--danger);background:rgba(255,123,114,.07);}
+.box.mental{border-color:var(--purple);background:rgba(210,168,255,.07);}
+.box.arm64{border-color:var(--teal);background:rgba(57,197,207,.07);}
+.box.legacy{border-color:#8b949e;background:rgba(139,148,158,.09);}
+.box.source{border-color:var(--gold);background:rgba(242,204,96,.07);}
+
+.fbox{border:1px solid var(--border);border-radius:8px;margin:16px 0;overflow:hidden;}
+.fbox .fhead{background:var(--bg2);padding:9px 15px;border-bottom:1px solid var(--border);}
+.fbox .fhead .fname{color:var(--accent2);font-size:14px;font-weight:700;}
+.fbox .fhead .floc{color:var(--text-dim);font-size:11px;margin-top:2px;}
+.fbox .fbody{padding:4px 15px 13px;}
+.fbox dl{display:grid;grid-template-columns:120px 1fr;gap:4px 12px;margin:9px 0;}
+.fbox dt{color:var(--text-dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;padding-top:2px;}
+.fbox dd{margin:0;font-size:12.8px;}
+
+.tag{display:inline-block;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;margin-right:4px;letter-spacing:.4px;}
+.tag.sched{background:rgba(88,166,255,.15);color:var(--accent);}
+.tag.arm64{background:rgba(57,197,207,.15);color:var(--teal);}
+.tag.cfs{background:rgba(126,231,135,.15);color:var(--accent2);}
+.tag.smp{background:rgba(210,168,255,.15);color:var(--purple);}
+.tag.irq{background:rgba(255,123,114,.15);color:var(--danger);}
+.tag.mm{background:rgba(242,204,96,.15);color:var(--gold);}
+.tag.legacy{background:rgba(139,148,158,.15);color:var(--text-dim);}
+.tag.syscall{background:rgba(88,166,255,.15);color:var(--accent);}
+
+details{border:1px solid var(--border);border-radius:8px;margin:12px 0;padding:0;background:var(--panel);}
+details summary{cursor:pointer;padding:9px 15px;color:var(--accent);font-size:12px;font-weight:600;}
+details[open] summary{border-bottom:1px solid var(--border);}
+details .inner{padding:13px 15px;}
+.codehdr{color:var(--text-dim);font-size:10.5px;padding-bottom:5px;border-bottom:1px dashed var(--border);margin-bottom:7px;display:flex;justify-content:space-between;}
+.copybtn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:10px;padding:1px 7px;cursor:pointer;}
+.copybtn:hover{color:var(--accent);border-color:var(--accent);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:820px){.grid2{grid-template-columns:1fr;}}
+.chapfoot{margin-top:22px;padding-top:12px;border-top:1px dashed var(--border);font-size:12px;color:var(--text-dim);}
+.chapfoot a{margin-right:12px;}
+mark{background:rgba(242,204,96,.35);color:inherit;border-radius:2px;}
+#backtop{position:fixed;bottom:22px;right:24px;background:var(--panel);border:1px solid var(--border);color:var(--accent);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;z-index:60;}
+#backtop:hover{background:var(--accent);color:var(--bg);}
+.center{text-align:center;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:var(--bg2);}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:6px;}
+@media(max-width:900px){#sidebar{display:none;}main{padding:20px 16px;}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="title">
+    <h1>Linux ARM64 Scheduler Internals</h1>
+    <div class="sub">PDF Concept → Modern Kernel → Source Code → Call Graph → ARM64 Assembly → CPU Hardware → Runtime Trace</div>
+  </div>
+  <div class="meta">
+    <span class="badge">Kernel: Linux 5.10.241</span>
+    <span class="badge">Source: Kernel/K-S800/Src/ (EagleBK_defconfig)</span>
+    <span class="badge warn">PDF nguồn: Understanding the Linux Kernel, Chap.7 — mô tả Linux 2.6 O(1) scheduler, x86</span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input id="search" type="text" placeholder="🔍 tìm: vruntime, TIF_NEED_RESCHED, cpu_switch_to ...">
+    <button class="btn" id="expandall">Expand all</button>
+    <button class="btn" id="collapseall">Collapse all</button>
+    <button class="btn" id="themetoggle">🌙/☀️</button>
+  </div>
+</div>
+
+<div id="shell">
+<nav id="sidebar">
+  <div class="grp-label">Nền tảng</div>
+  <a class="nav-item" href="#c01" data-kw="overview introduction gioi thieu">01 · Overview</a>
+  <a class="nav-item" href="#c02" data-kw="how to use huong dan doc">02 · Cách dùng tài liệu</a>
+  <a class="nav-item" href="#c03" data-kw="pdf chapter 7 o(1) scheduler active expired array">03 · PDF Chapter 7 tóm tắt</a>
+  <a class="nav-item" href="#c04" data-kw="pdf vs modern mapping table obsolete legacy">04 · PDF 2.6 vs Linux hiện đại</a>
+  <a class="nav-item" href="#c05" data-kw="source tree map kernel sched arch arm64">05 · Bản đồ source tree</a>
+
+  <div class="grp-label">Big picture &amp; Data structures</div>
+  <a class="nav-item" href="#c06" data-kw="big picture arm64 timer irq schedule context switch">06 · ARM64 Big Picture</a>
+  <a class="nav-item" href="#c07" data-kw="task_struct state prio sched_class se cpu">07 · task_struct</a>
+  <a class="nav-item" href="#c08" data-kw="struct rq runqueue percpu curr idle cfs rt dl">08 · struct rq</a>
+  <a class="nav-item" href="#c09" data-kw="sched_entity cfs_rq vruntime rbtree">09 · sched_entity &amp; cfs_rq</a>
+  <a class="nav-item" href="#c10" data-kw="sched_class stop dl rt fair idle for_each_class pick_next_task">10 · sched_class hierarchy</a>
+
+  <div class="grp-label">CFS</div>
+  <a class="nav-item" href="#c11" data-kw="cfs enqueue dequeue update_curr rbtree leftmost">11 · CFS deep dive</a>
+  <a class="nav-item" href="#c12" data-kw="vruntime nice weight calc_delta_fair sleeper bonus">12 · vruntime &amp; nice</a>
+
+  <div class="grp-label">Tick &amp; Preemption</div>
+  <a class="nav-item" href="#c13" data-kw="scheduler_tick task_tick_fair update_process_times">13 · scheduler_tick()</a>
+  <a class="nav-item" href="#c14" data-kw="preemption voluntary involuntary preempt_count">14 · Preemption</a>
+  <a class="nav-item" href="#c15" data-kw="tif_need_resched resched_curr set_tsk_need_resched entry.S">15 · TIF_NEED_RESCHED</a>
+
+  <div class="grp-label">Core scheduler</div>
+  <a class="nav-item" href="#c16" data-kw="schedule __schedule prev next deactivate_task">16 · schedule() / __schedule()</a>
+  <a class="nav-item" href="#c17" data-kw="pick_next_task pick_next_task_fair pick_next_entity">17 · pick_next_task()</a>
+  <a class="nav-item" href="#c18" data-kw="context_switch prepare_task_switch finish_task_switch">18 · context_switch()</a>
+
+  <div class="grp-label">ARM64 context switch</div>
+  <a class="nav-item" href="#c19" data-kw="switch_to __switch_to cpu_switch_to assembly stp ldp">19 · switch_to / __switch_to / cpu_switch_to</a>
+  <a class="nav-item" href="#c20" data-kw="current sp_el0 current_thread_info get_current">20 · current trên ARM64</a>
+  <a class="nav-item" href="#c21" data-kw="switch_mm ttbr0 ttbr1 asid tlb check_and_switch_context">21 · MM switch / TTBR / ASID</a>
+
+  <div class="grp-label">ARM64 exception &amp; timer</div>
+  <a class="nav-item" href="#c22" data-kw="exception entry vector table el0 el1 pt_regs entry.S">22 · ARM64 Exception Entry</a>
+  <a class="nav-item" href="#c23" data-kw="arm generic timer gic irq arch_timer_handler tick_sched_timer">23 · Timer → Scheduler</a>
+  <a class="nav-item" href="#c24" data-kw="interrupt preemption scenario sequence T=1000us">24 · Kịch bản Interrupt Preemption</a>
+
+  <div class="grp-label">Wakeup</div>
+  <a class="nav-item" href="#c25" data-kw="wakeup wake_up try_to_wake_up ttwu enqueue_task">25 · Wakeup Path</a>
+  <a class="nav-item" href="#c26" data-kw="try_to_wake_up select_task_rq ttwu_queue check_preempt_curr">26 · try_to_wake_up()</a>
+
+  <div class="grp-label">SMP</div>
+  <a class="nav-item" href="#c27" data-kw="percpu runqueue cpu_rq this_rq smp">27 · Per-CPU Runqueue</a>
+  <a class="nav-item" href="#c28" data-kw="load_balance find_busiest_group detach_tasks attach_tasks">28 · Load Balancing</a>
+  <a class="nav-item" href="#c29" data-kw="sched_domain sched_group cpu affinity cpumask">29 · sched_domain &amp; CPU Affinity</a>
+  <a class="nav-item" href="#c30" data-kw="cpu hotplug sched_cpu_starting dying activate deactivate">30 · CPU Hotplug</a>
+
+  <div class="grp-label">Kernel threads</div>
+  <a class="nav-item" href="#c31" data-kw="kernel thread mm null active_mm idle task kworker">31 · Kernel Thread vs User Process</a>
+
+  <div class="grp-label">Syscalls</div>
+  <a class="nav-item" href="#c32" data-kw="nice getpriority setpriority sched_setscheduler sched_yield syscall table">32 · Scheduler Syscalls</a>
+  <a class="nav-item" href="#c33" data-kw="svc entry vector el0_sync el0_svc syscall table x8">33 · ARM64 SVC Entry</a>
+
+  <div class="grp-label">Debug &amp; Trace</div>
+  <a class="nav-item" href="#c34" data-kw="ftrace perf sched_switch proc sched_debug tracing">34 · Runtime Tracing</a>
+
+  <div class="grp-label">Tổng kết</div>
+  <a class="nav-item" href="#c35" data-kw="mental model final diagram">35 · Mental Model</a>
+  <a class="nav-item" href="#c36" data-kw="roadmap study order level">36 · Roadmap học</a>
+  <a class="nav-item" href="#c37" data-kw="cheat sheet source commands rg git grep">37 · Cheat Sheet</a>
+  <a class="nav-item" href="#c38" data-kw="function index a-z">38 · Function Index</a>
+</nav>
+
+<main>
+
+<!-- ===================== C01 ===================== -->
+<section class="chapter" id="c01">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 01</div>
+  <h2>Overview — Mục tiêu &amp; phạm vi tài liệu</h2>
+  <div class="chap-meta"><span>Kernel: 5.10.241</span><span>Board: Konica Minolta bizhub S800 (EagleBK_defconfig)</span><span>CPU: 2× Cortex-A72 (AP806)</span></div>
+</div>
+
+<p>Tài liệu này trả lời một câu hỏi duy nhất, ở mức source code: <b>khi CPU Cortex-A72 chạy task A, timer ngắt xảy ra, và một lúc sau CPU chạy task B tại đúng instruction mà B đã dừng lại — chuyện gì thực sự xảy ra, dòng lệnh nào chạy, thanh ghi nào đổi?</b></p>
+
+<p>Điểm xuất phát là chương 7 ("Process Scheduling") của cuốn <i>Understanding the Linux Kernel</i> (file <code>Linux_kernel_chap_7.pdf</code>), mô tả scheduler <b>Linux 2.6 kiểu O(1)</b> minh hoạ bằng kiến trúc <b>x86</b>. Tài liệu đó không sai — nó đúng cho phiên bản kernel nó mô tả — nhưng <b>không phải</b> scheduler đang chạy trong cây source thật trên máy này. Cây source thật là <b>Linux 5.10.241</b>, dùng scheduler <b>CFS</b> (Completely Fair Scheduler, từ 2.6.23) cho tiến trình thường và scheduling classes phân lớp (stop/deadline/RT/fair/idle) cho toàn bộ hệ thống, chạy trên <b>ARM64 (AArch64, Cortex-A72)</b> chứ không phải x86.</p>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">✅ NGUYÊN TẮC BẮT BUỘC CỦA TÀI LIỆU NÀY</div>
+Mọi <code>function()</code>, <code>struct</code>, và số dòng trong tài liệu đã được xác minh trực tiếp bằng <code>grep</code>/đọc file trên cây source thật tại <code>Kernel/K-S800/Src/</code> (không suy đoán, không "tương đương với"). Chỗ nào PDF và source hiện đại khác nhau, có box <b>OLD PDF / MODERN KERNEL / REASON</b> riêng. Chỗ nào ARM64 khác x86, có box <b>ARM64 NOTE</b> riêng. Chỗ nào một khái niệm trong PDF đã biến mất khỏi kernel hiện đại, có box <b>LEGACY / OBSOLETE</b> riêng.
+</div>
+
+<p>Ba lớp code luôn được tách rõ trong mọi flow:</p>
+<img src="Process_3_layer.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<p>Ranh giới này xuất hiện lặp lại: <code>schedule()</code> hoàn toàn generic; nó gọi <code>context_switch()</code> (vẫn generic) mà bên trong gọi <code>switch_to()</code> — macro này là chỗ đường biên arch bắt đầu; từ đó xuống <code>__switch_to()</code> (C, arch/arm64) rồi <code>cpu_switch_to()</code> (assembly thuần, arch/arm64) chạm thẳng vào thanh ghi CPU.</p>
+</section>
+
+<!-- ===================== C02 ===================== -->
+<section class="chapter" id="c02">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 02</div>
+  <h2>Cách dùng tài liệu này</h2>
+</div>
+
+<p>Đọc theo đúng thứ tự sidebar nếu mới bắt đầu — nó đi từ khái niệm (PDF) → cấu trúc dữ liệu → tick/preemption → hàm lõi generic → arch ARM64 → SMP → syscall → debug thật. Nếu đã quen CFS, có thể nhảy thẳng vào <a href="#c19">Chương 19 (switch_to chain)</a> hoặc <a href="#c23">Chương 23 (Timer → Scheduler)</a> — đây là hai chương ARM64-specific sâu nhất.</p>
+
+<div class="grid2">
+<div class="box source">
+<div class="box-title">📌 Loại box sẽ gặp</div>
+<code>NOTE</code> — giải thích thêm · <code>ARM64 NOTE</code> — khác biệt kiến trúc · <code>IMPORTANT</code> — điểm mấu chốt dễ hiểu sai · <code>LEGACY/OBSOLETE</code> — khái niệm PDF đã bị loại bỏ · <code>WARNING</code> — cạm bẫy khi đọc code · <code>SOURCE TIP</code> — lệnh <code>rg</code>/<code>git</code> hữu ích
+</div>
+<div class="box arm64">
+<div class="box-title">🔧 fbox — Function card</div>
+Mỗi hàm quan trọng có một "card" riêng: FILE, PURPOSE, CALLERS/CALLEES, CONTEXT/IRQ/PREEMPT state, STEP-BY-STEP, và <b>ARM64 impact</b>. Đây là định dạng chính để trace call chain thật.
+</div>
+</div>
+
+<div class="box">
+<div class="box-title">🔍 Search &amp; điều hướng</div>
+Ô tìm kiếm trên topbar lọc sidebar theo từ khoá (tên hàm, struct, macro). <code>Expand all</code>/<code>Collapse all</code> mở/đóng mọi khối <code>&lt;details&gt;</code> (thường chứa source excerpt dài). Nút 🌙/☀️ đổi dark/light mode — mặc định theo hệ thống.
+</div>
+</section>
+
+<!-- ===================== C03 ===================== -->
+<section class="chapter" id="c03">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 03</div>
+  <h2>PDF Chapter 7 — Tóm tắt scheduler Linux 2.6 (nguồn: <i>Understanding the Linux Kernel</i>)</h2>
+  <div class="chap-meta"><span class="tag legacy">LEGACY BASELINE</span><span>Mô tả bằng x86, giả định system tick = 1ms</span></div>
+</div>
+
+<p>PDF chia thành 6 phần: 7.1 Scheduling Policy, 7.2 The Scheduling Algorithm, 7.3 Data Structures, 7.4 Functions Used by the Scheduler, 7.5 Runqueue Balancing in Multiprocessor Systems, 7.6 System Calls Related to Scheduling. Tóm tắt từng phần — đây là "concept" sẽ được map sang kernel hiện đại ở <a href="#c04">Chương 04</a>.</p>
+
+<h3 style="margin-top:22px">7.1 — Scheduling Policy</h3>
+<ul>
+<li>Time-sharing: CPU chia "quantum" cho từng runnable process; timer interrupt làm việc chia sẻ này trong suốt với chương trình.</li>
+<li>3 lớp process: <b>interactive</b> (cần phản hồi 50–150ms), <b>batch</b> (không cần tương tác, bị phạt), <b>real-time</b> (yêu cầu độ trễ chặt, không bao giờ bị blocked bởi process priority thấp hơn).</li>
+<li><b>Process Preemption</b>: khi một process vào <code>TASK_RUNNING</code>, kernel so priority với <code>current</code>; nếu cao hơn → set <code>TIF_NEED_RESCHED</code> trên <code>current</code> → scheduler chạy khi timer interrupt handler kết thúc. Process bị preempt <b>vẫn ở TASK_RUNNING</b>, chỉ không giữ CPU nữa.</li>
+<li><b>Quantum duration</b> là đánh đổi: ngắn quá → overhead process-switch cao; dài quá → hệ thống "giật", nhưng lý thuyết không ảnh hưởng nhiều tới interactive process vì chúng vẫn preempt được batch process ngay lập tức nhờ priority cao hơn.</li>
+</ul>
+
+<h3 style="margin-top:22px">7.2 — The Scheduling Algorithm (O(1))</h3>
+<ul>
+<li>3 scheduling classes: <code>SCHED_FIFO</code>, <code>SCHED_RR</code> (real-time), <code>SCHED_NORMAL</code> (conventional).</li>
+<li><b>Static priority</b>: 100 (cao nhất) → 139 (thấp nhất), đặt qua <code>nice()</code>/<code>setpriority()</code>. <b>Base time quantum</b> tính từ static priority: <code>(140 − static_prio) × 20ms</code> nếu <code>&lt;120</code>, <code>× 5ms</code> nếu <code>≥120</code>.</li>
+<li><b>Dynamic priority</b> = <code>max(100, min(static_prio − bonus + 5, 139))</code>; <code>bonus</code> (0–10) phụ thuộc <b>average sleep time</b> — process ngủ nhiều (interactive) được bonus dương (ưu tiên tăng), process CPU-bound liên tục được bonus âm.</li>
+<li><b>Active / Expired arrays</b>: mỗi runqueue giữ 2 tập <code>prio_array_t</code> (140 danh sách liên kết theo priority + bitmap). Process hết quantum bị chuyển từ <code>active</code> sang <code>expired</code>; khi <code>active</code> rỗng, đổi vai <code>active ↔ expired</code> bằng cách hoán đổi 2 con trỏ.</li>
+</ul>
+
+<h3 style="margin-top:22px">7.3 — Data Structures</h3>
+<ul>
+<li><code>struct runqueue</code> per-CPU (qua <code>this_rq()</code>/<code>cpu_rq(n)</code>): <code>active</code>, <code>expired</code>, <code>arrays[2]</code>, <code>curr</code>, <code>idle</code>, <code>nr_running</code>, <code>sd</code> (scheduling domain), <code>migration_thread</code>...</li>
+<li><code>task_struct</code> scheduling fields: <code>thread_info-&gt;flags</code> (chứa <code>TIF_NEED_RESCHED</code>), <code>state</code>, <code>prio</code>, <code>static_prio</code>, <code>array</code> (trỏ vào active hoặc expired), <code>sleep_avg</code>, <code>time_slice</code>, <code>policy</code>, <code>cpus_allowed</code>.</li>
+</ul>
+
+<h3 style="margin-top:22px">7.4 — Functions Used by the Scheduler</h3>
+<ul>
+<li><code>scheduler_tick()</code> — mỗi tick: cập nhật <code>time_slice</code>; nếu hết quantum → refill + chuyển sang expired (batch) hoặc để lại active (interactive nếu chưa starve) + set <code>TIF_NEED_RESCHED</code>.</li>
+<li><code>try_to_wake_up()</code> — đổi state → <code>TASK_RUNNING</code>, chọn CPU đích (heuristic cache-affinity), gọi <code>activate_task()</code> → <code>recalc_task_prio()</code> tính lại dynamic priority từ sleep time, rồi <code>resched_task()</code> nếu priority cao hơn <code>curr</code>.</li>
+<li><code>schedule()</code> — hàm trung tâm: disable preempt → xử lý trạng thái <code>prev</code> (dequeue nếu ngủ) → nếu runqueue rỗng thì đổi vai active/expired → <code>sched_find_first_bit()</code> tìm priority list không rỗng đầu tiên → lấy process đầu danh sách làm <code>next</code> → <code>context_switch()</code>.</li>
+<li><code>load_balance()</code> — cân bằng runqueue đa xử lý dựa trên <b>scheduling domains</b> phân cấp.</li>
+</ul>
+
+<h3 style="margin-top:22px">7.5 — Runqueue Balancing (SMP)</h3>
+<p>Giới thiệu <b>scheduling domains</b> (từ kernel 2.6.7): cây phân cấp các nhóm CPU, mỗi domain có nhiều <code>sched_group</code>; <code>rebalance_tick()</code> gọi <code>load_balance()</code> theo domain với tần suất khác nhau (thường xuyên hơn khi CPU idle); <code>move_tasks()</code>/<code>can_migrate_task()</code> di chuyển task từ runqueue bận nhất sang runqueue local.</p>
+
+<h3 style="margin-top:22px">7.6 — System Calls Related to Scheduling</h3>
+<p><code>nice()</code>, <code>getpriority()</code>/<code>setpriority()</code>, <code>sched_setscheduler()</code>/<code>sched_getscheduler()</code>, <code>sched_setparam()</code>/<code>sched_getparam()</code>, <code>sched_yield()</code>, <code>sched_get_priority_min/max()</code>, <code>sched_rr_get_interval()</code>, <code>sched_setaffinity()</code>/<code>sched_getaffinity()</code>.</p>
+
+<div class="box legacy">
+<div class="box-title">⚠️ LEGACY — những gì PDF mô tả không còn là cơ chế chính trong kernel hiện đại</div>
+<code>active</code>/<code>expired</code> array, <code>prio_array_t</code>, <code>sleep_avg</code>, "interactive delta" formula, <code>recalc_task_prio()</code> — toàn bộ heuristic "đoán process interactive hay batch" của O(1) scheduler đã bị <b>xoá hoàn toàn</b> khỏi kernel từ 2.6.23 (thay bằng CFS). Chi tiết tại <a href="#c04">Chương 04</a>.
+</div>
+</section>
+
+<!-- ===================== C04 ===================== -->
+<section class="chapter" id="c04">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 04</div>
+  <h2>PDF Linux 2.6 vs Linux hiện đại (5.10.241) trên ARM64</h2>
+</div>
+
+<p>Bảng dưới là mapping đầy đủ. Cột "Status": <span class="tag legacy">obsolete</span> = khái niệm biến mất hoàn toàn khỏi kernel · <span class="tag sched">changed</span> = còn tồn tại nhưng cơ chế/tên đổi khác · <span class="tag cfs">current</span> = còn đúng gần như nguyên vẹn.</p>
+
+<div class="tblwrap"><table>
+<tr><th>PDF Linux 2.6 concept</th><th>Linux hiện đại (5.10.241)</th><th>ARM64-specific</th><th>Status</th></tr>
+<tr><td>O(1) scheduler (toàn bộ thuật toán §7.2)</td><td>CFS (<code>fair_sched_class</code>) cho SCHED_NORMAL/BATCH, còn SCHED_FIFO/RR nằm ở <code>rt_sched_class</code> riêng — xem <a href="#c10">c10</a></td><td>Không có phần ARM64-riêng ở tầng thuật toán chọn task</td><td class="tag legacy">obsolete</td></tr>
+<tr><td><code>active</code>/<code>expired</code> <code>prio_array_t[2]</code> (140 danh sách liên kết + bitmap)</td><td><code>cfs_rq-&gt;tasks_timeline</code>: một <b>red-black tree</b> duy nhất, khoá = <code>vruntime</code> — xem <a href="#c09">c09</a>, <a href="#c11">c11</a></td><td>—</td><td class="tag legacy">obsolete</td></tr>
+<tr><td><code>static_prio</code> (100–139) là input chính cho base time quantum</td><td><code>static_prio</code> vẫn tồn tại trong <code>task_struct</code> (đặt qua nice), nhưng chỉ dùng để tính <code>sched_entity.load.weight</code> qua bảng <code>sched_prio_to_weight[]</code> — không còn quyết định "quantum"</td><td>—</td><td class="tag sched">changed</td></tr>
+<tr><td>Dynamic priority = <code>static_prio − bonus + 5</code> (heuristic "interactive delta")</td><td>Không tồn tại khái niệm dynamic priority kiểu này cho CFS. Vị trí trong rbtree quyết định bởi <code>vruntime</code>, tự nhiên hội tụ về công bằng</td><td>—</td><td class="tag legacy">obsolete</td></tr>
+<tr><td><code>sleep_avg</code>, <code>recalc_task_prio()</code>, "interactive delta" formula (§7.2.1.2)</td><td>Thay bằng <code>place_entity()</code> "sleeper boost" đơn giản: task thức dậy được đặt <code>vruntime = max(vruntime, min_vruntime − sched_latency)</code> — một cú hích một lần, không heuristic dài hạn</td><td>—</td><td class="tag legacy">obsolete</td></tr>
+<tr><td><code>time_slice</code> (unsigned int, số tick còn lại) trong <code>task_struct</code></td><td>Không có "quota tick" cố định. CFS dùng <code>sysctl_sched_latency</code> (6ms) chia cho số task runnable → mỗi task chạy tới khi <code>vruntime</code> vượt task khác quá <code>wakeup_granularity</code>, kiểm ở mỗi tick qua <code>check_preempt_tick()</code></td><td>—</td><td class="tag sched">changed</td></tr>
+<tr><td><code>runqueue</code> struct, field <code>arrays[2]</code>, <code>active</code>, <code>expired</code></td><td><code>struct rq</code> (kernel/sched/sched.h:904) — vẫn per-CPU nhưng chứa 3 sub-runqueue riêng: <code>cfs</code>, <code>rt</code>, <code>dl</code> — xem <a href="#c08">c08</a></td><td>Per-CPU qua <code>DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues)</code>, giống mọi arch — không có phần riêng ARM64</td><td class="tag sched">changed</td></tr>
+<tr><td><code>scheduler_tick()</code></td><td>Tên hàm <b>giữ nguyên</b>, vẫn gọi từ <code>update_process_times()</code> — nhưng đường vào tick đổi: không còn "timer interrupt 1ms cố định" mà qua <code>hrtimer</code>/tick subsystem — xem <a href="#c13">c13</a>, <a href="#c23">c23</a></td><td>Trigger vật lý = ARM Generic Timer (CNTV) qua GIC, không phải PIT/APIC như PDF giả định</td><td class="tag sched">changed</td></tr>
+<tr><td><code>schedule()</code> (toàn bộ logic nằm trong 1 hàm ~200 dòng)</td><td><code>schedule()</code> chỉ còn là wrapper mỏng gọi <code>__schedule()</code> (kernel/sched/core.c:4462) — xem <a href="#c16">c16</a></td><td>—</td><td class="tag sched">changed</td></tr>
+<tr><td><code>context_switch()</code></td><td>Tên hàm giữ nguyên, vẫn ở kernel/sched/core.c, nhưng bên trong gọi chuỗi arch riêng — xem <a href="#c18">c18</a>, <a href="#c19">c19</a></td><td><code>switch_to()</code> → <code>__switch_to()</code> (arch/arm64/kernel/process.c) → <code>cpu_switch_to()</code> (arch/arm64/kernel/entry.S, assembly) — hoàn toàn khác x86 <code>__switch_to_asm</code>/TSS</td><td class="tag sched">changed</td></tr>
+<tr><td><code>load_balance()</code>, scheduling domains, <code>rebalance_tick()</code>, <code>move_tasks()</code></td><td><code>load_balance()</code> vẫn tồn tại (kernel/sched/fair.c:9836), <code>find_busiest_group()</code> (:9488), nhưng <code>move_tasks()</code> đã tách thành <code>detach_tasks()</code> (:7884) + <code>attach_tasks()</code> (:8037); <code>rebalance_tick()</code> đổi tên thành logic trong <code>trigger_load_balance()</code> gọi từ <code>scheduler_tick()</code> — xem <a href="#c28">c28</a></td><td>Không có phần ARM64-riêng — <code>sched_domain</code> build từ device-tree topology (<code>cpu-map</code>) thay vì APIC ID như x86</td><td class="tag sched">changed</td></tr>
+<tr><td>System calls (nice/setpriority/sched_setscheduler/...)</td><td>Toàn bộ vẫn tồn tại với đúng số hiệu POSIX — xem <a href="#c32">c32</a></td><td><code>nice()</code> <b>không có syscall number native trên AArch64</b> — chỉ tồn tại trong bảng compat 32-bit (<code>unistd32.h:81</code>). Đây là khác biệt ARM64 vs x86 cụ thể, xem box trong c32</td><td class="tag sched">changed</td></tr>
+</table></div>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 Vì sao active/expired array bị loại bỏ</div>
+O(1) scheduler đúng như tên gọi — chọn task trong O(1) bất kể số task runnable — nhưng phải trả giá bằng một cỗ máy heuristic phức tạp (<code>sleep_avg</code>, "interactive delta", "starvation" check trên expired array) để đoán process nào là interactive. Heuristic này khét tiếng khó tune và có nhiều pathological case (ví dụ X server bị đối xử tệ). CFS (Ingo Molnar, 2.6.23, 2007) bỏ hẳn việc "đoán loại process": chọn thẳng task có <code>vruntime</code> nhỏ nhất trong rbtree — <b>O(log n)</b> thay vì O(1), nhưng với n vài trăm task, log n ~ 8-9 phép so sánh, không đáng kể; đổi lại thuật toán đơn giản, dự đoán được, không cần bảng heuristic nào.
+</div>
+</section>
+
+<!-- ===================== C05 ===================== -->
+<section class="chapter" id="c05">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 05</div>
+  <h2>Bản đồ source tree — Linux Scheduler trên cây <code>Kernel/K-S800/Src</code></h2>
+</div>
+
+<p>Bản đồ dưới lấy trực tiếp từ cây source thật trên máy này (không hardcode từ tài liệu khác).</p>
+
+<img src="Process_struct_file.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<div class="box source">
+<div class="box-title">📌 SOURCE TIP — lệnh đã dùng để xây bản đồ này</div>
+<pre><code>grep -n "^struct rq {" kernel/sched/sched.h
+grep -n "extern const struct sched_class" kernel/sched/sched.h
+grep -n "SYM_FUNC_START(cpu_switch_to)" arch/arm64/kernel/entry.S
+grep -n "scheduler_tick()" kernel/time/timer.c
+grep -n "__NR_sched_yield\|__NR_nice" include/uapi/asm-generic/unistd.h</code></pre>
+</div>
+</section>
+
+<!-- ===================== C06 ===================== -->
+<section class="chapter" id="c06">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 06</div>
+  <h2>ARM64 Scheduler — Big Picture</h2>
+</div>
+
+<img src="Process_Timer_Interrupt_Schedule_Context_Switch_flow.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — 3 điểm khác x86 mà PDF không nhắc tới (vì PDF viết cho x86)</div>
+1) x86 dùng PIT/APIC-timer + interrupt vector cố định; ARM64 dùng <b>ARM Generic Timer</b> (thanh ghi hệ thống <code>CNTV_CTL_EL0</code>/<code>CNTV_TVAL_EL0</code>) phát PPI (Private Peripheral Interrupt) qua <b>GIC</b> (Generic Interrupt Controller), không phải dây IRQ0 kiểu x86 cũ.<br>
+2) x86 context switch dùng TSS + <code>__switch_to_asm</code> đổi <code>ESP</code>/segment; ARM64 dùng <code>cpu_switch_to()</code> — một hàm assembly tuân theo <b>AAPCS64 calling convention</b>, chỉ lưu callee-saved registers (x19-x28, fp, sp, lr) — xem <a href="#c19">c19</a>.<br>
+3) x86 <code>current</code> đọc qua per-CPU segment (<code>%gs</code>); ARM64 "chiếm dụng" thanh ghi hệ thống <code>SP_EL0</code> (vô dụng ở EL1) để giữ thẳng con trỏ <code>task_struct*</code> — xem <a href="#c20">c20</a>.
+</div>
+</section>
+
+<!-- ===================== C07 ===================== -->
+<section class="chapter" id="c07">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 07</div>
+  <h2><code>task_struct</code> — các field liên quan scheduler</h2>
+  <div class="chap-meta"><span class="tag sched">include/linux/sched.h</span></div>
+</div>
+
+<p>Không dump toàn bộ struct (quá lớn) — chỉ các field scheduler chạm tới, theo đúng yêu cầu.</p>
+
+<div class="tblwrap"><table>
+<tr><th>Field</th><th>Ý nghĩa</th><th>Ai update</th><th>Ai đọc</th><th>Khi nào đổi</th></tr>
+<tr><td><code>volatile long state</code> / <code>__state</code></td><td>TASK_RUNNING / INTERRUPTIBLE / UNINTERRUPTIBLE / ...</td><td>chính task (<code>set_current_state()</code>) hoặc <code>try_to_wake_up()</code></td><td><code>__schedule()</code> (quyết định deactivate), <code>ttwu</code></td><td>task tự ngủ hoặc bị đánh thức</td></tr>
+<tr><td><code>on_rq</code></td><td>đang nằm trong runqueue (rbtree/list) hay không — <b>không</b> có nghĩa "đang chạy trên CPU"</td><td><code>enqueue_task()</code>/<code>dequeue_task()</code></td><td><code>__schedule()</code>, load-balancer</td><td>enqueue/dequeue</td></tr>
+<tr><td><code>prio</code> / <code>static_prio</code> / <code>normal_prio</code></td><td><code>static_prio</code>: từ nice (chỉ ảnh hưởng CFS <code>load.weight</code>, KHÔNG còn quyết định quantum như PDF §7.2.1.1); <code>normal_prio</code>: priority "nếu không có boost"; <code>prio</code>: priority hiệu lực hiện tại (RT/DL có thể override)</td><td><code>set_user_nice()</code>, <code>__setscheduler_prio()</code></td><td>scheduling class khi chọn task</td><td>nice()/setpriority()/sched_setscheduler()</td></tr>
+<tr><td><code>rt_priority</code></td><td>priority real-time (1–99, POSIX), riêng biệt với <code>prio</code> nội bộ kernel</td><td><code>sched_setscheduler()</code></td><td><code>rt_sched_class</code></td><td>chỉ RT task</td></tr>
+<tr><td><code>policy</code></td><td>SCHED_NORMAL/FIFO/RR/BATCH/IDLE/DEADLINE</td><td><code>sched_setscheduler()</code></td><td>chọn <code>sched_class</code> nào áp dụng</td><td>syscall</td></tr>
+<tr><td><code>sched_class</code></td><td>con trỏ hàm tới bảng operations (fair/rt/dl/idle/stop) — xem <a href="#c10">c10</a></td><td><code>__setscheduler_prio()</code></td><td><code>__schedule()</code> qua <code>for_each_class</code></td><td>đổi policy</td></tr>
+<tr><td><code>se</code> (struct sched_entity, nhúng)</td><td>node trong CFS rbtree — <code>vruntime</code>, <code>load</code>, <code>run_node</code> — xem <a href="#c09">c09</a></td><td><code>update_curr()</code>, <code>place_entity()</code></td><td><code>pick_next_entity()</code></td><td>mỗi lần chạy/ngủ/thức</td></tr>
+<tr><td><code>rt</code> / <code>dl</code> (nhúng)</td><td>sched_rt_entity / sched_dl_entity — tương đương <code>se</code> nhưng cho RT/deadline</td><td>rt.c / deadline.c</td><td>rt_sched_class / dl_sched_class</td><td>—</td></tr>
+<tr><td><code>cpu</code> / <code>wake_cpu</code></td><td><code>cpu</code>: CPU hiện đang (hoặc vừa) chạy task này; <code>wake_cpu</code>: CPU gợi ý khi bị đánh thức</td><td><code>set_task_cpu()</code></td><td><code>select_task_rq()</code></td><td>migrate/wakeup</td></tr>
+<tr><td><code>cpus_ptr</code> / <code>nr_cpus_allowed</code></td><td>bitmask CPU được phép chạy (affinity) — <code>cpus_ptr</code> trỏ tới <code>cpus_mask</code> (hoặc mask tạm khi migration-disable)</td><td><code>sched_setaffinity()</code></td><td><code>select_task_rq()</code>, load-balancer</td><td>syscall affinity</td></tr>
+<tr><td><code>on_cpu</code></td><td>"đang thực sự chạy trên 1 CPU vật lý" (khác <code>on_rq</code>) — dùng trong <code>try_to_wake_up()</code> để spin chờ context switch cũ hoàn tất trên SMP</td><td><code>context_switch()</code>/<code>finish_task_switch()</code></td><td><code>ttwu()</code></td><td>mỗi context switch</td></tr>
+<tr><td><code>preempt_count</code></td><td>nằm trong <code>thread_info</code>, không trực tiếp trong <code>task_struct</code>; đếm số lớp "không được preempt" đang lồng (spinlock, IRQ, softirq) — xem <a href="#c14">c14</a></td><td><code>preempt_disable()</code>/<code>enable()</code>, <code>irq_enter/exit</code></td><td><code>preemptible()</code>, exception return path</td><td>mỗi critical section</td></tr>
+<tr><td><code>flags</code></td><td><code>PF_KTHREAD</code> (kernel thread), <code>PF_EXITING</code>, <code>PF_IDLE</code>...</td><td><code>copy_process()</code>, <code>do_exit()</code></td><td><code>context_switch()</code> (quyết định mm handling)</td><td>tạo/kết thúc task</td></tr>
+<tr><td><code>thread</code> (struct thread_struct, field <b>cuối cùng</b>)</td><td>arch-specific: <code>cpu_context</code> (x19-x28,fp,sp,pc — nơi <code>cpu_switch_to()</code> lưu/nạp), TLS, FPSIMD state, debug regs</td><td><code>cpu_switch_to()</code>, <code>__switch_to()</code></td><td><code>cpu_switch_to()</code></td><td>mỗi context switch</td></tr>
+<tr><td><code>mm</code> / <code>active_mm</code></td><td><code>mm</code>: address space thật (NULL nếu kernel thread); <code>active_mm</code>: mm đang "mượn" để chạy — xem <a href="#c31">c31</a></td><td><code>context_switch()</code>, <code>exec_mmap()</code></td><td><code>switch_mm()</code></td><td>exec/exit/kernel-thread switch</td></tr>
+</table></div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE</div>
+<code>thread_info</code> là field <b>đầu tiên</b> của <code>task_struct</code> (không nằm ở đáy kernel stack như arch cũ/x86 truyền thống) vì <code>CONFIG_THREAD_INFO_IN_TASK=y</code> trên ARM64 — hệ quả: <code>current_thread_info()</code> chỉ là ép kiểu con trỏ <code>current</code>, không cần mask stack pointer. Xem <a href="#c20">c20</a>.
+</div>
+</section>
+
+<!-- ===================== C08 ===================== -->
+<section class="chapter" id="c08">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 08</div>
+  <h2><code>struct rq</code> — runqueue per-CPU</h2>
+  <div class="chap-meta"><span class="tag sched">kernel/sched/sched.h:904</span></div>
+</div>
+
+<p><b>rq là gì?</b> Mỗi CPU logic có đúng một <code>struct rq</code> — nó gom mọi trạng thái scheduler cục bộ của CPU đó: task đang chạy, 3 sub-runqueue (CFS/RT/DL), clock, load, scheduling domain. <b>Mỗi CPU có rq riêng</b> — đây là lý do CFS scale tốt theo số CPU: chọn task tiếp theo trên CPU0 không cần khoá rq của CPU1.</p>
+
+<p><b>Lưu ở đâu / per-CPU thế nào?</b> Khai báo <code>DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues)</code> trong kernel/sched/core.c — dùng cơ chế <b>per-CPU variable</b> chung của kernel (không phải cái gì ARM64-riêng): mỗi CPU có bản sao vật lý riêng trong vùng bộ nhớ per-CPU; <code>cpu_rq(n)</code> = <code>&per_cpu(runqueues, n)</code>, <code>this_rq()</code> = rq của CPU đang chạy code hiện tại. CPU0 và CPU1 có <code>rq</code> khác nhau đơn giản vì chúng là 2 bản sao khác nhau của cùng một vùng nhớ per-CPU — không có "chia sẻ" nào giữa chúng trừ khi code chủ động lock <code>rq2</code> từ CPU0 (load balancing).</p>
+
+<div class="tblwrap"><table>
+<tr><th>Field (thật, từ source)</th><th>Ý nghĩa</th></tr>
+<tr><td><code>raw_spinlock_t lock</code></td><td>bảo vệ toàn bộ trạng thái rq — hầu hết thao tác enqueue/dequeue/pick giữ lock này</td></tr>
+<tr><td><code>unsigned int nr_running</code></td><td>tổng số task runnable trên CPU này (mọi class cộng lại)</td></tr>
+<tr><td><code>u64 nr_switches</code></td><td>đếm số lần context switch đã xảy ra trên CPU này</td></tr>
+<tr><td><code>struct cfs_rq cfs</code> / <code>struct rt_rq rt</code> / <code>struct dl_rq dl</code></td><td>3 sub-runqueue <b>nhúng trực tiếp</b> (không phải con trỏ) — xem <a href="#c09">c09</a></td></tr>
+<tr><td><code>unsigned long nr_uninterruptible</code></td><td>số task đã từng ở rq này giờ đang ngủ <code>TASK_UNINTERRUPTIBLE</code> — chỉ tổng trên mọi CPU mới có nghĩa</td></tr>
+<tr><td><code>struct task_struct __rcu *curr</code></td><td>task đang thực sự chạy trên CPU này — chính là <code>current</code> khi đọc từ CPU đó</td></tr>
+<tr><td><code>struct task_struct *idle</code></td><td>con trỏ tới idle task (swapper) của CPU này — luôn tồn tại, chạy khi <code>nr_running==0</code></td></tr>
+<tr><td><code>struct task_struct *stop</code></td><td>task đặc biệt của <code>stop_sched_class</code> — ưu tiên tuyệt đối, dùng cho migration/CPU hotplug</td></tr>
+<tr><td><code>u64 clock</code> / <code>clock_task</code> / <code>clock_pelt</code></td><td>đồng hồ nội bộ của rq (cache lại để tránh gọi <code>sched_clock()</code> nhiều lần trong 1 lần schedule); <code>clock_task</code> trừ đi thời gian IRQ/steal</td></tr>
+<tr><td><code>struct root_domain *rd</code> / <code>struct sched_domain __rcu *sd</code></td><td>gốc và domain hiện hành cho load balancing — xem <a href="#c29">c29</a></td></tr>
+<tr><td><code>int active_balance</code> / <code>int push_cpu</code></td><td>cờ + CPU đích khi cần "active balance" (đánh thức stop task để ép migrate)</td></tr>
+<tr><td><code>int cpu</code> / <code>int online</code></td><td>chỉ số CPU sở hữu rq này; rq có online hay không (CPU hotplug)</td></tr>
+<tr><td><code>struct sched_avg avg_rt</code> / <code>avg_dl</code> / <code>avg_irq</code></td><td>PELT (Per-Entity Load Tracking) cho RT/DL/IRQ time — dùng trong tính <code>cpu_capacity</code> còn lại cho CFS</td></tr>
+<tr><td><code>u64 idle_stamp</code> / <code>avg_idle</code></td><td>thời điểm rq bắt đầu idle + trung bình thời gian idle — dùng để quyết định có đáng <code>idle_balance()</code> hay không</td></tr>
+<tr><td><code>struct hrtimer hrtick_timer</code></td><td>(nếu <code>CONFIG_SCHED_HRTICK</code>) hrtimer riêng cho preemption chính xác dưới mức 1 tick</td></tr>
+</table></div>
+
+<div class="box">
+<div class="box-title">📎 So với PDF §7.3.1</div>
+PDF liệt kê <code>active</code>, <code>expired</code>, <code>arrays[2]</code>, <code>best_expired_prio</code>, <code>timestamp_last_tick</code> — <b>tất cả không còn trong <code>struct rq</code> hiện đại</b>. Field còn khớp gần nguyên: <code>lock</code>, <code>nr_running</code>, <code>curr</code>, <code>idle</code>, <code>sd</code>, <code>active_balance</code>, <code>push_cpu</code>. Field <code>migration_thread</code> (PDF) đã đổi cơ chế thành <code>stop</code> task (per-CPU <code>stop_sched_class</code> task) — migration giờ là một schedule bình thường của stop-class, không phải kernel thread riêng đánh thức thủ công.
+</div>
+</section>
+
+<!-- ===================== C09 ===================== -->
+<section class="chapter" id="c09">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 09</div>
+  <h2><code>sched_entity</code> &amp; <code>cfs_rq</code></h2>
+</div>
+
+<img src="process_linux_scheduler_CFS.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 Điểm hay bị hiểu nhầm</div>
+Task <b>đang chạy không nằm trong rbtree</b> — nó là <code>cfs_rq-&gt;curr</code>, tách riêng. rbtree chỉ chứa các task <i>runnable nhưng chưa được chạy</i>. Khi <code>schedule()</code> chọn task mới, task cũ (nếu vẫn runnable) được <code>enqueue</code> lại vào cây, và task mới được rút ra làm <code>curr</code>. Đây là lý do "chọn task tiếp theo" luôn là O(log n) tra cứu + O(1) rút node leftmost, chứ không phải duyệt toàn cây.
+</div>
+</section>
+
+<!-- ===================== C10 ===================== -->
+<section class="chapter" id="c10">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 10</div>
+  <h2><code>sched_class</code> — kiến trúc phân lớp scheduler</h2>
+  <div class="chap-meta"><span class="tag sched">kernel/sched/sched.h:1871-1878</span></div>
+</div>
+
+<p>Thứ tự ưu tiên giữa các lớp — lấy trực tiếp từ khai báo thật trong source, <b>không suy đoán</b>:</p>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">for_each_class(class) — thứ tự duyệt sched_class</div>
+  <div class="floc">kernel/sched/sched.h:1871-1878</div>
+</div>
+<div class="fbody">
+<pre><code>extern const struct sched_class stop_sched_class;   // ưu tiên TUYỆT ĐỐI — migration/hotplug
+extern const struct sched_class dl_sched_class;     // SCHED_DEADLINE
+extern const struct sched_class rt_sched_class;      // SCHED_FIFO / SCHED_RR
+extern const struct sched_class fair_sched_class;     // SCHED_NORMAL / SCHED_BATCH (CFS)
+extern const struct sched_class idle_sched_class;      // idle task — chạy khi không còn gì khác
+
+#define for_each_class(class) \
+   for (class = &stop_sched_class; class; class = next_class(class))</code></pre>
+</div>
+</div>
+
+<p>Thứ tự <b>stop → deadline → RT → fair → idle</b> chính là thứ tự "quyền ưu tiên tuyệt đối": scheduler không bao giờ chọn một task ở lớp thấp hơn nếu còn task runnable ở lớp cao hơn — bất kể priority số học bên trong lớp đó.</p>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">pick_next_task() — call chain thật (không phải đoán)</div>
+  <div class="floc">kernel/sched/core.c:4383</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Duyệt <code>for_each_class</code> từ <code>stop</code> xuống <code>idle</code>, hỏi từng lớp "có task nào của mày runnable không?", trả về task đầu tiên tìm được.</dd>
+<dt>Caller</dt><dd><code>__schedule()</code> tại core.c:4548 — <code>next = pick_next_task(rq, prev, &rf);</code></dd>
+<dt>Callee</dt><dd><code>class-&gt;pick_next_task(rq)</code> tại core.c:4414 — con trỏ hàm ảo, gọi implementation riêng của từng lớp (<code>pick_next_task_fair()</code>, <code>pick_next_task_rt()</code>, ...)</dd>
+</dl>
+<div class="codehdr">FAST PATH (khi mọi task runnable đều thuộc CFS — trường hợp phổ biến nhất)<button class="copybtn">copy</button></div>
+<pre><code>// core.c ~4390: nếu rq->nr_running == rq->cfs.h_nr_running (không có RT/DL nào runnable)
+// → gọi thẳng pick_next_task_fair(), bỏ qua vòng lặp for_each_class để tiết kiệm nhánh</code></pre>
+</div>
+</div>
+
+<img src="process_schedule_.png" alt="" style="max-width: 100%; height: auto;">
+
+</section>
+
+<!-- ===================== C11 ===================== -->
+<section class="chapter" id="c11">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 11</div>
+  <h2>CFS deep dive — enqueue / dequeue / update_curr</h2>
+  <div class="chap-meta"><span class="tag cfs">kernel/sched/fair.c</span></div>
+</div>
+
+<img src="process_enqueue_task_fair.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">update_curr() — trái tim của "công bằng"</div>
+  <div class="floc">kernel/sched/fair.c</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Tính thời gian thực (ns) task đang chạy đã dùng kể từ lần <code>update_curr</code> trước, quy đổi ra "thời gian ảo" theo trọng số, cộng dồn vào <code>vruntime</code>.</dd>
+<dt>Gọi khi nào</dt><dd>Mỗi <code>scheduler_tick()</code>, mỗi <code>enqueue_entity()</code>, mỗi <code>dequeue_entity()</code>, và ngay đầu <code>pick_next_task_fair()</code> — bất cứ lúc nào cần vruntime chính xác trước khi so sánh.</dd>
+</dl>
+<div class="codehdr">Công thức quy đổi (calc_delta_fair)<button class="copybtn">copy</button></div>
+<pre><code>delta_exec = now - curr->exec_start;                 // thời gian thực (ns) vừa chạy
+curr->vruntime += calc_delta_fair(delta_exec, curr);  // += delta_exec * NICE_0_LOAD / se->load.weight
+curr->exec_start = now;</code></pre>
+<p style="margin-top:8px;font-size:12.8px">Task <b>nice thấp</b> (ưu tiên cao) có <code>load.weight</code> lớn hơn → <code>vruntime</code> tăng <b>chậm hơn</b> mỗi ns thực → ở lại bên trái rbtree lâu hơn → được chọn chạy thường xuyên hơn. Đây là toàn bộ cơ chế "priority" của CFS — không cần bảng nào như <code>sched_prio_to_weight[]</code> ngoài việc đổi nice → weight ban đầu.</p>
+</div>
+</div>
+</section>
+
+<!-- ===================== C12 ===================== -->
+<section class="chapter" id="c12">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 12</div>
+  <h2>vruntime &amp; nice — vì sao task vruntime nhỏ luôn được chọn</h2>
+</div>
+
+<img src="process_tasks_timeline.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<p><b>BẤT BIẾN CFS</b>: luôn chọn entity có <code>vruntime</code> nhỏ nhất. Task đang chạy → vruntime của nó tăng dần → tới lúc nó vượt qua vruntime của A → A trở thành leftmost mới → <code>check_preempt_tick()</code>/<code>check_preempt_wakeup()</code> phát hiện và set <code>TIF_NEED_RESCHED</code>. Theo thời gian, mọi vruntime hội tụ về nhau → đó chính là "công bằng" (fair) trong tên CFS.</p>
+
+<div class="box legacy">
+<div class="box-title">⚠️ OLD PDF vs MODERN KERNEL — "dynamic priority"</div>
+<b>PDF mô tả</b>: <code>dynamic_priority = max(100, min(static_prio − bonus + 5, 139))</code>, bonus tính từ <code>sleep_avg</code> qua bảng tra (Table 7-3, 11 mức).<br>
+<b>Kernel hiện đại</b>: không có "dynamic priority" dạng số nguyên nào cho CFS. Vị trí trong rbtree (tức "ai chạy trước") được quyết định hoàn toàn bởi <code>vruntime</code> — một giá trị liên tục, tự nhiên phản ánh lịch sử CPU-time đã dùng, không cần bảng tra rời rạc.<br>
+<b>Vì sao đổi</b>: bảng tra rời rạc + ngưỡng cứng (như "sleep 700ms → interactive") tạo ra hành vi bậc thang khó dự đoán và dễ bị game (một số ứng dụng cũ cố tình ngủ ngắn để giữ bonus). vruntime liên tục loại bỏ toàn bộ lớp vấn đề này.
+</div>
+</section>
+
+<!-- ===================== C13 ===================== -->
+<section class="chapter" id="c13">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 13</div>
+  <h2><code>scheduler_tick()</code></h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">FUNCTION: scheduler_tick()</div>
+  <div class="floc">kernel/sched/core.c — gọi từ kernel/time/timer.c:1747 (bên trong update_process_times(), định nghĩa tại :1733)</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Chạy mỗi tick (HZ=200 trên board này → mỗi 5ms), cập nhật thống kê CPU-time của task đang chạy và quyết định có cần preempt hay không.</dd>
+<dt>Context</dt><dd>Interrupt context (chạy trong tick handler, không phải process context)</dd>
+<dt>IRQ state</dt><dd>IRQ đang disabled (đang trong IRQ handler)</dd>
+<dt>Callees</dt><dd><code>task_tick(rq, curr, 0)</code> → <code>curr-&gt;sched_class-&gt;task_tick(rq, curr, 0)</code> → nếu CFS: <code>task_tick_fair()</code> → <code>entity_tick()</code> → <code>update_curr()</code> + <code>check_preempt_tick()</code></dd>
+</dl>
+<div class="codehdr">STEP-BY-STEP (CFS path)<button class="copybtn">copy</button></div>
+<img src="process_schedule_tick.png" alt="" style="max-width: 100%; height: auto;">
+
+</div>
+</div>
+
+<div class="box legacy">
+<div class="box-title">⚠️ OLD PDF vs MODERN KERNEL — cơ chế preempt-tick</div>
+<b>PDF §7.4.1.2</b>: <code>scheduler_tick()</code> giảm <code>current-&gt;time_slice</code>; hết quantum → <code>dequeue_task()</code> khỏi active array, <code>set_tsk_need_resched()</code>, tính lại dynamic priority, refill quantum, đẩy vào active hoặc expired tuỳ interactive/batch.<br>
+<b>Kernel hiện đại</b>: không có "time_slice" đếm ngược per-task. <code>check_preempt_tick()</code> so sánh <code>sum_exec_runtime</code> tích luỹ với <code>sched_slice()</code> (tính động từ <code>sysctl_sched_latency</code> chia theo trọng số, không phải hằng số cố định theo static_prio như PDF). Không có khái niệm "hết quantum → chuyển expired" — task vẫn ở nguyên trong rbtree, chỉ đổi vị trí tương đối khi vruntime tăng.
+</div>
+</section>
+
+<!-- ===================== C14 ===================== -->
+<section class="chapter" id="c14">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 14</div>
+  <h2>Preemption — voluntary, involuntary, từ interrupt, từ wakeup</h2>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Loại</th><th>Trigger</th><th>Cơ chế</th></tr>
+<tr><td><b>Voluntary</b></td><td>task tự gọi <code>schedule()</code> khi chờ resource (mutex, I/O, <code>wait_event()</code>)</td><td>gọi trực tiếp, không qua TIF_NEED_RESCHED</td></tr>
+<tr><td><b>Involuntary (tick)</b></td><td><code>scheduler_tick()</code> thấy task hết "ideal_runtime"</td><td><code>check_preempt_tick()</code> → <code>resched_curr()</code> → set cờ, schedule() chạy SAU khi tick handler xong — xem <a href="#c15">c15</a></td></tr>
+<tr><td><b>Từ interrupt (khác tick)</b></td><td>driver ISR đánh thức 1 task priority cao hơn</td><td><code>wake_up_interruptible()</code> → <code>try_to_wake_up()</code> → <code>check_preempt_curr()</code> → <code>resched_curr()</code> nếu cần</td></tr>
+<tr><td><b>Từ wakeup</b></td><td>task mới enqueue có vruntime nhỏ hơn curr đáng kể</td><td><code>ttwu_do_wakeup()</code> → <code>check_preempt_wakeup()</code> (CFS) so <code>wakeup_gran</code></td></tr>
+</table></div>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 Tại sao IRQ handler không gọi thẳng schedule()?</div>
+IRQ handler chạy với <code>preempt_count += HARDIRQ_OFFSET</code> (qua <code>irq_enter()</code>) — gọi <code>schedule()</code> trong trạng thái này sẽ <code>BUG()</code> (kernel có <code>__might_sleep()</code> assertion). Lý do sâu hơn: IRQ handler có thể đang chạy <b>trên IRQ stack riêng</b> (không phải kernel stack của task bị ngắt), và có thể đang giữ spinlock của driver — đổi task giữa chừng sẽ làm hỏng bất biến "process context mới được ngủ/switch". Vì vậy kernel tách làm 2 bước: (1) handler chỉ <i>set cờ</i> <code>TIF_NEED_RESCHED</code>, (2) <code>schedule()</code> thật sự chạy ở <b>safe point</b> sau khi handler kết thúc — xem <a href="#c15">c15</a>.
+</div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — "safe point" nằm ở đâu</div>
+Trên ARM64: nếu IRQ ngắt task đang ở <b>EL0</b> (userspace), safe point luôn là <code>ret_to_user</code> (entry.S) — <b>luôn luôn</b> kiểm tra <code>TIF_NEED_RESCHED</code>, bất kể <code>CONFIG_PREEMPT</code>. Nếu IRQ ngắt lúc đang ở <b>EL1</b> (giữa syscall khác, hoặc kernel code), safe point chỉ tồn tại nếu <code>CONFIG_PREEMPT=y</code> <i>và</i> <code>preempt_count()==0</code> lúc đó — qua <code>arm64_preempt_schedule_irq()</code> → <code>preempt_schedule_irq()</code>. Board này build <code>CONFIG_PREEMPT=y</code>, <code>CONFIG_PREEMPTION=y</code> nên có preemption đầy đủ ở cả hai trường hợp.
+</div>
+</section>
+
+<!-- ===================== C15 ===================== -->
+<section class="chapter" id="c15">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 15</div>
+  <h2>TIF_NEED_RESCHED trên ARM64</h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">TIF_NEED_RESCHED — định nghĩa &amp; đường đi thật</div>
+  <div class="floc">arch/arm64/include/asm/thread_info.h:65,88,104 · kernel/sched/core.c:615 · arch/arm64/kernel/entry.S:764</div>
+</div>
+<div class="fbody">
+<pre><code>// arch/arm64/include/asm/thread_info.h
+#define TIF_NEED_RESCHED   1                    // bit 1 trong thread_info->flags
+#define _TIF_NEED_RESCHED  (1 << TIF_NEED_RESCHED)
+#define _TIF_WORK_MASK      (_TIF_NEED_RESCHED | _TIF_SIGPENDING | ...)   // :104
+
+// arch/arm64/kernel/entry.S:764 — trong ret_to_user
+and  x2, x19, #_TIF_WORK_MASK    // x19 đã load từ tsk->thread_info.flags lúc kernel_entry
+cbnz x2, work_pending             // bất kỳ bit nào trong mask bật → xử lý trước khi eret</code></pre>
+</div>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">FUNCTION: resched_curr(struct rq *rq)</div>
+  <div class="floc">kernel/sched/core.c:615</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Đánh dấu <code>rq-&gt;curr</code> cần bị reschedule "ngay khi có thể" — xử lý cả trường hợp local CPU lẫn remote CPU (SMP).</dd>
+<dt>Lock</dt><dd>Yêu cầu giữ sẵn <code>rq-&gt;lock</code> (<code>lockdep_assert_held</code>)</dd>
+</dl>
+<div class="codehdr">Source thật (core.c:615-634)<button class="copybtn">copy</button></div>
+<pre><code>void resched_curr(struct rq *rq)
+{
+    struct task_struct *curr = rq->curr;
+    int cpu;
+
+    lockdep_assert_held(&rq->lock);
+
+    if (test_tsk_need_resched(curr))
+        return;                               // đã set rồi, khỏi làm lại
+
+    cpu = cpu_of(rq);
+    if (cpu == smp_processor_id()) {
+        set_tsk_need_resched(curr);            // local: chỉ cần set bit
+        set_preempt_need_resched();
+        return;
+    }
+    if (set_nr_and_not_polling(curr))
+        smp_send_reschedule(cpu);              // REMOTE: cần đánh thức CPU kia bằng IPI!
+    else
+        trace_sched_wake_idle_without_ipi(cpu);
+}</code></pre>
+</div>
+</div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — smp_send_reschedule() là gì trên ARM64</div>
+Khi task cần bị reschedule đang chạy trên <b>CPU khác</b> (ví dụ: <code>try_to_wake_up()</code> trên CPU0 vừa đánh thức 1 task priority cao và đặt nó vào rq1 của CPU1) — chỉ set bit <code>TIF_NEED_RESCHED</code> trong bộ nhớ là không đủ, vì CPU1 có thể đang chạy code khác không bao giờ đọc lại cờ đó. Kernel phải bắn một <b>IPI (Inter-Processor Interrupt)</b> để "đánh thức" CPU1 ngay lập tức.<br>
+<pre><code>// arch/arm64/kernel/smp.c
+enum ipi_msg_type { ... IPI_RESCHEDULE, ... };          // :70
+void smp_send_reschedule(int cpu) {                      // :1080
+    smp_cross_call(cpumask_of(cpu), IPI_RESCHEDULE);      // :1082
+}</code></pre>
+Trên ARM64, IPI được hiện thực bằng <b>SGI (Software Generated Interrupt)</b> của GIC — <code>smp_cross_call()</code> ghi vào GICD để GIC bắn SGI tới đúng CPU đích; CPU đó nhận SGI như một IRQ bình thường (vector <code>el1_irq</code> hoặc <code>el0_irq</code> tuỳ đang ở EL nào), handler tương ứng (<code>ipi_handler</code>, case <code>IPI_RESCHEDULE</code> tại smp.c:971) không làm gì thêm ngoài việc "wake up" — bản thân việc CPU vào IRQ handler rồi thoát ra qua <code>ret_to_user</code>/<code>preempt_schedule_irq</code> đã đủ để trigger check <code>TIF_NEED_RESCHED</code>.
+</div>
+
+<img src="process_set_tsk_need_resched.png" alt="" style="max-width: 100%; height: auto;">
+
+</section>
+
+<!-- ===================== C16 ===================== -->
+<section class="chapter" id="c16">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 16</div>
+  <h2><code>schedule()</code> / <code>__schedule()</code></h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">FUNCTION: __schedule(bool preempt)</div>
+  <div class="floc">kernel/sched/core.c:4462</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Hàm lõi thật sự chọn task tiếp theo và thực hiện context switch. <code>schedule()</code> chỉ là wrapper mỏng gọi <code>__schedule(false)</code> trong vòng lặp.</dd>
+<dt>Callers</dt><dd><code>schedule()</code> (voluntary), <code>preempt_schedule()</code>/<code>preempt_schedule_irq()</code> (involuntary, gọi với <code>preempt=true</code>), <code>do_notify_resume()</code> (ARM64: từ <code>ret_to_user</code> khi có _TIF_NEED_RESCHED sau IRQ từ EL0)</dd>
+<dt>IRQ state</dt><dd>Disable IRQ ngay từ đầu (giữ <code>rq-&gt;lock</code> với <code>raw_spin_lock_irq</code>)</dd>
+<dt>Preempt state</dt><dd><code>preempt_disable()</code> ở đầu <code>schedule()</code> (không phải trong <code>__schedule</code>) — tự nó không được preempt trong lúc chọn task</dd>
+</dl>
+<div class="codehdr">STEP-BY-STEP (rút gọn, đúng thứ tự thật trong core.c)<button class="copybtn">copy</button></div>
+<img src="process___schedule.png" alt="" style="max-width: 100%; height: auto;">
+
+</div>
+</div>
+
+<div class="box legacy">
+<div class="box-title">⚠️ OLD PDF vs MODERN KERNEL — cấu trúc hàm</div>
+<b>PDF §7.4.4</b> mô tả toàn bộ logic (bonus, sleep_avg, active/expired swap, <code>sched_find_first_bit</code> trên bitmap 140-bit) nằm <i>trong một hàm <code>schedule()</code> ~200 dòng</i>. <b>Kernel hiện đại</b> tách bạch rõ: <code>schedule()</code> (thin wrapper) → <code>__schedule()</code> (điều phối) → <code>pick_next_task()</code> (chọn class + entity, xem <a href="#c17">c17</a>) → <code>context_switch()</code> (đổi mm + registers, xem <a href="#c18">c18</a>). Việc tách lớp này phản ánh đúng kiến trúc <code>sched_class</code> pluggable — mỗi lớp tự quyết định thuật toán chọn task của riêng nó, <code>__schedule()</code> không biết gì về CFS/RT/DL bên trong.
+</div>
+</section>
+
+<!-- ===================== C17 ===================== -->
+<section class="chapter" id="c17">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 17</div>
+  <h2><code>pick_next_task()</code> — chi tiết</h2>
+</div>
+
+<p>Đã trace call chain thật ở <a href="#c10">Chương 10</a>: <code>pick_next_task()</code> (core.c:4383) → <code>class-&gt;pick_next_task(rq)</code> (:4414) → (nếu CFS) <code>pick_next_task_fair()</code> → <code>pick_next_entity()</code> → <code>__pick_first_entity()</code>.</p>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 "Scheduler quyết định task tiếp theo bằng cách nào?" — câu trả lời 1 câu</div>
+Duyệt <code>stop → dl → rt → fair → idle</code> (thứ tự ưu tiên tuyệt đối cố định), lớp đầu tiên còn task runnable thắng; bên trong lớp đó, thuật toán riêng của lớp quyết định (CFS: leftmost rbtree theo vruntime; RT: FIFO/RR theo priority 1-99; DL: earliest deadline first).
+</div>
+</section>
+
+<!-- ===================== C18 ===================== -->
+<section class="chapter" id="c18">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 18</div>
+  <h2><code>context_switch()</code></h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">FUNCTION: context_switch(rq, prev, next, rf)</div>
+  <div class="floc">kernel/sched/core.c — vẫn GENERIC, gọi từ __schedule() step 7 ở c16</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Chuẩn bị và thực hiện việc đổi <i>address space</i> (nếu cần) rồi đổi <i>CPU register context</i> — đây là điểm gặp nhau cuối cùng giữa generic scheduler và arch ARM64.</dd>
+</dl>
+<div class="codehdr">STEP-BY-STEP thật<button class="copybtn">copy</button></div>
+<img src="process_context_switch.png" alt="" style="max-width: 100%; height: auto;">
+
+</div>
+</div>
+
+<img src="process_context_switch_flow.png" alt="" style="max-width: 100%; height: auto;">
+
+</section>
+
+<!-- ===================== C19 ===================== -->
+<section class="chapter" id="c19">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 19</div>
+  <h2><code>switch_to()</code> / <code>__switch_to()</code> / <code>cpu_switch_to()</code> — ARM64 register context</h2>
+  <div class="chap-meta"><span class="tag arm64">Chương quan trọng nhất tài liệu</span></div>
+</div>
+
+<p>Ba lớp, ai làm gì:</p>
+<div class="diagram"><pre>
+context_switch(rq, prev, next)              [core.c — GENERIC]
+    │
+    ▼
+switch_to(prev, next, prev)                   [arch/arm64/include/asm/processor.h — MACRO]
+    │   #define switch_to(prev,next,last) ((last) = __switch_to(prev,next))
+    ▼
+__switch_to(prev, next)                        [arch/arm64/kernel/process.c — ARCH C]
+    │
+    ├─► fpsimd_thread_switch(next)    LƯU FP/SIMD của prev NẾU "bẩn" (lazy);
+    │                                  set TIF_FOREIGN_FPSTATE cho next (nạp lười khi chạm lệnh FP)
+    ├─► tls_thread_switch(next)        prev.tp_value ← TPIDR_EL0 ; TPIDR_EL0 ← next.tp_value
+    ├─► hw_breakpoint_thread_switch(next)   nạp DBGBVR/DBGWVR nếu có dùng
+    ├─► contextidr_thread_switch(next)      CONTEXTIDR_EL1 = next->pid (CoreSight/trace)
+    ├─► entry_task_switch(next)              __this_cpu_write(__entry_task, next)
+    ├─► ssbs/uao_thread_switch(next)           PSTATE.SSBS/UAO theo next
+    ├─► dsb(ish)                                 rào đầy đủ trước khi có thể bị migrate CPU
+    │
+    └─► last = cpu_switch_to(prev, next)          [entry.S:1015-1040 — ARCH ASM THUẦN]
+             (process.c:594: "last = cpu_switch_to(prev, next);")
+</pre></div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">FUNCTION: cpu_switch_to(x0=prev, x1=next)</div>
+  <div class="floc">arch/arm64/kernel/entry.S:1015 (SYM_FUNC_START) → :1040 (SYM_FUNC_END)</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>Purpose</dt><dd>Lưu 13 giá trị (đủ cho <b>một lời gọi hàm C bình thường</b> theo AAPCS64) của <code>prev</code> vào <code>prev-&gt;thread.cpu_context</code>, nạp 13 giá trị tương ứng của <code>next</code>, rồi <code>ret</code>.</dd>
+<dt>ARM64 impact</dt><dd>Đây LÀ toàn bộ ARM64 context switch ở tầng thanh ghi CPU — không còn tầng nào sâu hơn.</dd>
+</dl>
+<div class="codehdr">Instruction-by-instruction (đúng thứ tự thật)<button class="copybtn">copy</button></div>
+<pre><code>mov  x10, #THREAD_CPU_CONTEXT       ; offset của thread.cpu_context trong task_struct
+add  x8, x0, x10                    ; x8 = &prev->thread.cpu_context
+mov  x9, sp
+stp  x19, x20, [x8], #16            ; LƯU prev: callee-saved x19-x28 (10 thanh ghi)
+stp  x21, x22, [x8], #16
+stp  x23, x24, [x8], #16
+stp  x25, x26, [x8], #16
+stp  x27, x28, [x8], #16
+stp  x29, x9,  [x8], #16            ; fp (x29) và sp hiện tại (qua x9)
+str  lr,  [x8]                      ; pc ← lr (địa chỉ SAU "bl cpu_switch_to" trong __switch_to)
+
+add  x8, x1, x10                    ; x8 = &next->thread.cpu_context
+ldp  x19, x20, [x8], #16            ; KHÔI PHỤC next
+ldp  x21, x22, [x8], #16
+ldp  x23, x24, [x8], #16
+ldp  x25, x26, [x8], #16
+ldp  x27, x28, [x8], #16
+ldp  x29, x9,  [x8], #16            ; fp, sp (vào x9 trước)
+ldr  lr,  [x8]                      ; lr ← next->cpu_context.pc
+
+mov  sp, x9                         ; ◄◄◄ ĐỔI KERNEL STACK — từ đây "đang đứng" trên stack next
+msr  sp_el0, x1                     ; ◄◄◄ current = next  (xem chi tiết ở c20)
+ret                                  ; ◄◄◄ nhảy tới lr = next->cpu_context.pc</code></pre>
+</div>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Instruction</th><th>Thanh ghi</th><th>Lưu vào / khôi phục từ</th><th>Struct field</th></tr>
+<tr><td><code>stp x19,x20,...,x27,x28</code></td><td>x19-x28 (callee-saved theo AAPCS64)</td><td><code>prev-&gt;thread.cpu_context.x19..x28</code></td><td><code>struct cpu_context</code> (processor.h)</td></tr>
+<tr><td><code>stp x29, x9</code></td><td>x29 (frame pointer) + sp (đã copy vào x9)</td><td><code>cpu_context.fp</code>, <code>cpu_context.sp</code></td><td>—</td></tr>
+<tr><td><code>str lr</code></td><td>x30 (link register)</td><td><code>cpu_context.pc</code> — "next sẽ tiếp tục chạy TỪ ĐÂY khi được chọn lại"</td><td>—</td></tr>
+<tr><td><code>mov sp, x9</code></td><td>SP_EL1</td><td>kernel stack của <b>next</b> — "đổi sp = đổi task" (kernel stack chính là "task đang làm gì")</td><td><code>task_struct-&gt;stack</code></td></tr>
+<tr><td><code>msr sp_el0, x1</code></td><td>SP_EL0 (chiếm dụng làm con trỏ current)</td><td><code>next</code> (task_struct*)</td><td>xem <a href="#c20">c20</a></td></tr>
+</table></div>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 Tại sao KHÔNG lưu x0-x18, PSTATE, FP/SIMD ở đây?</div>
+<code>cpu_switch_to()</code> chỉ tuân theo <b>AAPCS64 — quy ước gọi hàm C chuẩn</b>, không phải "lưu toàn bộ CPU state" kiểu interrupt: x0-x18 là <b>caller-saved</b>, C ABI cho phép bất kỳ lời gọi hàm nào phá chúng — nếu compiler cần giữ giá trị sống, nó tự <code>spill</code> vào stack frame của <code>__switch_to</code> (nằm trên kernel stack, tự động "đi theo" khi <code>sp</code> đổi). FP/SIMD (V0-V31, >500 byte) được <code>fpsimd_thread_switch()</code> lưu <b>lười</b> (lazy) — chỉ khi thực sự "bẩn" — nên không cần trong <code>cpu_switch_to</code>. PSTATE không cần vì NZCV là caller-saved, còn DAIF luôn ở cùng trạng thái (IRQ off, giữ rq->lock) tại mọi điểm gọi <code>__schedule</code>.
+</div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — ý nghĩa tham số <code>last</code> của switch_to</div>
+Khi task B "chạy tiếp" sau khi được chọn lại, <code>x0</code> <b>không</b> bị <code>cpu_switch_to</code> ghi đè — nó vẫn giữ giá trị từ <b>lần B tự gọi <code>cpu_switch_to</code> trước đó</b> (tức "prev" của B lúc B ngủ = một task Z nào đó). Vì vậy <code>__switch_to</code> trả về Z, và <code>context_switch()</code> ở c18 gọi <code>finish_task_switch(Z)</code> — dọn dẹp đúng task đã bị B "thay thế", không phải task mà scheduler nghĩ mình vừa switch từ (biến <code>prev</code> cục bộ trong <code>__schedule()</code> đã bị compiler giữ nguyên qua lệnh gọi, nhưng thực thi thật lại nhảy tới điểm code của B — đây chính xác là lý do <code>switch_to</code> cần 3 tham số thay vì 2).
+</div>
+</section>
+
+<!-- ===================== C20 ===================== -->
+<section class="chapter" id="c20">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 20</div>
+  <h2><code>current</code> trên ARM64 — SP_EL0</h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">get_current() / current_thread_info()</div>
+  <div class="floc">arch/arm64/include/asm/current.h · include/linux/thread_info.h</div>
+</div>
+<div class="fbody">
+<pre><code>static __always_inline struct task_struct *get_current(void)
+{
+    unsigned long sp_el0;
+    asm ("mrs %0, sp_el0" : "=r" (sp_el0));   // asm THÔ (không dùng read_sysreg) để
+    return (struct task_struct *)sp_el0;      // compiler được phép CACHE giá trị 1 hàm
+}
+#define current get_current()
+
+// thread_info là FIELD ĐẦU TIÊN của task_struct (CONFIG_THREAD_INFO_IN_TASK=y)
+#define current_thread_info() ((struct thread_info *)current)   // chỉ ép kiểu, 0 offset</code></pre>
+</div>
+</div>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 "current" có phải global variable không?</div>
+<b>Không.</b> Nó là <b>nội dung của một thanh ghi CPU</b> (<code>SP_EL0</code>). Ở EL1 (kernel), thanh ghi này không có nghĩa "stack pointer" nào cả (EL1 dùng <code>SP_EL1</code>) — Linux "mượn" chỗ trống này để giữ con trỏ <code>task_struct*</code>. Vì mỗi CPU vật lý có bộ thanh ghi hệ thống riêng, <b>CPU0 và CPU1 tự nhiên có <code>current</code> khác nhau</b> mà không cần bất kỳ khoá hay bảng per-CPU nào — đọc <code>current</code> chỉ là 1 lệnh <code>mrs</code>, không chạm bộ nhớ, không thể cache-miss.
+</div>
+
+<div class="diagram"><pre>
+Ở EL0 (user đang chạy):   SP_EL0 = SP thật của USER STACK
+Ở EL1 (kernel đang chạy): SP_EL0 = con trỏ current (task_struct*)  ◄ "chiếm dụng"
+                            SP (mà kernel dùng) = SP_EL1 = đỉnh kernel stack 16KB của task
+
+EL0 → EL1 (exception):  kernel_entry ĐỌC SP_EL0 (=SP user) ra x21 → lưu vào pt_regs.sp
+                         RỒI GHI current vào SP_EL0 (msr sp_el0, tsk từ per-CPU __entry_task)
+EL1 → EL0 (eret):        kernel_exit GHI pt_regs.sp NGƯỢC LẠI vào SP_EL0 (khôi phục SP user)
+
+Context switch (cpu_switch_to, xem c19):
+    msr sp_el0, x1     ← x1 = next   ⇒  TỪ DÒNG NÀY, current trên CPU này = next
+</pre></div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — so với arch cũ / generic</div>
+Arch cũ (và một số arch khác hiện nay): <code>current</code> = đọc <code>thread_info</code> ở <b>đáy kernel stack</b> bằng <code>SP & ~(THREAD_SIZE-1)</code> — 1 phép AND + 1 load bộ nhớ, và <b>nguy hiểm</b>: nếu kernel stack bị overflow, <code>thread_info</code> (và do đó <code>current</code>) có thể bị hỏng. ARM64 (từ 4.14, <code>CONFIG_THREAD_INFO_IN_TASK=y</code>) tách hẳn: <code>current</code> = 1 lệnh <code>mrs</code>, 0 truy cập bộ nhớ, và stack overflow không thể làm hỏng nó vì <code>thread_info</code> không nằm trên stack.
+</div>
+</section>
+
+<!-- ===================== C21 ===================== -->
+<section class="chapter" id="c21">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 21</div>
+  <h2>MM switch — <code>switch_mm()</code>, TTBR0/TTBR1_EL1, ASID</h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">switch_mm_irqs_off() → check_and_switch_context() → cpu_do_switch_mm()</div>
+  <div class="floc">arch/arm64/include/asm/mmu_context.h · arch/arm64/mm/context.c</div>
+</div>
+<div class="fbody">
+<dl><dt>WHAT</dt><dd>Đổi address space đang active của CPU — tức đổi <code>TTBR0_EL1</code> (base của page table user) và ASID (tag phân biệt TLB entry của process nào).</dd>
+<dt>WHY</dt><dd>Nếu không tag TLB bằng ASID, mỗi lần đổi process bắt buộc phải <code>tlbi vmalle1</code> (flush toàn bộ TLB) — quá đắt. ASID cho phép TLB entry của process cũ NẰM LẠI trong TLB (chỉ bị bỏ qua vì lệch ASID), không cần flush.</dd>
+</dl>
+<div class="codehdr">Quyết định đầu tiên: có cần đổi mm không?<button class="copybtn">copy</button></div>
+<pre><code>if (!next->mm) {                                    // next là KERNEL THREAD — xem c31
+    enter_lazy_tlb(prev->active_mm, next);           // KHÔNG đụng TTBR0, chi phí MMU = 0
+} else if (prev->active_mm == next->mm) {            // thread CÙNG process (CLONE_VM)
+    // KHÔNG gọi __switch_mm — TLB dùng chung, còn nóng nguyên, 0 chi phí MMU
+} else {
+    check_and_switch_context(next->mm);              // process KHÁC mm_struct — xem dưới
+}</code></pre>
+<div class="codehdr">check_and_switch_context — fast path (đa số các lần switch)<button class="copybtn">copy</button></div>
+<pre><code>asid = atomic64_read(&mm->context.id);
+if (active_asids[cpu] còn hợp lệ && cùng generation && cmpxchg thành công) {
+    goto switch_mm_fastpath;    // KHÔNG lock, KHÔNG flush TLB
+}
+// slow path (hiếm — rollover ASID, ~1 lần mỗi 65536 mm được tạo):
+//   raw_spin_lock(&cpu_asid_lock); cấp ASID mới; nếu CPU nợ 1 lần flush từ rollover
+//   trước đó → local_flush_tlb_all()  (ĐẮT — chỉ ở slow path)</code></pre>
+<div class="codehdr">cpu_do_switch_mm — ghi thanh ghi TTBR thật<button class="copybtn">copy</button></div>
+<pre><code>ttbr1 = read_sysreg(ttbr1_el1);                 // = swapper_pgd | ASID_cũ<<48
+ttbr1 = (ttbr1 & ~TTBR_ASID_MASK) | (asid << 48);
+msr ttbr1_el1, ttbr1 ; isb()      // ① đổi ASID TRƯỚC — kernel pgd không đổi
+msr ttbr0_el1, ttbr0 ; isb()      // ② rồi mới đổi bảng trang user</code></pre>
+</div>
+</div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — vì sao ASID nằm trong TTBR1, không phải TTBR0</div>
+<code>TCR_EL1.A1 = 1</code> đưa 16-bit ASID vào <code>TTBR1_EL1[63:48]</code> thay vì <code>TTBR0_EL1</code>. Điều này tách được bước ① (đổi ASID) khỏi bước ② (đổi con trỏ page-table user) — giữa hai lệnh <code>msr</code>, <code>TTBR0</code> vẫn trỏ pgd CŨ nhưng ASID đã MỚI ⇒ mục TLB của pgd cũ mang ASID cũ ⇒ MMU không dùng (lệch ASID) ⇒ <b>không có cửa sổ "mapping bẩn"</b> giữa hai lệnh msr. Đây cũng là cơ chế cho phép KPTI (Kernel Page Table Isolation) lật <code>TTBR1</code> (kernel pgd ↔ trampoline pgd) mỗi lần vào/ra EL1 mà không phải đụng ASID.
+</div>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 Chi phí thực sự của process-switch không phải 2 lệnh msr</div>
+Hai lệnh <code>msr ttbr0/ttbr1_el1</code> + 2 <code>isb</code> chỉ tốn ~50-100 chu kỳ. Chi phí thật là <b>TLB miss hàng loạt sau đó</b>: các mục TLB của task B (nếu có) có thể đã bị task A đẩy ra trong lúc A chạy (cạnh tranh cùng bộ TLB vật lý) — mỗi lần B chạm VA chưa có trong TLB phải page-table walk 4 tầng (PGD→PUD→PMD→PTE). ASID không cứu được phần này — nó chỉ loại bỏ cú <b>flush toàn bộ bắt buộc</b> (còn tệ hơn nhiều vì xoá SẠCH mọi mục, không chỉ mục bị evict).
+</div>
+</section>
+
+<!-- ===================== C22 ===================== -->
+<section class="chapter" id="c22">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 22</div>
+  <h2>ARM64 Exception Entry — vector table, pt_regs</h2>
+</div>
+
+<div class="diagram"><pre>
+VBAR_EL1 → base của "vectors"  (arch/arm64/kernel/entry.S, mỗi entry căn 0x80 byte)
+
+  Cur EL, SP_EL0 (EL1t)     0x000  sync_invalid · 0x080 irq_invalid · ...
+  Cur EL, SP_ELx (EL1h)     0x200  el1_sync (fault/BUG trong kernel)
+                            0x280  el1_irq  (IRQ khi ĐANG Ở KERNEL)
+  Lower EL, AArch64         0x400  el0_sync ◄ SVC/page-fault/undef từ user 64-bit
+                            0x480  el0_irq  ◄ IRQ khi USER đang chạy (đường của timer tick)
+  Lower EL, AArch32         0x600  el0_sync_compat (32-bit compat, không dùng cho SVC64)
+</pre></div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">Vào kernel từ EL0 qua IRQ — thanh ghi nào phần cứng tự đặt</div>
+  <div class="floc">arch/arm64/kernel/entry.S</div>
+</div>
+<div class="fbody">
+<div class="codehdr">HW tự động (1 chu kỳ, không code nào chạy)<button class="copybtn">copy</button></div>
+<pre><code>SPSR_EL1 ← PSTATE hiện tại (của EL0)     ELR_EL1 ← địa chỉ lệnh BỊ NGẮT
+ESR_EL1  ← nguyên nhân exception          PSTATE  → EL1h, DAIF mask (IRQ/FIQ/debug off)
+SP       ← SP_EL1                         PC      ← VBAR_EL1 + 0x480  (el0_irq)
+SP_EL0:  KHÔNG đổi (vẫn = SP user)</code></pre>
+<div class="codehdr">kernel_entry 0 (software, entry.S)<button class="copybtn">copy</button></div>
+<pre><code>stp x0..x29, [sp,#...]  ; str x30           ; lưu x0-x30 vào pt_regs (đỉnh kernel stack)
+mrs x21, sp_el0                              ; x21 = SP USER  → pt_regs.sp
+ldr_this_cpu tsk, __entry_task, x20          ; tsk = current task (per-CPU)
+msr sp_el0, tsk                               ; ◄ TỪ ĐÂY current dùng được đúng
+mrs x22, elr_el1 ; mrs x23, spsr_el1           ; → pt_regs.pc / pt_regs.pstate
+enable_da_f                                     ; bật D/A/F, GIỮ NGUYÊN I mask (IRQ vẫn off)</code></pre>
+</div>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Thanh ghi</th><th>Ý nghĩa trong exception</th></tr>
+<tr><td><code>ELR_EL1</code></td><td>Địa chỉ <code>eret</code> sẽ nhảy về — kernel có thể sửa <code>pt_regs.pc</code> để đổi nơi quay về (vd signal delivery, syscall restart)</td></tr>
+<tr><td><code>SPSR_EL1</code></td><td>PSTATE sẽ khôi phục khi <code>eret</code> — gồm cả exception level đích (EL0t)</td></tr>
+<tr><td><code>ESR_EL1</code></td><td>Exception Class (EC) — cho <code>el0_sync</code> biết đây là SVC (0x15), page fault (0x24/0x25), hay undefined instruction, để rẽ nhánh đúng handler</td></tr>
+<tr><td><code>FAR_EL1</code></td><td>Faulting Address — chỉ có nghĩa với data/instruction abort, dùng trong page-fault handler (không liên quan trực tiếp scheduler)</td></tr>
+</table></div>
+</section>
+
+<!-- ===================== C23 ===================== -->
+<section class="chapter" id="c23">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 23</div>
+  <h2>ARM Generic Timer → GIC → scheduler_tick() — full trace</h2>
+  <div class="chap-meta"><span class="tag arm64">Board: CONFIG_HIGH_RES_TIMERS=y, CONFIG_NO_HZ_IDLE=y, CONFIG_HZ=200</span></div>
+</div>
+
+<img src="process_kich_ban_A.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 Trả lời trực tiếp các câu hỏi PHẦN 4 của yêu cầu</div>
+<b>ARM Generic Timer tạo interrupt như thế nào?</b> Đếm ngược thanh ghi <code>CNTV_TVAL_EL0</code>, chạm 0 → tự phát PPI (không qua GIC "định tuyến" theo nghĩa NIC — PPI vốn đã gắn cứng với 1 CPU).<br>
+<b>GIC chuyển interrupt tới CPU như thế nào?</b> PPI là per-CPU sẵn — GIC chỉ set pending trên đúng CPU sở hữu nó rồi báo exception; SGI (IPI) mới cần GIC "định tuyến" chủ động tới CPU đích.<br>
+<b>scheduler_tick() được gọi từ đâu?</b> <code>update_process_times()</code> (kernel/time/timer.c:1747), bản thân hàm này được gọi từ <code>tick_sched_handle()</code> (tick-sched.c:222) — chạy trong ngữ cảnh hrtimer callback <code>tick_sched_timer()</code> vì board bật <code>CONFIG_HIGH_RES_TIMERS=y</code>.<br>
+<b>Tại sao scheduler không gọi schedule() trực tiếp từ IRQ handler?</b> Xem <a href="#c14">Chương 14</a> — <code>preempt_count</code> đang cộng <code>HARDIRQ_OFFSET</code>.<br>
+<b>schedule() được gọi lúc nào sau interrupt?</b> Xem <a href="#c15">Chương 15</a> — tại safe point <code>ret_to_user</code> (nếu ngắt EL0) hoặc <code>preempt_schedule_irq()</code> (nếu ngắt EL1 và <code>CONFIG_PREEMPT</code>).
+</div>
+
+<div class="box legacy">
+<div class="box-title">⚠️ OLD PDF vs MODERN KERNEL — "system tick"</div>
+<b>PDF</b>: giả định timer tick cố định 1ms (x86 PIT), gọi thẳng <code>scheduler_tick()</code> từ timer interrupt handler theo kiểu "periodic" đơn giản.<br>
+<b>Board này</b>: <code>CONFIG_HZ=200</code> (5ms/tick danh nghĩa), nhưng thực thi qua tầng <b>hrtimer</b> (<code>CONFIG_HIGH_RES_TIMERS=y</code>) — tick không còn là "ngắt phần cứng cố định chu kỳ" mà là một hrtimer tự tái lập lịch (<code>tick_sched_timer</code>), cho phép độ chính xác cao hơn và (khi <code>CONFIG_NO_HZ_IDLE=y</code>, board này CÓ bật) cho phép <b>bỏ qua tick khi CPU idle</b> để tiết kiệm năng lượng — điều PDF (x86, kernel 2.6 cũ) hoàn toàn không có khái niệm.
+</div>
+</section>
+
+<!-- ===================== C24 ===================== -->
+<section class="chapter" id="c24">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 24</div>
+  <h2>Kịch bản đầy đủ — Timer interrupt preempt Task A → Task B chạy</h2>
+</div>
+
+<p>CPU0, Task A đang chạy ở EL0 (userspace). Timer interrupt xảy ra. Trace từng bước với CPU mode / EL / IRQ state / current / runqueue:</p>
+
+<img src="process_kich_ban_A_B.png" alt="" style="max-width: 100%; height: auto;">
+
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 "CPU register thay đổi như thế nào từ A đến B?" — câu trả lời chính xác</div>
+KHÔNG có một "đại từ đổi" nào — có <b>3 thao tác tách biệt</b>, mỗi thao tác một tầng: (1) <code>cpu_switch_to</code> đổi 13 thanh ghi callee-saved + SP_EL1 (kernel stack) — tầng "hàm C nào đang chạy"; (2) <code>msr sp_el0</code> đổi <code>current</code> — tầng "ai là task hiện tại"; (3) <code>cpu_do_switch_mm</code> (chạy TRƯỚC bước 1, trong <code>switch_mm</code>) đổi TTBR0/ASID — tầng "không gian địa chỉ nào". Thanh ghi user (x0-x30 lúc A/B ở EL0) <b>không hề bị đụng bởi 3 thao tác này</b> — chúng nằm trong <code>pt_regs_A</code>/<code>pt_regs_B</code> ở đỉnh kernel stack riêng của từng task, chỉ được khôi phục bởi <code>kernel_exit</code> ngay trước <code>eret</code> của chính task đó.
+</div>
+</section>
+
+<!-- ===================== C25 ===================== -->
+<section class="chapter" id="c25">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 25</div>
+  <h2>Wakeup Path — từ TASK_INTERRUPTIBLE tới chạy lại</h2>
+</div>
+
+<img src="process_linux_wakeup_path.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="box legacy">
+<div class="box-title">⚠️ OLD PDF vs MODERN KERNEL — "activated field" / recalc_task_prio</div>
+<b>PDF §7.4.2-7.4.3</b>: <code>try_to_wake_up()</code> đặt <code>p-&gt;activated</code> (0/1/2/-1 tuỳ nguồn đánh thức), rồi <code>recalc_task_prio()</code> dùng giá trị đó + <code>sleep_avg</code> để tính lại dynamic priority qua công thức phức tạp — phân biệt "đánh thức bởi syscall/kernel thread" vs "đánh thức bởi interrupt/deferrable function" để cộng sleep time khác nhau (38/128 vs toàn phần).<br>
+<b>Kernel hiện đại</b>: không có <code>activated</code> field, không có <code>recalc_task_prio()</code>. Chỉ có MỘT cơ chế duy nhất: <code>place_entity()</code> hích <code>vruntime</code> về gần <code>min_vruntime</code> nếu task vừa ngủ — không phân biệt nguồn đánh thức, không có bảng tra.
+</div>
+</section>
+
+<!-- ===================== C26 ===================== -->
+<section class="chapter" id="c26">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 26</div>
+  <h2><code>try_to_wake_up()</code></h2>
+</div>
+
+<div class="fbox">
+<div class="fhead">
+  <div class="fname">FUNCTION: try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)</div>
+  <div class="floc">kernel/sched/core.c:2865-2866 (static int, định nghĩa 2 dòng)</div>
+</div>
+<div class="fbody">
+<dl>
+<dt>WHAT</dt><dd>Chuyển một task đang ngủ (state khớp mask <code>state</code> truyền vào) sang <code>TASK_RUNNING</code> và đưa nó vào runqueue của một CPU.</dd>
+<dt>WHY</dt><dd>Đây là điểm nối duy nhất giữa "một sự kiện xảy ra" (I/O hoàn tất, mutex unlock, signal, timer) và "scheduler biết có thêm task runnable".</dd>
+<dt>WHERE</dt><dd>kernel/sched/core.c; gọi <code>select_task_rq()</code> (:2384, dispatch qua <code>p-&gt;sched_class-&gt;select_task_rq</code> tại :2389) và <code>ttwu_queue()</code> (:2731)</dd>
+<dt>Callers</dt><dd><code>wake_up()</code>/<code>wake_up_interruptible()</code> (qua <code>__wake_up_common</code>), <code>wake_up_process()</code>, đường signal delivery, mutex/semaphore unlock path</dd>
+</dl>
+<div class="codehdr">Điểm SMP đáng chú ý: chờ on_cpu<button class="copybtn">copy</button></div>
+<pre><code>// Nếu p vừa mới CHẠY trên 1 CPU khác và context switch CŨ chưa hoàn tất hẳn
+// (finish_task_switch chưa clear p->on_cpu), try_to_wake_up() PHẢI spin chờ:
+smp_cond_load_acquire(&p->on_cpu, !VAL);
+// lý do: không được enqueue p vào rq mới trong khi p vẫn "đang chạy" theo nghĩa CPU
+// (dù đã bị chọn thay) — tránh 1 task chạy đồng thời "ở 2 nơi"</code></pre>
+</div>
+</div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — wakeup trên SMP kết thúc bằng IPI nếu cần</div>
+Nếu CPU đích khác local CPU và task vừa đánh thức có priority cao hơn <code>rq_đích-&gt;curr</code>: <code>check_preempt_curr()</code> → <code>resched_curr(rq_đích)</code> → (theo đúng logic đã trích ở <a href="#c15">c15</a>) → <code>smp_send_reschedule()</code> → <code>smp_cross_call(..., IPI_RESCHEDULE)</code> → GIC bắn SGI tới CPU đích ngay lập tức, không đợi CPU đích tự nhiên vào IRQ tiếp theo.
+</div>
+</section>
+
+<!-- ===================== C27 ===================== -->
+<section class="chapter" id="c27">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 27</div>
+  <h2>Per-CPU Runqueue — SMP / multi-core ARM64</h2>
+</div>
+
+<div class="diagram"><pre>
+CPU0 ── rq0 ── cfs_rq0 (rbtree: task A, task B)
+CPU1 ── rq1 ── cfs_rq1 (rbtree: task C)
+(board S800: 2× Cortex-A72 — chỉ CPU0/CPU1 tồn tại)
+
+Mỗi CPU CHỈ chọn task từ rq CỦA CHÍNH NÓ (this_rq()). Một task runnable luôn nằm
+ĐÚNG MỘT rq tại một thời điểm — không có task nào "runnable trên 2 CPU cùng lúc".
+Đây là lý do rq riêng biệt giúp CFS scale: pick_next_task() trên CPU0 không cần
+lock rq1.
+</pre></div>
+
+<p>Việc "cân bằng" (không để 1 CPU quá tải trong khi CPU kia gần rảnh) là công việc riêng của <b>load balancing</b> — xem <a href="#c28">Chương 28</a>.</p>
+</section>
+
+<!-- ===================== C28 ===================== -->
+<section class="chapter" id="c28">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 28</div>
+  <h2>Load Balancing — <code>load_balance()</code>, <code>find_busiest_group()</code></h2>
+  <div class="chap-meta"><span class="tag smp">kernel/sched/fair.c</span></div>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Function (thật, verify bằng grep)</th><th>File:line</th><th>Việc</th></tr>
+<tr><td><code>find_busiest_group(struct lb_env *env)</code></td><td>fair.c:9488</td><td>phân tích các <code>sched_group</code> trong 1 <code>sched_domain</code>, tìm group bận nhất KHÔNG chứa local CPU</td></tr>
+<tr><td><code>load_balance(int this_cpu, struct rq *this_rq, ...)</code></td><td>fair.c:9836</td><td>điều phối toàn bộ 1 lần cân bằng: gọi find_busiest_group → tìm busiest rq trong group đó → detach_tasks → attach_tasks</td></tr>
+<tr><td><code>detach_tasks(struct lb_env *env)</code></td><td>fair.c:7884</td><td>gỡ (KHÔNG di chuyển ngay) các task đủ điều kiện khỏi busiest rq — giữ trong 1 list tạm</td></tr>
+<tr><td><code>attach_tasks(struct lb_env *env)</code></td><td>fair.c:8037</td><td>gắn các task vừa detach vào local rq</td></tr>
+</table></div>
+
+<img src="process_load_blancing.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="box legacy">
+<div class="box-title">⚠️ OLD PDF vs MODERN KERNEL — <code>move_tasks()</code></div>
+<b>PDF §7.5.4</b>: một hàm <code>move_tasks()</code> duy nhất vừa chọn task đủ điều kiện vừa di chuyển ngay lập tức (<code>pull_task()</code> = dequeue + enqueue trong cùng 1 bước).<br>
+<b>Kernel hiện đại</b>: tách <code>detach_tasks()</code> (gỡ, gom vào list tạm) và <code>attach_tasks()</code> (gắn hàng loạt) — tối ưu để giữ lock của busiest rq trong thời gian ngắn nhất có thể (chỉ trong lúc detach), giảm tranh chấp lock trên hệ nhiều CPU.<br>
+<b>Migration kernel thread riêng (PDF)</b> → thay bằng <code>stop_sched_class</code> chung cho mọi việc "ép chạy ngay lập tức" (migration, CPU hotplug) — xem <a href="#c10">c10</a>, <a href="#c30">c30</a>.
+</div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — không có phần load-balancing riêng ARM64</div>
+Toàn bộ logic trong chương này là <b>arch-independent</b>. Điểm khác biệt duy nhất liên quan ARM64 là <b>cách <code>sched_domain</code> được dựng</b> (topology) — xem <a href="#c29">Chương 29</a>: lấy từ device-tree <code>cpu-map</code> thay vì dò APIC ID như x86.
+</div>
+</section>
+
+<!-- ===================== C29 ===================== -->
+<section class="chapter" id="c29">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 29</div>
+  <h2><code>sched_domain</code> &amp; CPU Affinity</h2>
+</div>
+
+<p><code>sched_domain</code> = một tập CPU mà kernel cố gắng giữ cân bằng workload; phân cấp cây, mỗi domain chia thành nhiều <code>sched_group</code>. Trên board S800 (2× Cortex-A72, không NUMA, không hyper-threading), cây domain đơn giản nhất có thể: 1 domain duy nhất (MC — multi-core) gồm 2 group, mỗi group 1 CPU.</p>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — nguồn topology</div>
+x86 dựng <code>sched_domain</code> từ thông tin APIC/cache topology dò được qua CPUID. ARM64 dựng từ <b>device-tree</b> — node <code>cpu-map</code> trong DTS mô tả cluster/core, kernel/sched/topology.c đọc cấu trúc này để build domain hierarchy tương ứng phần cứng thật.
+</div>
+
+<p><b>CPU Affinity</b>: <code>task_struct-&gt;cpus_ptr</code>/<code>cpus_mask</code> — bitmask CPU được phép chạy task này, đặt qua <code>sched_setaffinity()</code> (syscall 122, xem <a href="#c32">c32</a>). <code>select_task_rq()</code> và load-balancer đều phải tôn trọng mask này khi chọn CPU đích.</p>
+</section>
+
+<!-- ===================== C30 ===================== -->
+<section class="chapter" id="c30">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 30</div>
+  <h2>CPU Hotplug — scheduler khi CPU online/offline</h2>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Hook (thật)</th><th>File:line</th><th>Khi nào chạy</th></tr>
+<tr><td><code>sched_cpu_starting(unsigned int cpu)</code></td><td>core.c:7002</td><td>CPU sắp online — khởi tạo lại rq/sched_domain cho CPU này</td></tr>
+<tr><td><code>sched_cpu_activate(unsigned int cpu)</code></td><td>core.c:6922</td><td>CPU chính thức "schedulable" — bắt đầu nhận task</td></tr>
+<tr><td><code>sched_cpu_deactivate(unsigned int cpu)</code></td><td>core.c:6960</td><td>CPU sắp offline — ngừng nhận task mới, bắt đầu drain</td></tr>
+<tr><td><code>sched_cpu_dying(unsigned int cpu)</code></td><td>core.c:7010</td><td>CPU thực sự dừng — mọi task còn lại đã được migrate đi nơi khác</td></tr>
+</table></div>
+
+<div class="diagram"><pre>
+CPU offline:  sched_cpu_deactivate → stop nhận task mới
+                  → mọi task runnable trên rq này bị active-balance migrate đi
+                    (qua stop_sched_class, xem c28) → sched_cpu_dying → CPU dừng
+
+CPU online:   sched_cpu_starting → rq khởi tạo lại (clock, load) → sched_cpu_activate
+                  → CPU bắt đầu được load_balance() coi là đích hợp lệ
+</pre></div>
+</section>
+
+<!-- ===================== C31 ===================== -->
+<section class="chapter" id="c31">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 31</div>
+  <h2>Kernel Thread vs User Process — <code>mm</code> / <code>active_mm</code></h2>
+</div>
+
+<p>Ví dụ kernel thread trên board này: <code>kworker/*</code>, <code>ksoftirqd/*</code>, idle task (<code>swapper/0</code>, <code>swapper/1</code>), migration/stop task per-CPU.</p>
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 mm=NULL / active_mm — vẫn còn dùng trong 5.10.241</div>
+Kernel thread có <code>task_struct-&gt;mm == NULL</code> (không sở hữu address space riêng). Khi được chọn chạy, <code>context_switch()</code> (xem <a href="#c18">c18</a>) KHÔNG đổi TTBR0 — nó "mượn" <code>active_mm</code> của task vừa chạy trước đó (<code>enter_lazy_tlb</code>): <code>next-&gt;active_mm = prev-&gt;active_mm; mmgrab(...)</code>. Vì kernel thread chỉ chạy code kernel (nửa trên của address space, ánh xạ giống nhau ở mọi process), việc "mượn" TTBR0 cũ không sai — chỉ đơn giản không cần đổi, tiết kiệm hẳn phần MMU của context switch (xem chi tiết chi phí ở <a href="#c21">c21</a>).
+</div>
+
+<div class="diagram"><pre>
+user process A (mm=MM_A)  →  kernel thread K (mm=NULL, active_mm=MM_A mượn từ A)
+     →  user process B (mm=MM_B)
+
+Switch A→K:  switch_mm KHÔNG chạy (K->mm==NULL) → TTBR0 VẪN LÀ MM_A → 0 chi phí MMU
+Switch K→B:  switch_mm CHẠY (B->mm=MM_B != K->active_mm=MM_A) → cpu_do_switch_mm bình thường
+</pre></div>
+
+<p><code>idle_sched_class</code>: idle task (<code>swapper/N</code>) chạy trong <code>cpu_startup_entry()</code> (kernel/sched/idle.c:397) → vòng lặp <code>do_idle()</code> gọi <code>schedule_idle()</code> (:334) mỗi khi <code>need_resched()</code> — đây là task <b>luôn tồn tại</b> trên mỗi rq, đảm bảo <code>pick_next_task()</code> luôn có kết quả kể cả khi <code>nr_running==0</code> (idle_sched_class luôn là "backstop" cuối cùng trong <code>for_each_class</code>).</p>
+</section>
+
+<!-- ===================== C32 ===================== -->
+<section class="chapter" id="c32">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 32</div>
+  <h2>Scheduler System Calls — mapping ARM64 hiện đại</h2>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Syscall</th><th>Số hiệu (native AArch64)</th><th>File nguồn số hiệu</th><th>Service routine</th></tr>
+<tr><td><code>sched_setparam()</code></td><td>118</td><td>include/uapi/asm-generic/unistd.h</td><td><code>sys_sched_setparam</code></td></tr>
+<tr><td><code>sched_setscheduler()</code></td><td>119</td><td>—</td><td><code>sys_sched_setscheduler</code> (SYSCALL_DEFINE3 tại core.c:5715)</td></tr>
+<tr><td><code>sched_getscheduler()</code></td><td>120</td><td>—</td><td><code>sys_sched_getscheduler</code></td></tr>
+<tr><td><code>sched_getparam()</code></td><td>121</td><td>—</td><td><code>sys_sched_getparam</code></td></tr>
+<tr><td><code>sched_setaffinity()</code></td><td>122</td><td>—</td><td><code>sys_sched_setaffinity</code> (compat wrapper qua __SC_COMP)</td></tr>
+<tr><td><code>sched_getaffinity()</code></td><td>123</td><td>—</td><td><code>sys_sched_getaffinity</code></td></tr>
+<tr><td><code>sched_yield()</code></td><td>124</td><td>—</td><td><code>sys_sched_yield</code> (SYSCALL_DEFINE0 tại core.c:6155)</td></tr>
+<tr><td><code>sched_get_priority_max()</code></td><td>125</td><td>—</td><td><code>sys_sched_get_priority_max</code></td></tr>
+<tr><td><code>sched_get_priority_min()</code></td><td>126</td><td>—</td><td><code>sys_sched_get_priority_min</code></td></tr>
+<tr><td><code>sched_rr_get_interval()</code></td><td>127 (32-bit time_t) / 423 (time64)</td><td>—</td><td><code>sys_sched_rr_get_interval_time32</code> / <code>_time64</code></td></tr>
+<tr><td><code>setpriority()</code></td><td>140</td><td>—</td><td><code>sys_setpriority</code></td></tr>
+<tr><td><code>getpriority()</code></td><td>141</td><td>—</td><td><code>sys_getpriority</code></td></tr>
+</table></div>
+
+<div class="box arm64">
+<div class="box-title">🔧 ARM64 NOTE — <code>nice()</code> KHÔNG có syscall number native trên AArch64 (verify bằng grep, không suy đoán)</div>
+<code>grep -n "__NR_nice" include/uapi/asm-generic/unistd.h</code> → <b>không có kết quả</b>. <code>__NR_nice</code> chỉ tồn tại trong <code>arch/arm64/include/asm/unistd32.h:81-82</code> — bảng syscall <b>compat</b> dành cho tiến trình AArch32 (32-bit) chạy trên kernel 64-bit. <code>SYSCALL_DEFINE1(nice, int, increment)</code> (core.c:5096) vẫn tồn tại trong kernel như một service routine khả dụng, nhưng <b>không có đường vào</b> từ một tiến trình AArch64 native gọi qua số syscall — vì bảng <code>include/uapi/asm-generic/unistd.h</code> mà AArch64 dùng trực tiếp không gán số cho nó.<br><br>
+<b>Vì sao khác x86</b>: x86-64 giữ syscall table riêng có cả các syscall "cũ/thừa" (đa số kiến trúc legacy làm vậy để tương thích ngược). ARM64 là kiến trúc <b>sạch từ đầu</b> (clean-slate, ra đời 2012) — cố tình chọn dùng thẳng bảng <code>asm-generic/unistd.h</code> chung, loại bỏ mọi syscall coi là "thừa/có thể thay thế bằng syscall khác" (ở đây: <code>nice(inc)</code> tương đương <code>setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS,0)+inc)</code>). <i>Ghi chú (INFERENCE, chưa verify glibc source trong phiên này)</i>: theo hành vi ABI Linux đã biết, glibc trên AArch64 hiện thực <code>nice()</code> bằng cách gọi <code>getpriority()</code>/<code>setpriority()</code> ở userspace thay vì một syscall trực tiếp.
+</div>
+</section>
+
+<!-- ===================== C33 ===================== -->
+<section class="chapter" id="c33">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 33</div>
+  <h2>ARM64 SVC Entry — ví dụ <code>sched_yield()</code></h2>
+</div>
+
+<p>Trace tổng quát (giống hệt mọi syscall khác, xem thêm <a href="#c22">c22</a> cho phần exception entry): userspace đặt <code>x8 = 124</code> (số hiệu <code>sched_yield</code>), <code>svc #0</code> → HW nhảy <code>VBAR_EL1+0x400</code> (<code>el0_sync</code>, khác <code>el0_irq</code> ở c22 vì đây là synchronous exception, không phải IRQ) → <code>el0_sync</code> đọc <code>ESR_EL1.EC == 0x15</code> (SVC64) → <code>el0_svc</code> → <code>el0_svc_common()</code> → <code>invoke_syscall()</code> → <code>sys_call_table[124](regs)</code> → <code>SYSCALL_DEFINE0(sched_yield)</code> (core.c:6155).</p>
+
+<img src="process_syscall_flow.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 sched_yield() là ví dụ preemption VOLUNTARY (xem c14) tinh khiết nhất</div>
+Khác timer tick (involuntary, chỉ set cờ rồi đợi safe point) hay wakeup (đánh thức task khác), <code>sched_yield()</code> gọi <code>schedule()</code> <b>trực tiếp trong thân syscall</b> — vì đang ở process context với IRQ đã bật lại và không giữ lock nào, đây LÀ safe point, không cần qua cơ chế <code>TIF_NEED_RESCHED</code>.
+</div>
+</section>
+
+<!-- ===================== C34 ===================== -->
+<section class="chapter" id="c34">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 34</div>
+  <h2>Runtime Tracing &amp; Debugging — quan sát scheduler thật</h2>
+</div>
+
+<p>Hai công cụ có sẵn trong mọi kernel bật <code>CONFIG_FTRACE</code>/<code>CONFIG_SCHEDSTATS</code> (không cần cấu hình thêm nếu đã bật):</p>
+
+<div class="grid2">
+<div class="box source">
+<div class="box-title">📊 /proc/sched_debug &amp; /proc/schedstat</div>
+<pre><code>cat /proc/sched_debug     # dump toàn bộ rq/cfs_rq/sched_entity mọi CPU:
+                           # nr_running, load, min_vruntime, từng task + vruntime
+cat /proc/schedstat        # thống kê load-balance theo domain: lb_count, lb_balanced,
+                             # lb_imbalance — đối chiếu với chương 28</code></pre>
+</div>
+<div class="box source">
+<div class="box-title">🔬 ftrace — sched events</div>
+<pre><code>cd /sys/kernel/debug/tracing
+echo 1 > events/sched/sched_switch/enable
+echo 1 > events/sched/sched_wakeup/enable
+echo 1 > events/sched/sched_wakeup_new/enable
+echo 1 > events/sched/sched_process_fork/enable
+echo 1 > events/sched/sched_process_exit/enable
+echo 1 > tracing_on
+cat trace     # mỗi dòng: sched_switch: prev_comm=A prev_pid=.. prev_state=..
+              #            ==> next_comm=B next_pid=..</code></pre>
+</div>
+</div>
+
+<p><b>Thực nghiệm đối chiếu source ↔ runtime</b>: viết 2 task (Task A sleep trên pipe rỗng, Task B write vào pipe để đánh thức A), bật <code>sched_switch</code> trace, so khớp thứ tự sự kiện với call chain ở <a href="#c25">Chương 25</a> — mỗi dòng <code>sched_switch</code> trong trace tương ứng đúng 1 lần <code>context_switch()</code> (c18) chạy xong.</p>
+
+<div class="box">
+<div class="box-title">📌 perf / trace-cmd / bpftrace</div>
+<code>perf sched record</code> + <code>perf sched latency</code> cho thống kê độ trễ scheduling per-task; <code>trace-cmd record -e sched</code> là wrapper tiện hơn cho ftrace ở trên; nếu kernel bật <code>CONFIG_BPF</code>, <code>bpftrace -e 'tracepoint:sched:sched_switch { printf("%s -> %s\n", args->prev_comm, args->next_comm); }'</code> cho cùng thông tin real-time không cần ghi file trace.
+</div>
+
+<div class="box warn">
+<div class="box-title">⚠️ WARNING — build kernel debug cho QEMU/board thật</div>
+Để dùng <code>gdb</code>/<code>kgdb</code> soi trực tiếp cấu trúc (<code>struct rq</code>, <code>struct task_struct</code>) cần build kernel với <code>CONFIG_DEBUG_INFO=y</code> (và lý tưởng <code>CONFIG_GDB_SCRIPTS=y</code> để dùng script <code>vmlinux-gdb.py</code> có sẵn — cho phép <code>lx-ps</code>, <code>lx-dmesg</code> ngay trong gdb). Board S800 thật cắm UART có thể cấu hình <code>kgdboc=ttyS0,115200</code> trên cmdline; với QEMU <code>-M virt -cpu cortex-a72 -kernel Image -append "console=ttyAMA0"</code> + <code>-s -S</code> để gdb attach qua cổng 1234 từ lúc CPU reset — hữu ích để đặt breakpoint ngay tại <code>cpu_switch_to</code> và xem thanh ghi đổi theo từng bước ở <a href="#c19">Chương 19</a>.
+</div>
+</section>
+
+<!-- ===================== C35 ===================== -->
+<section class="chapter" id="c35">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 35</div>
+  <h2>Mental Model tổng hợp</h2>
+</div>
+
+<img src="process_tong_quan.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="box important" style="border-color:var(--accent2)">
+<div class="box-title">💡 5 câu trả lời cốt lõi (đọc lại nếu quên toàn bộ tài liệu)</div>
+1) <b>Scheduler chọn task kế tiếp bằng cách nào?</b> Duyệt 5 lớp theo thứ tự ưu tiên tuyệt đối cố định (stop/dl/rt/fair/idle); trong CFS, luôn lấy leftmost của rbtree theo <code>vruntime</code>.<br>
+2) <b>Ai kích hoạt việc đổi task?</b> KHÔNG BAO GIỜ trực tiếp từ IRQ handler — luôn set <code>TIF_NEED_RESCHED</code> rồi đợi safe point (<code>ret_to_user</code>, <code>preempt_enable</code>, hoặc voluntary <code>schedule()</code>).<br>
+3) <b>current là gì?</b> Nội dung thanh ghi <code>SP_EL0</code> — không phải biến toàn cục, không cần khoá, mỗi CPU tự nhiên khác nhau.<br>
+4) <b>Context switch thật sự đổi cái gì?</b> 3 tầng tách biệt: 13 thanh ghi callee-saved (<code>cpu_switch_to</code>), con trỏ current (<code>msr sp_el0</code>), và address space (<code>switch_mm</code>/TTBR0+ASID) — không tầng nào đụng thanh ghi user (nằm an toàn trong <code>pt_regs</code>).<br>
+5) <b>PDF và kernel hiện đại khác nhau ở đâu nhất?</b> Toàn bộ cỗ máy heuristic "đoán interactive/batch" (active/expired array, sleep_avg, recalc_task_prio) của O(1) scheduler đã bị thay bằng nguyên tắc đơn giản: luôn chạy task có <code>vruntime</code> nhỏ nhất.
+</div>
+</section>
+
+<!-- ===================== C36 ===================== -->
+<section class="chapter" id="c36">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 36</div>
+  <h2>Recommended Study Order — lộ trình đọc tiếp source</h2>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Level</th><th>Chủ đề</th><th>Chương liên quan</th></tr>
+<tr><td><b>1</b></td><td><code>task_struct</code>, <code>current</code>, <code>struct rq</code>, <code>schedule()</code></td><td>c07, c08, c16, c20</td></tr>
+<tr><td><b>2</b></td><td><code>sched_class</code>, CFS, <code>vruntime</code>, wakeup</td><td>c10, c11, c12, c25, c26</td></tr>
+<tr><td><b>3</b></td><td>Preemption, timer tick, <code>TIF_NEED_RESCHED</code></td><td>c13, c14, c15, c23, c24</td></tr>
+<tr><td><b>4</b></td><td><code>context_switch()</code>, ARM64 assembly, MM switch</td><td>c18, c19, c21, c22</td></tr>
+<tr><td><b>5</b></td><td>SMP, load balancing, <code>sched_domain</code></td><td>c27, c28, c29, c30</td></tr>
+<tr><td><b>6</b></td><td>Tracing, debugging, sửa source thử nghiệm</td><td>c34</td></tr>
+</table></div>
+
+<p>Sau khi hiểu flow này từ source đến ARM64 assembly, bước tiếp theo hữu ích nhất là <b>đọc song song với trace thật</b> (c34): đặt breakpoint gdb ở <code>cpu_switch_to</code>, in <code>$sp</code>/<code>$x19</code> trước/sau, đối chiếu đúng với bảng instruction ở <a href="#c19">c19</a>.</p>
+</section>
+
+<!-- ===================== C37 ===================== -->
+<section class="chapter" id="c37">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 37</div>
+  <h2>Cheat Sheet — lệnh tìm source hữu ích</h2>
+</div>
+
+<div class="fbox">
+<div class="fhead"><div class="fname">Lệnh grep/rg đã dùng để xây tài liệu này (dùng lại được ngay)</div></div>
+<div class="fbody">
+<pre><code>grep -n "^struct rq {" kernel/sched/sched.h
+grep -n "extern const struct sched_class" kernel/sched/sched.h
+grep -n "pick_next_task\b" kernel/sched/core.c
+grep -n "define TIF_NEED_RESCHED" arch/arm64/include/asm/thread_info.h
+grep -n "set_tsk_need_resched\|resched_curr\b" kernel/sched/core.c
+grep -n "scheduler_tick()" kernel/time/timer.c kernel/time/tick-sched.c
+grep -n "try_to_wake_up(struct task_struct" kernel/sched/core.c
+grep -n "SYM_FUNC_START(cpu_switch_to)" arch/arm64/kernel/entry.S
+grep -n "IPI_RESCHEDULE\|smp_send_reschedule" arch/arm64/kernel/smp.c
+grep -n "^static int load_balance\|find_busiest_group" kernel/sched/fair.c
+grep -n "__NR_sched_yield\|__NR_nice" include/uapi/asm-generic/unistd.h arch/arm64/include/asm/unistd32.h
+grep -n "sched_cpu_starting\|sched_cpu_dying\|sched_cpu_activate" kernel/sched/core.c
+
+# xác minh số dòng trước khi trích dẫn:
+sed -n '1234p' file.c
+
+# lịch sử thay đổi 1 hàm/khái niệm:
+git log -S "prio_array" -- kernel/sched/
+git blame kernel/sched/core.c -L 4462,4470</code></pre>
+</div>
+</div>
+</section>
+
+<!-- ===================== C38 ===================== -->
+<section class="chapter" id="c38">
+<div class="chap-head">
+  <div class="chap-num">CHƯƠNG 38</div>
+  <h2>Function Index (A–Z)</h2>
+</div>
+
+<div class="tblwrap"><table>
+<tr><th>Function</th><th>Chương</th></tr>
+<tr><td><code>__schedule()</code></td><td><a href="#c16">c16</a></td></tr>
+<tr><td><code>__switch_to()</code></td><td><a href="#c19">c19</a></td></tr>
+<tr><td><code>attach_tasks()</code></td><td><a href="#c28">c28</a></td></tr>
+<tr><td><code>check_and_switch_context()</code></td><td><a href="#c21">c21</a></td></tr>
+<tr><td><code>check_preempt_tick()</code></td><td><a href="#c13">c13</a></td></tr>
+<tr><td><code>context_switch()</code></td><td><a href="#c18">c18</a></td></tr>
+<tr><td><code>cpu_do_switch_mm()</code></td><td><a href="#c21">c21</a></td></tr>
+<tr><td><code>cpu_switch_to()</code></td><td><a href="#c19">c19</a></td></tr>
+<tr><td><code>detach_tasks()</code></td><td><a href="#c28">c28</a></td></tr>
+<tr><td><code>enqueue_entity()</code> / <code>enqueue_task_fair()</code></td><td><a href="#c11">c11</a></td></tr>
+<tr><td><code>find_busiest_group()</code></td><td><a href="#c28">c28</a></td></tr>
+<tr><td><code>get_current()</code></td><td><a href="#c20">c20</a></td></tr>
+<tr><td><code>load_balance()</code></td><td><a href="#c28">c28</a></td></tr>
+<tr><td><code>pick_next_entity()</code></td><td><a href="#c11">c11</a>, <a href="#c17">c17</a></td></tr>
+<tr><td><code>pick_next_task()</code></td><td><a href="#c10">c10</a>, <a href="#c17">c17</a></td></tr>
+<tr><td><code>pick_next_task_fair()</code></td><td><a href="#c10">c10</a>, <a href="#c11">c11</a></td></tr>
+<tr><td><code>place_entity()</code></td><td><a href="#c25">c25</a></td></tr>
+<tr><td><code>resched_curr()</code></td><td><a href="#c15">c15</a></td></tr>
+<tr><td><code>schedule()</code></td><td><a href="#c16">c16</a></td></tr>
+<tr><td><code>scheduler_tick()</code></td><td><a href="#c13">c13</a>, <a href="#c23">c23</a></td></tr>
+<tr><td><code>sched_cpu_activate/deactivate/starting/dying()</code></td><td><a href="#c30">c30</a></td></tr>
+<tr><td><code>select_task_rq()</code></td><td><a href="#c26">c26</a></td></tr>
+<tr><td><code>set_tsk_need_resched()</code></td><td><a href="#c15">c15</a></td></tr>
+<tr><td><code>smp_send_reschedule()</code></td><td><a href="#c15">c15</a></td></tr>
+<tr><td><code>switch_mm_irqs_off()</code></td><td><a href="#c18">c18</a>, <a href="#c21">c21</a></td></tr>
+<tr><td><code>switch_to()</code> (macro)</td><td><a href="#c19">c19</a></td></tr>
+<tr><td><code>try_to_wake_up()</code></td><td><a href="#c25">c25</a>, <a href="#c26">c26</a></td></tr>
+<tr><td><code>update_curr()</code></td><td><a href="#c11">c11</a></td></tr>
+<tr><td><code>update_process_times()</code></td><td><a href="#c23">c23</a></td></tr>
+</table></div>
+
+<p class="center" style="margin-top:40px;color:var(--text-dim)">— Hết. Mọi function/struct/số dòng trong tài liệu này đã xác minh bằng <code>grep</code>/đọc trực tiếp trên Linux 5.10.241 tại <code>Kernel/K-S800/Src/</code>, đối chiếu với PDF <i>Understanding the Linux Kernel</i> Chapter 7 và các module đã nghiên cứu trước đó trong <code>docs/diagrams/</code>. —</p>
+
+</section>
+
+</main>
+</div>
+
+<div id="backtop" title="Về đầu trang">↑</div>
+
+<script>
+const links = Array.from(document.querySelectorAll('#sidebar a.nav-item'));
+const sections = links.map(a => document.querySelector(a.getAttribute('href')));
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = '#' + e.target.id;
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === id));
+    }
+  });
+}, {rootMargin: '-15% 0px -70% 0px', threshold: 0});
+sections.forEach(s => s && io.observe(s));
+
+const search = document.getElementById('search');
+search.addEventListener('input', () => {
+  const q = search.value.trim().toLowerCase();
+  links.forEach(a => {
+    const hay = (a.textContent + ' ' + (a.dataset.kw||'')).toLowerCase();
+    a.classList.toggle('hidden', q.length > 0 && !hay.includes(q));
+  });
+});
+search.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const first = links.find(a => !a.classList.contains('hidden'));
+    if (first) { window.location.hash = first.getAttribute('href'); }
+  }
+});
+
+document.getElementById('backtop').addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
+
+document.getElementById('expandall').addEventListener('click', () => {
+  document.querySelectorAll('details').forEach(d => d.open = true);
+});
+document.getElementById('collapseall').addEventListener('click', () => {
+  document.querySelectorAll('details').forEach(d => d.open = false);
+});
+
+const root = document.documentElement;
+function applyTheme(t){ if(t){ root.setAttribute('data-theme', t);} else { root.removeAttribute('data-theme'); } }
+try {
+  const saved = localStorage.getItem('sched-theme');
+  if (saved) applyTheme(saved);
+} catch(e) {}
+document.getElementById('themetoggle').addEventListener('click', () => {
+  const cur = root.getAttribute('data-theme');
+  const sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  let next;
+  if (!cur) next = sysDark ? 'light' : 'dark';
+  else if (cur === 'dark') next = 'light';
+  else next = 'dark';
+  applyTheme(next);
+  try { localStorage.setItem('sched-theme', next); } catch(e) {}
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('copybtn')) {
+    const container = e.target.closest('.fbox,.diagram,div');
+    const pre = container ? container.querySelector('pre') : null;
+    if (pre) {
+      navigator.clipboard && navigator.clipboard.writeText(pre.innerText).then(() => {
+        const old = e.target.textContent;
+        e.target.textContent = 'copied!';
+        setTimeout(() => e.target.textContent = old, 1200);
+      });
+    }
+  }
+});
+</script>
+</body>
+</html>

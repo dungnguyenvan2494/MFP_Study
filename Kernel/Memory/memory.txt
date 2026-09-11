@@ -1,0 +1,1447 @@
+Tôi muốn nghiên cứu cực kỳ chuyên sâu về Linux Kernel Memory Management trên kiến trúc ARM64.
+
+Nguồn lý thuyết ban đầu là Chapter 8 – Memory Management trong tài liệu PDF tôi cung cấp.
+Tuy nhiên tài liệu này chủ yếu mô tả Linux 2.6 và có nhiều phần mang tính historical/x86-specific.
+
+Mục tiêu của tôi KHÔNG phải học lại Linux 2.6.
+
+Mục tiêu là:
+
+1. Dùng Chapter 8 làm nền tảng concept.
+2. Sau đó mapping từng concept sang implementation Linux kernel trên ARM64.
+3. Ưu tiên Linux 5.4.x.
+4. Khi cần, so sánh với Linux 6.x để thấy implementation đã thay đổi như thế nào.
+5. Phải đọc source code thật và verify function/struct/file.
+6. Không được tự suy đoán call flow.
+7. Nếu tài liệu nói một cơ chế không còn phù hợp với ARM64 hiện đại, phải chỉ rõ:
+   - tài liệu nói gì
+   - ARM64 thực tế làm gì
+   - source code ở đâu
+   - cơ chế cũ được thay thế như thế nào
+
+==================================================
+PHẦN 0 — KẾT QUẢ CUỐI CÙNG CẦN ĐẠT
+==================================================
+
+Sau khi nghiên cứu xong, tôi phải có thể trả lời chính xác:
+
+- Một physical page trên ARM64 được kernel quản lý như thế nào?
+- struct page đại diện cho cái gì?
+- PFN được chuyển thành struct page như thế nào?
+- ARM64 virtual address → physical address hoạt động thế nào?
+- Linux ARM64 chia memory thành các zone như thế nào?
+- alloc_pages() hoạt động thế nào?
+- buddy allocator hoạt động thế nào?
+- per-CPU page allocator hoạt động thế nào?
+- kmalloc() hoạt động thế nào?
+- SLAB/SLUB hoạt động thế nào?
+- vmalloc() hoạt động thế nào?
+- Page Table của ARM64 được xây dựng thế nào?
+- Page fault liên quan đến vmalloc như thế nào?
+- reclaim liên quan allocation như thế nào?
+- NUMA ảnh hưởng allocation như thế nào?
+- DMA allocation trên ARM64 khác allocation bình thường ra sao?
+- Kernel virtual memory layout của ARM64 là gì?
+
+==================================================
+PHẦN 1 — PHÂN TÍCH CHAPTER 8 TRƯỚC
+==================================================
+
+Đọc toàn bộ Chapter 8.
+
+Chia nội dung thành:
+
+A. Page Frame Management
+B. struct page
+C. NUMA
+D. Memory Zones
+E. Reserved Pages
+F. Zoned Allocator
+G. GFP flags
+H. Buddy Allocator
+I. Per-CPU Page Cache
+J. SLAB Allocator
+K. Cache
+L. Slab
+M. Object
+N. Slab Coloring
+O. Memory Pool
+P. Highmem / Kernel Mapping
+Q. Non-contiguous Memory
+R. vmalloc/vfree
+S. Page Table Mapping
+
+Với từng phần, tạo bảng:
+
+Concept trong tài liệu
+↓
+Linux ARM64 tương ứng
+↓
+Source file
+↓
+Main struct
+↓
+Main functions
+↓
+Có còn đúng trên ARM64 không?
+↓
+Thay đổi gì?
+
+==================================================
+PHẦN 2 — ARM64 MEMORY MODEL
+==================================================
+
+Đây là phần bắt buộc phải nghiên cứu trước allocator.
+
+Nghiên cứu:
+
+- Physical Address
+- Virtual Address
+- IPA nếu có virtualization
+- VA_BITS
+- PA_BITS
+- PAGE_SHIFT
+- PAGE_SIZE
+- PFN
+- PAGE_OFFSET
+- VA_START
+- TASK_SIZE
+- VMALLOC_START
+- VMALLOC_END
+- FIXADDR_START
+- FIXADDR_TOP
+
+Phải kiểm tra source ARM64 thực tế.
+
+Nghiên cứu:
+
+arch/arm64/include/asm/memory.h
+arch/arm64/include/asm/pgtable*.h
+arch/arm64/mm/
+
+Giải thích chính xác:
+
+Physical Address
+        ↓
+      PFN
+        ↓
+    struct page
+
+và:
+
+Virtual Address
+        ↓
+PGD
+ ↓
+P4D
+ ↓
+PUD
+ ↓
+PMD
+ ↓
+PTE
+ ↓
+Physical Address
+
+Nhưng phải lưu ý rằng số level phụ thuộc:
+
+- 4KB pages
+- 16KB pages
+- 64KB pages
+- 4-level page table
+- 5-level page table nếu configuration hỗ trợ
+
+Không được hard-code rằng ARM64 luôn luôn có 4 level.
+
+==================================================
+PHẦN 3 — ARM64 VIRTUAL MEMORY LAYOUT
+==================================================
+
+Nghiên cứu kernel virtual address space của ARM64.
+
+Tạo memory map:
+
+User VA
+        ↓
+Kernel VA
+        ↓
+Linear Mapping
+        ↓
+VMALLOC region
+        ↓
+VMEMMAP
+        ↓
+FIXMAP
+        ↓
+PCI / IO mapping nếu có
+
+Phải xác định bằng source:
+
+- VMALLOC_START
+- VMALLOC_END
+- PAGE_OFFSET
+- phys_to_virt()
+- virt_to_phys()
+- __va()
+- __pa()
+- linear map
+
+Giải thích:
+
+Tại sao ARM64 có thể map physical RAM vào một vùng virtual address lớn?
+
+Linear mapping hoạt động thế nào?
+
+Một physical address:
+
+PA = 0xXXXXXXXX
+
+được ánh xạ thành kernel VA như thế nào?
+
+Trace source code thực tế.
+
+==================================================
+PHẦN 4 — ARM64 PAGE TABLE
+==================================================
+
+Nghiên cứu thật sâu:
+
+PGD
+P4D
+PUD
+PMD
+PTE
+
+Các API:
+
+pgd_offset()
+p4d_offset()
+pud_offset()
+pmd_offset()
+pte_offset_kernel()
+pte_offset_map()
+
+và các thao tác:
+
+set_pgd()
+set_p4d()
+set_pud()
+set_pmd()
+set_pte()
+
+Nghiên cứu ARM64 MMU.
+
+Giải thích:
+
+TTBR0_EL1
+TTBR1_EL1
+TCR_EL1
+MAIR_EL1
+SCTLR_EL1
+
+Phải giải thích:
+
+- TTBR0_EL1 dùng cho gì?
+- TTBR1_EL1 dùng cho gì?
+- Kernel page table nằm đâu?
+- User page table nằm đâu?
+- Context switch thay đổi page table như thế nào?
+
+==================================================
+PHẦN 5 — ARM64 BOOT MEMORY INITIALIZATION
+==================================================
+
+Trace từ boot kernel đến memory allocator.
+
+Bắt đầu từ:
+
+start_kernel()
+
+Sau đó tìm memory initialization path.
+
+Tôi muốn call graph thực tế kiểu:
+
+start_kernel()
+   ↓
+...
+   ↓
+mem_init()
+   ↓
+free_all_bootmem()
+   ↓
+...
+   ↓
+buddy allocator ready
+
+NHƯNG:
+
+Không được tự viết flow.
+
+Phải grep/source verify từng function.
+
+Tìm rõ:
+
+- memblock initialization
+- memory regions
+- reserved memory
+- memblock_free_all()
+- zone initialization
+- buddy initialization
+
+Đặc biệt nghiên cứu:
+
+memblock
+
+trước khi buddy allocator hoạt động.
+
+==================================================
+PHẦN 6 — MEMBLOCK
+==================================================
+
+Đây là phần tài liệu Chapter 8 không tập trung đủ.
+
+Nghiên cứu:
+
+memblock_memory
+memblock_reserved
+
+Các API:
+
+memblock_add()
+memblock_reserve()
+memblock_alloc()
+memblock_free()
+memblock_remove()
+
+Giải thích boot flow:
+
+Firmware/DT
+    ↓
+ARM64 boot
+    ↓
+memblock
+    ↓
+reserve kernel/initrd/FDT/etc.
+    ↓
+initialize zones
+    ↓
+initialize buddy
+    ↓
+normal runtime allocation
+
+Tạo sequence diagram.
+
+==================================================
+PHẦN 7 — struct page
+==================================================
+
+Nghiên cứu:
+
+struct page
+
+Không chỉ giải thích field.
+
+Phải trace usage.
+
+Đặc biệt:
+
+- flags
+- refcount
+- mapcount
+- private
+- mapping
+- index
+- lru
+
+Trả lời:
+
+1. Khi physical page được đưa vào buddy allocator, struct page thay đổi gì?
+2. Khi page được allocate, fields nào thay đổi?
+3. Khi page thuộc SLUB/SLAB thì fields nào được sử dụng?
+4. Khi page cache sử dụng struct page thế nào?
+5. Khi page được map vào userspace thì metadata thay đổi thế nào?
+
+==================================================
+PHẦN 8 — PFN ↔ struct page
+==================================================
+
+Trace source:
+
+pfn_to_page()
+page_to_pfn()
+
+Tìm macro/function thực tế trên ARM64.
+
+Giải thích:
+
+PFN
+ ↓
+mem_section
+ ↓
+struct page
+
+hoặc cơ chế thực tế của kernel version đang nghiên cứu.
+
+Không được giả định implementation.
+
+==================================================
+PHẦN 9 — MEMORY ZONES TRÊN ARM64
+==================================================
+
+Nghiên cứu:
+
+ZONE_DMA
+ZONE_DMA32
+ZONE_NORMAL
+ZONE_MOVABLE
+
+và các zone thực tế mà ARM64 kernel configuration sử dụng.
+
+Giải thích:
+
+Tại sao ARM64 có thể có:
+
+ZONE_DMA
+ZONE_DMA32
+ZONE_NORMAL
+
+trong một số platform/configuration?
+
+DMA zone được xác định bằng:
+
+DMA masks
+↓
+zone constraints
+↓
+allocation
+
+Phân tích:
+
+struct zone
+struct pglist_data
+
+Trace:
+
+page
+ ↓
+zone
+ ↓
+pgdat
+ ↓
+node
+
+==================================================
+PHẦN 10 — GFP FLAGS TRÊN ARM64
+==================================================
+
+Nghiên cứu:
+
+GFP_KERNEL
+GFP_ATOMIC
+GFP_NOWAIT
+GFP_NOFS
+GFP_NOIO
+GFP_DMA
+GFP_DMA32
+GFP_HIGHUSER
+GFP_USER
+GFP_HIGHMEM
+
+Đặc biệt:
+
+Phải kiểm tra GFP_HIGHMEM trên ARM64.
+
+Nếu ARM64 không sử dụng HIGHMEM theo cách của x86 32-bit:
+
+giải thích tại sao.
+
+Không được copy nguyên phần HIGHMEM của tài liệu sang ARM64.
+
+Tạo bảng:
+
+GFP flag
+Purpose
+May sleep?
+Reclaim?
+Zone restriction
+Typical kernel use
+ARM64 relevance
+
+==================================================
+PHẦN 11 — BUDDY ALLOCATOR
+==================================================
+
+Đây là phần cực kỳ quan trọng.
+
+Nghiên cứu:
+
+struct free_area
+struct zone
+
+và:
+
+order
+MAX_ORDER
+free_list
+pageblock
+
+Trace:
+
+alloc_pages()
+ ↓
+__alloc_pages_noprof()
+ ↓
+get_page_from_freelist()
+ ↓
+rmqueue()
+ ↓
+...
+
+Tùy kernel version hãy verify tên function thật.
+
+Phải nghiên cứu:
+
+- watermark
+- zonelist
+- fallback
+- splitting
+- merging
+- order
+- migratetype
+
+==================================================
+PHẦN 12 — BUDDY ALGORITHM
+==================================================
+
+Dùng ví dụ cụ thể với:
+
+PAGE_SIZE = 4KB
+
+Yêu cầu allocation:
+
+order = 3
+
+=> 8 pages
+=> 32KB
+
+Nếu allocator chỉ có:
+
+order 5
+
+thì:
+
+order 5
+ ↓ split
+order 4
+ ↓ split
+order 3
+
+Khi free:
+
+order 3
+ ↓ merge
+order 4
+ ↓ merge
+order 5
+
+Phải minh họa bằng physical addresses thực tế.
+
+Ví dụ:
+
+0x100000
+0x108000
+...
+
+Cho tôi thấy cách kernel tìm buddy của một block.
+
+==================================================
+PHẦN 13 — MIGRATE TYPES
+==================================================
+
+Đây là phần phải nghiên cứu thêm ngoài tài liệu.
+
+Nghiên cứu:
+
+MIGRATE_UNMOVABLE
+MIGRATE_MOVABLE
+MIGRATE_RECLAIMABLE
+MIGRATE_CMA
+MIGRATE_ISOLATE
+
+Giải thích vì sao buddy allocator hiện đại không chỉ dùng:
+
+free_area[order]
+
+mà còn phân loại theo migratetype.
+
+Tìm:
+
+free_area[order].free_list[MIGRATE_*]
+
+và trace source.
+
+==================================================
+PHẦN 14 — PER-CPU PAGE ALLOCATOR
+==================================================
+
+Nghiên cứu:
+
+struct per_cpu_pages
+struct per_cpu_pageset
+
+Trace:
+
+alloc_pages()
+ ↓
+PCP
+ ↓
+page available?
+ ├── YES → return
+ └── NO → buddy
+
+và:
+
+free page
+ ↓
+PCP
+ ↓
+batch exceeds threshold?
+ ↓
+return batch to buddy
+
+Giải thích:
+
+- spinlock reduction
+- cache locality
+- batching
+- hot/cold pages
+- CPU contention
+
+==================================================
+PHẦN 15 — SLOW PATH ALLOCATION
+==================================================
+
+Khi buddy allocator không có page:
+
+Trace chính xác:
+
+allocation failure
+ ↓
+watermark check
+ ↓
+slowpath
+ ↓
+direct reclaim?
+ ↓
+compaction?
+ ↓
+retry?
+ ↓
+OOM?
+
+Nghiên cứu các function thực tế của kernel version.
+
+Phân biệt:
+
+Fast path
+Slow path
+
+Vẽ sequence diagram.
+
+==================================================
+PHẦN 16 — RECLAIM / COMPACTION
+==================================================
+
+Chapter 8 tập trung allocator nhưng tôi muốn nối allocator với:
+
+kswapd
+direct reclaim
+shrinkers
+LRU
+compaction
+
+Giải thích:
+
+Một allocation request có thể gây ra reclaim như thế nào?
+
+Ví dụ:
+
+kmalloc / alloc_pages
+       ↓
+buddy failure
+       ↓
+reclaim
+       ↓
+free pages
+       ↓
+retry allocation
+
+và:
+
+fragmentation
+ ↓
+compaction
+ ↓
+higher-order allocation
+
+==================================================
+PHẦN 17 — SLUB TRÊN ARM64
+==================================================
+
+Tài liệu mô tả SLAB cũ.
+
+Đối với Linux hiện đại, phải nghiên cứu allocator thực tế:
+
+SLUB
+
+Phải phân biệt:
+
+SLAB
+SLUB
+SLOB
+
+và xác định kernel configuration đang dùng allocator nào.
+
+Nghiên cứu:
+
+kmem_cache
+kmem_cache_cpu
+kmem_cache_node
+
+Trace:
+
+kmalloc()
+ ↓
+__kmalloc()
+ ↓
+slab allocator
+ ↓
+per-CPU freelist
+ ↓
+object
+
+==================================================
+PHẦN 18 — KMALLOC
+==================================================
+
+Giải thích:
+
+kmalloc()
+vs
+alloc_pages()
+vs
+vmalloc()
+
+Tạo bảng:
+
+Property | kmalloc | alloc_pages | vmalloc
+
+Ví dụ:
+
+kmalloc:
+virtual contiguous
+physical contiguous
+
+vmalloc:
+virtual contiguous
+physical non-contiguous
+
+Nhưng phải verify implementation thực tế.
+
+==================================================
+PHẦN 19 — SLUB OBJECT ALLOCATION
+==================================================
+
+Trace chính xác:
+
+kmem_cache_alloc()
+ ↓
+slab_alloc_node()
+ ↓
+CPU freelist
+ ↓
+new slab?
+ ↓
+page allocator
+
+Phải giải thích:
+
+freelist
+slab
+node
+CPU partial
+remote free
+
+Đặc biệt nghiên cứu synchronization.
+
+==================================================
+PHẦN 20 — SLAB/SLUB → BUDDY
+==================================================
+
+Cho tôi hiểu rõ allocator tầng trên gọi tầng dưới thế nào:
+
+kmalloc
+   ↓
+SLUB
+   ↓
+alloc_slab_page()
+   ↓
+alloc_pages()
+   ↓
+buddy
+
+Khi destroy slab:
+
+SLUB
+ ↓
+free slab page
+ ↓
+free_pages()
+ ↓
+buddy
+
+Phải verify flow bằng source code.
+
+==================================================
+PHẦN 21 — VMALLOC TRÊN ARM64
+==================================================
+
+Nghiên cứu cực sâu:
+
+vmalloc()
+vmap()
+vunmap()
+vfree()
+
+Source:
+
+mm/vmalloc.c
+arch/arm64/mm/
+
+Trace:
+
+vmalloc(size)
+ ↓
+__vmalloc_node_range()
+ ↓
+get_vm_area...
+ ↓
+allocate physical pages
+ ↓
+map pages
+ ↓
+build page tables
+ ↓
+return virtual address
+
+Không được dùng flow nếu chưa verify bằng source.
+
+==================================================
+PHẦN 22 — VMALLOC ADDRESS SPACE
+==================================================
+
+Nghiên cứu:
+
+VMALLOC_START
+VMALLOC_END
+
+Trên ARM64:
+
+- VMALLOC nằm ở đâu?
+- kích thước bao nhiêu?
+- randomization có ảnh hưởng không?
+- kernel virtual address layout thay đổi thế nào với VA_BITS?
+
+Trace source.
+
+==================================================
+PHẦN 23 — VMALLOC PAGE TABLE MAPPING
+==================================================
+
+Phải giải thích bằng ARM64 page table.
+
+Ví dụ:
+
+vmalloc VA
+    ↓
+PGD
+    ↓
+P4D
+    ↓
+PUD
+    ↓
+PMD
+    ↓
+PTE
+    ↓
+physical page
+
+Trace các function:
+
+vmap_page_range()
+vmap_p4d_range()
+vmap_pud_range()
+vmap_pmd_range()
+vmap_pte_range()
+
+Tên function có thể khác ở kernel version đang nghiên cứu.
+Hãy verify.
+
+==================================================
+PHẦN 24 — ARM64 PAGE TABLE FLAGS
+==================================================
+
+Nghiên cứu:
+
+PAGE_KERNEL
+PAGE_KERNEL_RO
+PAGE_KERNEL_EXEC
+PAGE_KERNEL_ROX
+PAGE_USER
+PAGE_SHARED
+PAGE_READONLY
+
+và ARM64 attributes:
+
+Normal memory
+Device memory
+Cacheable
+Non-cacheable
+Shareable
+XN
+PXN
+UXN
+
+Giải thích:
+
+vmalloc mapping không chỉ là:
+
+VA → PA
+
+mà còn:
+
+VA
+ ↓
+PA
+ ↓
+memory attributes
+ ↓
+permissions
+ ↓
+execute permissions
+
+==================================================
+PHẦN 25 — TLB
+==================================================
+
+Nghiên cứu relationship:
+
+Page Table
+    ↓
+TLB
+    ↓
+CPU virtual address translation
+
+Khi kernel:
+
+- map page
+- unmap page
+- change permissions
+
+thì TLB phải xử lý thế nào?
+
+Nghiên cứu ARM64 TLB invalidation:
+
+TLBI
+
+và kernel abstraction:
+
+flush_tlb_kernel_range()
+flush_tlb_mm()
+local_flush_tlb_all()
+etc.
+
+Phải trace source thực tế.
+
+==================================================
+PHẦN 26 — DMA TRÊN ARM64
+==================================================
+
+Đây là phần rất quan trọng đối với embedded developer.
+
+Nghiên cứu:
+
+DMA API
+dma_alloc_coherent()
+dma_map_single()
+dma_map_sg()
+dma_unmap_single()
+
+Giải thích:
+
+CPU VA
+CPU PA
+DMA address
+
+Không được mặc định:
+
+DMA address == physical address
+
+Phân tích:
+
+IOMMU
+SMMU
+cache coherency
+non-coherent DMA
+
+==================================================
+PHẦN 27 — CONTIGUOUS MEMORY
+==================================================
+
+Nghiên cứu:
+
+CMA
+ZONE_CMA
+alloc_contig_pages()
+
+Giải thích:
+
+Normal buddy allocation
+vs
+CMA
+
+Tại sao multimedia / camera / DMA subsystem thường quan tâm physical contiguous memory?
+
+Trace:
+
+CMA allocation
+ ↓
+page isolation
+ ↓
+migration
+ ↓
+contiguous block
+ ↓
+DMA buffer
+
+==================================================
+PHẦN 28 — HIGHMEM: SO SÁNH VỚI TÀI LIỆU
+==================================================
+
+Không được bỏ qua phần HIGHMEM trong PDF.
+
+Hãy lập bảng:
+
+Concept trong Chapter 8
+ARM64 hiện đại
+Có còn dùng?
+Thay bằng gì?
+
+Ví dụ:
+
+HIGHMEM
+kmap()
+kunmap()
+
+Sau đó giải thích rõ:
+
+ARM64 có cần highmem mapping giống 32-bit x86 không?
+
+==================================================
+PHẦN 29 — MEMORY-MAPPED I/O
+==================================================
+
+Nghiên cứu:
+
+ioremap()
+ioremap_wc()
+ioremap_prot()
+
+và:
+
+readl()
+writel()
+
+ARM64 Device memory mapping.
+
+Trace:
+
+Device Tree
+ ↓
+physical MMIO address
+ ↓
+ioremap()
+ ↓
+kernel virtual address
+ ↓
+readl()/writel()
+
+Phân biệt:
+
+RAM mapping
+vs
+Device mapping
+
+==================================================
+PHẦN 30 — REAL CODE TRACE
+==================================================
+
+Tôi muốn ít nhất 5 bài trace thực tế.
+
+CASE 1:
+
+alloc_pages(GFP_KERNEL, 0)
+
+Trace từ caller đến physical page.
+
+CASE 2:
+
+alloc_pages(GFP_KERNEL, order)
+
+Trace higher-order allocation.
+
+CASE 3:
+
+kmalloc(128, GFP_KERNEL)
+
+Trace đến object allocation.
+
+CASE 4:
+
+vmalloc(1MB)
+
+Trace đến page-table mapping.
+
+CASE 5:
+
+dma_alloc_coherent()
+
+Trace đến DMA memory.
+
+Mỗi case phải có:
+
+Caller
+ ↓
+Function
+ ↓
+Function
+ ↓
+Function
+ ↓
+Final allocator
+ ↓
+Physical pages
+ ↓
+Virtual mapping
+
+==================================================
+PHẦN 31 — SOURCE CODE REQUIREMENT
+==================================================
+
+Với MỖI function quan trọng phải cung cấp:
+
+Function:
+File:
+Approximate source location:
+Purpose:
+Caller:
+Callee:
+Input:
+Output:
+Lock held:
+Data structures modified:
+Failure path:
+
+Không được chỉ giải thích conceptual.
+
+Ví dụ:
+
+alloc_pages()
+
+phải chỉ ra source thật.
+
+==================================================
+PHẦN 32 — DATA STRUCTURE RELATIONSHIP
+==================================================
+
+Tạo sơ đồ tổng thể:
+
+struct page
+    ↓
+zone
+    ↓
+pg_data_t
+    ↓
+node
+
+và:
+
+zone
+ ├── free_area[]
+ ├── watermarks
+ ├── PCP
+ └── LRU/reclaim data
+
+và:
+
+kmem_cache
+ ├── per-CPU data
+ ├── node data
+ └── slabs
+
+==================================================
+PHẦN 33 — FULL ALLOCATION ARCHITECTURE
+==================================================
+
+Cuối cùng hãy tạo một sơ đồ lớn:
+
+User/Kernel caller
+        │
+        ▼
+   kmalloc()
+        │
+        ▼
+      SLUB
+        │
+        ▼
+   alloc_pages()
+        │
+        ▼
+  Per-CPU Pages
+        │
+        ▼
+ Buddy Allocator
+        │
+        ▼
+      Zone
+        │
+        ▼
+      Node
+        │
+        ▼
+ Physical Memory
+
+Và một nhánh khác:
+
+vmalloc()
+   ↓
+virtual area allocator
+   ↓
+page allocator
+   ↓
+physical pages
+   ↓
+page table mapping
+   ↓
+ARM64 MMU
+   ↓
+TLB
+
+==================================================
+PHẦN 34 — DEBUG / OBSERVABILITY
+==================================================
+
+Hướng dẫn cách quan sát memory allocator trên ARM64 bằng:
+
+/proc/buddyinfo
+/proc/meminfo
+/proc/zoneinfo
+/proc/pagetypeinfo
+/proc/slabinfo
+
+debugfs
+tracepoints
+ftrace
+perf
+kmemleak
+page_owner
+
+Giải thích mỗi tool cho thấy phần nào của allocator.
+
+==================================================
+PHẦN 35 — THỰC HÀNH
+==================================================
+
+Tạo các bài lab nhỏ trên ARM64 Linux.
+
+LAB 1:
+Viết module gọi:
+
+alloc_pages()
+
+in:
+
+virtual address
+physical address
+PFN
+order
+page flags
+
+LAB 2:
+Gọi:
+
+kmalloc()
+
+và tìm relationship với slab/slub.
+
+LAB 3:
+Gọi:
+
+vmalloc()
+
+dump virtual address và page mapping.
+
+LAB 4:
+Theo dõi buddy allocator trước/sau khi allocation.
+
+LAB 5:
+Theo dõi zone watermark.
+
+LAB 6:
+Theo dõi DMA allocation.
+
+LAB 7:
+Dùng ftrace trace:
+
+alloc_pages
+kmalloc
+vmalloc
+
+==================================================
+PHẦN 36 — SO SÁNH 3 KIẾN TRÚC
+==================================================
+
+Cuối cùng so sánh:
+
+ARM64
+x86_64
+ARM32
+
+Tập trung:
+
+Virtual memory
+Page table
+HIGHMEM
+DMA
+ZONE
+Address space
+TLB
+Cache
+Memory mapping
+
+Không cần lan man sang CPU architecture nếu không liên quan memory management.
+
+==================================================
+PHẦN 37 — CÁCH TRÌNH BÀY
+==================================================
+
+Mỗi topic phải có cấu trúc:
+
+1. Concept
+2. Tại sao cần
+3. Data structure
+4. Source code
+5. Call flow
+6. Memory layout
+7. Locking
+8. Example
+9. ARM64-specific behavior
+10. Common mistakes
+11. Debugging
+12. Practical lab
+
+Khi giải thích source code:
+
+Không dump hàng nghìn dòng code.
+
+Chỉ trích đoạn quan trọng và giải thích từng đoạn.
+
+==================================================
+PHẦN 38 — ĐẶC BIỆT QUAN TRỌNG
+==================================================
+
+Tôi muốn bạn đóng vai một Linux kernel engineer đang hướng dẫn tôi đọc source.
+
+Không chỉ nói:
+
+"Buddy allocator dùng để cấp phát physical pages."
+
+Hãy bắt tôi hiểu:
+
+"CPU request memory → allocator nhận request → GFP mask được decode → zonelist được chọn → watermark được kiểm tra → PCP được kiểm tra → buddy được truy cập → free_area/order/migratetype được xử lý → struct page được cập nhật → page được trả về caller."
+
+Tương tự đối với:
+
+kmalloc()
+vmalloc()
+DMA
+page fault
+page table
+TLB
+
+==================================================
+PHẦN 39 — OUTPUT CUỐI
+==================================================
+
+Sau mỗi chương nghiên cứu, tạo:
+
+A. 1-page summary
+B. Architecture diagram
+C. Call graph
+D. Data structure graph
+E. Source-code map
+F. Important functions
+G. Important macros
+H. Debug commands
+I. Hands-on exercise
+J. Interview questions
+
+Cuối toàn bộ khóa học tạo:
+
+"ARM64 Linux Memory Management — Source Code Map"
+
+bao gồm:
+
+Boot
+ ↓
+memblock
+ ↓
+page initialization
+ ↓
+zones
+ ↓
+buddy
+ ↓
+PCP
+ ↓
+SLUB
+ ↓
+kmalloc
+ ↓
+vmalloc
+ ↓
+page tables
+ ↓
+MMU
+ ↓
+TLB
+ ↓
+reclaim
+ ↓
+compaction
+ ↓
+CMA
+ ↓
+DMA
+
+Mục tiêu cuối cùng:
+Tôi có thể tự mở Linux kernel source và trace một memory allocation request từ API như kmalloc()/alloc_pages()/vmalloc() xuống tận page allocator, đồng thời hiểu chính xác ARM64 MMU và page-table mapping phía dưới.
+Thứ tự mình khuyên bạn học
+
+Đừng đi đúng thứ tự PDF 1:1. Với ARM64, nên đi theo chuỗi này:
+
+ARM64 VA/PA + MMU → memblock → struct page → zones → buddy → PCP → SLUB → kmalloc → vmalloc → page tables/TLB → reclaim/compaction → CMA/DMA.
+
+Lý do là tài liệu bắt đầu khá sớm bằng struct page, zones và buddy , rồi mới tới SLAB và vmalloc/non-contiguous memory ở cuối chương . Với ARM64, chen MMU/page-table + memblock vào trước sẽ giúp toàn bộ flow phía sau dễ nối lại hơn rất nhiều.
+
+Một điểm đặc biệt mình muốn bạn giữ trong prompt: đừng học HIGHMEM như thể ARM64 hiện đại là x86 32-bit. Hãy biến nó thành một bài “PDF concept → ARM64 implementation → historical difference”. Đây chính là chỗ tài liệu cũ dễ làm người học ARM64 bị rối.

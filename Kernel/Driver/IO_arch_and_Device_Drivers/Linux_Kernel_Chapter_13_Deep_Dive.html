@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux Kernel Chapter 13 — Kiến trúc I/O và Device Driver — Đào Sâu</title>
+<style>
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --fg:#1a1d23; --muted:#5b6270; --border:#dfe3e8;
+  --accent:#2563eb; --accent-fg:#ffffff; --code-bg:#0f172a; --code-fg:#e2e8f0;
+  --blue:#2563eb; --blue-bg:#e8f0fe;
+  --purple:#7c3aed; --purple-bg:#f1eafe;
+  --orange:#d97706; --orange-bg:#fef3e2;
+  --green:#059669; --green-bg:#e6f7f1;
+  --red:#dc2626; --red-bg:#fdeaea;
+  --yellow:#a16207; --yellow-bg:#fdf6d8;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+[data-theme="dark"]{
+  --bg:#0f1216; --panel:#161a20; --fg:#e6e9ee; --muted:#9aa4b2; --border:#2a2f38;
+  --accent:#5b8def; --accent-fg:#0b1220; --code-bg:#0a0d12; --code-fg:#d6e0f0;
+  --blue:#6ea8fe; --blue-bg:#132038;
+  --purple:#b794f6; --purple-bg:#231a38;
+  --orange:#f5a623; --orange-bg:#2e2210;
+  --green:#4fd1a5; --green-bg:#0f2a22;
+  --red:#f87171; --red-bg:#301414;
+  --yellow:#eab308; --yellow-bg:#2c2408;
+  --shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+}
+code, pre, .mono{font-family:"SF Mono",Consolas,"Liberation Mono",Menlo,monospace;}
+a{color:var(--accent)}
+#progressbar{position:fixed;top:0;left:0;height:3px;background:var(--accent);z-index:1000;width:0%;transition:width .1s}
+.layout{display:flex; min-height:100vh}
+#sidebar{
+  width:300px; flex:0 0 300px; background:var(--panel); border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto; padding:16px 12px;
+}
+#sidebar h1{font-size:15px; margin:4px 6px 10px; line-height:1.3}
+#sidebar .sub{font-size:11.5px; color:var(--muted); margin:0 6px 14px}
+#searchBox{width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--fg); font-size:13px}
+#searchResults{margin-top:6px; font-size:12.5px; max-height:160px; overflow:auto}
+#searchResults div{padding:5px 8px; border-radius:6px; cursor:pointer}
+#searchResults div:hover{background:var(--blue-bg)}
+.navgroup{margin-top:14px}
+.navgroup .navtitle{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 6px 4px; font-weight:600}
+.navgroup a{display:block; padding:5px 8px; border-radius:6px; color:var(--fg); text-decoration:none; font-size:13px}
+.navgroup a:hover{background:var(--blue-bg)}
+.navgroup a.active{background:var(--accent); color:var(--accent-fg); font-weight:600}
+#topctrls{display:flex; gap:6px; margin:10px 6px 4px}
+#topctrls button{flex:1; padding:6px 8px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--fg); cursor:pointer; font-size:12px}
+#topctrls button:hover{border-color:var(--accent)}
+main{flex:1; min-width:0; padding:28px clamp(16px,4vw,64px) 100px}
+.section{max-width:980px; margin:0 auto 64px; scroll-margin-top:20px}
+.section h2{font-size:26px; border-bottom:2px solid var(--border); padding-bottom:10px; margin-top:0}
+.section h3{font-size:19px; margin-top:34px; color:var(--fg)}
+.section h4{font-size:15.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:22px 0 8px}
+.badge{display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.03em; margin-right:6px}
+.badge.source{background:var(--green-bg); color:var(--green)}
+.badge.synth{background:var(--purple-bg); color:var(--purple)}
+.badge.infer{background:var(--orange-bg); color:var(--orange)}
+.badge.modern{background:var(--blue-bg); color:var(--blue)}
+.badge.verify{background:var(--red-bg); color:var(--red)}
+.callout{border:1px solid var(--border); border-left:4px solid var(--accent); background:var(--panel); border-radius:8px; padding:14px 16px; margin:16px 0; box-shadow:var(--shadow)}
+.callout.fit{border-left-color:var(--purple)}
+.callout.mental{border-left-color:var(--green)}
+.callout.five{border-left-color:var(--orange)}
+.callout h5{margin:0 0 8px; font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px}
+th,td{border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top}
+th{background:var(--panel); font-weight:700}
+tr:nth-child(even) td{background:rgba(127,127,127,.04)}
+.codewrap{position:relative; margin:14px 0}
+.codehead{display:flex; justify-content:space-between; align-items:center; background:#000a; color:#cbd5e1; font-size:11.5px; padding:6px 12px; border-radius:8px 8px 0 0; font-family:monospace}
+[data-theme="dark"] .codehead{background:#000}
+.copybtn{background:transparent; border:1px solid #4b5563; color:#cbd5e1; font-size:10.5px; padding:2px 8px; border-radius:6px; cursor:pointer}
+.copybtn:hover{background:#374151}
+pre{background:var(--code-bg); color:var(--code-fg); padding:14px 16px; border-radius:0 0 8px 8px; overflow-x:auto; margin:0; font-size:12.8px; line-height:1.55}
+.codewrap pre{margin-top:0}
+.diagram{border:1px solid var(--border); border-radius:10px; padding:18px; margin:18px 0; background:var(--panel); overflow-x:auto; box-shadow:var(--shadow)}
+.diagram .dtitle{font-weight:700; font-size:13px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center}
+.diagram .dtitle .dq{font-weight:400; color:var(--muted); font-size:11.5px}
+.flow{display:flex; flex-direction:column; align-items:center; gap:2px; min-width:220px}
+.flow .box{border:1.5px solid var(--border); border-radius:8px; padding:8px 16px; font-size:13px; text-align:center; min-width:180px; background:var(--bg)}
+.flow .arrow{color:var(--muted); font-size:16px; line-height:1}
+.row{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; align-items:flex-start}
+.col{display:flex; flex-direction:column; align-items:center; gap:2px}
+.box.blue{background:var(--blue-bg); border-color:var(--blue); color:var(--blue)}
+.box.purple{background:var(--purple-bg); border-color:var(--purple); color:var(--purple)}
+.box.orange{background:var(--orange-bg); border-color:var(--orange); color:var(--orange)}
+.box.green{background:var(--green-bg); border-color:var(--green); color:var(--green)}
+.box.red{background:var(--red-bg); border-color:var(--red); color:var(--red)}
+.box.yellow{background:var(--yellow-bg); border-color:var(--yellow); color:var(--yellow)}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; margin-top:12px; border-top:1px dashed var(--border); padding-top:10px; color:var(--muted)}
+.legend span{display:inline-flex; align-items:center; gap:5px}
+.legend i{width:11px; height:11px; border-radius:3px; display:inline-block}
+.ascii{white-space:pre; font-family:monospace; font-size:12.3px; line-height:1.35; overflow-x:auto; background:var(--code-bg); color:var(--code-fg); padding:14px 16px; border-radius:8px}
+details.fc{border:1px solid var(--border); border-radius:10px; margin:14px 0; background:var(--panel); box-shadow:var(--shadow)}
+details.fc>summary{cursor:pointer; padding:10px 14px; font-weight:700; font-size:13.5px; list-style:none; display:flex; justify-content:space-between; gap:10px}
+details.fc>summary::-webkit-details-marker{display:none}
+details.fc>summary:after{content:"▸"; color:var(--muted); transition:.15s}
+details.fc[open]>summary:after{transform:rotate(90deg)}
+.fcbody{padding:0 16px 16px}
+.fcgrid{display:grid; grid-template-columns:170px 1fr; gap:4px 12px; font-size:13px; margin-top:10px}
+.fcgrid dt{color:var(--muted); font-weight:600}
+.fcgrid dd{margin:0}
+.quiz{border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin:12px 0; background:var(--panel)}
+.quiz .q{font-weight:700; margin-bottom:6px}
+.quiz details summary{cursor:pointer; color:var(--accent); font-size:13px}
+.quiz .a{margin-top:8px; padding:10px; background:var(--green-bg); border-radius:8px; font-size:13.5px}
+.idx-search{width:100%; padding:8px; margin-bottom:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--fg)}
+.tag{display:inline-block; font-size:10px; padding:1px 7px; border-radius:12px; background:var(--blue-bg); color:var(--blue); font-weight:700; margin-right:3px}
+.tag.cb{background:var(--purple-bg);color:var(--purple)}
+.tag.pub{background:var(--green-bg);color:var(--green)}
+#backtotop{position:fixed; bottom:24px; right:24px; width:42px; height:42px; border-radius:50%; background:var(--accent); color:var(--accent-fg); border:none; font-size:18px; cursor:pointer; box-shadow:var(--shadow); display:none; z-index:900}
+mark{background:#ffe066; color:#111; padding:0 2px; border-radius:3px}
+[data-theme="dark"] mark{background:#7c6a12; color:#fff}
+.hide-review{display:none !important}
+body.quickreview .study-only{display:none !important}
+body.quickreview .section h2::after{content:" (Ôn nhanh)"; font-size:12px; color:var(--muted); font-weight:400}
+kbd{background:var(--panel); border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:11px; font-family:monospace}
+hr.sep{border:none; border-top:1px dashed var(--border); margin:26px 0}
+@media (max-width:900px){
+  #sidebar{position:fixed; left:-320px; top:0; z-index:999; transition:left .2s; box-shadow:4px 0 20px rgba(0,0,0,.3)}
+  #sidebar.open{left:0}
+  #menuBtn{display:inline-flex !important}
+  main{padding-left:16px; padding-right:16px}
+}
+#menuBtn{display:none; position:fixed; top:10px; left:10px; z-index:998; width:38px; height:38px; border-radius:8px; border:1px solid var(--border); background:var(--panel); color:var(--fg); align-items:center; justify-content:center; cursor:pointer}
+@media print{
+  #sidebar,#menuBtn,#backtotop,#progressbar,#topctrls,.no-print{display:none !important}
+  main{padding:0}
+  .section{page-break-inside:avoid}
+  body{background:#fff; color:#000}
+  a{color:#000; text-decoration:underline}
+}
+</style>
+</head>
+<body>
+<div id="progressbar"></div>
+<button id="menuBtn" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+<div class="layout">
+<nav id="sidebar">
+  <h1>Chapter 13 — Đào Sâu</h1>
+  <div class="sub">Kiến trúc I/O &amp; Device Driver — Understanding the Linux Kernel, bản 3 (Linux 2.6.11)</div>
+  <input id="searchBox" placeholder="Tìm hàm, struct, mục… (/)" oninput="doSearch(this.value)">
+  <div id="searchResults"></div>
+  <div id="topctrls">
+    <button onclick="toggleTheme()" id="themeBtn">🌙 Tối</button>
+    <button onclick="toggleReview()" id="reviewBtn">⚡ Ôn nhanh</button>
+  </div>
+  <div class="navgroup">
+    <div class="navtitle">Định hướng</div>
+    <a href="#howtoread">Cách đọc chương này</a>
+    <a href="#master">Kiến trúc tổng quát</a>
+    <a href="#layers">Kiến trúc toàn cục &amp; theo lớp</a>
+  </div>
+  <div class="navgroup">
+    <div class="navtitle">13.1 — 13.5 Nội dung chính</div>
+    <a href="#s13-1">13.1 Kiến trúc I/O</a>
+    <a href="#s13-2">13.2 Mô hình Device Driver</a>
+    <a href="#s13-3">13.3 Tệp thiết bị (Device Files)</a>
+    <a href="#s13-4">13.4 Device Driver</a>
+    <a href="#s13-5">13.5 Character Device Driver</a>
+  </div>
+  <div class="navgroup">
+    <div class="navtitle">Tra cứu</div>
+    <a href="#func-index">Chỉ mục hàm</a>
+    <a href="#struct-index">Chỉ mục cấu trúc dữ liệu</a>
+    <a href="#diagram-index">Chỉ mục sơ đồ</a>
+  </div>
+  <div class="navgroup">
+    <div class="navtitle">Tổng hợp</div>
+    <a href="#knowledge-map">Bản đồ tri thức &amp; Lộ trình học</a>
+    <a href="#debugging">Debug subsystem</a>
+    <a href="#labs">Bài tập trace source code</a>
+    <a href="#misconceptions">Ngộ nhận thường gặp</a>
+    <a href="#versions">Nhận thức về phiên bản</a>
+  </div>
+  <div class="navgroup">
+    <div class="navtitle">Ôn tập</div>
+    <a href="#quiz">Câu hỏi ôn tập</a>
+    <a href="#cheatsheet">Tờ ghi nhớ</a>
+  </div>
+</nav>
+<main id="main">
+
+<div class="section" id="howtoread">
+<span class="badge source">NGUỒN SÁCH</span><span class="badge synth">TỔNG HỢP</span><span class="badge infer">SUY LUẬN</span><span class="badge modern">KERNEL HIỆN ĐẠI</span><span class="badge verify">CẦN KIỂM CHỨNG</span>
+<p style="font-size:12.5px;color:var(--muted);margin-top:6px">Chú giải nhãn dùng xuyên suốt tài liệu. <b>NGUỒN SÁCH</b> = đã đối chiếu trực tiếp với các trang scan của chương sách. <b>TỔNG HỢP</b> = giải thích/sơ đồ được dựng từ các dữ kiện trong sách nhưng không phải nguyên văn. <b>SUY LUẬN</b> = dùng kiến thức kernel tổng quát để lấp khoảng trống mà sách không nói rõ (ví dụ vị trí file mã nguồn). <b>KERNEL HIỆN ĐẠI</b> = phần này đã thay đổi thế nào kể từ Linux 2.6.11. <b>CẦN KIỂM CHỨNG</b> = một chi tiết chưa được xác nhận, cần đối chiếu với source thật trước khi dựa vào nó.</p>
+
+<h2>Cách Đọc Chương Này</h2>
+
+<div class="callout">
+<h5>Chương này giải quyết vấn đề gì?</h5>
+<p><span class="badge source">NGUỒN SÁCH</span> Virtual File System (VFS) của kernel biết cách định tuyến các lời gọi <code>open/read/write/ioctl</code> đến một filesystem, nhưng cuối cùng phải có ai đó thực sự "nói chuyện" với thiết bị vật lý — bật/tắt bit trong một I/O port, chờ ngắt (interrupt), lập trình một bộ điều khiển DMA. Chapter 13 chính là lớp nằm ngay dưới VFS: nó giải thích kiến trúc phần cứng I/O của PC (bus, port, interface, controller), <em>device driver model</em> tổng quát mà Linux 2.6 đưa vào để cho mọi bus/device/driver một cách biểu diễn thống nhất, phân cấp, hỗ trợ hotplug (kobject, kset, sysfs), cách một "device file" trong <code>/dev</code> được nối dây tới các hàm của driver thật, và cuối cùng là cách một character device driver được đăng ký và cách <code>open()</code> trên một device file tìm đường tới đúng driver đó.</p>
+</div>
+
+<h4>Kiến thức cần có trước</h4>
+<ul>
+<li>Khái niệm ở Chapter 1: trừu tượng "file" của Unix là gì, device file là một loại file đặc biệt.</li>
+<li>Chapter 4: ngắt và ngoại lệ (interrupt/exception), đường IRQ, Programmable Interrupt Controller.</li>
+<li>Chapter 5: spin lock và các phép toán atomic (được nhắc tới khi bàn về polling và trọng tài bộ nhớ cho DMA).</li>
+<li>Chapter 8: các bộ cấp phát bộ nhớ (vùng nhớ không liên tục kiểu <code>vmalloc</code>, bộ cấp phát trang theo vùng) — cần cho <code>ioremap()</code> và buffer DMA.</li>
+<li>Chapter 12: luồng system call <code>open()</code> của VFS, phân giải pathname, đối tượng dentry/inode — Chapter 13 cắm thẳng vào luồng đó.</li>
+</ul>
+
+<h4>Mục tiêu học tập</h4>
+<ul>
+<li>Mô tả chuỗi phần cứng I/O của PC: CPU → I/O bus → I/O interface → device controller → device, và I/O port cùng I/O shared memory nằm ở đâu trong đó.</li>
+<li>Giải thích các đối tượng cốt lõi của device driver model — <code>kobject</code>, <code>kset</code>, <code>subsystem</code>, <code>device</code>, <code>device_driver</code>, <code>bus_type</code>, <code>class</code> — và cách chúng ánh xạ vào cây thư mục <code>sysfs</code>.</li>
+<li>Trace được cách số major/minor của một device file trở thành một kết nối sống tới bảng <code>file_operations</code> của driver.</li>
+<li>So sánh polling và giám sát bằng interrupt cho một thao tác I/O, và đi qua toàn bộ ví dụ kinh điển <code>foo_read()</code> / <code>foo_interrupt()</code>.</li>
+<li>Giải thích DMA đồng bộ/bất đồng bộ, bus address, và ánh xạ DMA coherent so với streaming.</li>
+<li>Trace việc đăng ký character device (<code>cdev</code>, <code>kobj_map</code>) và các bước chính xác mà <code>chrdev_open()</code> thực hiện.</li>
+</ul>
+
+<h4>Tổng quan 5 phút</h4>
+<p><span class="badge synth">TỔNG HỢP</span> Một thiết bị được nối với CPU qua một chuỗi phân cấp — <strong>I/O bus → I/O interface → device controller → device</strong> — và CPU nói chuyện với nó qua <strong>I/O port</strong> hoặc <strong>memory-mapped I/O</strong>. Linux 2.6 bọc mọi bus, device và driver trong hệ thống bằng một <strong>device driver model</strong> thống nhất dựng trên <strong>kobject</strong>, được phơi ra cho user space dưới dạng filesystem <strong>sysfs</strong> (<code>/sys</code>). Một thiết bị được user space chạm tới qua một <strong>device file</strong> (<code>/dev/hda</code>, …) định danh bởi cặp <strong>(major, minor)</strong>; đường đi <code>open()</code> của VFS phát hiện đó là device file và thay vào bảng <code>def_chr_fops</code>/<code>def_blk_fops</code>, mà phương thức <code>open</code> của bảng này sẽ tra ra driver thật và nối lại <code>file-&gt;f_op</code> trỏ về đúng bảng <code>file_operations</code> của driver đó. Từ lúc đó mọi syscall trên file object này chạy code của driver, driver này giám sát phần cứng hoặc bằng <strong>polling</strong> hoặc bằng cách ngủ cho tới khi <strong>interrupt handler</strong> đánh thức nó, và có thể dùng <strong>DMA</strong> để di chuyển dữ liệu thật sự.</p>
+
+<h4>Tổng quan 15 phút</h4>
+<p><span class="badge synth">TỔNG HỢP</span> Thêm vào phần trên: device driver model biểu diễn mỗi bus, device và driver bằng một <code>kobject</code> nhúng trong một struct "container" (<code>device</code>, <code>device_driver</code>, <code>bus_type</code>); các kobject cùng loại được nhóm trong một <code>kset</code>, và các kset được nhóm trong một <code>subsystem</code> — sự lồng nhau này chính là những gì bạn thấy dưới dạng thư mục lồng nhau trong <code>/sys</code>. Số hiệu thiết bị trước đây tĩnh và chỉ 8-bit; Linux 2.6 làm chúng động và mở rộng thành 12-bit major / 20-bit minor (<code>dev_t</code>), với <code>udev</code> tự động điền <code>/dev</code> bằng cách đọc các file thuộc tính <code>dev</code> mà <code>sysfs</code> xuất ra dưới <code>/sys/class/*</code>. Character device được theo dõi ở hai lớp: một đối tượng <code>cdev</code> cho mỗi driver (đăng ký vào một hash toàn cục <code>kobj_map</code> theo khoảng major/minor), và về mặt lịch sử, một hash <code>chrdevs</code> đơn giản hơn gồm các <code>char_device_struct</code> cho các driver chiếm trọn một major dùng API cũ <code>register_chrdev()</code>. Các driver cần thông lượng thật sự cao (sound card, NIC, ổ đĩa) kết hợp DMA với buffer vòng (circular buffer) để phần cứng vẫn tiếp tục đổ dữ liệu ngay cả khi tiến trình tiêu thụ tạm thời không được lập lịch chạy.</p>
+
+<h4>Lộ trình học sâu</h4>
+<ol>
+<li>Đọc <a href="#s13-1">13.1 Kiến trúc I/O</a> để nắm bức tranh phần cứng — nên đọc dù bạn chỉ quan tâm phần mềm, vì mọi trừu tượng phía trên đều được đặt tên theo phần cứng này (I/O port, interface, controller).</li>
+<li>Đọc <a href="#s13-2">13.2 Device Driver Model</a> thật chậm — đây là bộ xương khái niệm mà phần còn lại của kernel hiện đại (không chỉ Ch.13) dựng trên đó.</li>
+<li>Đọc <a href="#s13-3">13.3 Device Files</a> và <a href="#s13-4">13.4 Device Drivers</a> cùng nhau — chúng là hai góc nhìn (phía VFS / phía driver) của cùng một đường đi <code>open()</code>.</li>
+<li>Kết thúc với <a href="#s13-5">13.5 Character Device Drivers</a>, phần trả giá cụ thể, ở mức code, cho tất cả những gì trước đó.</li>
+<li>Dùng <a href="#labs">Bài tập trace source code</a> trên một cây kernel thật để xác nhận điều gì đã thay đổi kể từ 2.6.11.</li>
+</ol>
+</div>
+
+<div class="section" id="master">
+<h2>Kiến Trúc Tổng Quát (Master Architecture)</h2>
+<p><span class="badge synth">TỔNG HỢP</span> Đây là sơ đồ duy nhất bạn cần khắc vào đầu. Mọi thứ khác trong tài liệu này chỉ là zoom vào một nhánh của cây này.</p>
+
+<div class="diagram" id="D01">
+<div class="dtitle">D01 — Kiến trúc tổng quát (bản đồ điều hướng) <span class="dq">Chapter 13 nằm ở đâu trong toàn bộ kernel, và bên trong nó có gì?</span></div>
+<img src="DD_Tong_Quat.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="legend">
+<span><i style="background:var(--purple)"></i>Lõi kernel / chương này</span>
+<span><i style="background:var(--green)"></i>Dữ liệu &amp; cấu trúc</span>
+<span><i style="background:var(--orange)"></i>Phần cứng / runtime</span>
+</div>
+</div>
+
+<div class="callout mental">
+<h5>Mô hình tư duy (Mental Model)</h5>
+<p>Hãy hình dung Chapter 13 gồm <strong>ba lớp đồng tâm</strong>: (1) lớp dây nối vật lý — port, interface, controller; (2) lớp sổ sách — device driver model — cho mỗi mẩu phần cứng một cái tên, một chỗ đứng trong cây, và một "nhà" trong <code>sysfs</code>; và (3) lớp phiên dịch — device file + <code>file_operations</code> — cho phép các lời gọi <code>read()</code>/<code>write()</code> bình thường chạm được vào lớp (1) mà user space không cần biết gì về lớp (2) hay phần cứng.</p>
+</div>
+</div>
+
+<div class="section" id="layers">
+<h2>Kiến Trúc Toàn Cục &amp; Theo Lớp</h2>
+
+<div class="diagram" id="D02">
+<div class="dtitle">D02 — Mức 0: Góc nhìn hệ thống (Bird's-Eye View) <span class="dq">Một read() từ user space cuối cùng chạm vào silicon như thế nào?</span></div>
+<div class="flow">
+<div class="box blue">USER SPACE — tiến trình gọi open()/read()/write()/ioctl() trên /dev/foo</div>
+<div class="arrow">↓ syscall</div>
+<div class="box purple">KERNEL ENTRY — điều phối syscall, service routine của VFS</div>
+<div class="arrow">↓</div>
+<div class="box purple">KERNEL TỔNG QUÁT — VFS (đối tượng dentry/inode/file, Ch.12)</div>
+<div class="arrow">↓ phát hiện là device file</div>
+<div class="box purple">CHAPTER 13 — device driver model + lớp keo dán device file + char driver</div>
+<div class="arrow">↓</div>
+<div class="box orange">I/O PORT / I/O SHARED MEMORY / IRQ / DMA</div>
+<div class="arrow">↓</div>
+<div class="box orange">THIẾT BỊ PHẦN CỨNG</div>
+</div>
+</div>
+
+<div class="diagram" id="D03">
+<div class="dtitle">D03 — Mức 1: Góc nhìn Kernel <span class="dq">Ngoài chương này ra, kernel còn đang làm gì khác?</span></div>
+<div class="ascii">Kernel
+ ├── Process scheduler / IPC
+ ├── Memory management (mm/)
+ ├── Virtual File System (fs/, Ch.12)
+ ├── Networking (net/)
+ └── ★ Chapter 13: Kiến trúc I/O &amp; Device Driver ★
+      (nằm ngay dưới VFS; các thao tác inode/file của
+       mọi filesystem đối với special file đều ủy quyền về đây)</div>
+</div>
+
+<div class="diagram" id="D04">
+<div class="dtitle">D04 — Mức 2: Góc nhìn Chapter — Bóc tách thành phần <span class="dq">4 mảnh ghép lớn bên trong Chapter 13 là gì?</span></div>
+<div class="row">
+<div class="col"><div class="box purple">Device Driver<br>Model</div><div style="font-size:11px;color:var(--muted)">kobject/kset/subsystem<br>device/driver/bus/class<br>sysfs</div></div>
+<div class="col"><div class="box purple">Device Files</div><div style="font-size:11px;color:var(--muted)">major/minor, dev_t<br>def_chr_fops/def_blk_fops<br>udev</div></div>
+<div class="col"><div class="box purple">Mẫu hình runtime<br>của Device Driver</div><div style="font-size:11px;color:var(--muted)">đăng ký/khởi tạo<br>polling/interrupt<br>I/O memory, DMA</div></div>
+<div class="col"><div class="box purple">Lớp Character<br>Device</div><div style="font-size:11px;color:var(--muted)">cdev, kobj_map<br>chrdev_open()<br>chiến lược buffering</div></div>
+</div>
+</div>
+
+<div class="diagram" id="D05">
+<div class="dtitle">D05 — Mức 3-6: Thành phần → Đối tượng → Hàm → Source → Phần cứng <span class="dq">Từ một thành phần trừu tượng đi xuống code thật và silicon.</span></div>
+<div class="flow">
+<div class="box purple">THÀNH PHẦN — ví dụ "Lớp Character Device"</div>
+<div class="arrow">↓</div>
+<div class="box green">ĐỐI TƯỢNG / CẤU TRÚC DỮ LIỆU — struct cdev</div>
+<div class="arrow">↓</div>
+<div class="box purple">HÀM — chrdev_open(), cdev_add(), kobj_lookup()</div>
+<div class="arrow">↓</div>
+<div class="box purple">CHUỖI GỌI HÀM — dentry_open() → chrdev_open() → kobj_lookup() → filp->f_op->open()</div>
+<div class="arrow">↓</div>
+<div class="box green">FILE SOURCE — fs/char_dev.c (vị trí mang tính khái niệm, xem <a href="#versions">Nhận thức về phiên bản</a>) <span class="badge infer">SUY LUẬN</span></div>
+<div class="arrow">↓</div>
+<div class="box orange">PHẦN CỨNG — I/O port / thanh ghi memory-mapped mà phương thức read/write của driver truy cập</div>
+</div>
+</div>
+
+<div class="callout fit">
+<h5>Cái này nằm ở đâu? (khung tái sử dụng — xuất hiện lại ở mọi mục lớn)</h5>
+<p>Linux → Kernel → I/O subsystem → <strong>Chapter 13</strong> → một trong {Kiến trúc I/O, Device Driver Model, Device Files, Device Drivers, Character Device Drivers} → struct/hàm cụ thể bạn đang học ngay lúc này.</p>
+</div>
+</div>
+
+<div class="section" id="s13-1">
+<h2>13.1 Kiến Trúc I/O</h2>
+<div class="callout fit"><h5>Cái này nằm ở đâu?</h5><p>Linux → Kernel → <strong>Chapter 13 → 13.1 Kiến trúc I/O</strong> → I/O port / I/O interface / device controller / I/O shared memory</p></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Để một máy tính hoạt động, phải có các đường dẫn dữ liệu cho phép thông tin chảy giữa CPU, RAM, và các thiết bị I/O. Những đường dẫn này gọi là <strong>bus</strong>, đóng vai trò kênh giao tiếp chính bên trong máy tính. Một system bus điển hình là PCI; các loại bus khác đang dùng gồm ISA, EISA, MCA, SCSI và USB. Cùng một máy tính thường có nhiều loại bus khác nhau, nối với nhau bằng các thiết bị phần cứng gọi là <strong>bridge</strong>. Hai bus tốc độ cao được dành riêng cho lưu lượng bộ nhớ: <strong>frontside bus</strong> nối CPU với bộ điều khiển RAM, còn <strong>backside bus</strong> nối CPU trực tiếp với cache phần cứng ngoài; <strong>host bridge</strong> nối system bus với frontside bus. Mỗi thiết bị I/O chỉ được gắn vào đúng một bus duy nhất.</p>
+
+<div class="diagram" id="D06">
+<div class="dtitle">D06 — Góc nhìn tổng quan kiến trúc I/O của PC <span class="dq">Hệ thống phân cấp phần cứng nào nằm giữa CPU và một thiết bị?</span></div>
+<img src="DD_1.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px">Nguồn: Hình 13-1 "Kiến trúc I/O của PC" <span class="badge source">NGUỒN SÁCH</span> — vẽ lại bằng ASCII. I/O bus nối tới mỗi thiết bị qua tối đa ba thành phần phần cứng: I/O port, I/O interface, và device controller.</p>
+</div>
+
+<h3>13.1.1 I/O Port</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Mỗi thiết bị nối vào I/O bus có tập địa chỉ I/O riêng của nó, gọi là <strong>I/O port</strong>. Trong kiến trúc IBM PC, không gian địa chỉ I/O cung cấp tới 65.536 I/O port 8-bit; hai port 8-bit liên tiếp có thể được coi là một port 16-bit (phải bắt đầu ở địa chỉ chẵn), và hai port 16-bit liên tiếp có thể coi là một port 32-bit (phải bắt đầu ở địa chỉ là bội số của 4). Bốn chỉ thị hợp ngữ — <code>in</code>, <code>ins</code>, <code>out</code>, <code>outs</code> — cho phép CPU đọc/ghi trực tiếp một I/O port. I/O port cũng có thể được <strong>ánh xạ vào bộ nhớ</strong> (memory-mapped) trong không gian địa chỉ vật lý, để CPU dùng các chỉ thị bình thường như <code>mov</code>/<code>and</code>/<code>or</code>; phần cứng hiện đại ưa cách này hơn vì nhanh hơn và có thể kết hợp với DMA.</p>
+
+<div class="diagram" id="D07">
+<div class="dtitle">D07 — Các I/O port chuyên dụng <span class="dq">Các port của một thiết bị đóng những vai trò gì?</span></div>
+<img src="DD_2.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px">Nguồn: Hình 13-2 "Các I/O port chuyên dụng" <span class="badge source">NGUỒN SÁCH</span>. CPU ghi lệnh vào control register, đọc trạng thái thiết bị từ status register, đọc dữ liệu từ input register, và ghi dữ liệu vào output register. Cùng một port thường được dùng chồng cho nhiều hơn một vai trò để giảm chi phí.</p>
+</div>
+
+<h4>Truy cập I/O Port</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Kernel bọc các chỉ thị hợp ngữ thô trong các hàm hỗ trợ:</p>
+<table>
+<tr><th>Họ hàm</th><th>Mục đích</th></tr>
+<tr><td><code>inb()</code>, <code>inw()</code>, <code>inl()</code></td><td>Đọc 1, 2, hoặc 4 byte liên tiếp từ một I/O port (hậu tố b/w/l = byte/word/long).</td></tr>
+<tr><td><code>inb_p()</code>, <code>inw_p()</code>, <code>inl_p()</code></td><td>Giống trên, sau đó thực hiện một chỉ thị "giả" để tạo khoảng nghỉ (pause).</td></tr>
+<tr><td><code>outb()</code>, <code>outw()</code>, <code>outl()</code></td><td>Ghi 1, 2, hoặc 4 byte liên tiếp vào một I/O port.</td></tr>
+<tr><td><code>outb_p()</code>, <code>outw_p()</code>, <code>outl_p()</code></td><td>Giống trên, sau đó có chỉ thị pause.</td></tr>
+<tr><td><code>insb()</code>, <code>insw()</code>, <code>insl()</code></td><td>Đọc một dãy byte liên tiếp, theo nhóm 1/2/4, từ một I/O port; độ dài là tham số.</td></tr>
+<tr><td><code>outsb()</code>, <code>outsw()</code>, <code>outsl()</code></td><td>Ghi một dãy byte, theo nhóm 1/2/4, vào một I/O port.</td></tr>
+</table>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Việc phát hiện I/O port nào đã được gán cho thiết bị nào là khó, đặc biệt trên hệ thống dùng bus ISA: driver thường phải "mù quáng" ghi thử vào một I/O port để dò thiết bị; nếu port đó đã bị thiết bị khác dùng, máy có thể sập. Để tránh, kernel theo dõi các I/O port đã gán bằng "<strong>resource</strong>". Một resource biểu diễn một khoảng địa chỉ I/O port có thể được gán độc quyền cho một driver.</p>
+
+<div class="diagram" id="D08">
+<div class="dtitle">D08 — Cấu trúc dữ liệu: cây <code>resource</code> của I/O port <span class="dq">Tại sao dùng cây thay vì danh sách phẳng?</span></div>
+<img src="DD_3.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge source">NGUỒN SÁCH</span> Quy tắc: dải của mỗi node phải là dải con của node cha. Ví dụ này (bộ điều khiển IDE chia thành dải con master/slave) lấy nguyên từ sách.</p>
+</div>
+
+<h4>Cấu trúc dữ liệu — <code>struct resource</code></h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>const char *</code></td><td><code>name</code></td><td>Mô tả chủ sở hữu của resource</td></tr>
+<tr><td><code>unsigned long</code></td><td><code>start</code></td><td>Điểm bắt đầu của dải resource</td></tr>
+<tr><td><code>unsigned long</code></td><td><code>end</code></td><td>Điểm kết thúc của dải resource</td></tr>
+<tr><td><code>unsigned long</code></td><td><code>flags</code></td><td>Các cờ khác nhau</td></tr>
+<tr><td><code>struct resource *</code></td><td><code>parent</code></td><td>Con trỏ tới node cha trong cây resource</td></tr>
+<tr><td><code>struct resource *</code></td><td><code>sibling</code></td><td>Con trỏ tới một sibling trong cây resource</td></tr>
+<tr><td><code>struct resource *</code></td><td><code>child</code></td><td>Con trỏ tới con đầu tiên trong cây resource</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-1. Các con của một node được gom trong danh sách mà phần tử đầu là <code>child</code>; <code>sibling</code> trỏ tới node kế tiếp trong danh sách đó.</p>
+
+<details class="fc">
+<summary>Thẻ hàm — request_region() / allocate_resource() / release_region() <span class="tag">Quản lý resource</span></summary>
+<div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục đích</dt><dd><code>request_resource()</code> gán một dải cho một thiết bị I/O; <code>allocate_resource()</code> tìm một dải trống có kích thước/canh lề cho trước rồi gán nó (chủ yếu dùng bởi driver PCI, vốn có thể cấu hình để dùng số port bất kỳ); <code>release_resource()</code> giải phóng một dải. <code>request_region()</code>/<code>release_region()</code> là hai hàm rút gọn của hai hàm trên, chuyên cho I/O port.</dd>
+<dt>Vì sao nó tồn tại?</dt><dd>Nếu không có nó, hai driver có thể "mù quáng" chiếm cùng I/O port và làm sập máy khi va chạm.</dd>
+<dt>Đầu vào</dt><dd>Gốc của cây resource (vd. <code>ioport_resource</code>) + địa chỉ của một <code>resource</code> mô tả dải mong muốn.</dd>
+<dt>Đầu ra / Hiệu ứng phụ</dt><dd>Dải được đánh dấu độc quyền đang dùng trong cây, hoặc trả lỗi/NULL nếu chồng lấn một đăng ký sẵn có.</dd>
+<dt>Quan sát được</dt><dd><span class="badge source">NGUỒN SÁCH</span> Toàn bộ cây các dải I/O port đang được gán có thể đọc từ <code>/proc/ioports</code>.</dd>
+</dl>
+</div>
+</details>
+
+<h3>13.1.2 I/O Interface</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Một I/O interface là mạch phần cứng nằm giữa một nhóm I/O port và device controller tương ứng: nó dịch giá trị trong port thành lệnh/dữ liệu cho thiết bị, và theo chiều ngược lại cập nhật port đóng vai trò status register để phản ánh thay đổi trạng thái thiết bị. Nó cũng có thể phát IRQ qua Programmable Interrupt Controller thay mặt thiết bị. Có hai loại:</p>
+<table>
+<tr><th>Loại</th><th>Mô tả</th><th>Ví dụ (từ sách)</th></tr>
+<tr><td>I/O interface tùy biến (custom)</td><td>Dành riêng cho một thiết bị cụ thể; đôi khi controller nằm chung card với interface. Thiết bị có thể là internal hoặc external.</td><td>Interface bàn phím, interface đồ họa (có frame buffer + ROM riêng), interface đĩa (vd. IDE, cáp 40 dây tới controller trên chính ổ đĩa), interface chuột bus, interface mạng (Ethernet/IEEE 802.3 phổ biến nhất)</td></tr>
+<tr><td>I/O interface đa dụng (general-purpose)</td><td>Nối nhiều loại thiết bị ngoài khác nhau.</td><td>Cổng song song (1 byte một lần), cổng nối tiếp (1 bit một lần, chip UART), PCMCIA, SCSI (tới 8 thiết bị trên SCSI-2, 16+ trên Wide SCSI-2/SCSI-3), USB (tốc độ cao, có thể thay thế các thiết bị ngoại vi vốn nối qua cổng song song/nối tiếp/SCSI)</td></tr>
+</table>
+
+<h3>13.1.3 Device Controller</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Một thiết bị phức tạp có thể cần một device controller để điều khiển nó. Controller (1) diễn dịch các lệnh mức cao từ I/O interface và buộc thiết bị thực hiện hành động cụ thể bằng chuỗi tín hiệu điện phù hợp, và (2) chuyển đổi/diễn dịch tín hiệu điện từ thiết bị và cập nhật status register qua I/O interface. Ví dụ điển hình là bộ điều khiển đĩa, biến lệnh mức cao "ghi khối dữ liệu này" thành các thao tác mức thấp như "đặt đầu đọc vào đúng track" và "ghi dữ liệu trong track." Bộ điều khiển đĩa hiện đại rất tinh vi, vì chúng có thể giữ dữ liệu đĩa trong cache tốc độ cao trên board và sắp xếp lại các yêu cầu mức cao của CPU cho tối ưu với hình học đĩa thật. Thiết bị đơn giản hơn — Programmable Interrupt Controller (Ch.4) và Programmable Interval Timer (Ch.6) — không có device controller riêng. Một số thiết bị còn mang bộ nhớ riêng trên board, gọi là <strong>I/O shared memory</strong> (vd. hàng chục MB RAM frame-buffer trên card đồ họa) — được bàn chi tiết ở <a href="#s13-4">13.4 Device Drivers</a>.</p>
+
+<div class="callout mental">
+<h5>Mô hình tư duy</h5>
+<p>Hãy hình dung chuỗi <strong>I/O bus → I/O interface → device controller → device</strong> như một đường ống phiên dịch, mỗi tầng nói một ngôn ngữ mức cao hơn tầng dưới nó: tín hiệu điện thô trên bus → thanh ghi địa chỉ được bằng I/O port → lệnh mức cao → hành động vật lý của thiết bị. Cây <code>resource</code> chẳng qua là một sổ đăng ký để hai driver không bao giờ tranh nhau cùng địa chỉ mức thấp.</p>
+</div>
+<div class="callout five">
+<h5>Nếu chỉ nhớ 5 điều</h5>
+<ol>
+<li>Mỗi thiết bị chỉ gắn vào đúng một bus; loại bus định hình cả phần cứng lẫn driver.</li>
+<li>I/O port có thể truy cập qua chỉ thị <code>in</code>/<code>out</code> chuyên dụng hoặc qua memory-mapped; thiết bị hiện đại ưa memory-mapped I/O.</li>
+<li>Kernel ngăn va chạm port bằng cây <code>resource</code> (<code>request_region</code>/<code>release_region</code>), xem được ở <code>/proc/ioports</code>.</li>
+<li>I/O interface là hạ tầng chung (song song/nối tiếp/USB/SCSI…); device controller là logic dịch chuyên biệt cho từng thiết bị (vd. bộ điều khiển đĩa).</li>
+<li>Một số thiết bị mang RAM riêng ("I/O shared memory") mà kernel phải ánh xạ vào không gian địa chỉ tuyến tính của nó để dùng được.</li>
+</ol>
+</div>
+</div>
+
+<div class="section" id="s13-2">
+<h2>13.2 Mô Hình Device Driver</h2>
+<div class="callout fit"><h5>Cái này nằm ở đâu?</h5><p>Linux → Kernel → <strong>Chapter 13 → 13.2 Device Driver Model</strong> → sysfs / kobject / kset / subsystem / device / driver / bus / class</p></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Các phiên bản Linux trước đây chỉ cung cấp cho người viết driver những dịch vụ cơ bản: cấp phát bộ nhớ, giữ chỗ địa chỉ I/O hoặc một đường IRQ, cài đặt một interrupt handler. Phần cứng cũ cồng kềnh và hai thiết bị dù cùng bus cũng ít điểm chung, nên một mô hình thống nhất chưa đáng để làm. Điều đó thay đổi khi các loại bus như PCI đặt ra những đòi hỏi mạnh, chung cho thiết kế phần cứng: <strong>quản lý nguồn điện (power management)</strong>, <strong>plug and play</strong>, và <strong>hot-plugging</strong>. Riêng quản lý nguồn điện phải được làm theo một thứ tự toàn cục, chính xác (vd. phải đưa ổ đĩa vào chế độ standby trước bộ điều khiển của nó, chứ không phải ngược lại, nếu không sẽ không thể gửi lệnh cho ổ đĩa). Linux 2.6 đưa vào <strong>device driver model</strong> — các cấu trúc dữ liệu và hàm hỗ trợ dùng chung, cho một góc nhìn thống nhất về mọi bus, device và driver trong hệ thống.</p>
+
+<h3>13.2.1 Filesystem sysfs</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> <code>sysfs</code> là một filesystem đặc biệt, giống <code>/proc</code>, thường được mount vào <code>/sys</code>. Trong khi <code>/proc</code> phơi ra các nội bộ kernel tùy ý, <code>sysfs</code> được tạo ra riêng để phơi bày quan hệ phân cấp giữa các thành phần của device driver model, theo cách có cấu trúc hơn. Các thư mục cấp cao nhất của nó:</p>
+<table>
+<tr><th>Thư mục</th><th>Nội dung</th></tr>
+<tr><td><code>block</code></td><td>Các block device, không phụ thuộc bus mà chúng gắn vào.</td></tr>
+<tr><td><code>devices</code></td><td>Mọi thiết bị phần cứng mà kernel nhận diện, tổ chức theo bus đang gắn.</td></tr>
+<tr><td><code>bus</code></td><td>Các bus có trong hệ thống.</td></tr>
+<tr><td><code>drivers</code></td><td>Các device driver đã đăng ký trong kernel.</td></tr>
+<tr><td><code>class</code></td><td>Các loại thiết bị (âm thanh, mạng, đồ họa…) — một class có thể trải trên nhiều thiết bị ở các bus khác nhau, do các driver khác nhau điều khiển.</td></tr>
+<tr><td><code>power</code></td><td>Các file để xử lý trạng thái nguồn của một số thiết bị phần cứng.</td></tr>
+<tr><td><code>firmware</code></td><td>Các file để xử lý firmware của một số thiết bị phần cứng.</td></tr>
+</table>
+<p><span class="badge source">NGUỒN SÁCH</span> Quan hệ giữa các thành phần của mô hình xuất hiện trong <code>sysfs</code> dưới dạng <strong>symbolic link</strong>. Ví dụ từ sách: <code>/sys/block/sda/device</code> có thể là symlink vào một thư mục con của <code>/sys/devices/pci0000:00</code> đại diện cho bộ điều khiển SCSI trên bus PCI; và <code>/sys/block/sda/device/block</code> trỏ ngược lại <code>/sys/block/sda</code>, nói rằng thiết bị PCI này là bộ điều khiển của ổ đĩa SCSI đó. Các file thường trong <code>sysfs</code> đại diện cho <strong>thuộc tính (attribute)</strong> — vd. file <code>dev</code> dưới <code>/sys/block/hda</code> chứa major/minor của ổ đĩa master trên chuỗi IDE đầu tiên.</p>
+
+<h3>13.2.2 Kobject</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Cấu trúc dữ liệu lõi của device driver model là một <code>kobject</code> tổng quát, gắn liền với <code>sysfs</code>: <strong>mỗi kobject ứng với đúng một thư mục sysfs</strong>. Kobject được nhúng bên trong các đối tượng "container" lớn hơn, mô tả các thành phần thật (descriptor của bus/device/driver là các container điển hình — vd. phân vùng đầu tiên của ổ đĩa IDE đầu tiên ứng với <code>/sys/block/hda/hda1</code>). Việc nhúng một kobject vào container cho phép kernel: giữ bộ đếm tham chiếu cho container, duy trì danh sách/tập phân cấp của các container (vd. một thư mục con cho mỗi phân vùng đĩa), và cung cấp góc nhìn ở chế độ người dùng cho các thuộc tính của container.</p>
+
+<h4>Cấu trúc dữ liệu — <code>struct kobject</code></h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>char *</code></td><td><code>k_name</code></td><td>Con trỏ tới chuỗi chứa tên của container</td></tr>
+<tr><td><code>char []</code></td><td><code>name</code></td><td>Tên của container, nếu vừa trong 20 byte</td></tr>
+<tr><td><code>struct kref</code></td><td><code>kref</code></td><td>Bộ đếm tham chiếu cho container</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>entry</code></td><td>Con trỏ cho danh sách mà kobject được chèn vào</td></tr>
+<tr><td><code>struct kobject *</code></td><td><code>parent</code></td><td>Con trỏ tới kobject cha, nếu có</td></tr>
+<tr><td><code>struct kset *</code></td><td><code>kset</code></td><td>Con trỏ tới kset chứa nó</td></tr>
+<tr><td><code>struct kobj_type *</code></td><td><code>ktype</code></td><td>Con trỏ tới descriptor kiểu của kobject</td></tr>
+<tr><td><code>struct dentry *</code></td><td><code>dentry</code></td><td>Con trỏ tới dentry của file sysfs tương ứng</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-2. <code>kref</code> là một <code>struct k_ref</code> bọc một trường <code>refcount</code> duy nhất — <code>kobject_get()</code>/<code>kobject_put()</code> tăng/giảm nó; khi về 0, tài nguyên của container được giải phóng và phương thức <code>release</code> của <code>ktype</code> chạy (thường chỉ định nghĩa khi container được cấp phát động — nó giải phóng chính container). <code>ktype</code> còn mang một con trỏ <code>sysfs_ops</code> (bảng thao tác sysfs) và danh sách thuộc tính mặc định.</p>
+
+<h4>13.2.2.1 Kobject, kset, và subsystem</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Các kobject được tổ chức thành cây phân cấp thông qua <strong>kset</strong>: một kset là tập hợp các kobject <em>cùng loại</em> (tức nhúng trong cùng một loại container).</p>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>struct subsystem *</code></td><td><code>subsys</code></td><td>Con trỏ tới descriptor subsystem</td></tr>
+<tr><td><code>struct kobj_type *</code></td><td><code>ktype</code></td><td>Con trỏ tới descriptor kiểu kobject của kset</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>list</code></td><td>Đầu danh sách các kobject nằm trong kset</td></tr>
+<tr><td><code>struct kobject</code></td><td><code>kobj</code></td><td>Kobject nhúng (xem văn bản)</td></tr>
+<tr><td><code>struct kset_hotplug_ops *</code></td><td><code>hotplug_ops</code></td><td>Con trỏ tới bảng callback để lọc kobject và xử lý hot-plug</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-3. Một kset nhúng <code>kobj</code> của chính nó, và đây chính là thứ mà các kobject <em>bên trong</em> kset trỏ tới qua trường <code>parent</code> của chúng — vậy nên một kset dựa vào một kobject ở mức cao hơn để đếm tham chiếu và liên kết trong cây. <code>kset_get()</code>/<code>kset_put()</code> đơn giản là gọi <code>kobject_get()</code>/<code>kobject_put()</code> trên kobject nhúng đó. Vì kset nhúng một kobject, một kset có thể tự trở thành thành viên của một kset ở mức cao hơn. Tập hợp các kset được gọi là <strong>subsystem</strong>, biểu diễn bằng struct <code>subsystem</code> chỉ có hai trường: <code>kset</code> (một kset nhúng chứa các kset thuộc subsystem) và <code>rwsem</code> (một semaphore đọc-ghi bảo vệ mọi thứ nằm đệ quy bên trong subsystem). <code>subsys_get()</code>/<code>subsys_put()</code> điều chỉnh bộ đếm tham chiếu của kobject nhúng trong kset nhúng đó.</p>
+
+<div class="diagram" id="D09">
+<div class="dtitle">D09 — Ví dụ phân cấp Device Driver Model (từ sách) <span class="dq">kobject → kset → subsystem lồng nhau ra sao, và ánh xạ vào sysfs thế nào?</span></div>
+<div class="ascii">/sys                          (đỉnh của sysfs)
+ └── bus                       ── subsystem "bus"
+      └── pci                  ── subsystem "pci" (bên trong "bus")
+           └── drivers         ── kset "drivers" (bên trong "pci")
+                └── serial     ── kobject (driver cho cổng serial)
+                     └── new-id── attribute (một file sysfs thường)</div>
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge source">NGUỒN SÁCH</span> Vẽ lại từ Hình 13-3. Subsystem <em>bus</em> chứa subsystem <em>pci</em>, subsystem này chứa kset <em>drivers</em>, kset này chứa kobject <em>serial</em> với một file thuộc tính <code>new-id</code>.</p>
+</div>
+
+<h4>13.2.2.2 Đăng ký kobject, kset, và subsystem</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Nguyên tắc chung: muốn một kobject/kset/subsystem xuất hiện trong cây <code>sysfs</code>, trước tiên phải <strong>đăng ký (register)</strong> nó. Thư mục của một kobject luôn xuất hiện trong thư mục của kobject cha (nên các kobject cùng một kset xuất hiện trong chính thư mục của kset đó) — cấu trúc cây sysfs phản ánh đúng cây kobject đã đăng ký.</p>
+<table>
+<tr><th>Hàm</th><th>Hiệu ứng</th></tr>
+<tr><td><code>kobject_register()</code></td><td>Khởi tạo một kobject và thêm thư mục tương ứng vào sysfs. Trước khi gọi, caller phải đặt trường <code>kset</code> của kobject trỏ tới kset cha, nếu có.</td></tr>
+<tr><td><code>kobject_unregister()</code></td><td>Xóa thư mục của một kobject khỏi sysfs.</td></tr>
+<tr><td><code>kset_register()</code> / <code>kset_unregister()</code></td><td>Hàm bọc tiện lợi quanh <code>kobject_register()</code>/<code>kobject_unregister()</code> dành cho kset.</td></tr>
+<tr><td><code>subsystem_register()</code> / <code>subsystem_unregister()</code></td><td>Tương tự, cho subsystem.</td></tr>
+<tr><td><code>sysfs_create_file()</code></td><td>Cho địa chỉ một kobject + một descriptor attribute, tạo file đặc biệt tương ứng trong thư mục của kobject.</td></tr>
+<tr><td><code>sysfs_create_link()</code></td><td>Tạo symbolic link cho một kobject cho trước bên trong thư mục của một kobject khác (biểu diễn quan hệ không phải cha-con).</td></tr>
+</table>
+
+<h3>13.2.3 Các Thành Phần Của Device Driver Model</h3>
+<h4>13.2.3.1 Device — <code>struct device</code></h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>struct list_head</code></td><td><code>node</code></td><td>Con trỏ cho danh sách các device anh em (sibling)</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>bus_list</code></td><td>Con trỏ cho danh sách các device cùng loại bus</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>driver_list</code></td><td>Con trỏ cho danh sách device của driver</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>children</code></td><td>Đầu danh sách các device con</td></tr>
+<tr><td><code>struct device *</code></td><td><code>parent</code></td><td>Con trỏ tới device cha</td></tr>
+<tr><td><code>struct kobject</code></td><td><code>kobj</code></td><td>Kobject nhúng</td></tr>
+<tr><td><code>char []</code></td><td><code>bus_id</code></td><td>Vị trí của device trên bus đang gắn</td></tr>
+<tr><td><code>struct bus_type *</code></td><td><code>bus</code></td><td>Con trỏ tới bus đang gắn</td></tr>
+<tr><td><code>struct device_driver *</code></td><td><code>driver</code></td><td>Con trỏ tới driver điều khiển</td></tr>
+<tr><td><code>void *</code></td><td><code>driver_data</code></td><td>Dữ liệu riêng cho driver</td></tr>
+<tr><td><code>void *</code></td><td><code>platform_data</code></td><td>Dữ liệu riêng cho driver kiểu cũ (legacy)</td></tr>
+<tr><td><code>struct dev_pm_info</code></td><td><code>power</code></td><td>Thông tin quản lý nguồn</td></tr>
+<tr><td><code>unsigned long</code></td><td><code>detach_state</code></td><td>Trạng thái nguồn cần vào khi gỡ driver</td></tr>
+<tr><td><code>unsigned long long *</code></td><td><code>dma_mask</code></td><td>Mask DMA của device</td></tr>
+<tr><td><code>unsigned long long</code></td><td><code>coherent_dma_mask</code></td><td>Mask cho DMA coherent của device</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>dma_pools</code></td><td>Đầu danh sách các buffer DMA tổng hợp</td></tr>
+<tr><td><code>struct dma_coherent_mem *</code></td><td><code>dma_mem</code></td><td>Con trỏ tới descriptor bộ nhớ DMA coherent của device</td></tr>
+<tr><td><code>void (*)(struct device *)</code></td><td><code>release</code></td><td>Callback để giải phóng descriptor device</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-4. Mọi đối tượng <code>device</code> được gom trong subsystem toàn cục <code>devices_subsys</code> (<code>/sys/devices</code>). Device tạo thành phân cấp cha/con: một device là "cha" của các device "con" nếu các con không thể hoạt động nếu thiếu cha (vd. một bridge PCI↔USB là cha của mọi device trên bus USB đó). Điều này phản ánh vào cấu trúc thư mục sysfs dưới <code>/sys/devices</code>. <code>get_device()</code>/<code>put_device()</code> điều chỉnh bộ đếm của kobject nhúng; <code>device_register()</code>/<code>device_unregister()</code> thêm/xóa device khỏi mô hình. Thường <code>device</code> được nhúng tĩnh trong một descriptor riêng của bus — vd. PCI device được mô tả bằng struct <code>pci_dev</code>, có trường <code>dev</code> chính là <code>device</code> nhúng.</p>
+
+<h4>13.2.3.2 Driver — <code>struct device_driver</code></h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>char *</code></td><td><code>name</code></td><td>Tên của device driver</td></tr>
+<tr><td><code>struct bus_type *</code></td><td><code>bus</code></td><td>Con trỏ tới descriptor của bus chứa các device được hỗ trợ</td></tr>
+<tr><td><code>struct semaphore</code></td><td><code>unload_sem</code></td><td>Ngăn việc gỡ driver; được giải phóng khi bộ đếm tham chiếu về 0</td></tr>
+<tr><td><code>struct kobject</code></td><td><code>kobj</code></td><td>Kobject nhúng</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>devices</code></td><td>Đầu danh sách mọi device mà driver hỗ trợ</td></tr>
+<tr><td><code>struct module *</code></td><td><code>owner</code></td><td>Module cài đặt driver, nếu có</td></tr>
+<tr><td><code>int (*)(struct device *)</code></td><td><code>probe</code></td><td>Dò xem một device (kiểm tra xem driver này có xử lý được không)</td></tr>
+<tr><td><code>int (*)(struct device *)</code></td><td><code>remove</code></td><td>Được gọi khi một device bị gỡ</td></tr>
+<tr><td><code>void (*)(struct device *)</code></td><td><code>shutdown</code></td><td>Được gọi khi một device bị tắt nguồn</td></tr>
+<tr><td><code>int (*)(struct device *, u32, u32)</code></td><td><code>suspend</code></td><td>Được gọi khi một device vào trạng thái tiết kiệm điện</td></tr>
+<tr><td><code>int (*)(struct device *, u32)</code></td><td><code>resume</code></td><td>Được gọi khi một device trở lại công suất đầy đủ</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-5. <code>probe</code> chạy khi driver của một bus phát hiện một device có thể do driver này xử lý; <code>remove</code> chạy khi hot-unplug và cũng chạy trên mọi device driver còn quản lý khi bản thân driver bị gỡ. <code>shutdown</code>/<code>suspend</code>/<code>resume</code> xử lý chuyển trạng thái nguồn. <code>get_driver()</code>/<code>put_driver()</code> dùng bộ đếm của kobject nhúng. <code>driver_register()</code>/<code>driver_unregister()</code> thêm/xóa driver khỏi mô hình (và thư mục sysfs của nó). Driver PCI nhúng struct này trong <code>pci_driver</code>.</p>
+
+<h4>13.2.3.3 Bus — <code>struct bus_type</code></h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>char *</code></td><td><code>name</code></td><td>Tên loại bus</td></tr>
+<tr><td><code>struct subsystem</code></td><td><code>subsys</code></td><td>Subsystem kobject gắn với loại bus này</td></tr>
+<tr><td><code>struct kset</code></td><td><code>drivers</code></td><td>Tập kobject của các driver</td></tr>
+<tr><td><code>struct kset</code></td><td><code>devices</code></td><td>Tập kobject của các device</td></tr>
+<tr><td><code>struct bus_attribute *</code></td><td><code>bus_attrs</code></td><td>Thuộc tính của bus + phương thức xuất chúng ra sysfs</td></tr>
+<tr><td><code>struct device_attribute *</code></td><td><code>dev_attrs</code></td><td>Thuộc tính của device + phương thức xuất ra sysfs</td></tr>
+<tr><td><code>struct driver_attribute *</code></td><td><code>drv_attrs</code></td><td>Thuộc tính của driver + phương thức xuất ra sysfs</td></tr>
+<tr><td><code>int (*)(struct device *, struct device_driver *)</code></td><td><code>match</code></td><td>Kiểm tra xem một driver cho trước có hỗ trợ một device cho trước không</td></tr>
+<tr><td><code>int (*)(struct device *, char **, int, char *, int)</code></td><td><code>hotplug</code></td><td>Được gọi khi một device đang được đăng ký</td></tr>
+<tr><td><code>int (*)(struct device *, u32)</code></td><td><code>suspend</code></td><td>Lưu trạng thái phần cứng và đổi mức nguồn</td></tr>
+<tr><td><code>int (*)(struct device *)</code></td><td><code>resume</code></td><td>Đổi mức nguồn và khôi phục trạng thái phần cứng</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-6. Mọi subsystem <code>bus_type</code> được gom trong <code>bus_subsys</code>, gắn với <code>/sys/bus</code> (nên vd. có thư mục <code>/sys/bus/pci</code>). Subsystem của mỗi bus thường chỉ có hai kset là <code>drivers</code> và <code>devices</code>; vì thư mục kobject của device đã tồn tại dưới <code>/sys/devices</code> rồi, nên kset <code>devices</code> của subsystem theo bus chỉ lưu các <em>symbolic link</em> trỏ về đó. <code>bus_for_each_drv()</code> / <code>bus_for_each_dev()</code> duyệt qua các phần tử của hai danh sách driver và device. <code>match</code> thường chỉ đơn giản là tìm định danh của device trong bảng định danh được hỗ trợ của driver. <code>hotplug</code> thêm thông tin riêng của bus, truyền dưới dạng biến môi trường cho chương trình ở chế độ người dùng được thông báo về device mới (xem <a href="#reg-callchain">Đăng ký Device Driver</a>).</p>
+
+<h4>13.2.3.4 Class</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Mỗi class được mô tả bằng một đối tượng <code>class</code>; mọi class thuộc subsystem <code>class_subsys</code>, gắn với <code>/sys/class</code> (vd. <code>/sys/class/input</code>). Mỗi đối tượng <code>class</code> cũng nhúng một subsystem riêng. Một class giữ danh sách các descriptor <code>class_device</code>, mỗi descriptor đại diện cho một <strong>logical device</strong> thuộc class đó; <code>class_device</code> có trường <code>dev</code> trỏ về một descriptor <code>device</code> thật — nhưng có thể có nhiều <code>class_device</code> cùng trỏ tới <em>cùng</em> một device, vì một thiết bị vật lý có thể chứa nhiều logical sub-device, mỗi cái cần một giao diện chế độ người dùng riêng (DSP, mixer, cổng game… của một sound card). Các driver cùng class được kỳ vọng cung cấp cùng chức năng cho user space. Quan trọng cho phần tiếp theo: mỗi <code>class_device</code> nhúng một kobject với file thuộc tính <code>dev</code>, chứa <strong>số major và minor</strong> của device file cần dùng để chạm tới logical device đó.</p>
+
+<div class="diagram" id="D10">
+<div class="dtitle">D10 — Tương tác giữa các thành phần: ai trỏ tới ai <span class="dq">bus_type, device, device_driver và class liên hệ với nhau ra sao?</span></div>
+<img src="DD_4.png" alt="" style="max-width: 100%; height: auto;">
+
+<table>
+<tr><th>A</th><th>Quan hệ</th><th>B</th></tr>
+<tr><td><code>kobject</code></td><td>nhúng-trong</td><td>container (device / device_driver / bus_type / kset / class / cdev …)</td></tr>
+<tr><td><code>kset</code></td><td>nhóm</td><td>các <code>kobject</code> cùng loại container</td></tr>
+<tr><td><code>subsystem</code></td><td>nhóm</td><td>các <code>kset</code></td></tr>
+<tr><td><code>device</code></td><td>trỏ-tới (driver)</td><td><code>device_driver</code></td></tr>
+<tr><td><code>device</code></td><td>trỏ-tới (bus)</td><td><code>bus_type</code></td></tr>
+<tr><td><code>device_driver</code></td><td>liệt-kê</td><td><code>device</code> (qua danh sách <code>devices</code>)</td></tr>
+<tr><td><code>bus_type.match()</code></td><td>quyết-định</td><td><code>device_driver</code> nào xử lý <code>device</code></td></tr>
+<tr><td><code>class_device</code></td><td>tham-chiếu-tới</td><td><code>device</code> (nhiều-tới-một)</td></tr>
+<tr><td>thuộc tính <code>class_device.dev</code></td><td>công-bố</td><td>major:minor để udev tạo file <code>/dev</code></td></tr>
+</table>
+
+<h4 id="reg-callchain">Đầu-Cuối: Chuỗi Gọi Hàm Đăng Ký Device / Driver</h4>
+<div class="diagram" id="D11">
+<div class="dtitle">D11 — Luồng đăng ký <span class="dq">Điều gì xảy ra, theo thứ tự, khi một driver PCI tự đăng ký và có device khớp?</span></div>
+<img src="DD_5.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge synth">TỔNG HỢP</span> ghép lại từ các phát biểu riêng lẻ của sách về <code>driver_register()</code>, <code>bus_type.match</code>, <code>device_driver.probe</code> và <code>device_register()</code> ở <a href="#s13-4">13.4.1 Đăng ký Device Driver</a> và mục này.</p>
+</div>
+
+<div class="callout mental">
+<h5>Mô hình tư duy</h5>
+<p>Hãy nghĩ về device driver model theo kiểu <strong>"sysfs là cái cây, kobject là các node."</strong> Một <code>kobject</code> không bao giờ xuất hiện một mình — nó luôn là "thẻ thành viên" của ai đó để vào cây đó (một bus, một device, một driver, một class, một kset). Đếm tham chiếu (<code>kref</code>), vị trí thư mục (<code>parent</code>), và thành viên tập hợp (<code>kset</code>) là <em>ba việc duy nhất</em> mà một kobject trần làm; mọi thứ khác (thuộc tính, hành vi hotplug, dò tìm) thuộc về container hoặc về đối tượng bus/driver/class bọc nó.</p>
+</div>
+<div class="callout five">
+<h5>Nếu chỉ nhớ 5 điều</h5>
+<ol>
+<li>Một kobject ⇔ một thư mục sysfs. Luôn luôn đúng.</li>
+<li>kobject ⊂ kset ⊂ subsystem là hệ phân cấp chứa đựng; mỗi mức lồng đúng vào đường dẫn sysfs của mức trên nó.</li>
+<li><code>device</code>, <code>device_driver</code>, <code>bus_type</code> là ba trụ cột; <code>bus_type.match()</code> + <code>device_driver.probe()</code> quyết định ai điều khiển cái gì.</li>
+<li><code>class</code>/<code>class_device</code> tồn tại thuần để cho user space một giao diện ổn định, không phụ thuộc bus, và để công bố major:minor qua thuộc tính <code>dev</code>.</li>
+<li>Thứ tự đăng ký quan trọng cho quản lý nguồn: con phải suspend trước cha, resume sau cha.</li>
+</ol>
+</div>
+</div>
+
+<div class="section" id="s13-3">
+<h2>13.3 Tệp Thiết Bị (Device Files)</h2>
+<div class="callout fit"><h5>Cái này nằm ở đâu?</h5><p>Linux → Kernel → <strong>Chapter 13 → 13.3 Device Files</strong> → số major/minor → xử lý ở VFS → udev</p></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Các hệ thống kiểu Unix được xây trên khái niệm file như một container byte tuần tự. Thiết bị I/O được coi là các file đặc biệt gọi là <strong>device file</strong>, nên chính những system call dùng cho file thường (vd. <code>write()</code>) cũng chạy được trên thiết bị — vd. <code>write()</code> trên <code>/dev/lp0</code> gửi dữ liệu tới máy in. Device file có hai loại:</p>
+<ul>
+<li><strong>Block</strong> — dữ liệu có thể được đánh địa chỉ ngẫu nhiên và thời gian truyền một khối gần như hằng số, nhỏ (ổ đĩa cứng, đĩa mềm, CD-ROM, DVD).</li>
+<li><strong>Character</strong> — dữ liệu hoặc không thể đánh địa chỉ ngẫu nhiên (sound card), hoặc có thể nhưng thời gian truy cập phụ thuộc nhiều vào vị trí (băng từ).</li>
+</ul>
+<p><span class="badge source">NGUỒN SÁCH</span> Card mạng là một ngoại lệ đáng chú ý — thiết bị phần cứng <em>không</em> có device file tương ứng nào cả.</p>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Một device file là file thật trong một filesystem; inode của nó không cần con trỏ tới khối dữ liệu trên đĩa (không có dữ liệu file), nhưng phải định danh thiết bị phần cứng: theo truyền thống là một <strong>loại</strong> (character/block) cộng một <strong>số major</strong> (định danh loại thiết bị/driver — mọi device file cùng loại và cùng major dùng chung một bộ thao tác file) và một <strong>số minor</strong> (định danh một thiết bị cụ thể trong nhóm chia sẻ cùng major). System call <code>mknod()</code> tạo một device file, với tên, loại, và major/minor cho trước.</p>
+
+<table>
+<tr><th>Tên</th><th>Loại</th><th>Major</th><th>Minor</th><th>Mô tả</th></tr>
+<tr><td><code>/dev/fd0</code></td><td>block</td><td>2</td><td>0</td><td>Đĩa mềm</td></tr>
+<tr><td><code>/dev/hda</code></td><td>block</td><td>3</td><td>0</td><td>Ổ đĩa IDE đầu tiên</td></tr>
+<tr><td><code>/dev/hda2</code></td><td>block</td><td>3</td><td>2</td><td>Phân vùng chính thứ hai của ổ IDE đầu tiên</td></tr>
+<tr><td><code>/dev/hdb</code></td><td>block</td><td>3</td><td>64</td><td>Ổ đĩa IDE thứ hai</td></tr>
+<tr><td><code>/dev/hdb3</code></td><td>block</td><td>3</td><td>67</td><td>Phân vùng chính thứ ba của ổ IDE thứ hai</td></tr>
+<tr><td><code>/dev/ttyp0</code></td><td>char</td><td>3</td><td>0</td><td>Terminal</td></tr>
+<tr><td><code>/dev/console</code></td><td>char</td><td>5</td><td>1</td><td>Console</td></tr>
+<tr><td><code>/dev/lp1</code></td><td>char</td><td>6</td><td>1</td><td>Máy in song song</td></tr>
+<tr><td><code>/dev/ttyS0</code></td><td>char</td><td>4</td><td>64</td><td>Cổng serial đầu tiên</td></tr>
+<tr><td><code>/dev/rtc</code></td><td>char</td><td>10</td><td>135</td><td>Đồng hồ thời gian thực (real-time clock)</td></tr>
+<tr><td><code>/dev/null</code></td><td>char</td><td>1</td><td>3</td><td>Thiết bị null ("hố đen")</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-7. Lưu ý block (3,0) và character (3,0) là hai thiết bị khác nhau — hai không gian đánh số độc lập nhau. Tên của device file không có ý nghĩa gì với kernel: một file tên <code>/tmp/disk</code> loại block, major 3 minor 0, hoàn toàn tương đương <code>/dev/hda</code>. Một số ứng dụng lại giả định tên quy ước cụ thể (vd. chương trình liên lạc giả định cổng serial đầu tiên là <code>/dev/ttyS0</code>).</p>
+
+<h3>13.3.1 Xử Lý Device File Ở Chế Độ Người Dùng</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Theo truyền thống, major/minor mỗi cái 8-bit (≤65.536 file mỗi loại) — không đủ cho hệ thống lớn (vd. hơn 16 ổ SCSI × 15 phân vùng đã vượt registry truyền thống trong <code>Documentation/devices.txt</code> / <code>include/linux/major.h</code>). Linux 2.6 mở rộng <code>dev_t</code> thành giá trị 32-bit, chia thành <strong>12-bit major</strong> / <strong>20-bit minor</strong> (macro <code>MAJOR</code>/<code>MINOR</code> trích xuất, <code>MKDEV</code> mã hóa; device file mã hóa 16-bit cũ vẫn được xử lý đúng để tương thích ngược). Các số bổ sung không được cấp phát tĩnh sẵn — cách được ưa chuộng hiện nay là hoàn toàn động, cả về cấp số lẫn tạo device file.</p>
+
+<div class="diagram" id="D12">
+<div class="dtitle">D12 — Mã hóa dev_t <span class="dq">major/minor được đóng gói vào một giá trị 32-bit ra sao?</span></div>
+<div class="ascii">Kiểu cũ (trước 2.6, 16-bit):  [ 8 bit major ][ 8 bit minor ]
+dev_t của Linux 2.6 (32-bit): [ 12 bit major ][ 20 bit minor ]
+                                MAJOR(dev)        MINOR(dev)
+                                MKDEV(ma,mi) -> dev_t</div>
+</div>
+
+<h4>13.3.1.1 Cấp số thiết bị động</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Một driver có thể yêu cầu một dải số thiết bị chính xác, hoặc đơn giản nhờ kernel cấp bất kỳ dải nào đang trống (xem <a href="#s13-4">Đăng ký Device Driver</a>). Driver mới vì vậy không cần một mục trong registry chính thức nữa. Nhưng khi đó device file không thể tạo sẵn một lần rồi dùng mãi — nó phải được tạo ngay sau khi driver khởi tạo xong, với đúng số mà kernel vừa cấp. Device driver model cung cấp đường xuất khẩu: major/minor được công bố trong các file thuộc tính <code>dev</code> dưới các thư mục con của <code>/sys/class</code>.</p>
+
+<h4>13.3.1.2 Tạo device file động</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Bộ công cụ <strong>udev</strong> (các chương trình ở chế độ người dùng) tự động hóa <code>/dev</code>: lúc khởi động, <code>/dev</code> được làm rỗng, sau đó một chương trình udev quét các thư mục con của <code>/sys/class</code> để tìm file <code>dev</code>; với mỗi file tìm thấy, nó tạo device file tương ứng trong <code>/dev</code>. Khi một thiết bị xuất hiện sau đó — module chứa driver được nạp, hoặc một thiết bị hot-pluggable như thiết bị USB được cắm vào — kernel sinh một tiến trình chạy script chế độ người dùng <code>/sbin/hotplug</code> (đường dẫn có thể cấu hình qua <code>/proc/sys/kernel/hotplug</code>), truyền thông tin thiết bị dưới dạng biến môi trường; script đó (và udev, nếu có cài) sẽ tạo device file mới ngay lập tức.</p>
+
+<div class="diagram" id="D13">
+<div class="dtitle">D13 — Tạo device file động qua udev/hotplug <span class="dq">Làm sao /dev được điền mà không cần bảng tĩnh?</span></div>
+<div class="flow">
+<div class="box purple">Driver đăng ký → được cấp (major,minor) → thuộc tính dev trong sysfs được công bố dưới /sys/class/*</div>
+<div class="arrow">↓ (lúc boot)</div>
+<div class="box green">udev quét /sys/class/* để tìm file "dev"</div>
+<div class="arrow">↓</div>
+<div class="box blue">udev tạo device file /dev/&lt;tên&gt; tương ứng (mknod)</div>
+</div>
+<div class="flow" style="margin-top:14px">
+<div class="box orange">Sự kiện hot-plug (vd. cắm thiết bị USB)</div>
+<div class="arrow">↓ IRQ / phát hiện trên bus</div>
+<div class="box purple">kernel sinh tiến trình chạy /sbin/hotplug (hoặc biến môi trường từ bus_type.hotplug)</div>
+<div class="arrow">↓</div>
+<div class="box blue">udev (nếu có) tạo device file trong /dev</div>
+</div>
+</div>
+
+<h3>13.3.2 Xử Lý Device File Ở VFS</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Device file nằm trong cây thư mục nhưng về bản chất khác hẳn file/thư mục thường: truy cập một file thường là chạm vào khối dữ liệu trong một phân vùng qua một filesystem, còn truy cập một device file chỉ đơn thuần là điều khiển phần cứng (vd. một tiến trình có thể truy cập một device file để đọc nhiệt độ phòng từ một nhiệt kế số nối với máy tính). Việc che giấu khác biệt này khỏi ứng dụng là trách nhiệm của VFS: nó thay đổi bộ thao tác file mặc định của một device file ngay khi mở, để mỗi system call trên đó biến thành lời gọi tới một hàm liên quan tới thiết bị, thay vì hàm của filesystem đang chứa nó.</p>
+
+<div class="diagram" id="D14">
+<div class="dtitle">D14 — open() trên device file: VFS → fops riêng của thiết bị <span class="dq">Chính xác open() dẫn tới gọi code driver thay vì code filesystem như thế nào?</span></div>
+<img src="DD_6.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge source">NGUỒN SÁCH</span> Symbolic link trỏ tới device file hoạt động y hệt device file, nhờ cơ chế phân giải tên thông thường của VFS (Ch.12 "Pathname Lookup").</p>
+</div>
+
+<div class="callout mental">
+<h5>Mô hình tư duy</h5>
+<p>Một device file là một <strong>"vé thông hành"</strong>, không phải nơi chứa dữ liệu: inode của nó chỉ mang một loại + cặp (major,minor). Mở nó là một cú chuyển giao hai bước — trước tiên VFS thay vào một bảng <code>file_operations</code> tổng quát "đây là thiết bị" (<code>def_chr_fops</code>/<code>def_blk_fops</code>), sau đó phương thức <code>open</code> của bảng tổng quát này (với char device là <code>chrdev_open()</code>, 13.5.2) mới thay vào bảng THẬT của driver. Sau bước chuyển giao thứ hai, VFS hoàn toàn đứng ngoài cuộc.</p>
+</div>
+<div class="callout five">
+<h5>Nếu chỉ nhớ 5 điều</h5>
+<ol>
+<li>Danh tính của một device file là (loại, major, minor) — tên của nó không có ý nghĩa với kernel.</li>
+<li>Linux 2.6 <code>dev_t</code> = 12-bit major + 20-bit minor, đóng gói trong 32 bit; <code>MAJOR</code>/<code>MINOR</code>/<code>MKDEV</code> chuyển đổi qua lại.</li>
+<li>Số hiệu thiết bị và device file ngày nay đều được cấp phát động; udev/hotplug điền <code>/dev</code> dựa trên những gì <code>sysfs</code> công bố.</li>
+<li><code>init_special_inode()</code> là điểm bản lề: nó thiết lập <code>i_rdev</code> và chọn <code>def_blk_fops</code>/<code>def_chr_fops</code>.</li>
+<li>Mở một device file là một cú thay <code>file_operations</code> hai bước: bảng tổng quát cho device file, rồi bảng thật của driver.</li>
+</ol>
+</div>
+</div>
+
+<div class="section" id="s13-4">
+<h2>13.4 Device Driver</h2>
+<div class="callout fit"><h5>Cái này nằm ở đâu?</h5><p>Linux → Kernel → <strong>Chapter 13 → 13.4 Device Drivers</strong> → đăng ký → khởi tạo → giám sát (polling/interrupt) → I/O memory → DMA → mức độ hỗ trợ</p></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Một device driver là tập hợp các hàm kernel cài đặt các thao tác chuẩn của VFS (<code>open</code>, <code>read</code>, <code>lseek</code>, <code>ioctl</code>, …) cho một thiết bị phần cứng. Vì mỗi thiết bị có bộ điều khiển I/O khác nhau, do đó lệnh và thông tin trạng thái khác nhau, hầu hết thiết bị I/O đều cần driver riêng. Các driver chủ yếu khác nhau ở mức hỗ trợ dành cho ứng dụng chế độ người dùng, và ở chiến lược buffering.</p>
+
+<h3>13.4.1 Đăng Ký Device Driver</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Mỗi syscall trên một device file được kernel dịch thành lời gọi tới một hàm phù hợp của driver tương ứng — nhưng chỉ khi driver đó đã <strong>đăng ký</strong>: cấp phát một descriptor <code>device_driver</code> mới, chèn nó vào device driver model, và liên kết nó với (các) device file tương ứng. Truy cập một device file mà driver tương ứng chưa đăng ký sẽ trả về <code>-ENODEV</code>. Nếu driver được biên dịch tĩnh vào kernel, việc đăng ký diễn ra ở giai đoạn khởi tạo kernel. Nếu driver được biên dịch thành module, nó đăng ký khi module được nạp (và có thể tự hủy đăng ký khi module bị gỡ).</p>
+<p><span class="badge source">NGUỒN SÁCH</span> Ví dụ: một driver PCI tổng quát cấp phát một descriptor <code>pci_driver</code> (dùng bởi tầng kernel PCI) và gọi <code>pci_register_driver()</code>. Bên trong, <code>pci_driver</code> nhúng một <code>device_driver</code>; <code>pci_register_driver()</code> chỉ khởi tạo các trường của descriptor nhúng đó rồi gọi <code>driver_register()</code> để chèn driver vào device driver model. Khi một driver đăng ký, kernel tìm phần cứng chưa được hỗ trợ mà driver này có thể xử lý được, dựa vào phương thức <code>match</code> của <code>bus_type</code> liên quan, và phương thức <code>probe</code> của <code>device_driver</code>; nếu tìm thấy một device khớp, kernel cấp phát một đối tượng <code>device</code> và gọi <code>device_register()</code> để chèn nó vào device driver model. (Xem lại <a href="#D11">Sơ đồ D11</a> ở trên cho toàn bộ luồng.)</p>
+
+<h3>13.4.2 Khởi Tạo Device Driver</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Đăng ký driver và khởi tạo nó là hai việc khác nhau. Một driver đăng ký càng sớm càng tốt để user space dùng được nó qua device file; nhưng nó được <strong>khởi tạo vào thời điểm muộn nhất có thể</strong>, vì khởi tạo nghĩa là cấp phát tài nguyên quý giá của hệ thống, khiến chúng không còn sẵn cho driver khác. Ví dụ (Ch.4): việc gán IRQ thường được làm động, ngay trước khi dùng, vì nhiều thiết bị có thể chia sẻ chung một đường IRQ. Các tài nguyên khác được gán muộn: page frame cho buffer DMA, và chính kênh DMA (đối với thiết bị không phải PCI đời cũ như driver đĩa mềm).</p>
+
+<div class="diagram" id="D15">
+<div class="dtitle">D15 — Mẫu hình bộ đếm sử dụng cho việc chiếm tài nguyên <span class="dq">Làm sao driver tránh chiếm lại tài nguyên đã có sẵn?</span></div>
+<img src="DD_7.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge source">NGUỒN SÁCH</span> Chính xác hơn, bộ đếm sử dụng theo dõi số <em>file object</em> tham chiếu tới device file, vì các tiến trình clone có thể chia sẻ chung một file object.</p>
+</div>
+
+<h3>13.4.3 Giám Sát Thao Tác I/O</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Thời gian một thao tác I/O thường không thể đoán trước (vị trí cơ học của đầu đọc đĩa, sự kiện thật sự ngẫu nhiên như gói tin đến trên card mạng, hay yếu tố con người như người dùng nhấn phím hoặc kẹt giấy máy in). Driver khởi động một thao tác cần một kỹ thuật giám sát báo hiệu hoặc sự kết thúc của thao tác I/O, hoặc một time-out. Hai kỹ thuật: <strong>chế độ polling</strong> và <strong>chế độ interrupt</strong>.</p>
+
+<h4>13.4.3.1 Chế độ polling</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> CPU liên tục kiểm tra (poll) status register của thiết bị cho tới khi giá trị của nó báo hiệu thao tác đã hoàn tất — cùng nguyên lý với một spin lock bận (Ch.5). Cũng cần kiểm tra time-out:</p>
+<div class="codewrap"><div class="codehead"><span>vòng lặp polling — ví dụ khái niệm</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div><pre>for (;;) {
+    if (read_status(device) &amp; DEVICE_END_OPERATION) break;
+    if (--count == 0) break;
+}</pre></div>
+<p><span class="badge source">NGUỒN SÁCH</span> Biến <code>count</code> được khởi tạo trước vòng lặp và giảm dần mỗi lần lặp, tạo ra một time-out tương đối. Một time-out chính xác hơn có thể đọc bộ đếm tick <code>jiffies</code> (Ch.6) mỗi lần lặp và so sánh với giá trị đọc được trước khi vào vòng lặp. Nếu thời gian cần để hoàn tất thao tác I/O tương đối lớn, cỡ mili giây, cách làm này trở nên kém hiệu quả vì CPU lãng phí chu kỳ máy khi chờ; khi đó nên tự nguyện nhường CPU sau mỗi lần poll bằng cách chèn một lời gọi <code>schedule()</code> vào trong vòng lặp.</p>
+
+<h4>13.4.3.2 Chế độ interrupt</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Chỉ dùng được nếu bộ điều khiển I/O có khả năng báo hiệu, qua một đường IRQ, sự kết thúc của một thao tác I/O. Sách đi qua một ví dụ đầy đủ: một driver đơn giản cho character device đầu vào, khi người dùng gọi <code>read()</code> trên device file tương ứng, một lệnh input được gửi tới control register của thiết bị. Sau một khoảng thời gian không đoán trước được, thiết bị đặt một byte dữ liệu vào input register và phát ngắt. Hai hàm cài đặt driver này: <code>foo_read()</code> (phương thức <code>read</code>) và <code>foo_interrupt()</code> (interrupt handler).</p>
+
+<div class="codewrap"><div class="codehead"><span>foo_read() — phương thức read, driver chế độ interrupt</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div><pre>ssize_t foo_read(struct file *filp, char *buf, size_t count,
+                  loff_t *ppos)
+{
+    foo_dev_t * foo_dev = filp-&gt;private_data;
+    if (down_interruptible(&amp;foo_dev-&gt;sem))
+        return -ERESTARTSYS;
+    foo_dev-&gt;intr = 0;
+    outb(DEV_FOO_READ, DEV_FOO_CONTROL_PORT);
+    wait_event_interruptible(foo_dev-&gt;wait, (foo_dev-&gt;intr == 1));
+    if (put_user(foo_dev-&gt;data, buf))
+        return -EFAULT;
+    up(&amp;foo_dev-&gt;sem);
+    return 1;
+}</pre></div>
+
+<div class="codewrap"><div class="codehead"><span>foo_interrupt() — interrupt handler</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div><pre>irqreturn_t foo_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+{
+    foo-&gt;data = inb(DEV_FOO_DATA_PORT);
+    foo-&gt;intr = 1;
+    wake_up_interruptible(&amp;foo-&gt;wait);
+    return 1;
+}</pre></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Descriptor riêng của driver, kiểu <code>foo_dev_t</code>, gồm: một semaphore <code>sem</code> bảo vệ thiết bị khỏi truy cập đồng thời, một wait queue <code>wait</code>, một cờ <code>intr</code> được đặt khi thiết bị phát ngắt, và một buffer một byte <code>data</code> được interrupt handler ghi và <code>read</code> đọc. Địa chỉ của nó thường được cất trong <code>filp->private_data</code> hoặc một biến toàn cục. Lưu ý <code>foo_interrupt()</code> không dùng đến bất kỳ tham số nào trong ba tham số của nó — sách gọi đây là "một trường hợp khá phổ biến." Để đơn giản, ví dụ này bỏ qua việc xử lý time-out, thứ nói chung được cài đặt bằng timer tĩnh/động (Ch.6), được đặt trước khi thao tác I/O bắt đầu và gỡ khi nó kết thúc.</p>
+
+<div class="diagram" id="D16">
+<div class="dtitle">D16 — Sequence Diagram: foo_read() / foo_interrupt() đầu-cuối <span class="dq">Thứ tự chính xác của các sự kiện qua process context và interrupt context là gì?</span></div>
+<img src="DD_8.png" alt="" style="max-width: 100%; height: auto;">
+
+<div class="legend">
+<span><i style="background:var(--purple)"></i>Process context</span>
+<span><i style="background:var(--red)"></i>Interrupt context</span>
+</div>
+</div>
+
+<details class="fc">
+<summary>Thẻ hàm — foo_read() <span class="tag">Phương thức read</span> <span class="tag cb">Process context</span></summary>
+<div class="fcbody">
+<dl class="fcgrid">
+<dt>Lớp</dt><dd>Character device driver — phương thức <code>file_operations.read</code></dd>
+<dt>Mục đích</dt><dd>Kích hoạt một thao tác đọc trên thiết bị, chặn (block) cho tới khi interrupt handler có dữ liệu, rồi sao chép byte đó sang user space.</dd>
+<dt>Được gọi bởi</dt><dd>VFS <code>sys_read()</code> → <code>vfs_read()</code> → <code>file-&gt;f_op-&gt;read</code></dd>
+<dt>Gọi tới</dt><dd><code>down_interruptible()</code>, <code>outb()</code>, <code>wait_event_interruptible()</code>, <code>put_user()</code>, <code>up()</code></dd>
+<dt>Execution context</dt><dd>Process context; <strong>có thể ngủ (sleep)</strong> (chặn trong <code>wait_event_interruptible</code>).</dd>
+<dt>Cấu trúc dữ liệu</dt><dd><code>foo_dev_t</code> (sem, wait, intr, data)</dd>
+<dt>Khóa (locking)</dt><dd>Semaphore <code>foo_dev-&gt;sem</code> tuần tự hóa các tiến trình đọc đồng thời trên cùng thiết bị.</dd>
+<dt>Đường lỗi</dt><dd><code>-ERESTARTSYS</code> nếu việc chờ semaphore bị một tín hiệu (signal) ngắt; <code>-EFAULT</code> nếu sao chép sang user space thất bại (lưu ý: ví dụ trong sách trả về ở nhánh này mà không giải phóng <code>sem</code> — một điểm đơn giản hóa đáng lưu ý, xem <a href="#misconceptions">Ngộ nhận thường gặp</a>).</dd>
+<dt>Vì sao nó tồn tại?</dt><dd>Nó là nửa "process context" của một cái bắt tay hai phía: bản thân nó không thể biết khi nào phần cứng sẵn sàng, nên phải cho tiến trình ngủ và để interrupt handler cung cấp dữ liệu còn thiếu một cách bất đồng bộ.</dd>
+</dl>
+</div>
+</details>
+
+<details class="fc">
+<summary>Thẻ hàm — foo_interrupt() <span class="tag">IRQ handler</span> <span class="tag cb">Interrupt context</span></summary>
+<div class="fcbody">
+<dl class="fcgrid">
+<dt>Lớp</dt><dd>Character device driver — interrupt service routine đăng ký qua <code>request_irq()</code> (Ch.4, không xuất hiện trong đoạn trích này)</dd>
+<dt>Mục đích</dt><dd>Lấy byte mà thiết bị vừa sinh ra và đánh thức tiến trình đang chặn trong <code>foo_read()</code>.</dd>
+<dt>Được gọi bởi</dt><dd>Cơ chế điều phối ngắt của CPU, trên đường IRQ mà thiết bị được nối tới — <strong>không</strong> được gọi trực tiếp bởi bất kỳ hàm kernel nào.</dd>
+<dt>Gọi tới</dt><dd><code>inb()</code>, <code>wake_up_interruptible()</code></dd>
+<dt>Execution context</dt><dd>Interrupt context. <strong>Không thể ngủ, không thể chiếm mutex/semaphore</strong>, phải chạy nhanh.</dd>
+<dt>Cấu trúc dữ liệu</dt><dd>Cùng <code>foo_dev_t</code>, truy cập qua biến/con trỏ toàn cục <code>foo</code>.</dd>
+<dt>Vì sao nó tồn tại?</dt><dd>Đây là đoạn code duy nhất chạy đúng lúc sự kiện phần cứng xảy ra; không có nó, driver sẽ không có cách nào biết "dữ liệu đã sẵn sàng" trừ việc polling.</dd>
+<dt>Lỗi thường gặp</dt><dd>Việc không dùng tới bất kỳ tham số nào trong <code>(irq, dev_id, regs)</code> là bình thường — nhưng quên bảo vệ <code>foo-&gt;data</code>/<code>foo-&gt;intr</code> khỏi truy cập đồng thời từ CPU khác mới là lỗi kinh điển mà interrupt handler phải tránh (chưa được xử lý trong ví dụ đơn giản hóa này).</dd>
+</dl>
+</div>
+</details>
+
+<h3>13.4.4 Truy Cập I/O Shared Memory</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Tùy theo thiết bị và loại bus, I/O shared memory rơi vào các dải địa chỉ vật lý khác nhau. Với thiết bị <strong>ISA</strong>, thường là dải 16-bit <code>0xa0000</code>–<code>0xfffff</code> — "lỗ hổng" giữa 640KB và 1MB (Ch.2). Với thiết bị <strong>PCI</strong>, nó được ánh xạ vào địa chỉ vật lý 32-bit gần biên 4GB — dễ xử lý hơn nhiều. Card đồ họa AGP còn dùng thêm một <strong>Graphics Address Remapping Table (GART)</strong> để card có thể trực tiếp đánh địa chỉ các phần của RAM trên bo mạch chủ; từ góc nhìn của kernel, bộ nhớ ánh xạ qua GART được xử lý như mọi loại I/O shared memory khác.</p>
+<p><span class="badge source">NGUỒN SÁCH</span> Code kernel chỉ chạm vào địa chỉ <em>tuyến tính</em>, nên một địa chỉ vật lý của I/O memory phải được dịch. Trên PC, các địa chỉ vật lý của RAM được ánh xạ, trong lúc khởi tạo kernel, vào đầu gigabyte thứ tư của không gian địa chỉ tuyến tính (giả sử <code>PAGE_OFFSET = 0xc0000000</code>) đơn giản bằng cách OR với hằng số <code>0xc0000000</code> — điều này đúng với các địa chỉ nằm trong RAM thật (vd. lỗ hổng ISA tại <code>0x000b0fe4</code>). Nhưng nó <em>không</em> đúng với I/O memory nằm trên đỉnh RAM vật lý (vd. <code>0xfc000000</code>), vì chưa có ánh xạ tuyến tính nào cho nó. Trong trường hợp đó, driver phải gọi <code>ioremap()</code> (hoặc <code>ioremap_nocache()</code>, còn tắt luôn cache phần cứng) để tạo một ánh xạ địa chỉ tuyến tính mới — về bản chất giống <code>vmalloc()</code>: nó gọi <code>get_vm_area()</code> để tạo một descriptor <code>vm_struct</code> (Ch.8) có kích thước bằng vùng I/O cần dùng, rồi cập nhật các mục Page Table kernel liên quan.</p>
+
+<div class="codewrap"><div class="codehead"><span>hai trường hợp ánh xạ, đối chiếu</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div><pre>/* ngây thơ / chỉ đúng với địa chỉ nằm trong RAM đã ánh xạ: */
+t1 = *((unsigned char *)(0xc00b0fe4));      /* ĐÚNG: 0x000b0fe4 nằm trong lỗ hổng ISA */
+t2 = *((unsigned char *)(0xfc000000));      /* SAI: chưa có ánh xạ tuyến tính nào  */
+
+/* dạng đúng, khả chuyển cho I/O memory nằm trên RAM: */
+io_mem = ioremap(0xfb000000, 0x200000);     /* ánh xạ 2 MB bắt đầu từ 0xfb000000 */
+t2 = *((unsigned char *)(io_mem + 0x100000));
+/* giải phóng sau đó bằng: iounmap(io_mem); */</pre></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Trên các kiến trúc khác PC, đôi khi không thể chạm vào I/O shared memory chỉ bằng cách dereference một địa chỉ tuyến tính, nên Linux định nghĩa các hàm truy cập độc lập kiến trúc, bắt buộc phải dùng thay vì con trỏ thô:</p>
+<table>
+<tr><th>Hàm</th><th>Mục đích</th></tr>
+<tr><td><code>readb()</code>, <code>readw()</code>, <code>readl()</code></td><td>Đọc 1/2/4 byte từ một vị trí I/O shared memory</td></tr>
+<tr><td><code>writeb()</code>, <code>writew()</code>, <code>writel()</code></td><td>Ghi 1/2/4 byte vào một vị trí I/O shared memory</td></tr>
+<tr><td><code>memcpy_fromio()</code>, <code>memcpy_toio()</code></td><td>Sao chép một khối giữa I/O shared memory và bộ nhớ động thường</td></tr>
+<tr><td><code>memset_io()</code></td><td>Điền một vùng I/O shared memory bằng một giá trị cố định</td></tr>
+</table>
+<div class="codewrap"><div class="codehead"><span>mẫu truy cập khả chuyển được khuyến nghị</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div><pre>io_mem = ioremap(0xfb000000, 0x200000);
+t2 = readb(io_mem + 0x100000);</pre></div>
+
+<h3>13.4.5 Direct Memory Access (DMA)</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Trong kiến trúc PC nguyên bản, chỉ CPU mới có thể lái bus địa chỉ/dữ liệu (là "bus master" duy nhất). Với PCI, mọi ngoại vi có mạch phù hợp đều có thể là bus master; ngày nay mọi PC đều có mạch <strong>DMA</strong> phụ trợ, có thể truyền dữ liệu giữa RAM và một thiết bị I/O mà không cần thêm sự can thiệp của CPU, và phát ngắt khi hoàn tất. Xung đột khi CPU và mạch DMA cùng truy cập một vị trí bộ nhớ đồng thời được giải quyết bởi một mạch phần cứng gọi là <strong>trọng tài bộ nhớ (memory arbiter)</strong> (Ch.5). DMA phù hợp với driver đĩa và các thiết bị truyền nhiều byte cùng lúc — với các truyền nhỏ, CPU sao chép trực tiếp hiệu quả hơn vì chi phí thiết lập DMA tương đối cao.</p>
+
+<h4>13.4.5.1 DMA đồng bộ và bất đồng bộ</h4>
+<table>
+<tr><th>Chế độ</th><th>Được kích hoạt bởi</th><th>Ví dụ trong sách</th></tr>
+<tr><td>DMA đồng bộ (synchronous)</td><td>Một tiến trình</td><td>Một sound card đang phát âm thanh: ứng dụng ghi các sample vào một device file cho DSP của sound card; driver dồn các sample này vào một kernel buffer; đồng thời driver ra lệnh cho sound card sao chép các sample từ kernel buffer sang DSP theo một nhịp thời gian định trước; mỗi ngắt hoàn tất khiến driver kiểm tra xem còn sample nào trong buffer chưa và kích hoạt một lần truyền DMA nữa nếu cần.</td></tr>
+<tr><td>DMA bất đồng bộ (asynchronous)</td><td>Thiết bị phần cứng</td><td>Một card mạng nhận một frame (gói tin) từ LAN: ngoại vi lưu frame trong I/O shared memory riêng của nó rồi phát ngắt; driver của card mạng xác nhận ngắt, rồi ra lệnh cho ngoại vi sao chép frame từ I/O shared memory vào một kernel buffer bằng DMA; khi truyền xong, card mạng phát một ngắt khác, và driver báo cho tầng mạng phía trên biết về frame mới.</td></tr>
+</table>
+
+<h4>13.4.5.2 – 13.4.5.6 Hàm hỗ trợ DMA, bus address, cache coherency</h4>
+<p><span class="badge source">NGUỒN SÁCH</span> Một driver nên vừa độc lập kiến trúc vừa độc lập bus xét về mặt DMA; các hàm hỗ trợ DMA của kernel che giấu những khác biệt đó. Có hai nhóm hàm hỗ trợ: một nhóm cũ hơn, chỉ dành cho PCI, độc lập kiến trúc; một nhóm mới hơn, độc lập cả bus lẫn kiến trúc.</p>
+<p><span class="badge source">NGUỒN SÁCH</span> <strong>Bus address</strong>: bên cạnh địa chỉ logic/tuyến tính (dùng nội bộ bởi CPU) và địa chỉ vật lý (địa chỉ mà CPU thật sự lái trên bus dữ liệu), còn có loại địa chỉ thứ tư — <strong>bus address</strong> — dùng bởi mọi thiết bị phần cứng ngoại trừ CPU để lái bus dữ liệu. Vì một truyền DMA diễn ra mà không có CPU can thiệp, kernel phải lập trình các I/O port của DMA/thiết bị với địa chỉ <em>bus</em> của buffer bộ nhớ liên quan, chứ không phải địa chỉ tuyến tính hay vật lý. Trên 80x86, bus address trùng với địa chỉ vật lý; các kiến trúc khác (SPARC, Alpha) có một <strong>I/O-MMU</strong> ánh xạ địa chỉ vật lý → bus address, và mọi driver dùng DMA phải lập trình đúng IO-MMU trước. Độ rộng bus khác nhau: bus address của ISA dài 24 bit (nên DMA ISA trên 80x86 bị giới hạn ở 16MB thấp nhất — vì vậy buffer cho loại DMA này phải lấy từ vùng <code>ZONE_DMA</code> qua cờ <code>GFP_DMA</code>); PCI nguyên bản định nghĩa bus address 32-bit (nhưng một số phần cứng PCI, vốn thiết kế ban đầu cho ISA, vẫn không thể đánh địa chỉ trên <code>0x00ffffff</code>); chuẩn PCI-X dùng bus address 64-bit và cho phép mạch DMA đánh địa chỉ trực tiếp vùng nhớ cao. Kiểu bus address tổng quát là <code>dma_addr_t</code> — một số nguyên 32-bit trên 80x86, hoặc 64-bit nếu kernel hỗ trợ PAE (Ch.2). <code>pci_set_dma_mask()</code>/<code>dma_set_mask()</code> kiểm tra xem bus có chấp nhận một kích thước bus address cho trước hay không, và nếu có, đăng ký kích thước đó cho ngoại vi.</p>
+<p><span class="badge source">NGUỒN SÁCH</span> <strong>Cache coherency</strong>: kiến trúc không nhất thiết đảm bảo tính nhất quán giữa cache phần cứng và mạch DMA ở mức phần cứng, nên các hàm ánh xạ DMA phải tính đến điều này — nếu không một thiết bị có thể DMA-đọc dữ liệu cũ vẫn còn nằm dirty chỉ trong cache line. Hai kiểu ánh xạ DMA:</p>
+<table>
+<tr><th>Kiểu ánh xạ</th><th>Còn gọi là</th><th>Đảm bảo</th><th>Hàm hỗ trợ</th></tr>
+<tr><td>Ánh xạ DMA coherent</td><td>"đồng bộ" / "consistent"</td><td>Kernel đảm bảo không có vấn đề cache-coherency: mỗi lần CPU ghi đều lập tức hiển thị cho thiết bị và ngược lại.</td><td><code>pci_alloc_consistent()</code> / <code>dma_alloc_coherent()</code> (cấp phát + ánh xạ; trả về địa chỉ tuyến tính và bus), <code>pci_free_consistent()</code> / <code>dma_free_coherent()</code> (giải phóng)</td></tr>
+<tr><td>Ánh xạ DMA streaming</td><td>"bất đồng bộ" / "non-coherent"</td><td>Bản thân driver phải tự xử lý coherency bằng các lời gọi đồng bộ hóa tường minh.</td><td><code>pci_map_single()</code> / <code>dma_map_single()</code> (ánh xạ một buffer có sẵn, trả về bus address), <code>pci_unmap_single()</code> / <code>dma_unmap_single()</code> (bỏ ánh xạ); <code>pci_dma_sync_single_for_device()</code> / <code>dma_sync_single_for_device()</code> trước khi truyền RAM→thiết bị, <code>pci_dma_sync_single_for_cpu()</code> / <code>dma_sync_single_for_cpu()</code> trước khi CPU đọc buffer thiết bị→RAM; <code>pci_map_page()</code>/<code>dma_map_page()</code> và <code>pci_unmap_page()</code>/<code>dma_unmap_page()</code> cho buffer nằm trong vùng nhớ cao (high memory)</td></tr>
+</table>
+<p><span class="badge source">NGUỒN SÁCH</span> Trên 80x86 không bao giờ có vấn đề cache-coherency với DMA — phần cứng tự "snoop" cache — nên một driver viết riêng cho x86 có thể chọn kiểu ánh xạ nào cũng được; chúng gần như tương đương ở đó, và các hàm đồng bộ hóa gần như không làm gì cả. Trên nhiều kiến trúc khác (MIPS, SPARC, một số PowerPC) phần cứng không phải lúc nào cũng snoop, nên vấn đề coherency là có thật. Quy tắc kinh nghiệm: nếu buffer được CPU và DMA truy cập theo cách không đoán trước, ánh xạ coherent là bắt buộc (vd. cấu trúc lệnh của các adapter SCSI); còn lại thường nên dùng ánh xạ streaming, vì xử lý ánh xạ coherent có thể cồng kềnh và chậm hơn trên một số kiến trúc. Buffer streaming thường được cấp phát bằng bộ cấp phát trang theo vùng hoặc bộ cấp phát tổng quát (Ch.8) và được ánh xạ ngay trước, bỏ ánh xạ ngay sau, mỗi lần truyền.</p>
+
+<div class="diagram" id="D17">
+<div class="dtitle">D17 — DMA đồng bộ và bất đồng bộ, đầu-cuối <span class="dq">Ai khởi động việc truyền, và có bao nhiêu ngắt liên quan?</span></div>
+<img src="DD_9.png" alt="" style="max-width: 100%; height: auto;">
+</div>
+
+<h3>13.4.6 Các Mức Hỗ Trợ Của Kernel</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Kernel không hỗ trợ đầy đủ mọi thiết bị có thể có; có ba mức:</p>
+<table>
+<tr><th>Mức</th><th>Mô tả</th><th>Ví dụ trong sách</th></tr>
+<tr><td>Không hỗ trợ gì cả</td><td>Ứng dụng nói chuyện trực tiếp với I/O port của thiết bị qua <code>in</code>/<code>out</code>.</td><td>Cách X Window System truyền thống xử lý màn hình đồ họa — hiệu quả, nhưng X server không dùng được ngắt phần cứng và cần đặc quyền <code>iopl()</code>/<code>ioperm()</code> (chỉ root, nhưng có thể phơi ra qua setuid, Ch.20) để chạm được I/O port.</td></tr>
+<tr><td>Hỗ trợ tối thiểu</td><td>Kernel nhận diện I/O <em>interface</em>, không nhận diện thiết bị; chương trình người dùng coi nó như một dòng ký tự tuần tự.</td><td>Cổng serial và song song — chuột serial được điều khiển trực tiếp bởi ứng dụng (vd. X server); modem serial cần chương trình liên lạc (Minicom, Seyon) hoặc một PPP daemon.</td></tr>
+<tr><td>Hỗ trợ đầy đủ (extended)</td><td>Kernel nhận diện đầy đủ thiết bị phần cứng và tự xử lý I/O interface; thậm chí có thể không có device file nào cả.</td><td>Mọi thứ nằm trực tiếp trên I/O bus (ổ đĩa cứng trong máy), và mọi interface đa dụng ngoại trừ serial/song song — USB, PCMCIA, SCSI.</td></tr>
+</table>
+<p><span class="badge source">NGUỒN SÁCH</span> Hỗ trợ tối thiểu giữ kernel nhỏ gọn, nhưng không thể dùng khi thiết bị ngoài cần tương tác sâu với cấu trúc kernel nội bộ (vd. một ổ đĩa cứng tháo rời được, nối qua một interface đa dụng, cần được mount như một filesystem thật — ứng dụng đơn giản là không thể chạm tới các cấu trúc/hàm kernel cần thiết, nên hỗ trợ đầy đủ trở thành bắt buộc). Kernel gần đây cũng hỗ trợ trừu tượng frame buffer (<code>/dev/fb</code>) và Direct Rendering Infrastructure (DRI) cho đồ họa 3D tăng tốc, dù mô hình X server tự làm mọi thứ truyền thống vẫn được dùng rộng rãi. Cuối cùng: các syscall file chuẩn (<code>open/read/write</code>) không phải lúc nào cũng cho ứng dụng toàn quyền điều khiển thiết bị bên dưới — giao diện mẫu số chung nhỏ nhất của VFS không có chỗ cho lệnh riêng của thiết bị hay cho việc kiểm tra thiết bị đang ở trạng thái nội bộ nào. Syscall <code>ioctl()</code> ra đời chính để lấp khoảng trống đó, nhận fd của thiết bị, một mã yêu cầu, và một số lượng tham số bổ sung tùy ý (vd. lấy mức âm lượng CD-ROM, hoặc đẩy khay đĩa ra).</p>
+
+<div class="callout mental">
+<h5>Mô hình tư duy</h5>
+<p><strong>Đăng ký</strong> là một lời hứa ("tôi có thể điều khiển các thiết bị khớp ID này"); <strong>khởi tạo</strong> là một khoản nợ (tài nguyên lấy từ bể chung) — kernel giữ lời hứa rẻ và trì hoãn khoản nợ càng lâu càng tốt. <strong>Polling và interrupt</strong> là một sự đánh đổi chi phí-CPU / độ trễ, và driver chế độ interrupt luôn được cấu trúc như một vở kịch hai diễn viên: nửa process-context tra tay lắp thiết bị rồi ngủ, và nửa interrupt-context cung cấp kết quả rồi đánh thức — không bao giờ ngược lại. <strong>DMA</strong> thêm diễn viên thứ ba (chính động cơ DMA) có thể di chuyển byte trong khi cả tiến trình lẫn interrupt handler đều không chạy.</p>
+</div>
+<div class="callout five">
+<h5>Nếu chỉ nhớ 5 điều</h5>
+<ol>
+<li>Đăng ký sớm, khởi tạo muộn — khởi tạo tiêu tốn tài nguyên chung, có hạn (IRQ, kênh DMA, buffer).</li>
+<li>Polling đốt CPU; hãy gọi <code>schedule()</code> trong vòng lặp hoặc chuyển sang chế độ interrupt khi thời gian chờ vượt quá khoảng một mili giây.</li>
+<li>Driver chế độ interrupt là hai nửa: process-context tra tay rồi ngủ, interrupt-context cung cấp rồi đánh thức — <code>foo_read()</code>/<code>foo_interrupt()</code> là hình mẫu kinh điển.</li>
+<li>I/O memory nằm trên RAM thật cần <code>ioremap()</code> cộng họ hàm truy cập <code>readb()</code>/<code>writeb()</code>, không bao giờ dereference con trỏ thô.</li>
+<li>Chọn ánh xạ DMA coherent khi CPU và thiết bị cùng truy cập một buffer theo cách không đoán trước; ngược lại nên ưu tiên ánh xạ streaming với các lời gọi <code>*_sync_single_for_device/cpu</code> tường minh.</li>
+</ol>
+</div>
+</div>
+
+<div class="section" id="s13-5">
+<h2>13.5 Character Device Driver</h2>
+<div class="callout fit"><h5>Cái này nằm ở đâu?</h5><p>Linux → Kernel → <strong>Chapter 13 → 13.5 Character Device Drivers</strong> → cdev / kobj_map → đăng ký → chrdev_open() → buffering</p></div>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Character device tương đối dễ xử lý — không cần chiến lược buffering tinh vi, không liên quan tới disk cache (dù các char device riêng lẻ khác nhau rất nhiều về độ phức tạp giao thức, từ một chuột bus tới một card serial đa cổng). Block device driver về bản chất phức tạp hơn nhiều — ứng dụng có thể yêu cầu lại cùng một khối nhiều lần, và truy cập thường chậm — và dựa vào các thành phần kernel như page cache và block I/O subsystem, được bàn ở các chương sau. Phần còn lại của §13.5 chỉ tập trung vào character device driver.</p>
+
+<h4>Cấu trúc dữ liệu — <code>struct cdev</code></h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>struct kobject</code></td><td><code>kobj</code></td><td>Kobject nhúng</td></tr>
+<tr><td><code>struct module *</code></td><td><code>owner</code></td><td>Module cài đặt driver, nếu có</td></tr>
+<tr><td><code>struct file_operations *</code></td><td><code>ops</code></td><td>Con trỏ tới bảng thao tác file của driver</td></tr>
+<tr><td><code>struct list_head</code></td><td><code>list</code></td><td>Đầu danh sách các inode, ứng với device file, thuộc character device này</td></tr>
+<tr><td><code>dev_t</code></td><td><code>dev</code></td><td>Số major/minor khởi đầu được gán cho driver</td></tr>
+<tr><td><code>unsigned int</code></td><td><code>count</code></td><td>Kích thước dải số thiết bị được gán cho driver</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-8. Một driver có thể gắn với cả một <em>dải</em> số thiết bị, không chỉ một số duy nhất — mọi device file có số nằm trong dải đó đều do cùng driver xử lý; <code>count</code> giữ kích thước dải. <code>cdev_alloc()</code> cấp phát động một <code>cdev</code> và khởi tạo kobject của nó sao cho descriptor tự giải phóng khi bộ đếm tham chiếu về 0.</p>
+
+<div class="diagram" id="D18">
+<div class="dtitle">D18 — Cấu trúc tra cứu kobj_map <span class="dq">Làm sao kernel đi từ một số (major,minor) trần trụi tới một cdev đang sống?</span></div>
+<img src="DD_10.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge source">NGUỒN SÁCH</span> <code>cdev_add()</code> đăng ký một <code>cdev</code>: nó điền các trường <code>dev</code>/<code>count</code>, rồi gọi <code>kobj_map()</code>, hàm này chèn dải vào bảng hash (255 entry, đánh chỉ số theo số major) dưới dạng một đối tượng <code>probe</code> có trường <code>data</code> trỏ tới <code>cdev</code>. <code>kobj_lookup()</code> nhận một miền ánh xạ + số thiết bị, tìm trong bảng hash, và trả về kobject của chủ sở hữu dải khớp — với miền character device, đó là kobject nhúng trong <code>cdev</code> sở hữu.</p>
+</div>
+
+<h4>Cấu trúc dữ liệu — <code>struct probe</code> (một entry của bảng hash)</h4>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>struct probe *</code></td><td><code>next</code></td><td>Phần tử kế tiếp trong danh sách va chạm hash</td></tr>
+<tr><td><code>dev_t</code></td><td><code>dev</code></td><td>Số thiết bị khởi đầu (major, minor) của dải</td></tr>
+<tr><td><code>unsigned long</code></td><td><code>range</code></td><td>Kích thước của dải</td></tr>
+<tr><td><code>struct module *</code></td><td><code>owner</code></td><td>Module cài đặt driver, nếu có</td></tr>
+<tr><td><code>struct kobject *(*)(dev_t, int *, void *)</code></td><td><code>get</code></td><td>Dò tìm chủ sở hữu của dải</td></tr>
+<tr><td><code>int (*)(dev_t, void *)</code></td><td><code>lock</code></td><td>Tăng bộ đếm tham chiếu của chủ sở hữu</td></tr>
+<tr><td><code>void *</code></td><td><code>data</code></td><td>Dữ liệu riêng của chủ sở hữu dải — chính con trỏ <code>cdev</code></td></tr>
+</table>
+
+<h3>13.5.1 Cấp Số Thiết Bị</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Một bảng hash thứ hai, độc lập, tên là <code>chrdevs</code>, theo dõi các gán trọn một số major (255 entry, hash theo bit thấp của số major, danh sách va chạm sắp theo major rồi minor). Các phần tử của nó là <code>char_device_struct</code>:</p>
+<table>
+<tr><th>Kiểu</th><th>Trường</th><th>Mô tả</th></tr>
+<tr><td><code>unsigned char_device_struct *</code></td><td><code>next</code></td><td>Phần tử kế tiếp trong danh sách va chạm hash</td></tr>
+<tr><td><code>unsigned int</code></td><td><code>major</code></td><td>Số major của dải</td></tr>
+<tr><td><code>unsigned int</code></td><td><code>baseminor</code></td><td>Số minor khởi đầu của dải</td></tr>
+<tr><td><code>int</code></td><td><code>minorct</code></td><td>Kích thước dải</td></tr>
+<tr><td><code>const char *</code></td><td><code>name</code></td><td>Tên driver xử lý dải này</td></tr>
+<tr><td><code>struct file_operations *</code></td><td><code>fops</code></td><td>Không dùng</td></tr>
+<tr><td><code>struct cdev *</code></td><td><code>cdev</code></td><td>Con trỏ tới descriptor character device driver</td></tr>
+</table>
+<p style="font-size:12px;color:var(--muted)"><span class="badge source">NGUỒN SÁCH</span> Table 13-10. Hai dải có thể chia sẻ cùng một số major, nhưng dải minor của chúng không được chồng lấn.</p>
+
+<p><span class="badge source">NGUỒN SÁCH</span> Có hai cách gán một dải số thiết bị cho một driver:</p>
+<table>
+<tr><th>Cách</th><th>API</th><th>Ghi chú</th></tr>
+<tr><td>Được ưu tiên (mọi driver mới)</td><td><code>register_chrdev_region(dev, size, "foo")</code> hoặc <code>alloc_chrdev_region(...)</code></td><td>Dải tùy ý; caller phải tự gọi <code>cdev_add()</code> sau đó — các hàm này <em>không</em> tự gọi nó.</td></tr>
+<tr><td>Kiểu cũ (legacy)</td><td><code>register_chrdev(major, name, fops)</code></td><td>Dải cố định: một major, minor từ 0–255; caller <em>không được</em> gọi <code>cdev_add()</code> — việc này đã làm sẵn bên trong.</td></tr>
+</table>
+
+<div class="diagram" id="D19">
+<div class="dtitle">D19 — Call graph: register_chrdev_region() / alloc_chrdev_region() <span class="dq">Bên trong __register_chrdev_region() thực sự xảy ra điều gì?</span></div>
+<img src="DD_11.png" alt="" style="max-width: 100%; height: auto;">
+</div>
+
+<div class="diagram" id="D20">
+<div class="dtitle">D20 — Call graph: register_chrdev() (kiểu cũ, một major duy nhất) <span class="dq">API legacy "trọn một major" được dựng trên cdev như thế nào?</span></div>
+<img src="DD_12.png" alt="" style="max-width: 100%; height: auto;">
+
+</div>
+
+<h3>13.5.2 Truy Cập Một Character Device Driver</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Nhớ lại từ <a href="#s13-3">13.3.2</a> rằng <code>dentry_open()</code> (được kích hoạt bởi service routine của syscall <code>open()</code>) đặt <code>f_op</code> của device file loại character thành <code>def_chr_fops</code> — một bảng gần như trống, chỉ định nghĩa một phương thức, <code>open = chrdev_open()</code>, mà <code>dentry_open()</code> gọi ngay lập tức.</p>
+
+<div class="diagram" id="D21">
+<div class="dtitle">D21 — chrdev_open() từng bước <span class="dq">Chính xác những bước nào biến một device file trần trụi thành kết nối sống tới một driver?</span></div>
+<img src="DD12.png" alt="" style="max-width: 100%; height: auto;">
+
+<p style="font-size:12px;color:var(--muted);margin-top:8px"><span class="badge source">NGUỒN SÁCH</span> Đây là cú thay <code>file_operations</code> thứ hai và cuối cùng được nhắc tới ở <a href="#D14">D14</a> — sau bước 6/7, mọi syscall tiếp theo trên file object này chạy code thật của driver, không còn qua lớp keo dán tổng quát của VFS nữa.</p>
+</div>
+
+<details class="fc">
+<summary>Thẻ hàm — chrdev_open() <span class="tag">Phương thức open</span> <span class="tag cb">Process context</span></summary>
+<div class="fcbody">
+<dl class="fcgrid">
+<dt>Lớp</dt><dd>Lớp keo dán character-device tổng quát, giữa VFS và một driver cụ thể</dd>
+<dt>Mục đích</dt><dd>Phân giải (major,minor) → <code>cdev</code> sở hữu → <code>file_operations</code> thật, rồi lắp bảng đó vào file object.</dd>
+<dt>Được gọi bởi</dt><dd><code>dentry_open()</code>, với vai trò phương thức <code>open</code> của <code>def_chr_fops</code></dd>
+<dt>Gọi tới</dt><dd><code>kobject_get()</code>, <code>kobj_lookup()</code>, và — nếu có định nghĩa — phương thức <code>open</code> riêng của driver thật</dd>
+<dt>Đầu vào</dt><dd><code>inode</code> và <code>filp</code> của device file đang được mở</dd>
+<dt>Đầu ra / Hiệu ứng phụ</dt><dd>Đặt <code>inode->i_cdev</code>, <code>inode->i_cindex</code>, nối inode vào <code>cdev->list</code>, đặt <code>filp->f_op</code></dd>
+<dt>Vì sao nó tồn tại?</dt><dd>Nó là điểm nút duy nhất biến "một device file nào đó vừa được mở" thành "code của driver cụ thể này giờ đã được nối dây" — nếu không có nó, hàm <code>read_inode</code> của mỗi filesystem sẽ phải biết về mọi driver có thể có.</dd>
+<dt>Hàm liên quan</dt><dd><code>init_special_inode()</code> (thiết lập <code>i_fop</code>=<code>def_chr_fops</code> ngay từ đầu, 13.3.2), <code>cdev_add()</code>/<code>kobj_map()</code> (điền dữ liệu mà <code>kobj_lookup()</code> tìm kiếm)</dd>
+</dl>
+</div>
+</details>
+
+<h3>13.5.3 Chiến Lược Buffering Cho Character Device</h3>
+<p><span class="badge source">NGUỒN SÁCH</span> Sự phân chia block/character không kể hết câu chuyện buffering — một số char device truyền vài byte mỗi thao tác, số khác truyền lượng lớn.</p>
+<table>
+<tr><th>Hình dạng thiết bị</th><th>Chiến lược</th><th>Ví dụ trong sách</th></tr>
+<tr><td>Vài byte mỗi thao tác</td><td>Đọc từng ký tự một từ input register vào một cấu trúc dữ liệu kernel; sao chép sang user space khi rảnh. Dữ liệu ghi được sao chép từ user space rồi ghi từng đơn vị một vào output register. DMA không đáng dùng — thời gian thiết lập DMA ≈ thời gian di chuyển dữ liệu trực tiếp.</td><td>Chuột PS/2: vài byte mỗi lần đọc, mô tả trạng thái nút và vị trí con trỏ.</td></tr>
+<tr><td>Dữ liệu lớn/tuần tự</td><td>Kết hợp DMA (di chuyển cả khối) với một <strong>buffer vòng (circular buffer)</strong> gồm 2 phần tử trở lên, mỗi phần tử cỡ một khối. Interrupt handler đẩy con trỏ sang một phần tử trống khi một khối mới tới; driver trả lại một phần tử khi đã sao chép xong khối đó sang user space.</td><td>Sound card ghi âm từ microphone ở 44,1kHz, sample 16-bit; NIC nhận gói tin (ở đây thời điểm đến là bất đồng bộ/không đoán trước, khác với tính tuần hoàn).</td></tr>
+<tr><td>Truy cập ngẫu nhiên (đĩa)</td><td>Phức tạp hơn nhiều — để dành cho các chương sau (page cache, block I/O subsystem).</td><td>Đĩa mềm, CD-ROM, ổ đĩa SCSI.</td></tr>
+</table>
+<p><span class="badge source">NGUỒN SÁCH</span> Buffer vòng làm phẳng các đỉnh tải CPU: dù bên tiêu thụ ở chế độ người dùng tạm thời bị đói do các tác vụ ưu tiên cao hơn, DMA vẫn tiếp tục điền các phần tử buffer vì interrupt handler chạy thay mặt cho bất kỳ tiến trình nào đang hiện hành, độc lập với việc lập lịch của chính bên tiêu thụ. Buffering cho thiết bị tuần tự tương đối dễ vì một buffer không bao giờ bị dùng lại — một ứng dụng âm thanh không thể yêu cầu microphone gửi lại cùng một khối. (Theo sách, Chapter 15 bàn về trường hợp truy cập ngẫu nhiên/đĩa khó hơn nhiều.)</p>
+
+<div class="diagram" id="D22">
+<div class="dtitle">D22 — Buffer vòng + DMA cho character device thông lượng cao <span class="dq">Làm sao dữ liệu vẫn tiếp tục chảy dù tiến trình tiêu thụ không được lập lịch?</span></div>
+<img src="DD_14.png" alt="" style="max-width: 100%; height: auto;">
+</div>
+
+<div class="callout mental">
+<h5>Mô hình tư duy</h5>
+<p>Đăng ký character device là một <strong>hệ thống hai bảng hash</strong> đặt trên bộ máy kobject tổng quát: <code>chrdevs</code> là sổ sách thô, trọn-một-major (chủ yếu là legacy), còn <code>cdev_map</code>/<code>kobj_map</code> là tra cứu tinh (major,minor) mà <code>chrdev_open()</code> thực sự truy vấn ở mỗi <code>open()</code>. <code>cdev_add()</code> là cầu nối điền bảng thứ hai từ descriptor riêng của driver. Sau khi <code>chrdev_open()</code> chạy xong, lớp character-device coi như hoàn thành nhiệm vụ — mọi thứ sau đó là code thuần của driver.</p>
+</div>
+<div class="callout five">
+<h5>Nếu chỉ nhớ 5 điều</h5>
+<ol>
+<li><code>struct cdev</code> là "tay cầm" đăng ký của driver; nó sở hữu một dải <code>[dev, dev+count)</code> số thiết bị và một bảng <code>file_operations</code>.</li>
+<li><code>cdev_add()</code> → <code>kobj_map()</code> chèn driver vào bảng hash <code>cdev_map</code> mà <code>kobj_lookup()</code> tìm kiếm.</li>
+<li>Driver mới: <code>register_chrdev_region()</code>/<code>alloc_chrdev_region()</code> + tự gọi <code>cdev_add()</code>. Driver legacy: <code>register_chrdev()</code> tự làm cả hai bên trong.</li>
+<li><code>chrdev_open()</code> chính là nơi chính xác biến "vừa mở một file /dev" thành "giờ đang chạy code thật của driver" — hãy thuộc lòng 8 bước của nó.</li>
+<li>Thiết bị vài-byte sao chép từng byte qua một struct kernel; thiết bị thông lượng cao ghép DMA với một buffer vòng để phần cứng và bên tiêu thụ chạy ở nhịp độ tách rời nhau.</li>
+</ol>
+</div>
+</div>
+
+<div class="section" id="func-index">
+<h2>Chỉ Mục Hàm</h2>
+<p><span class="badge synth">TỔNG HỢP</span> Mọi hàm được nhắc tới trong chương, gom vào một bảng có thể tìm kiếm được. Vị trí file mang tính khái niệm/kiến thức kernel tổng quát <span class="badge infer">SUY LUẬN</span> — luôn đối chiếu đường dẫn/dòng chính xác với cây source thật bạn đang học (xem <a href="#versions">Nhận thức về phiên bản</a>).</p>
+<input class="idx-search" placeholder="Lọc chỉ mục hàm…" oninput="filterTable(this,'funcTable')">
+<table id="funcTable">
+<tr><th>Hàm</th><th>Thuộc mục</th><th>Vai trò</th><th>Được gọi bởi</th><th>Gọi tới</th></tr>
+<tr><td><code>inb/outb/…</code></td><td>13.1</td><td>Truy cập I/O port thô</td><td>device driver</td><td>chỉ thị CPU <code>in</code>/<code>out</code></td></tr>
+<tr><td><code>request_region()</code>/<code>release_region()</code></td><td>13.1</td><td>Giữ chỗ/giải phóng một dải I/O port</td><td>init/cleanup của driver</td><td><code>request_resource()</code>/<code>release_resource()</code></td></tr>
+<tr><td><code>allocate_resource()</code></td><td>13.1</td><td>Tìm + giữ chỗ một dải trống với kích thước cho trước</td><td>driver PCI</td><td>duyệt cây resource</td></tr>
+<tr><td><code>kobject_register()</code>/<code>kobject_unregister()</code></td><td>13.2</td><td>Thêm/xóa thư mục sysfs của một kobject</td><td><code>kset_register</code>, luồng đăng ký device/driver/bus</td><td>thao tác thư mục sysfs</td></tr>
+<tr><td><code>kobject_get()</code>/<code>kobject_put()</code></td><td>13.2</td><td>Đếm tham chiếu một kobject/container</td><td>mọi nơi dùng/giải phóng container</td><td>thao tác <code>kref</code>; <code>ktype->release()</code> khi về 0</td></tr>
+<tr><td><code>kset_register()</code>/<code>kset_unregister()</code></td><td>13.2</td><td>Hàm bọc đăng ký một kset</td><td>khởi tạo subsystem</td><td><code>kobject_register()</code></td></tr>
+<tr><td><code>subsystem_register()</code>/<code>subsystem_unregister()</code></td><td>13.2</td><td>Hàm bọc đăng ký một subsystem</td><td>khởi tạo bus/class</td><td><code>kobject_register()</code></td></tr>
+<tr><td><code>sysfs_create_file()</code></td><td>13.2</td><td>Tạo file thuộc tính cho một kobject</td><td>khởi tạo driver/device</td><td>nội bộ sysfs</td></tr>
+<tr><td><code>sysfs_create_link()</code></td><td>13.2</td><td>Tạo symlink giữa hai thư mục kobject</td><td>code bus/class</td><td>nội bộ sysfs</td></tr>
+<tr><td><code>get_device()</code>/<code>put_device()</code></td><td>13.2</td><td>Đếm tham chiếu một <code>device</code></td><td>code bus/driver</td><td><code>kobject_get()</code>/<code>put()</code></td></tr>
+<tr><td><code>device_register()</code>/<code>device_unregister()</code></td><td>13.2 / 13.4.1</td><td>Thêm/xóa một device khỏi mô hình</td><td>luồng probe của <code>driver_register()</code></td><td><code>kobject_register()</code>, tạo entry <code>/sys/devices</code></td></tr>
+<tr><td><code>get_driver()</code>/<code>put_driver()</code></td><td>13.2</td><td>Đếm tham chiếu một <code>device_driver</code></td><td>code bus</td><td><code>kobject_get()</code>/<code>put()</code></td></tr>
+<tr><td><code>driver_register()</code>/<code>driver_unregister()</code></td><td>13.2 / 13.4.1</td><td>Thêm/xóa một driver khỏi mô hình</td><td><code>pci_register_driver()</code> và các hàm bọc riêng-bus tương tự</td><td><code>kobject_register()</code>, <code>bus_type.match</code></td></tr>
+<tr><td><code>bus_for_each_drv()</code>/<code>bus_for_each_dev()</code></td><td>13.2</td><td>Duyệt danh sách driver/device của một bus</td><td>code tầng bus</td><td>duyệt danh sách</td></tr>
+<tr><td><code>pci_register_driver()</code></td><td>13.4.1</td><td>Hàm bọc đăng ký riêng cho PCI</td><td>hàm init module driver PCI</td><td><code>driver_register()</code></td></tr>
+<tr><td><code>foo_read()</code></td><td>13.4.3.2</td><td>Ví dụ phương thức <code>read</code> chế độ interrupt</td><td>luồng <code>sys_read</code> của VFS</td><td><code>down_interruptible</code>, <code>outb</code>, <code>wait_event_interruptible</code>, <code>put_user</code>, <code>up</code></td></tr>
+<tr><td><code>foo_interrupt()</code></td><td>13.4.3.2</td><td>Ví dụ interrupt handler</td><td>cơ chế điều phối IRQ của CPU</td><td><code>inb</code>, <code>wake_up_interruptible</code></td></tr>
+<tr><td><code>ioremap()</code>/<code>ioremap_nocache()</code></td><td>13.4.4</td><td>Ánh xạ I/O physical memory vào không gian tuyến tính của kernel</td><td>khởi tạo driver</td><td><code>get_vm_area()</code>, cập nhật Page Table</td></tr>
+<tr><td><code>iounmap()</code></td><td>13.4.4</td><td>Hủy <code>ioremap()</code></td><td>dọn dẹp driver</td><td>cập nhật Page Table</td></tr>
+<tr><td><code>readb/readw/readl/writeb/writew/writel</code></td><td>13.4.4</td><td>Hàm truy cập I/O-memory khả chuyển</td><td>device driver</td><td>cài đặt riêng kiến trúc</td></tr>
+<tr><td><code>memcpy_fromio()</code>/<code>memcpy_toio()</code>/<code>memset_io()</code></td><td>13.4.4</td><td>Truy cập I/O-memory theo khối</td><td>device driver</td><td>cài đặt riêng kiến trúc</td></tr>
+<tr><td><code>pci_set_dma_mask()</code>/<code>dma_set_mask()</code></td><td>13.4.5.3</td><td>Thỏa thuận kích thước bus-address với tầng bus</td><td>khởi tạo driver</td><td>tầng bus</td></tr>
+<tr><td><code>pci_alloc_consistent()</code>/<code>dma_alloc_coherent()</code></td><td>13.4.5.5</td><td>Cấp phát + ánh xạ coherent một buffer DMA</td><td>khởi tạo driver</td><td>bộ cấp phát trang, tầng DMA riêng kiến trúc</td></tr>
+<tr><td><code>pci_free_consistent()</code>/<code>dma_free_coherent()</code></td><td>13.4.5.5</td><td>Giải phóng một buffer DMA coherent</td><td>dọn dẹp driver</td><td>bộ cấp phát trang</td></tr>
+<tr><td><code>pci_map_single()</code>/<code>dma_map_single()</code></td><td>13.4.5.6</td><td>Ánh xạ một buffer có sẵn cho DMA streaming</td><td>đường I/O của driver</td><td>IO-MMU / tầng DMA riêng kiến trúc</td></tr>
+<tr><td><code>pci_unmap_single()</code>/<code>dma_unmap_single()</code></td><td>13.4.5.6</td><td>Bỏ ánh xạ một buffer DMA streaming</td><td>đường I/O của driver</td><td>IO-MMU / tầng DMA riêng kiến trúc</td></tr>
+<tr><td><code>*_sync_single_for_device()</code>/<code>*_sync_single_for_cpu()</code></td><td>13.4.5.6</td><td>Flush/invalidate cache quanh một lần truyền DMA streaming</td><td>đường I/O của driver</td><td>hàm flush cache riêng kiến trúc</td></tr>
+<tr><td><code>pci_map_page()</code>/<code>dma_map_page()</code>, <code>*_unmap_page()</code></td><td>13.4.5.6</td><td>Ánh xạ DMA streaming cho buffer nằm ở vùng nhớ cao</td><td>đường I/O của driver</td><td>IO-MMU / tầng DMA riêng kiến trúc</td></tr>
+<tr><td><code>ioctl()</code></td><td>13.4.6</td><td>Kênh lệnh riêng của thiết bị, ngoài luồng chuẩn</td><td>user space</td><td>phương thức <code>ioctl</code>/<code>unlocked_ioctl</code> của driver</td></tr>
+<tr><td><code>cdev_alloc()</code></td><td>13.5</td><td>Cấp phát + khởi tạo động một <code>cdev</code></td><td>khởi tạo driver</td><td>khởi tạo kobject</td></tr>
+<tr><td><code>cdev_add()</code></td><td>13.5</td><td>Đăng ký một <code>cdev</code> vào mô hình</td><td>khởi tạo driver, <code>register_chrdev()</code></td><td><code>kobj_map()</code></td></tr>
+<tr><td><code>kobj_map()</code></td><td>13.5</td><td>Chèn một dải (major,minor) vào bảng hash của một miền ánh xạ</td><td><code>cdev_add()</code></td><td>chèn bảng hash</td></tr>
+<tr><td><code>kobj_lookup()</code></td><td>13.5 / 13.5.2</td><td>Tìm kobject chủ sở hữu của một số thiết bị</td><td><code>chrdev_open()</code></td><td>tìm trong bảng hash, <code>probe.get()</code>, <code>probe.lock()</code></td></tr>
+<tr><td><code>register_chrdev_region()</code>/<code>alloc_chrdev_region()</code></td><td>13.5.1.1</td><td>Giữ chỗ một dải (major,minor) (kiểu mới)</td><td>khởi tạo driver</td><td><code>__register_chrdev_region()</code></td></tr>
+<tr><td><code>__register_chrdev_region()</code></td><td>13.5.1.1</td><td>Logic lõi giữ chỗ dải</td><td>hai hàm trên, và <code>register_chrdev()</code></td><td>chèn bảng hash <code>chrdevs</code></td></tr>
+<tr><td><code>register_chrdev()</code></td><td>13.5.1.2</td><td>Đăng ký kiểu cũ, một major duy nhất</td><td>khởi tạo driver legacy</td><td><code>__register_chrdev_region()</code>, <code>cdev_add()</code></td></tr>
+<tr><td><code>chrdev_open()</code></td><td>13.5.2</td><td>Phương thức <code>open</code> của <code>def_chr_fops</code>; phân giải driver + lắp fops thật</td><td><code>dentry_open()</code></td><td><code>kobject_get()</code>, <code>kobj_lookup()</code>, phương thức <code>open</code> riêng của driver</td></tr>
+<tr><td><code>init_special_inode()</code></td><td>13.3.2</td><td>Thiết lập <code>i_rdev</code>/<code>i_fop</code> cho inode của một device file</td><td><code>read_inode</code> của filesystem</td><td>—</td></tr>
+<tr><td><code>dentry_open()</code></td><td>13.3.2 / 13.5.2</td><td>Cấp phát file object, sao chép <code>i_fop</code> vào <code>f_op</code>, gọi <code>open</code></td><td>service routine của syscall <code>open()</code></td><td><code>chrdev_open()</code> (với char device)</td></tr>
+<tr><td><code>mknod()</code></td><td>13.3</td><td>Tạo một device file với loại/major/minor cho trước</td><td>user space / <code>udev</code></td><td>tạo inode ở VFS</td></tr>
+</table>
+</div>
+
+<div class="section" id="struct-index">
+<h2>Chỉ Mục Cấu Trúc Dữ Liệu</h2>
+<input class="idx-search" placeholder="Lọc chỉ mục cấu trúc dữ liệu…" oninput="filterTable(this,'structTable')">
+<table id="structTable">
+<tr><th>Cấu trúc</th><th>Mục đích</th><th>Chủ sở hữu / Được tạo bởi</th><th>Được dùng bởi</th><th>Hàm liên quan</th></tr>
+<tr><td><code>resource</code></td><td>Node trong cây giữ chỗ một dải I/O port (hoặc bộ nhớ)</td><td>Device driver, lúc khởi tạo</td><td>Bộ kiểm tra va chạm port của kernel; <code>/proc/ioports</code></td><td><code>request_region</code>, <code>release_region</code>, <code>allocate_resource</code></td></tr>
+<tr><td><code>kobject</code></td><td>Node tổng quát của cây device model; ⇔ một thư mục sysfs</td><td>Nhúng trong một container, đăng ký qua <code>kobject_register()</code></td><td>Mọi cấu trúc device-model khác</td><td><code>kobject_get/put</code>, <code>kobject_register/unregister</code></td></tr>
+<tr><td><code>kset</code></td><td>Tập hợp các kobject cùng loại container</td><td>Khởi tạo bus/class/subsystem</td><td>Nhóm các device/driver cùng loại</td><td><code>kset_get/put</code>, <code>kset_register/unregister</code></td></tr>
+<tr><td><code>subsystem</code></td><td>Tập hợp các kset, cộng một rwsem cho toàn bộ cây con</td><td>Khởi tạo mô hình cấp cao nhất (bus_subsys, devices_subsys, class_subsys…)</td><td>Gốc của một thư mục sysfs cấp cao nhất</td><td><code>subsys_get/put</code>, <code>subsystem_register/unregister</code></td></tr>
+<tr><td><code>device</code></td><td>Descriptor của một thiết bị phần cứng trong mô hình</td><td>Descriptor riêng của bus (vd. <code>pci_dev</code>), qua <code>device_register()</code></td><td><code>bus_type</code>, <code>device_driver</code>, <code>class_device</code></td><td><code>get_device/put_device</code>, <code>device_register/unregister</code></td></tr>
+<tr><td><code>device_driver</code></td><td>Descriptor của một driver trong mô hình</td><td>Descriptor riêng của bus (vd. <code>pci_driver</code>), qua <code>driver_register()</code></td><td><code>bus_type</code>, danh sách <code>device</code> sở hữu</td><td><code>get_driver/put_driver</code>, <code>driver_register/unregister</code></td></tr>
+<tr><td><code>bus_type</code></td><td>Descriptor của một loại bus (PCI, USB, …)</td><td>Code subsystem của bus, tĩnh hoặc lúc khởi tạo</td><td><code>device.bus</code>, <code>device_driver.bus</code></td><td><code>bus_for_each_drv/dev</code>, các phương thức <code>match</code>/<code>hotplug</code>/<code>suspend</code>/<code>resume</code></td></tr>
+<tr><td><code>class</code> / <code>class_device</code></td><td>Nhóm logical device độc lập bus, phơi ra cho user space</td><td>Code subsystem của class</td><td>udev (đọc thuộc tính <code>dev</code>)</td><td>API (un)register của class <span class="badge infer">SUY LUẬN</span></td></tr>
+<tr><td><code>dev_t</code></td><td>Số thiết bị 32-bit (12-bit major / 20-bit minor)</td><td>Gán lúc đăng ký driver</td><td>Inode (<code>i_rdev</code>), <code>cdev</code>, <code>char_device_struct</code></td><td><code>MAJOR</code>, <code>MINOR</code>, <code>MKDEV</code></td></tr>
+<tr><td><code>cdev</code></td><td>Descriptor character-driver: sở hữu một dải số thiết bị + bảng fops</td><td><code>cdev_alloc()</code> hoặc nhúng trong một struct lớn hơn</td><td><code>kobj_map</code>/<code>cdev_map</code>, <code>i_cdev</code> của inode</td><td><code>cdev_add</code>, <code>cdev_alloc</code></td></tr>
+<tr><td><code>probe</code></td><td>Một entry trong danh sách va chạm hash bên trong <code>kobj_map</code></td><td><code>kobj_map()</code></td><td><code>kobj_lookup()</code></td><td>phương thức <code>get</code>/<code>lock</code></td></tr>
+<tr><td><code>char_device_struct</code></td><td>Bản ghi giữ chỗ trọn-một-major kiểu legacy</td><td><code>__register_chrdev_region()</code></td><td>Bảng hash <code>chrdevs</code>, <code>register_chrdev()</code></td><td>—</td></tr>
+<tr><td><code>foo_dev_t</code> (ví dụ)</td><td>Descriptor riêng cho mỗi thiết bị của driver ví dụ chế độ interrupt</td><td>Riêng của driver</td><td><code>foo_read()</code>, <code>foo_interrupt()</code></td><td>—</td></tr>
+</table>
+</div>
+
+<div class="section" id="diagram-index">
+<h2>Chỉ Mục Sơ Đồ</h2>
+<p><span class="badge synth">TỔNG HỢP</span> Nhấn vào bất kỳ dòng nào để nhảy tới sơ đồ đó.</p>
+<table>
+<tr><th>Mã</th><th>Tiêu đề</th><th>Câu hỏi nó trả lời</th></tr>
+<tr><td><a href="#D01">D01</a></td><td>Kiến trúc tổng quát</td><td>Chapter 13 nằm ở đâu trong toàn bộ kernel, và bên trong có gì?</td></tr>
+<tr><td><a href="#D02">D02</a></td><td>Mức 0 — Góc nhìn hệ thống</td><td>Một read() từ user space cuối cùng chạm vào silicon thế nào?</td></tr>
+<tr><td><a href="#D03">D03</a></td><td>Mức 1 — Góc nhìn Kernel</td><td>Ngoài chương này, kernel còn đang làm gì khác?</td></tr>
+<tr><td><a href="#D04">D04</a></td><td>Mức 2 — Góc nhìn Chapter</td><td>4 mảnh ghép lớn bên trong Chapter 13 là gì?</td></tr>
+<tr><td><a href="#D05">D05</a></td><td>Mức 3–6 — Thành phần→Đối tượng→Hàm→Source→HW</td><td>Từ một thành phần trừu tượng đi xuống code thật và silicon thế nào?</td></tr>
+<tr><td><a href="#D06">D06</a></td><td>Góc nhìn tổng quan kiến trúc I/O của PC</td><td>Hệ thống phân cấp phần cứng nào nằm giữa CPU và một thiết bị?</td></tr>
+<tr><td><a href="#D07">D07</a></td><td>Các I/O port chuyên dụng</td><td>Các port của một thiết bị đóng vai trò gì?</td></tr>
+<tr><td><a href="#D08">D08</a></td><td>Cây resource của I/O port</td><td>Tại sao dùng cây thay vì danh sách phẳng?</td></tr>
+<tr><td><a href="#D09">D09</a></td><td>Ví dụ phân cấp Device Driver Model</td><td>kobject→kset→subsystem lồng nhau ra sao, ánh xạ vào sysfs thế nào?</td></tr>
+<tr><td><a href="#D10">D10</a></td><td>Tương tác giữa các thành phần</td><td>bus_type, device, device_driver và class liên hệ ra sao?</td></tr>
+<tr><td><a href="#D11">D11</a></td><td>Luồng đăng ký</td><td>Điều gì xảy ra khi một driver PCI đăng ký và có device khớp?</td></tr>
+<tr><td><a href="#D12">D12</a></td><td>Mã hóa dev_t</td><td>major/minor đóng gói vào một giá trị 32-bit ra sao?</td></tr>
+<tr><td><a href="#D13">D13</a></td><td>Tạo device file động qua udev/hotplug</td><td>Làm sao /dev được điền mà không cần bảng tĩnh?</td></tr>
+<tr><td><a href="#D14">D14</a></td><td>open() trên một Device File</td><td>open() dẫn tới gọi code driver thay vì code FS thế nào?</td></tr>
+<tr><td><a href="#D15">D15</a></td><td>Mẫu hình bộ đếm sử dụng</td><td>Làm sao driver tránh chiếm lại tài nguyên đã giữ?</td></tr>
+<tr><td><a href="#D16">D16</a></td><td>Sequence: foo_read()/foo_interrupt()</td><td>Thứ tự chính xác của sự kiện qua process và interrupt context?</td></tr>
+<tr><td><a href="#D17">D17</a></td><td>DMA đồng bộ và bất đồng bộ</td><td>Ai khởi động truyền, có bao nhiêu ngắt?</td></tr>
+<tr><td><a href="#D18">D18</a></td><td>Cấu trúc tra cứu kobj_map</td><td>Làm sao (major,minor) phân giải thành một cdev đang sống?</td></tr>
+<tr><td><a href="#D19">D19</a></td><td>Call graph: register_chrdev_region()</td><td>Bên trong __register_chrdev_region() xảy ra điều gì?</td></tr>
+<tr><td><a href="#D20">D20</a></td><td>Call graph: register_chrdev()</td><td>API legacy được dựng trên cdev thế nào?</td></tr>
+<tr><td><a href="#D21">D21</a></td><td>chrdev_open() từng bước</td><td>Bước nào nối dây một device file với một driver?</td></tr>
+<tr><td><a href="#D22">D22</a></td><td>Buffer vòng + DMA</td><td>Làm sao dữ liệu vẫn chảy khi bên tiêu thụ không được lập lịch?</td></tr>
+</table>
+</div>
+
+<div class="section" id="knowledge-map">
+<h2>Bản Đồ Tri Thức, Dependency Graph &amp; Lộ Trình Học</h2>
+
+<div class="diagram" id="D23">
+<div class="dtitle">D23 — Bản đồ tri thức Chapter 13 <span class="dq">Năm mảng con liên hệ ra sao để tạo thành một tổng thể?</span></div>
+<img src="DD_15.png" alt="" style="max-width: 100%; height: auto;">
+</div>
+
+<div class="diagram" id="D24">
+<div class="dtitle">D24 — Dependency Graph khái niệm <span class="dq">Cần hiểu gì trước khi hiểu X?</span></div>
+<img src="DD_16.png" alt="" style="max-width: 100%; height: auto;">
+</div>
+
+<h3>Lộ Trình Học</h3>
+<table>
+<tr><th>Mức</th><th>Mục tiêu</th></tr>
+<tr><td>1</td><td>Hiểu vấn đề: tại sao VFS lại cần một lớp bên dưới nó?</td></tr>
+<tr><td>2</td><td>Hiểu kiến trúc phần cứng: bus → interface → controller → device (13.1).</td></tr>
+<tr><td>3</td><td>Hiểu các cấu trúc dữ liệu của device driver model: kobject/kset/subsystem, device/driver/bus/class (13.2).</td></tr>
+<tr><td>4</td><td>Hiểu device file: major/minor, dev_t, keo dán VFS, udev (13.3).</td></tr>
+<tr><td>5</td><td>Hiểu các mẫu hình runtime của driver: đăng ký/khởi tạo, polling vs interrupt, I/O memory, DMA (13.4).</td></tr>
+<tr><td>6</td><td>Đọc source code thật cho <code>cdev</code>, <code>kobj_map</code>, <code>chrdev_open()</code> trên một cây kernel bạn có (13.5 + Labs).</td></tr>
+<tr><td>7</td><td>Trace đường <code>open()</code>/<code>read()</code> của một driver thật, đầu-cuối, bằng ftrace/printk (xem <a href="#debugging">Debugging</a>).</td></tr>
+<tr><td>8</td><td>Debug: tái tạo một va chạm resource, một wakeup bị bỏ lỡ, hoặc một lỗi coherency DMA trong môi trường test/VM.</td></tr>
+<tr><td>9</td><td>Sửa đổi: viết hoặc mở rộng một character device driver tối giản, dùng các mẫu hình từ 13.4–13.5.</td></tr>
+</table>
+
+<h3>Từ Bức Tranh Lớn Tới Source Code</h3>
+<div class="diagram" id="D25">
+<div class="dtitle">D25 — Cầu nối Kiến trúc → Source Code <span class="dq">Làm sao đi từ một khái niệm tới một dòng code thật?</span></div>
+<div class="flow">
+<div class="box purple">Kiến trúc — "character device được biểu diễn thống nhất"</div>
+<div class="arrow">↓</div>
+<div class="box purple">Thành phần — "lớp cdev / kobj_map"</div>
+<div class="arrow">↓</div>
+<div class="box green">Đối tượng — struct cdev, struct probe</div>
+<div class="arrow">↓</div>
+<div class="box purple">Hàm — cdev_add(), kobj_map(), kobj_lookup(), chrdev_open()</div>
+<div class="arrow">↓</div>
+<div class="box purple">Chuỗi gọi hàm — dentry_open() → chrdev_open() → kobj_lookup() → filp->f_op->open()</div>
+<div class="arrow">↓</div>
+<div class="box green">File source — fs/char_dev.c <span class="badge infer">SUY LUẬN</span></div>
+<div class="arrow">↓</div>
+<div class="box orange">CPU / Phần cứng — phương thức read/write thật của driver cuối cùng chạm vào một I/O port hoặc bộ nhớ</div>
+</div>
+</div>
+
+<h3>Đọc Source Code Theo Chiều Ngược</h3>
+<p><span class="badge synth">TỔNG HỢP</span> Đứng tại <code>chrdev_open()</code> trong source: <strong>ai gọi tôi?</strong> <code>dentry_open()</code>, với vai trò phương thức <code>open</code> của <code>def_chr_fops</code>. <strong>Tại sao họ gọi tôi?</strong> Vì inode vừa được <code>init_special_inode()</code> nhận diện là một character device file. <strong>Dữ liệu đầu vào của tôi từ đâu tới?</strong> Cặp <code>inode</code>/<code>filp</code> mà VFS vừa dựng khi phân giải pathname (Ch.12). <strong>Tôi thay đổi gì?</strong> <code>inode->i_cdev</code>, <code>inode->i_cindex</code>, <code>cdev->list</code>, <code>filp->f_op</code>. <strong>Ai dùng kết quả của tôi?</strong> Mọi syscall tiếp theo trên file descriptor này, qua <code>filp->f_op->read/write/ioctl/...</code>. <strong>Cái gì chạy ngay trước tôi?</strong> Việc cấp phát file object của <code>dentry_open()</code>. <strong>Cái gì chạy ngay sau tôi?</strong> Phương thức <code>open</code> riêng của driver thật, nếu có định nghĩa, rồi tới bất kỳ syscall nào người dùng gọi tiếp theo.</p>
+</div>
+
+<div class="section" id="debugging">
+<h2>Debug Subsystem</h2>
+<div class="callout fit"><h5>Cái này nằm ở đâu?</h5><p>Áp dụng xuyên suốt §13.2–13.5 — đây là cách bạn điều tra bất kỳ cấu trúc/luồng nào ở trên, trên một kernel đang chạy (hoặc đang sập).</p></div>
+<p><span class="badge synth">TỔNG HỢP</span> Các công cụ dưới đây được chọn vì ánh xạ trực tiếp vào các khái niệm chương này đưa ra; chỉ liệt kê công cụ thực sự phù hợp với nội dung.</p>
+<table>
+<tr><th>Triệu chứng</th><th>Nên xem ở đâu</th><th>Công cụ đề xuất</th></tr>
+<tr><td>"Device or resource busy" / sập máy lúc dò một I/O port</td><td>cây <code>resource</code> của I/O port</td><td><code>cat /proc/ioports</code>; đối chiếu với lời gọi <code>request_region()</code> của driver</td></tr>
+<tr><td>Một thiết bị không xuất hiện trong <code>/dev</code></td><td>đường xuất sysfs: driver → <code>class_device</code> → thuộc tính <code>dev</code> → udev</td><td><code>ls /sys/class/&lt;class&gt;/*/dev</code>; xem log udev/hotplug</td></tr>
+<tr><td><code>open()</code> trên device file trả về <code>-ENODEV</code></td><td>driver đã bao giờ đăng ký chưa</td><td><code>ls /sys/bus/&lt;bus&gt;/drivers</code>, <code>ls /sys/class/&lt;class&gt;</code>; dynamic_debug / printk trong <code>probe</code> của driver</td></tr>
+<tr><td>Tiến trình treo mãi trong <code>read()</code></td><td>wait queue + interrupt handler (mất wakeup / IRQ không bao giờ phát)</td><td><code>cat /proc/interrupts</code> (số IRQ có tăng không?), function tracer của <code>ftrace</code> trên <code>request_irq</code>/handler, <code>dump_stack()</code> một lần trong handler</td></tr>
+<tr><td>Driver crash khi đọc bộ nhớ thiết bị</td><td>đã thực sự <code>ioremap()</code> trước khi dereference chưa, hay dùng <code>readb</code>/<code>writeb</code> thay vì con trỏ thô chưa</td><td><code>addr2line</code>/<code>objdump</code> trên EIP gây lỗi; grep driver tìm cast con trỏ thô so với <code>readb/writeb</code></td></tr>
+<tr><td>Dữ liệu hỏng chỉ trên non-x86 / sau khi thêm DMA</td><td>lựa chọn ánh xạ DMA coherent vs streaming, thiếu lời gọi <code>*_sync_single_for_*</code></td><td>review code theo §13.4.5.4–13.4.5.6; <code>pahole</code> để kiểm tra layout/canh lề buffer</td></tr>
+<tr><td>Hai device file lặng lẽ trùng nhau ở cùng major:minor</td><td>bảng hash <code>chrdevs</code> / <code>cdev_map</code></td><td><code>cat /proc/devices</code> (số major), log kernel cho lỗi <code>__register_chrdev_region</code></td></tr>
+<tr><td>Cần xem chính xác open()/read() của một driver làm gì lúc chạy</td><td>các phương thức file_operations cụ thể của driver</td><td>function_graph tracer của <code>trace-cmd</code>/<code>ftrace</code> giới hạn trong module driver; <code>perf probe</code> trên các hàm của nó</td></tr>
+</table>
+</div>
+
+<div class="section" id="labs">
+<h2>Bài Tập Trace Source Code</h2>
+<p><span class="badge synth">TỔNG HỢP</span> Các bài tập này giả định bạn có một cây source kernel Linux thật (bất kỳ phiên bản tương đối hiện đại nào — xem <a href="#versions">Nhận thức về phiên bản</a> để biết đã thay đổi gì kể từ 2.6.11) và, lý tưởng, một VM có thể boot và đo đạc được.</p>
+
+<details class="fc"><summary>LAB 01 — Trace điểm vào của open() trên character device</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Xác nhận cú thay <code>file_operations</code> hai bước ở D14/D21 trên một kernel thật.</dd>
+<dt>Môi trường</dt><dd>Một cây source kernel + <code>ctags</code>/<code>cscope</code>, hoặc chỉ cần <code>grep -rn</code>.</dd>
+<dt>Các bước</dt><dd>1) Tìm <code>def_chr_fops</code> và phương thức <code>open</code> của nó. 2) Tìm cài đặt của phương thức open đó (tương đương hiện đại của <code>chrdev_open()</code>). 3) Theo nó tới nơi tra driver theo số thiết bị và gán lại <code>filp->f_op</code>.</dd>
+<dt>Kết quả mong đợi</dt><dd>Bạn chỉ ra được chính xác dòng gán lại <code>f_op</code> lần thứ hai.</dd>
+<dt>Cần quan sát</dt><dd>Tên/chữ ký hàm hiện đại có còn khớp mô tả <code>chrdev_open()</code> của chương này không, hay đã được tái cấu trúc.</dd>
+<dt>Vì sao quan trọng</dt><dd>Đây là điểm nút quan trọng nhất để hiểu bất kỳ character device driver nào được gọi tới như thế nào.</dd>
+</dl>
+</div></details>
+
+<details class="fc"><summary>LAB 02 — Trace toàn bộ chuỗi gọi hàm đăng ký</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Đi từ hàm init module của một driver thật xuống tới <code>cdev_add()</code>/<code>kobj_map()</code>.</dd>
+<dt>Các bước</dt><dd>Chọn một character device driver đơn giản trong <code>drivers/</code>. Tìm hàm <code>module_init</code> của nó, theo các lời gọi tới <code>alloc_chrdev_region</code>/<code>register_chrdev_region</code>, rồi tới <code>cdev_init</code>/<code>cdev_add</code>.</dd>
+<dt>Kết quả mong đợi</dt><dd>Một chuỗi gọi hàm được viết ra, từng hàm một, từ lúc nạp module tới khi số thiết bị có thể tìm kiếm được.</dd>
+<dt>Cần quan sát</dt><dd>Driver dùng API kiểu mới (region + cdev_add) hay kiểu cũ (<code>register_chrdev</code>).</dd>
+<dt>Vì sao quan trọng</dt><dd>Xác nhận D19/D20 trên một ví dụ thật, không phải ví dụ đồ chơi.</dd>
+</dl>
+</div></details>
+
+<details class="fc"><summary>LAB 03 — Quan sát sống các cấu trúc dữ liệu kobj_map / cdev</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Xem <code>/proc/devices</code> và đối chiếu với các bảng hash bên trong kernel.</dd>
+<dt>Các bước</dt><dd>Boot một VM với KGDB hoặc dùng <code>crash</code> trên một kernel đang chạy/dump; in mảng <code>chrdevs</code> và struct <code>cdev</code> của một driver cụ thể.</dd>
+<dt>Kết quả mong đợi</dt><dd>Bạn khớp được một số major trong <code>/proc/devices</code> với một <code>char_device_struct</code>/<code>cdev</code> đang sống trong bộ nhớ.</dd>
+<dt>Vì sao quan trọng</dt><dd>Biến Table 13-8/13-10 từ danh sách trường trừu tượng thành thứ bạn đã thực sự thấy trong bộ nhớ.</dd>
+</dl>
+</div></details>
+
+<details class="fc"><summary>LAB 04 — Trace locking quanh bộ đếm sử dụng của một thiết bị</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Xác nhận mẫu hình bộ đếm sử dụng open/release ở D15 trên một driver thật.</dd>
+<dt>Các bước</dt><dd>Tìm một driver mà phương thức <code>open</code> kiểm tra bộ đếm trước khi bật IRQ/DMA, và phương thức <code>release</code> tắt chúng khi bộ đếm về 0.</dd>
+<dt>Cần quan sát</dt><dd>Lock nào (mutex/spinlock) bảo vệ chính bộ đếm khỏi truy cập đồng thời trên SMP.</dd>
+<dt>Vì sao quan trọng</dt><dd>Đây là mẫu hình chuẩn cho "chỉ trả chi phí khởi tạo một lần."</dd>
+</dl>
+</div></details>
+
+<details class="fc"><summary>LAB 05 — Trace đường lỗi của một driver chế độ interrupt</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Tìm phiên bản thực tế tương đương <code>foo_read()</code>/<code>foo_interrupt()</code> và xem nó thực sự xử lý time-out ra sao (ví dụ trong sách cố tình bỏ qua phần này).</dd>
+<dt>Các bước</dt><dd>Tìm một driver nhỏ điều khiển bằng interrupt; định vị việc thiết lập timer quanh chỗ chờ, và điều gì xảy ra nếu wait_event timeout thay vì được IRQ đánh thức.</dd>
+<dt>Vì sao quan trọng</dt><dd>Driver thật không được phép treo mãi nếu phần cứng không bao giờ phát ngắt (thiết bị hỏng, sai đường IRQ, mất ngắt).</dd>
+</dl>
+</div></details>
+
+<details class="fc"><summary>LAB 06 — Trace một thiết lập I/O-memory / DMA</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Tìm một driver PCI gọi <code>ioremap()</code> và hoặc <code>dma_alloc_coherent()</code> hoặc <code>dma_map_single()</code>, rồi phân loại kiểu ánh xạ DMA nó chọn và tại sao.</dd>
+<dt>Vì sao quan trọng</dt><dd>Nối kết phần bàn luận trừu tượng về coherent-vs-streaming (13.4.5.4) với một quyết định kỹ thuật thật, có lý do rõ ràng.</dd>
+</dl>
+</div></details>
+
+<details class="fc"><summary>LAB 07 — Ánh xạ ngược source code về kiến trúc</summary><div class="fcbody">
+<dl class="fcgrid">
+<dt>Mục tiêu</dt><dd>Cho một hàm bạn chưa từng thấy (từ một driver ngẫu nhiên), phân loại xem: nó thuộc mảng con nào trong 5 mảng (13.1–13.5), và tại sao?</dd>
+<dt>Vì sao quan trọng</dt><dd>Đây chính là kỹ năng mà toàn bộ tài liệu này cố gắng xây dựng — nhận diện mẫu hình của code driver lạ và đối chiếu ngược lại với kiến trúc bạn vừa học.</dd>
+</dl>
+</div></details>
+</div>
+
+<div class="section" id="misconceptions">
+<h2>Ngộ Nhận Thường Gặp</h2>
+<div class="quiz"><div class="q">"Một kobject CHÍNH LÀ một device/driver/bus."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: Một kobject chỉ luôn được <em>nhúng bên trong</em> một struct container lớn hơn (<code>device</code>, <code>device_driver</code>, <code>bus_type</code>, <code>kset</code>, <code>cdev</code>, …). Nó cung cấp đếm tham chiếu, vị trí trong cây và một thư mục sysfs cho container đó — nó không bao giờ là "đối tượng thật" đứng một mình. <span class="badge source">NGUỒN SÁCH</span></div></div>
+<div class="quiz"><div class="q">"Đăng ký một driver nghĩa là nó đã sẵn sàng dùng."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: Đăng ký chỉ làm driver được mô hình <em>biết đến</em> (để device file thôi trả về <code>-ENODEV</code>). <strong>Khởi tạo</strong> — thực sự chiếm IRQ, kênh DMA, buffer — diễn ra sau đó, khi cần, đúng để tránh tích trữ tài nguyên chung khan hiếm. <span class="badge source">NGUỒN SÁCH</span></div></div>
+<div class="quiz"><div class="q">"Tên của một device file nói cho kernel biết nó là gì."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: Kernel chỉ quan tâm bộ ba (loại, major, minor) của inode; <code>/tmp/disk</code> và <code>/dev/hda</code> với cùng bộ ba đó là cùng một thiết bị theo góc nhìn của kernel. Tên chỉ quan trọng với các ứng dụng có quy ước hardcode. <span class="badge source">NGUỒN SÁCH</span></div></div>
+<div class="quiz"><div class="q">"Một interrupt handler có thể an toàn làm mọi thứ mà phương thức read() làm."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: <code>foo_interrupt()</code> chạy trong <strong>interrupt context</strong> — nó không thể ngủ, không thể chiếm một semaphore/mutex, và phải nhanh; chỉ <code>foo_read()</code>, chạy trong <strong>process context</strong>, mới được phép chặn trong <code>wait_event_interruptible()</code> hay giữ <code>foo_dev->sem</code>. <span class="badge synth">TỔNG HỢP</span> (quy tắc context là kiến thức kernel tổng quát, áp dụng vào chính ví dụ của sách)</div></div>
+<div class="quiz"><div class="q">"DMA luôn nhanh hơn, nên driver lúc nào cũng nên dùng nó."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: Chi phí thiết lập DMA tương đối cao; với các lần truyền nhỏ, để CPU sao chép trực tiếp hiệu quả hơn là lập trình một lần truyền DMA. <span class="badge source">NGUỒN SÁCH</span></div></div>
+<div class="quiz"><div class="q">"register_chrdev_region()/alloc_chrdev_region() đã đăng ký đầy đủ driver."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: Hai hàm đó chỉ giữ chỗ <em>dải số</em> — driver vẫn phải tự gọi <code>cdev_add()</code> sau đó. (Ngoại lệ duy nhất là <code>register_chrdev()</code> kiểu cũ: nó tự gọi <code>cdev_add()</code> bên trong, và một driver dùng nó KHÔNG được gọi <code>cdev_add()</code> lần nữa.) <span class="badge source">NGUỒN SÁCH</span></div></div>
+<div class="quiz"><div class="q">"Driver x86 không bao giờ phải lo về cache coherency của DMA, chấm hết."</div><div class="a" style="display:block">Ngộ nhận → Mô hình đúng: Riêng trên 80x86, nhờ hardware snooping nên không bao giờ có vấn đề coherency và kiểu ánh xạ nào cũng dùng được — nhưng đây là đặc thù riêng của x86, không phải đảm bảo chung của kernel; driver độc lập kiến trúc vẫn phải chọn đúng và gọi các hàm đồng bộ hóa, vì trên MIPS/SPARC/một số PowerPC coherency thực sự có thể vỡ. <span class="badge source">NGUỒN SÁCH</span></div></div>
+</div>
+
+<div class="section" id="versions">
+<h2>Nhận Thức Về Phiên Bản</h2>
+<p><span class="badge modern">KERNEL HIỆN ĐẠI</span> Chương này viết dựa trên Linux <strong>2.6.11</strong> (phiên bản mà <em>Understanding the Linux Kernel</em>, bản 3, dùng làm nền). Device driver model đã thay đổi đáng kể kể từ đó. Nơi nào không có số phiên bản chính xác trong nguồn, nó được đánh dấu <span class="badge verify">CẦN KIỂM CHỨNG</span> thay vì bịa ra.</p>
+<table>
+<tr><th>Chủ đề</th><th>Sách (2.6.11)</th><th>Kernel về sau</th><th>Khác biệt</th></tr>
+<tr><td><code>struct subsystem</code></td><td>Kiểu tường minh, nhúng một <code>kset</code> + <code>rwsem</code></td><td>Đã bị loại bỏ; vai trò của nó gộp thẳng vào <code>kset</code> <span class="badge verify">CẦN KIỂM CHỨNG phiên bản chính xác</span></td><td>Kernel hiện đại có ít hơn một tầng gián tiếp — đừng mong tìm thấy <code>struct subsystem</code> trong cây hiện tại.</td></tr>
+<tr><td><code>kobject_register()</code>/<code>kset_register()</code></td><td>API đăng ký chính</td><td>Được thay bằng kiểu API <code>kobject_init()</code> + <code>kobject_add()</code> <span class="badge verify">CẦN KIỂM CHỨNG phiên bản chính xác</span></td><td>Đăng ký trở thành mẫu hình init/add hai bước; vai trò khái niệm (kobject ⇔ thư mục sysfs) không đổi.</td></tr>
+<tr><td><code>bus_type.hotplug</code> / <code>kset_hotplug_ops</code></td><td>Kernel sinh tiến trình <code>/sbin/hotplug</code>, truyền biến môi trường</td><td>Được thay bằng cơ chế <strong>uevent</strong> qua netlink của kernel, được <code>udevd</code>/<code>systemd-udevd</code> tiêu thụ <span class="badge modern"></span></td><td>Cùng mục đích (báo user space về việc thêm/xóa thiết bị kèm ngữ cảnh), khác cơ chế vận chuyển.</td></tr>
+<tr><td><code>class_device</code></td><td>Struct riêng, nhúng kobject của chính nó, trỏ tới một <code>device</code></td><td>Phần lớn gộp vào <code>struct device</code> cộng <code>struct class</code> <span class="badge verify">CẦN KIỂM CHỨNG phiên bản chính xác</span></td><td>Về khái niệm vẫn là "logical device có thuộc tính dev," nhưng ít tầng gián tiếp hơn.</td></tr>
+<tr><td>Cấu trúc <code>dev_t</code> (12-bit major / 20-bit minor)</td><td>Như đã mô tả</td><td>Không đổi <span class="badge modern"></span></td><td>Vẫn chính xác cho tới hôm nay — đây là một trong những phần ổn định nhất của chương.</td></tr>
+<tr><td><code>cdev</code> / <code>kobj_map</code> / <code>chrdev_open()</code></td><td>Như mô tả ở 13.5</td><td>Về khái niệm không đổi; <code>chrdev_open()</code> vẫn phân giải số thiết bị và lắp <code>file_operations</code> của driver <span class="badge modern"></span></td><td>Cơ chế mô tả ở D18/D21 vẫn là mô hình tư duy đúng cho kernel hiện tại, dù tên hàm hỗ trợ nội bộ có thể khác đôi chút — xác nhận ở Lab 01.</td></tr>
+<tr><td>Phương thức <code>ioctl</code></td><td>Một phương thức file <code>ioctl</code> duy nhất</td><td>Tách thành <code>unlocked_ioctl</code>/<code>compat_ioctl</code> <span class="badge verify">CẦN KIỂM CHỨNG phiên bản chính xác</span></td><td>Bỏ Big Kernel Lock ngầm từng bọc quanh <code>ioctl</code>; thêm xử lý tương thích 32-trên-64-bit.</td></tr>
+<tr><td>Giá trị trả về của handler <code>irqreturn_t</code></td><td>Ví dụ trong sách trả về số <code>1</code> trần</td><td>Hằng số có tên <code>IRQ_HANDLED</code>/<code>IRQ_NONE</code> <span class="badge modern"></span></td><td>Cùng ý nghĩa, hằng số rõ ràng/có kiểu hơn trong code hiện đại — coi số <code>1</code> nguyên văn của sách là minh họa, không phải phong cách nên chép nguyên.</td></tr>
+</table>
+<p style="font-size:12.5px;color:var(--muted)">Bảng này cố tình không thay thế nội dung sách bằng kiến thức kernel hiện đại — nó đứng song song với sách. Khi học source thật, hãy tin source hơn cả chương này lẫn bảng này.</p>
+</div>
+
+<div class="section" id="quiz">
+<h2>Câu Hỏi Ôn Tập</h2>
+<p style="font-size:12.5px;color:var(--muted)">Nhấn vào một câu hỏi để xem đáp án.</p>
+
+<div class="quiz"><div class="q">Câu 1 (Khái niệm). Tại sao kernel không thể đơn giản mmap I/O memory của một thiết bị ISA giống như xử lý RAM thường?</div><details><summary>Xem đáp án</summary><div class="a">Vì code kernel chỉ dereference địa chỉ tuyến tính, và ánh xạ RAM→tuyến tính tự động dựng lúc boot chỉ phủ RAM vật lý. I/O memory nằm trên đỉnh RAM (vd. bộ nhớ của một card PCI gần biên 4GB) chưa có ánh xạ như vậy, nên driver phải tự tạo một ánh xạ bằng <code>ioremap()</code>, rồi truy cập qua họ hàm <code>readb</code>/<code>writeb</code> (hoặc con trỏ thô trên x86, dù các hàm khả chuyển vẫn được khuyến nghị).</div></details></div>
+
+<div class="quiz"><div class="q">Câu 2 (Kiến trúc). Chapter 13 nằm ở đâu so với VFS đã học ở chương trước?</div><details><summary>Xem đáp án</summary><div class="a">Ngay bên dưới VFS. VFS phụ thuộc vào các hàm mức thấp hơn để thực hiện mỗi thao tác đọc/ghi/… theo cách phù hợp với thiết bị; Chapter 13 chính là mức thấp hơn đó — cách kernel thực sự gọi tới các thao tác trên thiết bị thật.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 3 (Quan hệ hàm). Nếu <code>chrdev_open()</code> gọi <code>kobj_lookup()</code>, thì vì sao?</div><details><summary>Xem đáp án</summary><div class="a">Vì tại thời điểm đó kernel chỉ biết số (major,minor) của device file (từ <code>inode->i_rdev</code>); nó chưa biết driver nào sở hữu số đó. <code>kobj_lookup()</code> tìm trong bảng hash <code>cdev_map</code> dải chứa số đó và trả về kobject của <code>cdev</code> sở hữu — cách duy nhất để nối "một con số" với "một driver."</div></details></div>
+
+<div class="quiz"><div class="q">Câu 4 (Source code / cấu trúc dữ liệu). Ai sở hữu các đối tượng <code>struct probe</code> trong bảng hash của <code>kobj_map</code>, và ai đọc chúng?</div><details><summary>Xem đáp án</summary><div class="a"><code>kobj_map()</code> (được gọi từ <code>cdev_add()</code>) tạo và chèn chúng; <code>kobj_lookup()</code> (được gọi từ <code>chrdev_open()</code>) đọc chúng. Trường <code>data</code> của mỗi <code>probe</code> trỏ ngược về <code>cdev</code> của driver.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 5 (Debug). Một device file tồn tại trong <code>/dev</code> nhưng <code>open()</code> báo lỗi <code>-ENODEV</code>. Nguyên nhân khả dĩ nhất là gì và nên xem ở đâu?</div><details><summary>Xem đáp án</summary><div class="a">Driver lẽ ra sở hữu dải major/minor đó chưa đăng ký (module chưa nạp, hoặc <code>probe</code>/<code>match</code> chưa bao giờ khớp một thiết bị). Kiểm tra <code>/proc/devices</code> để tìm số major, và <code>/sys/bus/&lt;bus&gt;/drivers</code> để xem driver có tồn tại hay không.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 6 (Tại sao?). Tại sao device driver model lại cần thêm lớp <code>class</code>/<code>class_device</code> khi đã có <code>device</code> rồi?</div><details><summary>Xem đáp án</summary><div class="a"><code>device</code> phản ánh cấu trúc vật lý/bus (cha/con trên một bus); nó không nói gì về việc thiết bị đó thuộc <em>loại</em> nào với user space. <code>class</code>/<code>class_device</code> tồn tại để cho các driver cùng loại chức năng (mọi sound card, mọi thiết bị input…) một giao diện chế độ người dùng thống nhất, độc lập bus, và cụ thể là để công bố major:minor qua thuộc tính <code>dev</code> sao cho các công cụ như udev có thể tạo đúng device file mà không cần biết gì về bus.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 7 (Trace chuỗi gọi hàm). Trace toàn bộ chuỗi gọi hàm từ khi người dùng gọi <code>read()</code> trên device file của driver ví dụ, tới khi byte thực sự rời khỏi phần cứng.</div><details><summary>Xem đáp án</summary><div class="a">Syscall <code>read()</code> → VFS <code>sys_read()</code>/<code>vfs_read()</code> → <code>file->f_op->read</code> = <code>foo_read()</code> → <code>down_interruptible(&sem)</code> → <code>outb(READ_CMD, CONTROL_PORT)</code> (phần cứng bắt đầu thao tác) → <code>wait_event_interruptible()</code> (tiến trình ngủ) → [phần cứng xong, phát IRQ] → <code>foo_interrupt()</code> chạy: <code>inb(DATA_PORT)</code>, đặt <code>intr=1</code>, <code>wake_up_interruptible()</code> → scheduler đánh thức lại <code>foo_read()</code> → <code>put_user()</code> sao chép byte sang user space → <code>up(&sem)</code> → return.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 8 (Nếu X thất bại thì sao?). Điều gì xảy ra nếu <code>__register_chrdev_region()</code> không tìm được số major trống nào?</div><details><summary>Xem đáp án</summary><div class="a">Nó trả về mã lỗi, và theo đúng chú thích của sách, kernel chỉ có thể cấp phát động các major dưới 255 — việc cấp phát có thể thất bại ngay cả khi vẫn còn major chưa dùng trên ngưỡng đó. Việc đăng ký của driver gọi hàm này sẽ thất bại, và nó không được tiếp tục gọi <code>cdev_add()</code>.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 9 (Ai sở hữu cấu trúc Y?). Ai sở hữu bộ nhớ của một đối tượng <code>device</code>, và ai giải phóng nó?</div><details><summary>Xem đáp án</summary><div class="a">Nó thường được nhúng tĩnh bên trong một descriptor riêng của bus (vd. <code>pci_dev</code>), do code tầng bus cấp cao hơn cấp phát. Quyền sở hữu/vòng đời được theo dõi qua bộ đếm tham chiếu của kobject nhúng (<code>get_device()</code>/<code>put_device()</code>); khi về 0, phương thức <code>release</code> của kobject giải phóng toàn bộ container — không ai gọi <code>free()</code> trực tiếp trên một <code>device</code> cả.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 10 (Context nào chạy? Có ngủ được không?). <code>foo_interrupt()</code> có thể gọi <code>down_interruptible()</code> trên semaphore của driver không?</div><details><summary>Xem đáp án</summary><div class="a">Không. <code>foo_interrupt()</code> chạy trong interrupt context, không thể ngủ hay chặn trên một semaphore/mutex. Chỉ <code>foo_read()</code>, trong process context, mới được phép gọi <code>down_interruptible()</code>.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 11 (Hàm tiếp theo là gì?). Sau khi <code>init_special_inode()</code> đặt <code>inode->i_fop = &def_chr_fops</code>, điều gì chạy tiếp trong đường open(), và nó làm gì?</div><details><summary>Xem đáp án</summary><div class="a"><code>dentry_open()</code> chạy tiếp: nó cấp phát file object, sao chép <code>i_fop</code> vào <code>file->f_op</code>, rồi gọi ngay phương thức <code>open</code> — với <code>def_chr_fops</code> đó là <code>chrdev_open()</code>, hàm cuối cùng lắp bảng <code>file_operations</code> THẬT của driver.</div></details></div>
+
+<div class="quiz"><div class="q">Câu 12 (So sánh). Khi nào driver nên chọn ánh xạ DMA coherent thay vì streaming?</div><details><summary>Xem đáp án</summary><div class="a">Khi buffer được cả CPU lẫn động cơ DMA truy cập theo cách không đoán trước — vd. cấu trúc lệnh của các adapter SCSI — ánh xạ coherent (đồng bộ/consistent) là bắt buộc. Ngoài ra thường nên ưu tiên ánh xạ streaming, vì xử lý ánh xạ coherent có thể cồng kềnh và chậm hơn trên một số kiến trúc.</div></details></div>
+</div>
+
+<div class="section" id="cheatsheet">
+<h2>Tờ Ghi Nhớ Chapter 13</h2>
+
+<h4>Kiến trúc</h4>
+<p class="mono" style="font-size:12.5px">CPU → I/O bus → I/O interface → device controller → device, cộng I/O shared memory và mạch DMA tùy chọn.</p>
+
+<h4>Các thành phần chính</h4>
+<ul>
+<li><strong>Device driver model:</strong> kobject ⊂ kset ⊂ subsystem; device / device_driver / bus_type / class dựng trên đó; mọi thứ phản ánh vào <code>sysfs</code>.</li>
+<li><strong>Device files:</strong> danh tính (loại, major, minor); <code>dev_t</code> = 12-bit major + 20-bit minor; <code>def_chr_fops</code>/<code>def_blk_fops</code> là lớp keo dán tổng quát của VFS.</li>
+<li><strong>Lớp character device:</strong> <code>cdev</code> + <code>kobj_map</code>/<code>cdev_map</code> (hiện đại), <code>char_device_struct</code> + <code>chrdevs</code> (legacy, trọn một major).</li>
+</ul>
+
+<h4>Cấu trúc dữ liệu chính</h4>
+<table>
+<tr><td><code>resource</code></td><td><code>kobject</code></td><td><code>kset</code></td><td><code>subsystem</code></td></tr>
+<tr><td><code>device</code></td><td><code>device_driver</code></td><td><code>bus_type</code></td><td><code>class</code>/<code>class_device</code></td></tr>
+<tr><td><code>cdev</code></td><td><code>probe</code></td><td><code>char_device_struct</code></td><td><code>dev_t</code></td></tr>
+</table>
+
+<h4>Hàm chính</h4>
+<p class="mono" style="font-size:12px">request_region/release_region · kobject_register/unregister · device_register/driver_register · register_chrdev_region/alloc_chrdev_region · __register_chrdev_region · register_chrdev · cdev_add · kobj_map/kobj_lookup · chrdev_open · init_special_inode · dentry_open · ioremap/iounmap · họ readb/writeb · pci_map_single/dma_map_single · pci_alloc_consistent/dma_alloc_coherent</p>
+
+<h4>Chuỗi gọi hàm (kinh điển)</h4>
+<p class="mono" style="font-size:12px">open("/dev/x") → phân giải pathname ở VFS → read_inode → init_special_inode (đặt i_fop=def_chr_fops) → dentry_open (f_op=i_fop, gọi open) → chrdev_open (kobj_lookup, lắp f_op thật) → open() thật của driver → các read()/write()/ioctl() sau đó chạy thẳng driver thật</p>
+
+<h4>Luồng runtime — I/O chế độ interrupt</h4>
+<p class="mono" style="font-size:12px">read() → foo_read(): khóa sem → xóa intr → outb(cmd) → wait_event_interruptible(intr==1) [NGỦ] ⇄ IRQ → foo_interrupt(): inb(data) → intr=1 → wake_up_interruptible() → foo_read() tỉnh lại → put_user() → mở khóa sem → return</p>
+
+<h4>Các execution context</h4>
+<table>
+<tr><th>Context</th><th>Ngủ được?</th><th>Chiếm mutex/semaphore được?</th><th>Ví dụ trong chương</th></tr>
+<tr><td>Process context</td><td>Có</td><td>Có</td><td><code>foo_read()</code>, phương thức open/release của driver</td></tr>
+<tr><td>Interrupt context</td><td>Không</td><td>Không</td><td><code>foo_interrupt()</code></td></tr>
+</table>
+
+<h4>Lock / cơ chế đồng bộ đã thấy</h4>
+<ul>
+<li>Semaphore bảo vệ một thiết bị khỏi truy cập đồng thời (<code>foo_dev->sem</code>).</li>
+<li>Semaphore đọc-ghi bảo vệ toàn bộ một <code>subsystem</code> (<code>rwsem</code>).</li>
+<li>Wait queue cho việc chặn ở chế độ interrupt (<code>foo_dev->wait</code>).</li>
+<li>Bộ đếm tham chiếu (<code>kref</code>) trên hầu như mọi đối tượng device-model.</li>
+</ul>
+
+<h4>Vòng đời đối tượng (tổng quát, áp dụng cho device/driver/bus/cdev)</h4>
+<p class="mono" style="font-size:12px">cấp phát container → nhúng+khởi tạo kobject → đăng ký (tạo thư mục sysfs) → hoạt động, đếm tham chiếu qua get/put → lần put cuối đưa bộ đếm về 0 → ktype->release() giải phóng container → (nếu đã unregister trước) thư mục sysfs bị xóa</p>
+
+<h4>Đường bình thường vs đường lỗi (đăng ký)</h4>
+<table>
+<tr><th>Bình thường</th><th>Lỗi</th></tr>
+<tr><td>yêu cầu dải → còn trống → __register_chrdev_region thành công → cdev_add → kobj_map chèn vào</td><td>dải chồng lấn dải có sẵn, hoặc không còn major trống → trả mã lỗi → caller không được gọi cdev_add</td></tr>
+</table>
+
+<h4>File source quan trọng</h4>
+<p class="mono" style="font-size:12px">(mang tính khái niệm, <span class="badge infer">SUY LUẬN</span> — xác nhận trên cây của bạn) kernel/resource.c · lib/kobject.c · drivers/base/*.c (core.c, bus.c, driver.c, class.c) · fs/char_dev.c · fs/inode.c (init_special_inode) · fs/open.c (dentry_open)</p>
+
+<h4>Điểm bắt đầu để debug</h4>
+<p class="mono" style="font-size:12px">/proc/ioports · /proc/devices · /proc/interrupts · /sys/bus/*/drivers · /sys/class/*/dev · ftrace function_graph · dynamic_debug/printk trong probe()/open()</p>
+</div>
+
+</main>
+</div>
+<button id="backtotop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<script>
+(function(){
+  var root = document.documentElement;
+
+  // ---------- Theme ----------
+  function applyTheme(t){
+    if(t==='dark'||t==='light'){ root.setAttribute('data-theme', t); }
+    else { root.removeAttribute('data-theme'); }
+    var btn = document.getElementById('themeBtn');
+    var isDark = t==='dark' || (t!=='light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if(btn) btn.textContent = isDark ? '☀️ Sáng' : '🌙 Tối';
+  }
+  function toggleTheme(){
+    var cur = localStorage.getItem('ch13-theme');
+    var isDark = cur==='dark' || (cur!=='light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    localStorage.setItem('ch13-theme', next);
+    applyTheme(next);
+  }
+  window.toggleTheme = toggleTheme;
+  try{ applyTheme(localStorage.getItem('ch13-theme')); }catch(e){ applyTheme(null); }
+
+  // ---------- Quick review mode ----------
+  function toggleReview(){
+    var on = document.body.classList.toggle('quickreview');
+    localStorage.setItem('ch13-review', on ? '1':'0');
+    document.getElementById('reviewBtn').textContent = on ? '📖 Chế độ học' : '⚡ Ôn nhanh';
+  }
+  window.toggleReview = toggleReview;
+  try{
+    if(localStorage.getItem('ch13-review')==='1'){
+      document.body.classList.add('quickreview');
+      document.getElementById('reviewBtn').textContent = '📖 Chế độ học';
+    }
+  }catch(e){}
+
+  // ---------- Copy code buttons ----------
+  window.copyCode = function(btn){
+    var pre = btn.closest('.codewrap').querySelector('pre');
+    var text = pre.innerText;
+    if(navigator.clipboard){ navigator.clipboard.writeText(text); }
+    var old = btn.textContent; btn.textContent='Đã sao chép!';
+    setTimeout(function(){ btn.textContent = old; }, 1200);
+  };
+
+  // ---------- Table filter (indexes) ----------
+  window.filterTable = function(input, tableId){
+    var q = input.value.toLowerCase();
+    var table = document.getElementById(tableId);
+    var rows = table.querySelectorAll('tr');
+    rows.forEach(function(row, i){
+      if(i===0) return; // header
+      var txt = row.textContent.toLowerCase();
+      row.style.display = txt.indexOf(q) === -1 ? 'none' : '';
+    });
+  };
+
+  // ---------- Sidebar nav + scroll spy ----------
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('.navgroup a'));
+  var sections = navLinks.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+
+  function onScroll(){
+    // progress bar
+    var doc = document.documentElement;
+    var scrollTop = doc.scrollTop || document.body.scrollTop;
+    var height = doc.scrollHeight - doc.clientHeight;
+    var pct = height>0 ? (scrollTop/height*100) : 0;
+    document.getElementById('progressbar').style.width = pct + '%';
+
+    // back to top
+    document.getElementById('backtotop').style.display = scrollTop > 600 ? 'block' : 'none';
+
+    // active section
+    var pos = scrollTop + 140;
+    var activeIdx = 0;
+    for(var i=0;i<sections.length;i++){
+      if(sections[i] && sections[i].offsetTop <= pos) activeIdx = i;
+    }
+    navLinks.forEach(function(a){ a.classList.remove('active'); });
+    if(navLinks[activeIdx]) navLinks[activeIdx].classList.add('active');
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('load', onScroll);
+
+  // close mobile sidebar after clicking a link
+  navLinks.forEach(function(a){
+    a.addEventListener('click', function(){
+      document.getElementById('sidebar').classList.remove('open');
+    });
+  });
+
+  // ---------- Search ----------
+  var SEARCH_INDEX = [];
+  function buildIndex(){
+    document.querySelectorAll('#main h2, #main h3, #main h4').forEach(function(h){
+      var sec = h.closest('.section');
+      if(!sec || !sec.id) return;
+      SEARCH_INDEX.push({text: h.textContent.trim(), id: sec.id, hid: h.id || null, kind: h.tagName});
+    });
+    document.querySelectorAll('#main code').forEach(function(c){
+      var sec = c.closest('.section');
+      if(!sec || !sec.id) return;
+      var t = c.textContent.trim();
+      if(t.length>1 && t.length<40) SEARCH_INDEX.push({text:t, id:sec.id, kind:'CODE'});
+    });
+  }
+  window.addEventListener('load', buildIndex);
+
+  window.doSearch = function(q){
+    var box = document.getElementById('searchResults');
+    q = q.trim().toLowerCase();
+    clearHighlights();
+    if(q.length<2){ box.innerHTML=''; return; }
+    var seen = {}; var out = [];
+    SEARCH_INDEX.forEach(function(item){
+      if(item.text.toLowerCase().indexOf(q) !== -1){
+        var key = item.text+item.id;
+        if(seen[key]) return; seen[key]=true;
+        out.push(item);
+      }
+    });
+    out = out.slice(0,25);
+    box.innerHTML = out.map(function(item){
+      return '<div onclick="jumpTo(\''+item.id+'\',\''+(item.hid||'')+'\')">'+
+        (item.kind==='CODE' ? '<code>'+escapeHtml(item.text)+'</code>' : escapeHtml(item.text))+
+        '</div>';
+    }).join('');
+    highlightInPage(q);
+  };
+  function escapeHtml(s){ return s.replace(/[&<>]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  window.jumpTo = function(sectionId, hid){
+    var target = hid ? document.getElementById(hid) : document.getElementById(sectionId);
+    if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  };
+  function clearHighlights(){
+    document.querySelectorAll('mark.searchmark').forEach(function(m){
+      var parent = m.parentNode;
+      parent.replaceChild(document.createTextNode(m.textContent), m);
+      parent.normalize();
+    });
+  }
+  function highlightInPage(q){
+    if(!q) return;
+    var walker = document.createTreeWalker(document.getElementById('main'), NodeFilter.SHOW_TEXT, null);
+    var nodes = []; var n;
+    while((n = walker.nextNode())){
+      if(n.parentNode.tagName==='SCRIPT' || n.parentNode.tagName==='STYLE') continue;
+      if(n.nodeValue.toLowerCase().indexOf(q) !== -1) nodes.push(n);
+    }
+    nodes.slice(0,60).forEach(function(node){
+      var idx = node.nodeValue.toLowerCase().indexOf(q);
+      if(idx===-1) return;
+      var before = node.nodeValue.slice(0,idx);
+      var match = node.nodeValue.slice(idx, idx+q.length);
+      var after = node.nodeValue.slice(idx+q.length);
+      var mark = document.createElement('mark');
+      mark.className='searchmark'; mark.textContent = match;
+      var frag = document.createDocumentFragment();
+      frag.appendChild(document.createTextNode(before));
+      frag.appendChild(mark);
+      frag.appendChild(document.createTextNode(after));
+      node.parentNode.replaceChild(frag, node);
+    });
+  }
+
+  // keyboard shortcuts
+  document.addEventListener('keydown', function(e){
+    if(e.key==='/' && document.activeElement.tagName!=='INPUT'){
+      e.preventDefault(); document.getElementById('searchBox').focus();
+    } else if(e.key==='Escape'){
+      document.getElementById('searchBox').value='';
+      document.getElementById('searchResults').innerHTML='';
+      clearHighlights();
+      document.activeElement.blur();
+    } else if(e.key==='Home' && document.activeElement.tagName!=='INPUT'){
+      window.scrollTo({top:0,behavior:'smooth'});
+    } else if(e.key==='End' && document.activeElement.tagName!=='INPUT'){
+      window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -238,21 +238,7 @@ hoàn toàn trong RAM, đóng vai trò trung gian bắt buộc giữa syscall v�
 <li><b>Cache tập trung</b> — dcache (dentry cache) và inode cache là cơ chế <i>chung cho mọi filesystem</i>, filesystem không phải tự cài lại logic cache pathname.</li>
 </ol>
 
-<div class="diagram"><pre>
-struct file_system_type          ← đăng ký bởi mỗi filesystem (register_filesystem())
-        │  .mount()
-        ▼
-struct super_block                ← một filesystem đã MOUNT (một instance)
-        │  .s_root
-        ▼
-struct dentry  ←──────┐            ← một pathname component đã resolve
-        │  .d_inode    │ .d_parent / .d_subdirs (cây dentry)
-        ▼               │
-struct inode            │          ← metadata của 1 file/thư mục (có thể có N dentry trỏ tới — hard link)
-        │  .i_mapping
-        ▼
-struct address_space               ← cache nội dung file (page cache) của inode này
-</pre></div>
+<img src="VFSA_1.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Object VFS</th><th>Đại diện cho</th><th>File header</th></tr>
@@ -289,30 +275,7 @@ THIS CHAPTER ENABLES: <a href="#c03">03 Core Data Structures</a>, mọi chương
 
 <p>Đây là bản đồ struct quan trọng nhất trong toàn bộ VFS. Mọi chương sau đều tham chiếu ngược lại chương này.</p>
 
-<div class="diagram"><pre>
-current (struct task_struct)
-     │  .files
-     ▼
-struct files_struct
-     │  .fdt → struct fdtable  (mảng fd → struct file*)
-     ▼   fd = 3
-struct file                                    ← 1 OPEN FILE INSTANCE (mỗi open() 1 cái mới)
-     │
-     ├── f_path ──────┬── dentry ──── d_inode ──┐
-     │                └── vfsmount              │
-     ├── f_inode  (cached, trỏ thẳng inode) ─────┤
-     ├── f_op     (file_operations, do fs cài)   │
-     ├── f_pos    (vị trí đọc/ghi hiện tại)      │
-     ├── f_mapping ── trỏ address_space          │
-     └── f_count  (atomic_long_t refcount)       ▼
-                                          struct inode        ← METADATA (không phụ thuộc tên)
-                                                │
-                                                ├── i_sb ──── struct super_block ──── filesystem
-                                                ├── i_op     (inode_operations)
-                                                ├── i_mapping ── struct address_space  (page cache)
-                                                ├── i_ino, i_mode, i_size, i_nlink, i_uid/i_gid, i_atime/i_mtime/i_ctime
-                                                └── i_count  (atomic_t refcount, qua igrab/iput)
-</pre></div>
+<img src="VFS_2.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Object</th><th>Purpose</th><th>Lifetime</th><th>Field quan trọng (verify từ source 5.10.241)</th></tr>
@@ -364,19 +327,7 @@ THIS CHAPTER ENABLES: <a href="#c04">04</a>–<a href="#c09">09</a>
 <p>Một <b>fd</b> (file descriptor, số nguyên nhỏ) là chỉ số vào một mảng riêng của process, KHÔNG phải con trỏ vào struct file trực tiếp
 — lớp gián tiếp này cho phép mỗi process có bảng fd độc lập trong khi vẫn share cùng <code>struct file</code> nếu <code>dup()</code>/<code>fork()</code>.</p>
 
-<div class="diagram"><pre>
-task_struct (process)
-     │ files
-     ▼
-struct files_struct
-     │ fdt  (RCU-protected pointer, cho phép resize)
-     ▼
-struct fdtable
-     │ fd[]  ── mảng con trỏ struct file*, index = fd number
-     │ open_fds  ── bitmap fd đang mở
-     ▼
-fd=3 ──► struct file ──► f_path ──► dentry ──► inode
-</pre></div>
+<img src="VFS_3.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="fbox">
 <div class="fhead"><div class="fname">get_unused_fd_flags()</div><div class="floc">Source: fs/file.c &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
@@ -442,34 +393,7 @@ close(fd)
 <p>Đây là cơ chế biến một chuỗi ký tự như <code>"/home/user/test.txt"</code> thành <code>struct path { dentry, vfsmount }</code>.
 Kernel đi qua từng component (<code>home</code>, <code>user</code>, <code>test.txt</code>) một, mỗi bước tra dcache trước — chỉ chạm filesystem thật khi cache miss.</p>
 
-<div class="diagram"><pre>
-"/home/user/test.txt"
-        │
-        ▼
-path_lookupat()  (fs/namei.c:2331)         ← entry point pathname resolution
-        │
-        ▼
-path_init()                                 ← xác định điểm bắt đầu: '/' → root, tương đối → cwd
-        │
-        ▼
-link_path_walk()  (fs/namei.c:2113)         ← vòng lặp chính, tách từng component bằng '/'
-        │
-        │  với mỗi component:
-        ▼
-walk_component()
-        │
-        ▼
-lookup_fast()  (fs/namei.c:1465)  ─────── HIT ──► có ngay dentry (RCU hoặc ref-walk)
-        │ MISS
-        ▼
-__lookup_slow()  (fs/namei.c:1529)
-        │
-        ▼
-inode->i_op->lookup()                       ← gọi VÀO filesystem cụ thể (vd ext4_lookup())
-        │
-        ▼
-d_alloc() + d_add()                         ← tạo dentry mới, gắn vào dcache, gắn inode
-</pre></div>
+<img src="VFS_5.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="fbox">
 <div class="fhead"><div class="fname">link_path_walk()</div><div class="floc">Source: fs/namei.c:2113 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
@@ -564,26 +488,7 @@ mỗi lần resolve cùng một pathname. Không có dcache, MỖI lần <code>o
 <dt>Next step</dt><dd>Dưới áp lực bộ nhớ, shrinker (<code>prune_dcache_sb()</code>) sẽ evict dentry ở cuối LRU → gọi <code>iput()</code> trên inode liên quan.</dd>
 </dl></div></div>
 
-<div class="diagram"><pre>
-pathname component
-       │
-       ▼
-   d_lookup() / lookup_fast()
-       │
-   ┌───┴────┐
-   ▼        ▼
-  HIT      MISS
-   │        │
-   │        ▼
-   │   inode->i_op->lookup()   (chạm filesystem thật)
-   │        │
-   │        ▼
-   │   d_alloc() + d_add()      (cache lại cho lần sau)
-   │        │
-   └────┬───┘
-        ▼
-   dentry sẵn sàng dùng
-</pre></div>
+<img src="VFS_4.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>3 loại cache dễ nhầm</th><th>dentry cache (dcache)</th><th>inode cache</th><th>page cache</th></tr>
@@ -631,31 +536,7 @@ Dcache còn cache cả việc "KHÔNG tồn tại": nếu <code>open("/tmp/khong
 <dt>Next step</dt><dd><code>evict()</code> xong → <code>destroy_inode()</code> free vùng nhớ struct inode.</dd>
 </dl></div></div>
 
-<div class="diagram"><pre>
-filesystem lookup
-      │
-      ▼
-  iget_locked()  ── inode cache HIT ──► trả về, i_count++
-      │ MISS
-      ▼
-  alloc_inode()  (I_NEW)
-      │
-      ▼
-  fs điền field từ on-disk inode (ext4_iget đọc inode table)
-      │
-      ▼
-  unlock_new_inode()
-      │
-      ▼
-  ACTIVE (i_count > 0, dùng bình thường)
-      │
-      │  iput() lặp lại, i_count → 0
-      ▼
-  i_nlink == 0 ? ──YES──► evict()  ──► s_op->evict_inode() ──► free block trên disk ──► destroy_inode()
-      │ NO
-      ▼
-  giữ trong inode LRU cache (chưa free, có thể tái dùng nếu lookup lại)
-</pre></div>
+<img src="VFS_6.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box warn">
 <div class="box-title">⚠ COMMON MISCONCEPTION</div>
@@ -682,34 +563,7 @@ verify được trong 5.10.241 (<code>fs/namespace.c:994, 2976, 2997</code>). T�
 (<code>get_sb()</code>/<code>mount()</code> trả trực tiếp <code>dentry*</code>) vẫn còn tương thích ở 5.4, nhưng 5.10 đã dùng cơ chế context-based này.
 </div>
 
-<div class="diagram"><pre>
-mount("/dev/sda1", "/mnt", "ext4", ...)
-      │
-      ▼
-SYSCALL_DEFINE5(mount, ...)   (fs/namespace.c:3525)
-      │
-      ▼
-do_mount()   (fs/namespace.c:3331)
-      │
-      ▼
-do_new_mount()  (fs/namespace.c:2950)
-      │
-      ├── fs_context_for_mount(type, sb_flags)   ← tra file_system_type theo tên "ext4"
-      │
-      ├── vfs_get_tree(fc)                        ← gọi fc->ops->get_tree() = ext4_get_tree()
-      │        │
-      │        ▼
-      │   ext4_fill_super()                       ← đọc ext4 superblock từ disk (block 0/1),
-      │        │                                      dựng struct super_block, tạo root inode + root dentry
-      │        ▼
-      │   struct super_block  { s_root, s_op = &ext4_sops, s_bdev, ... }
-      │
-      ▼
-do_new_mount_fc()  → vfs_create_mount(fc)  → gắn super_block vào struct vfsmount
-      │
-      ▼
-graft vfsmount vào mount tree tại mountpoint "/mnt"  (attach_mnt / graft_tree)
-</pre></div>
+<img src="VFS_7.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Struct</th><th>Vai trò</th></tr>
@@ -937,58 +791,7 @@ return fd;   ──────────────────────�
   <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c10">10</a>, <a href="#c20">20 Page Cache</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-USERSPACE:  n = read(fd, buf, 4096);
-      │
-      ▼
-SYSCALL_DEFINE3(read, fd, buf, count)     fs/read_write.c:672     [SYSCALL]
-      │
-      ▼
-ksys_read(fd, buf, count)                  fs/read_write.c:636     [SYSCALL]
-      │
-      ├── fdget_pos(fd)                                            [SYSCALL]  lấy struct file an toàn
-      ▼
-vfs_read(file, buf, count, &pos)           fs/read_write.c:489     [VFS]
-      │
-      ├── rw_verify_area()                                         [VFS]  kiểm tra quyền/khoảng offset
-      ▼
-file->f_op->read_iter  đã set?  ──YES──►  new_sync_read()          fs/read_write.c:417   [VFS]  wrap iovec quanh buf, gọi read_iter
-      │                                          │
-      │NO (f_op->read cũ)                        ▼
-      ▼                                   file->f_op->read_iter(kiocb, iter)   = ext4_file_read_iter()   [FILESYSTEM]
-   file->f_op->read(...)  (hiếm ở fs hiện đại)
-                                                  │
-                                                  ▼
-                                     generic_file_read_iter()  (mm/filemap.c)   [MM/PAGE CACHE]
-                                                  │
-                                                  ▼
-                                     generic_file_buffered_read()  mm/filemap.c:2189   [MM]
-                                                  │
-                                        ┌─────────┴──────────┐
-                                        ▼                    ▼
-                                  PAGE CACHE HIT       PAGE CACHE MISS
-                                        │                    │
-                                        │                    ▼
-                                        │            a_ops->readahead() / ->readpage()  = ext4_mpage_readpages()   [FILESYSTEM]
-                                        │                    │
-                                        │                    ▼
-                                        │            ext4_map_blocks()  (LBA logic → extent tree)   fs/ext4/inode.c:539  [FILESYSTEM]
-                                        │                    │
-                                        │                    ▼
-                                        │            bio alloc + submit_bio()  fs/ext4/readpage.c:366  [BLOCK]
-                                        │                    │
-                                        │                    ▼
-                                        │            blk-mq → device driver → HARDWARE → interrupt/completion
-                                        │                    │
-                                        │                    ▼
-                                        │            trang được nạp vào page cache, đánh dấu Uptodate
-                                        └─────────┬──────────┘
-                                                   ▼
-                                     copy_page_to_iter()  → copy_to_user()          [MM]
-      │
-      ▼
-return count đã đọc ─────────────────────────────────────────────────────► USERSPACE
-</pre></div>
+<img src="VFS_9.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="fbox">
 <div class="fhead"><div class="fname">vfs_read()</div><div class="floc">Source: fs/read_write.c:489 &nbsp;|&nbsp; Subsystem: <span class="tag vfs" style="display:inline">VFS</span></div></div>
@@ -1008,38 +811,7 @@ return count đã đọc ──────────────────�
 </dl></div></div>
 
 <div class="grid2">
-<div class="box flow">
-<div class="box-title">CACHE HIT</div>
-<pre>read()
-  ↓
-generic_file_buffered_read()
-  ↓
-tìm thấy page, PageUptodate
-  ↓
-copy_page_to_iter() → copy_to_user()
-  ↓
-return ngay, KHÔNG chạm block layer</pre>
-</div>
-<div class="box flow">
-<div class="box-title">CACHE MISS</div>
-<pre>read()
-  ↓
-generic_file_buffered_read()
-  ↓
-không có trang / chưa Uptodate
-  ↓
-a_ops->readahead()  (ext4_mpage_readpages)
-  ↓
-ext4_map_blocks()  (LBA → extent → physical block)
-  ↓
-bio_alloc() + submit_bio()
-  ↓
-blk-mq → driver → HARDWARE
-  ↓
-interrupt → bio->bi_end_io() → unlock_page(), SetPageUptodate
-  ↓
-copy_page_to_iter() → copy_to_user()</pre>
-</div>
+<img src="VFS_cache.png" alt="" style="max-width: 100%; height: auto;">
 </div>
 
 <div class="box key">
@@ -1060,36 +832,7 @@ disk "nhớ", mà vì Linux giữ nguyên page trong RAM cho tới khi bị recl
   <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c11">11</a>, <a href="#c21">21 Writeback</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-USERSPACE:  write(fd, buf, 4096);
-      │
-      ▼
-SYSCALL_DEFINE3(write,...)  fs/read_write.c:752     [SYSCALL]
-      ▼
-ksys_write()   fs/read_write.c:677                   [SYSCALL]
-      ▼
-vfs_write()    fs/read_write.c:598                   [VFS]
-      ▼
-new_sync_write()  fs/read_write.c:520 → file->f_op->write_iter()   [VFS]
-      ▼
-ext4_file_write_iter()   fs/ext4/file.c:652           [FILESYSTEM]
-      ▼
-ext4_buffered_write_iter()   fs/ext4/file.c:258        [FILESYSTEM]
-      ▼
-generic_perform_write()   mm/filemap.c:3295            [MM/PAGE CACHE]
-      │
-      ├── a_ops->write_begin()  = ext4_write_begin()    [FILESYSTEM]  chuẩn bị page (đọc trước nếu partial write + block chưa map)
-      ├── copy_page_from_iter() (copy dữ liệu từ user buffer vào page trong RAM)   [MM]
-      └── a_ops->write_end()    = ext4_write_end()       [FILESYSTEM]  đánh dấu page DIRTY, cập nhật i_size
-      ▼
-return ngay cho userspace — DỮ LIỆU HIỆN CHỈ NẰM TRONG PAGE CACHE (RAM), CHƯA XUỐNG DISK
-      .
-      .   (sau này, độc lập, kernel writeback thread ghi xuống)
-      ▼
-[BACKGROUND]  wb_workfn() → write_cache_pages() → a_ops->writepages() = ext4_writepages()   [FILESYSTEM]
-      ▼
-ext4_map_blocks() + bio  →  submit_bio()   [BLOCK]  →  driver  →  HARDWARE
-</pre></div>
+<img src="VFS_8.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="fbox">
 <div class="fhead"><div class="fname">generic_perform_write()</div><div class="floc">Source: mm/filemap.c:3295 &nbsp;|&nbsp; Subsystem: <span class="tag mm" style="display:inline">MM</span></div></div>
@@ -1126,35 +869,7 @@ chỉ đảm bảo dữ liệu đã nằm trong <b>page cache</b> (RAM) và đã
   <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-addr = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
-      │
-      ▼
-SYSCALL_DEFINE6(mmap_pgoff,...)   mm/mmap.c:1652        [SYSCALL]
-      ▼
-ksys_mmap_pgoff()   mm/mmap.c:1602                       [SYSCALL]
-      ▼
-do_mmap()   mm/mmap.c:1412                                [MM]
-      │
-      ├── kiểm tra quyền qua file->f_op->mmap  (ext4: ext4_file_mmap — chỉ set vm_ops, KHÔNG đọc data ngay)
-      ├── tạo struct vm_area_struct (VMA), gắn vm_ops = generic_file_vm_ops (ánh xạ tới filemap_fault)
-      ▼
-mmap_region()  → chèn VMA vào mm->mmap_tree của process
-      │
-      ▼
-return addr  ────────────────────────────────────────────► USERSPACE  (chưa có trang nào được nạp!)
-
-      .   (khi thực sự truy cập bộ nhớ đó lần đầu)
-      ▼
-CPU page fault → do_page_fault() (arch-specific) → handle_mm_fault() → __do_fault()
-      ▼
-vma->vm_ops->fault()  =  filemap_fault()   (mm/filemap.c)                [MM]
-      ▼
-tìm/nạp page từ PAGE CACHE — CHÍNH LÀ address_space của inode, giống hệt read()
-      (miss thì đi xuống filesystem → bio → block layer → driver, y như đọc file)
-      ▼
-map page đó vào page table của process (không copy — SHARED với page cache)
-</pre></div>
+<img src="VFS_mmap.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA</div>
@@ -1175,18 +890,7 @@ tương đương ghi trực tiếp vào page cache (giống hiệu ứng <code>w
   <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c09">09</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-ioctl(fd, request, arg)
-      ▼
-SYSCALL_DEFINE3(ioctl,...)   fs/ioctl.c        [SYSCALL]
-      ▼
-do_vfs_ioctl()   fs/ioctl.c                     [VFS]  xử lý các lệnh "generic" chung cho mọi fd
-      │   (FIONBIO, FIOCLEX, FIGETBSZ, FS_IOC_GETFLAGS...)
-      │
-      │  không phải lệnh generic?
-      ▼
-file->f_op->unlocked_ioctl(file, cmd, arg)      [FILESYSTEM / DRIVER]
-</pre></div>
+<img src="VFS_12.png" alt="" style="max-width: 100%; height: auto;">
 
 <p>Khác biệt cốt lõi so với <code>read/write</code>: <b>ioctl không có API thống nhất</b> — mỗi filesystem/driver tự định nghĩa
 <code>cmd</code> nào làm gì. VFS chỉ generic hoá một tập lệnh rất nhỏ (thao tác trên fd nói chung), phần còn lại đi thẳng xuống
@@ -1210,27 +914,7 @@ tự do, không được kernel validate kiểu dữ liệu như syscall thườ
   <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c10">10</a>, <a href="#c06">06</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-open("test.txt", O_CREAT | O_WRONLY, 0644);
-      ▼
-path_openat()  → do_last()   fs/namei.c                        [VFS]
-      │
-      ├── link_path_walk()  resolve tới THƯ MỤC CHA               [VFS]
-      ├── lookup_fast()/lookup_open()  component cuối "test.txt"  [VFS]
-      │         │  negative dentry (chưa tồn tại) + O_CREAT
-      │         ▼
-      ├── inode_permission()  kiểm tra quyền WRITE trên thư mục cha [VFS]
-      ▼
-parent_inode->i_op->create(parent_inode, dentry, mode, ...)
-      = ext4_create()   fs/ext4/namei.c:2717                    [FILESYSTEM]
-      │
-      ├── ext4_new_inode_start_handle()  mở JBD2 transaction      [FILESYSTEM+JBD2]
-      ├── __ext4_new_inode()  cấp 1 inode number trống từ inode bitmap của block group  [FILESYSTEM]
-      ├── ext4_add_entry()  ghi directory entry MỚI "test.txt" → inode number vào block thư mục cha  [FILESYSTEM]
-      ├── d_instantiate(dentry, inode)  gắn inode mới vào dentry (đang negative → thành positive)   [VFS]
-      ▼
-ext4_journal_stop()  đóng transaction — commit vào journal (không nhất thiết xuống disk ngay, xem ch.23)
-</pre></div>
+<img src="VFS_11.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Phân biệt</th><th>inode creation</th><th>dentry creation</th><th>directory entry</th></tr>
@@ -1250,46 +934,11 @@ ext4_journal_stop()  đóng transaction — commit vào journal (không nhất t
   <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c06">06</a>, <a href="#c07">07</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-unlink("test.txt");
-      ▼
-SYSCALL_DEFINE1(unlink,...)   fs/namei.c              [SYSCALL]
-      ▼
-do_unlinkat()   fs/namei.c                             [VFS]
-      │
-      ├── path resolve tới THƯ MỤC CHA + dentry của "test.txt"     [VFS] — xem ch.05
-      ├── inode_permission() trên thư mục cha (cần quyền WRITE+EXEC trên dir, KHÔNG cần quyền trên chính file)  [VFS]
-      ▼
-vfs_unlink(parent_inode, dentry, ...)                              [VFS]
-      ▼
-parent_inode->i_op->unlink(parent_inode, dentry) = ext4_unlink()   fs/ext4/namei.c:3369   [FILESYSTEM]
-      │
-      ├── ext4_delete_entry()   xoá directory entry khỏi block thư mục cha (trên disk)     [FILESYSTEM]
-      ├── drop_nlink(inode)     giảm inode->i_nlink                                        [VFS/FILESYSTEM]
-      ├── nếu i_nlink == 0: ext4_orphan_add()  đưa inode vào orphan list của JBD2 journal
-      │        (đảm bảo: nếu crash trước khi giải phóng xong block, lần mount sau sẽ tự dọn — recovery)
-      ▼
-d_delete(dentry)  gỡ dentry ra khỏi dcache (hoặc chuyển thành negative)                     [VFS]
-</pre></div>
+<img src="VFS_13.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA — vì sao process A vẫn đọc được file sau khi process B unlink()</div>
-<pre>
-process A:  fd = open("test.txt")     →  struct file A giữ 1 reference TỚI INODE
-                                          (qua f_inode / dentry->d_inode), i_count++
-
-process B:  unlink("test.txt")        →  chỉ xoá DIRECTORY ENTRY (tên) + drop_nlink()
-                                          inode->i_nlink về 0, NHƯNG inode->i_count VẪN > 0
-                                          (vì process A còn giữ struct file trỏ tới nó)
-                                          → ext4 CHƯA giải phóng block dữ liệu thật
-
-process A:  read(fd, ...)             →  vẫn đọc được bình thường — filesystem/inode vẫn "sống"
-                                          trong RAM, dữ liệu vẫn còn trên disk
-
-process A:  close(fd)                 →  fput() → i_count-- → về 0
-                                          → iput() thấy i_nlink==0 && i_count==0
-                                          → evict() → ext4_evict_inode() → GIẢI PHÓNG BLOCK THẬT trên disk
-</pre>
+<img src="VFS_14.png" alt="" style="max-width: 100%; height: auto;">
 Chuỗi quan hệ: <code>filename → dentry → inode → struct file</code>. <code>unlink()</code> chỉ cắt đứt mắt xích ĐẦU TIÊN
 (<code>filename → dentry</code>). Mắt xích <code>dentry(process A) → inode</code> và <code>inode → struct file(process A)</code>
 không bị ảnh hưởng, vì chúng được giữ bằng reference count độc lập, không phụ thuộc tên.
@@ -1356,23 +1005,7 @@ d_move(old_dentry, new_dentry)  cập nhật dcache: dentry giữ nguyên, chỉ
   <div class="chap-meta"><span class="stars">★★☆☆☆</span><span class="prereq">Requires: <a href="#c07">07</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-getdents64(fd, buf, count);
-      ▼
-SYSCALL_DEFINE3(getdents64,...)   fs/readdir.c:354          [SYSCALL]
-      ▼
-iterate_dir(file, &ctx)   fs/readdir.c:40                    [VFS]
-      │  kiểm tra file->f_mode có FMODE_LSEEK/dir hợp lệ, tự cập nhật f_pos giữa các lần gọi
-      ▼
-file->f_op->iterate_shared(file, ctx)  =  ext4_readdir()   fs/ext4/dir.c    [FILESYSTEM]
-      │
-      ▼
-đọc trực tiếp directory block (qua page cache/buffer head), với mỗi entry gọi
-      ctx->actor(ctx, name, len, pos, ino, d_type)  = filldir64()   fs/readdir.c   [VFS]
-      │
-      ▼
-filldir64() copy entry vào buffer userspace theo format struct linux_dirent64
-</pre></div>
+<img src="VFS_15.png" alt="" style="max-width: 100%; height: auto;">
 
 <p>Khác biệt quan trọng với <code>read()</code>: <code>getdents</code> KHÔNG đi qua <code>generic_file_read_iter</code>/page-cache-theo-byte-offset
 thông thường — nó dùng cơ chế <b>callback</b> (<code>dir_context.actor</code>) vì cấu trúc thư mục trên disk (entry có độ dài thay đổi) không
@@ -1389,20 +1022,7 @@ map trực tiếp 1-1 với buffer userspace như file thường.</p>
   <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c12">12</a>, <a href="#c21">21</a>, <a href="#c23">23</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-fsync(fd);
-      ▼
-SYSCALL_DEFINE1(fsync,...)   fs/sync.c:232           [SYSCALL]
-      ▼
-vfs_fsync(file, datasync=0)   fs/sync.c:214           [VFS]
-      ▼
-file->f_op->fsync(file, start, end, datasync) = ext4_sync_file()   fs/ext4/fsync.c:129   [FILESYSTEM]
-      │
-      ├── filemap_write_and_wait_range()  ép writeback NGAY (không đợi flusher thread), CHỜ tới khi bio hoàn tất  [MM+BLOCK]
-      ├── nếu inode có transaction JBD2 chưa commit: jbd2_complete_transaction() / jbd2_journal_commit_transaction()  [JBD2]
-      ▼
-blkdev_issue_flush()  gửi lệnh FLUSH/FUA xuống device — đảm bảo dữ liệu đã qua khỏi write cache CỦA CHÍNH Ổ ĐĨA  [BLOCK→DRIVER→HW]
-</pre></div>
+<img src="VFS-16.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA</div>
@@ -1429,24 +1049,7 @@ Trong 5.10, page cache đang trong quá trình chuyển từ <code>struct page</
 (<code>i_pages</code>) — đây bản thân đã là thay đổi so với <code>radix_tree</code> cũ hơn dùng ở kernel &lt; 4.20.
 </div>
 
-<div class="diagram"><pre>
-Application
-      │  read()/write()/mmap()
-      ▼
-     VFS
-      │
-      ▼
-struct address_space (của 1 inode)
-      │  i_pages: xarray  (index = page offset trong file, tính theo đơn vị PAGE_SIZE)
-      ├── HIT  → page đã có, PageUptodate → dùng ngay
-      └── MISS → a_ops->readahead()/readpage()
-                        │
-                        ▼
-                    Filesystem  (ext4_mpage_readpages)
-                        │
-                        ▼
-                       BIO  → block layer → driver → hardware
-</pre></div>
+<img src="VFS_17.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Field <code>struct address_space</code> (verify include/linux/fs.h:458)</th><th>Ý nghĩa</th></tr>
@@ -1475,28 +1078,7 @@ thao tác trên cùng các trang RAM, không phải hai bản sao.
   <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-write() đánh dấu page DIRTY
-      │
-      ▼
-balance_dirty_pages_ratelimited()   mm/page-writeback.c    [MM]
-      │  nếu tổng dirty page toàn hệ thống vượt ngưỡng (dirty_ratio) → BLOCK writer
-      │  cho tới khi writeback giảm bớt (throttle ngược để tránh OOM/flood I/O)
-      ▼
-[BACKGROUND KERNEL THREAD]  bdi writeback worker (mỗi block device 1 "wb")
-      ▼
-wb_workfn()  →  wb_do_writeback()  →  writeback_sb_inodes()                [MM]
-      ▼
-write_cache_pages()   mm/page-writeback.c                                  [MM]
-      │  duyệt các trang dirty của address_space theo thứ tự offset
-      ▼
-a_ops->writepages() = ext4_writepages()   fs/ext4/inode.c:2702             [FILESYSTEM]
-      │
-      ├── ext4_map_blocks()  đảm bảo block đã allocate (có thể mở JBD2 transaction nếu delayed allocation)
-      ├── gộp nhiều page liên tiếp thành 1 bio lớn (mpage — multi-page I/O, giảm số lượng I/O request)
-      ▼
-submit_bio()   →   BLOCK LAYER   →   DRIVER   →   HARDWARE
-</pre></div>
+<img src="VFS_18.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Hàm</th><th>Vai trò</th></tr>
@@ -1523,19 +1105,7 @@ Writeback có 3 cơ chế kích hoạt độc lập: (1) <b>định kỳ</b> (di
   <div class="chap-meta"><span class="stars">★★★★★</span><span class="prereq">Requires: <a href="#c02">02</a>–<a href="#c09">09</a>, <a href="#c20">20</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-ext4 on-disk layout (giản lược)
-┌──────────┬─────────────┬─────────────┬─────────────┬─── ... ───┐
-│ Boot     │ Block Group 0│ Block Group 1│ Block Group 2│           │
-│ (1 block)│              │              │              │           │
-└──────────┴─────────────┴─────────────┴─────────────┴───────────┘
-   mỗi Block Group chứa:
-   ┌───────────┬──────────┬──────────┬───────────┬──────────────┐
-   │ Superblock│ Group Desc│ Block    │ Inode     │ Inode Table  │  Data blocks
-   │ (copy, có │           │ Bitmap   │ Bitmap    │ (metadata    │  (nội dung thật
-   │ redundancy)│          │          │          │  từng inode) │   + directory entries)
-   └───────────┴──────────┴──────────┴───────────┴──────────────┘
-</pre></div>
+<img src="VFS_19.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>Khái niệm</th><th>Ý nghĩa</th><th>Source</th></tr>
@@ -1556,21 +1126,7 @@ ext4 on-disk layout (giản lược)
 <dt>Next step</dt><dd>Có physical block → xây <code>struct bio</code> trỏ đúng sector, <code>submit_bio()</code>.</dd>
 </dl></div></div>
 
-<div class="diagram"><pre>
-VFS
- ↓
-ext4  (ext4_file_read_iter / ext4_file_write_iter — fs/ext4/file.c)
- ↓
-ext4 inode  (struct ext4_inode_info bọc struct inode)
- ↓
-extent tree  (ext4_map_blocks — logical→physical)
- ↓
-buffer_head/bio  (fs/ext4/page-io.c, readpage.c)
- ↓
-JBD2  (nếu là ghi metadata — mở transaction trước khi sửa)
- ↓
-block layer (submit_bio)
-</pre></div>
+<img src="VFS_20.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="chapfoot">NEXT SOURCE FILES: <a href="#c23">fs/jbd2/transaction.c</a> · <a href="#c24">block/blk-core.c</a></div>
 </section>
@@ -1589,32 +1145,7 @@ nhưng trước block 2, filesystem rơi vào trạng thái không nhất quán.
 (log tuần tự, ghi nhanh) trước, rồi mới "checkpoint" (ghi thật) vào vị trí cuối cùng — nếu crash giữa chừng, lần mount sau
 replay journal để hoàn tất hoặc rollback toàn bộ transaction, không bao giờ để lại trạng thái nửa vời.</p>
 
-<div class="diagram"><pre>
-ext4 (vd ext4_create())
-      ▼
-jbd2__journal_start(journal, nblocks, ...)   fs/jbd2/transaction.c:473      [JBD2]
-      │  mở 1 "handle" — bắt đầu tham gia vào transaction hiện tại (hoặc tạo mới)
-      ▼
-với mỗi buffer sắp sửa:
-jbd2_journal_get_write_access(handle, bh)    fs/jbd2/transaction.c:1209     [JBD2]
-      │  đăng ký ý định sửa buffer này — JBD2 tạo bản sao "frozen" nếu cần
-      ▼
-    (ext4 sửa nội dung buffer trong RAM bình thường)
-      ▼
-jbd2_journal_dirty_metadata(handle, bh)      fs/jbd2/transaction.c:1464     [JBD2]
-      │  đánh dấu buffer này thuộc transaction, sẽ được ghi vào journal khi commit
-      ▼
-jbd2_journal_stop(handle)                     fs/jbd2/transaction.c:1805    [JBD2]
-      │  kết thúc phần tham gia của handle này (transaction có thể vẫn mở cho handle khác)
-      .
-      .  (độc lập, theo định kỳ hoặc khi cần — vd trước checkpoint hoặc do fsync ép)
-      ▼
-jbd2_journal_commit_transaction()             fs/jbd2/commit.c              [JBD2]
-      │  ghi TOÀN BỘ block đã sửa trong transaction vào vùng JOURNAL (tuần tự, nhanh)
-      │  ghi commit record cuối cùng — đánh dấu transaction "hoàn tất, có thể replay"
-      ▼
-[Sau đó, có thể trễ] checkpoint: ghi các block đó từ journal vào VỊ TRÍ THẬT trên disk
-</pre></div>
+<img src="VFS_21.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA</div>
@@ -1634,29 +1165,7 @@ double-write (ghi 2 lần: journal rồi checkpoint) đổi lấy consistency đ
   <div class="chap-meta"><span class="stars">★★★★☆</span><span class="prereq">Requires: <a href="#c20">20</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-Filesystem (ext4/readpage.c, page-io.c)
-      ▼
-struct bio  { bi_iter (sector + size), bi_end_io, bio_vec[] (danh sách page vật lý) }
-      ▼
-submit_bio(bio)   block/blk-core.c:1071                      [BLOCK]
-      ▼
-submit_bio_noacct(bio)   block/blk-core.c:1036                [BLOCK]
-      │  áp policy chung: kiểm tra giới hạn queue, có thể split bio nếu quá lớn cho device
-      ▼
-request_queue của gendisk đích  (blk-mq)                       [BLOCK]
-      │
-      ├── blk_mq_get_request()   cấp 1 struct request, gắn bio vào (hoặc merge vào request đã có)
-      ├── I/O scheduler (mq-deadline / kyber / bfq / none)   sắp xếp thứ tự request theo policy
-      ▼
-blk_mq_dispatch_rq_list()  →  driver->queue_rq()               [DRIVER]
-      ▼
-Device driver dịch struct request thành lệnh phần cứng thật (NVMe submission queue entry / SCSI CDB / MMC command)
-      ▼
-HARDWARE thực thi, hoàn tất → INTERRUPT
-      ▼
-driver hoàn tất request → blk_mq_complete_request() → bio->bi_end_io() gọi ngược lên filesystem
-</pre></div>
+<img src="VFS_22.png" alt="" style="max-width: 100%; height: auto;">
 
 <table>
 <tr><th>So sánh</th><th><code>struct page</code></th><th><code>struct bio</code></th><th><code>struct request</code></th></tr>
@@ -1684,31 +1193,7 @@ ext4, xfs, btrfs, hay raw disk access — nó hoàn toàn filesystem-agnostic.
   <div class="chap-meta"><span class="stars">★★★☆☆</span><span class="prereq">Requires: <a href="#c24">24</a></span></div>
 </div>
 
-<div class="diagram"><pre>
-read()
- ↓  [SYSCALL/VFS]
-ext4 (ext4_file_read_iter → ext4_mpage_readpages)
- ↓  [FILESYSTEM]
-page cache miss → ext4_map_blocks()
- ↓
-bio  →  submit_bio()
- ↓  [BLOCK]
-blk-mq  →  request_queue của thiết bị đích
- ↓  [BLOCK]
-driver->queue_rq()   (NVMe: nvme_queue_rq, SCSI: scsi_queue_rq, MMC: mmc_queue tương tự)
- ↓  [DRIVER]
-lệnh phần cứng thật (NVMe submission queue entry ghi vào vòng SQ, doorbell register)
- ↓  [HARDWARE]
-controller đọc NAND/platter, DMA dữ liệu thẳng vào buffer RAM đã chỉ định trong bio
- ↓
-INTERRUPT khi hoàn tất  →  driver ISR  →  blk_mq_complete_request()
- ↓  [DRIVER→BLOCK]
-bio->bi_end_io()  →  đánh dấu page Uptodate, unlock_page()
- ↓  [MM]
-generic_file_buffered_read() đang chờ được đánh thức → copy_to_user()
- ↓
-USERSPACE nhận được byte dữ liệu
-</pre></div>
+<img src="VFS_23.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA</div>
@@ -1736,21 +1221,7 @@ trong toàn bộ hành trình (trừ khi dùng <code>O_DIRECT</code>, lúc đó 
 thay vì đọc block từ disk, hàm <code>read</code> của chúng <b>sinh dữ liệu ngay tại chỗ</b> từ kernel state đang có trong RAM.
 </div>
 
-<div class="diagram"><pre>
-cat /proc/cpuinfo
-      ▼
-read(fd, buf, count)
-      ▼
-VFS: vfs_read() → file->f_op->read_iter
-      ▼
-seq_read_iter()   (fs/seq_file.c — cơ chế "seq_file" dùng chung bởi rất nhiều file /proc)
-      ▼
-proc file's ->show() callback  (vd cpuinfo: cpuinfo_proc_show(), duyệt per_cpu cpuinfo data)
-      ▼
-đọc TRỰC TIẾP struct cpuinfo_x86 / kernel data structures đang có trong RAM — KHÔNG có bio, KHÔNG có block layer
-      ▼
-seq_file format text ngay lúc đọc → copy_to_user()
-</pre></div>
+<img src="VFS_24.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA</div>
@@ -1815,17 +1286,7 @@ Với ext4, page cache là <b>bản sao tạm thời</b> của dữ liệu — n
 <p>overlayfs (nền tảng container image layer — Docker/containerd) ghép 2+ filesystem thành 1 view thống nhất:
 <b>lowerdir</b> (read-only, có thể nhiều lớp chồng) + <b>upperdir</b> (read-write) + <b>workdir</b> (vùng làm việc nội bộ).</p>
 
-<div class="diagram"><pre>
-lookup "/merged/file.txt"
-      ▼
-overlayfs lookup: kiểm tra upperdir trước
-      │
-      ├── có trong upperdir → dùng trực tiếp (đã copy-up hoặc tạo mới ở đây)
-      │
-      └── không có → tìm trong lowerdir (theo thứ tự layer)
-                 │
-                 └── found → trả về, đọc THẲNG từ lowerdir (không copy nếu chỉ đọc)
-</pre></div>
+<img src="VFS_25.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box key">
 <div class="box-title">💡 KEY IDEA — copy-up</div>
@@ -1858,17 +1319,7 @@ chung 1 base image (lowerdir) mà vẫn cách ly ghi của từng container (upp
 </table>
 </div>
 
-<div class="diagram"><pre>
-userspace observation (strace/bpftrace output)
-        ↓
-syscall  (số hiệu + tham số)
-        ↓
-kernel source  (tìm SYSCALL_DEFINEn tương ứng — tra include/uapi hoặc grep)
-        ↓
-function  (theo call graph đã học ở chương 10-19)
-        ↓
-subsystem  (VFS / filesystem / MM / block)
-</pre></div>
+<img src="VFS_26.png" alt="" style="max-width: 100%; height: auto;">
 
 <h3>12 Labs</h3>
 
@@ -1953,52 +1404,7 @@ Xem <a href="#c27">chương 27</a>.
   <div class="chap-meta"><span class="stars">★★★★★</span><span class="prereq">Tổng hợp toàn bộ 30 chương trước</span></div>
 </div>
 
-<div class="diagram"><pre>
-                                USERSPACE
-                                    │
-                                    ▼
-                                SYSCALL
-                                    │
-                ┌───────────────────┴───────────────────┐
-                │                                        │
-                ▼                                        ▼
-              OPEN                                      READ
-                │                                        │
-                ▼                                        ▼
-               VFS                                      VFS
-                │                                        │
-                ▼                                        ▼
-        PATHNAME LOOKUP                            FILE OBJECT (f_op, f_pos)
-        (link_path_walk)                                 │
-                │                                        ▼
-                ▼                                   PAGE CACHE (address_space)
-             DCACHE                                      │
-        (d_lookup fast path)                       ┌─────┴─────┐
-                │                                   ▼           ▼
-                ▼                                 HIT         MISS
-             INODE                              (copy_to_    (readahead/
-        (iget_locked)                             user)        readpage)
-                │                                   │           │
-                ▼                                   │           ▼
-          FILESYSTEM ─────────────────────────────┐ │          BIO
-        (ext4_lookup/create)                       │ │           │
-                │                                  │ │           ▼
-                ▼                                  │ │     BLOCK LAYER
-              EXT4                                 │ │     (blk-mq, request)
-        (extent tree, block group)                 │ │           │
-                │                                  │ │           ▼
-                ▼                                  │ └────►  DEVICE DRIVER
-              JBD2                                 │               │
-        (transaction, journal)                     │               ▼
-                │                                  │         HARDWARE
-                └──────────────────────────────────┴───────────────┘
-                                    │
-                                    ▼
-                              DEVICE DRIVER
-                                    │
-                                    ▼
-                               HARDWARE
-</pre></div>
+<img src="VFS_27.png" alt="" style="max-width: 100%; height: auto;">
 
 <div class="box mental">
 <div class="box-title">🧠 Ví dụ đầy đủ — <code>read("/home/test.txt")</code> từ đầu đến cuối</div>

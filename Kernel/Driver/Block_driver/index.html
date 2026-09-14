@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux Kernel Block I/O — Source Study Book</title>
+<style>
+:root{
+  --bg:#0d1117; --bg-elev:#11161d; --bg-card:#161b22; --bg-hover:#1c2229;
+  --border:#2a313c; --border-soft:#1f252d;
+  --text:#c9d1d9; --text-dim:#8b949e; --text-bright:#f0f3f6;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --fn:#79c0ff; --struct:#d2a8ff; --src:#7ee787; --warn:#f0883e; --legacy:#f85149; --modern:#56d364;
+  --accent:#58a6ff;
+  --shadow: 0 4px 16px rgba(0,0,0,.35);
+}
+[data-theme="light"]{
+  --bg:#f6f8fa; --bg-elev:#ffffff; --bg-card:#ffffff; --bg-hover:#eef1f4;
+  --border:#d0d7de; --border-soft:#e6e9ec;
+  --text:#1f2328; --text-dim:#57606a; --text-bright:#0b0e14;
+  --fn:#0969da; --struct:#8250df; --src:#116329; --warn:#9a6700; --legacy:#cf222e; --modern:#1a7f37;
+  --accent:#0969da;
+  --shadow: 0 2px 10px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.65;}
+code,pre,.mono,.fn,.struct,.src{font-family:var(--mono);}
+h1,h2,h3,h4{color:var(--text-bright);font-weight:600;line-height:1.3;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+::selection{background:rgba(88,166,255,.35);}
+
+/* ---- progress bar ---- */
+#progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);z-index:1000;width:0%;transition:width .1s;}
+
+/* ---- header ---- */
+header{position:sticky;top:0;z-index:900;background:var(--bg-elev);border-bottom:1px solid var(--border);}
+.header-inner{display:flex;align-items:center;gap:16px;padding:10px 20px;max-width:1600px;margin:0 auto;}
+.brand{display:flex;flex-direction:column;line-height:1.15;margin-right:8px;}
+.brand .t1{font-weight:700;font-size:15px;color:var(--text-bright);}
+.brand .t2{font-size:11px;color:var(--text-dim);}
+.ver-badge{font-family:var(--mono);font-size:11px;background:var(--bg-card);border:1px solid var(--border);color:var(--modern);padding:2px 8px;border-radius:4px;}
+.header-actions{margin-left:auto;display:flex;gap:8px;align-items:center;}
+.hbtn{background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:var(--sans);}
+.hbtn:hover{background:var(--bg-hover);}
+#searchBox{background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12.5px;width:220px;font-family:var(--sans);}
+#searchBox::placeholder{color:var(--text-dim);}
+kbd{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:0 5px;font-family:var(--mono);font-size:10.5px;color:var(--text-dim);}
+
+/* ---- version banner ---- */
+.banner{background:linear-gradient(90deg,rgba(240,136,62,.12),transparent);border-bottom:1px solid var(--border);padding:8px 20px;font-size:12.5px;color:var(--warn);text-align:center;}
+.banner b{color:var(--text-bright);}
+
+/* ---- layout ---- */
+.layout{display:flex;max-width:1600px;margin:0 auto;align-items:flex-start;}
+nav.sidebar{position:sticky;top:97px;align-self:flex-start;width:250px;flex-shrink:0;max-height:calc(100vh - 110px);overflow-y:auto;padding:18px 10px 40px 20px;}
+nav.sidebar::-webkit-scrollbar{width:6px;}
+nav.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.side-group{margin-bottom:4px;}
+.side-link{display:block;padding:5px 10px;border-radius:6px;font-size:13px;color:var(--text-dim);border-left:2px solid transparent;}
+.side-link:hover{background:var(--bg-hover);text-decoration:none;color:var(--text);}
+.side-link.active{color:var(--accent);border-left-color:var(--accent);background:var(--bg-hover);font-weight:600;}
+.side-num{opacity:.5;margin-right:6px;font-family:var(--mono);font-size:11px;}
+
+main{flex:1;min-width:0;padding:20px 32px 100px;max-width:1100px;}
+.breadcrumb{font-size:12px;color:var(--text-dim);margin-bottom:6px;font-family:var(--mono);}
+
+/* ---- hero ---- */
+.hero{padding:60px 0 40px;border-bottom:1px solid var(--border-soft);margin-bottom:40px;}
+.hero h1{font-size:34px;margin:0 0 10px;}
+.hero .sub{color:var(--text-dim);font-size:16px;max-width:640px;margin-bottom:22px;}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;}
+.badge{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);color:var(--text-dim);background:var(--bg-card);}
+.core6{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px;}
+.core6 a.corecard{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;color:var(--text);}
+.core6 a.corecard:hover{border-color:var(--accent);text-decoration:none;}
+.core6 .cc-t{font-family:var(--mono);color:var(--fn);font-weight:700;font-size:13px;}
+.core6 .cc-d{font-size:12px;color:var(--text-dim);margin-top:4px;}
+
+/* ---- sections ---- */
+section{margin-bottom:64px;scroll-margin-top:100px;}
+section h2{font-size:24px;border-bottom:1px solid var(--border-soft);padding-bottom:10px;margin-bottom:18px;display:flex;align-items:center;gap:10px;}
+section h2 .secno{font-family:var(--mono);color:var(--text-dim);font-size:14px;font-weight:400;}
+section h3{font-size:17px;margin-top:28px;}
+p{color:var(--text);}
+.lede{color:var(--text-dim);font-size:14.5px;margin-bottom:18px;}
+
+/* ---- tags ---- */
+.tag{display:inline-block;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;padding:2px 7px;border-radius:4px;font-weight:700;margin-right:6px;}
+.tag-legacy{background:rgba(248,81,73,.15);color:var(--legacy);}
+.tag-modern{background:rgba(86,211,100,.15);color:var(--modern);}
+.tag-removed{background:rgba(248,81,73,.15);color:var(--legacy);}
+.tag-changed{background:rgba(240,136,62,.15);color:var(--warn);}
+.tag-unchanged{background:rgba(125,211,252,.12);color:var(--fn);}
+.tag-unverified{background:rgba(210,168,255,.15);color:var(--struct);}
+.tag-verified{background:rgba(86,211,100,.15);color:var(--modern);}
+
+/* ---- diagram (flow chain) ---- */
+.flow{display:flex;flex-direction:column;align-items:center;gap:0;margin:20px 0;}
+.flow-h{display:flex;flex-wrap:wrap;justify-content:center;gap:0;margin:20px 0;}
+.fnode{background:var(--bg-card);border:1px solid var(--border);padding:9px 16px;border-radius:7px;font-family:var(--mono);font-size:13px;cursor:pointer;text-align:center;color:var(--text);transition:.15s;}
+.fnode:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px);}
+.fnode.dim{color:var(--text-dim);font-family:var(--sans);font-size:12px;cursor:default;}
+.fnode.dim:hover{border-color:var(--border);color:var(--text-dim);transform:none;}
+.arrow-d{color:var(--text-dim);font-size:16px;line-height:1;margin:2px 0;}
+.arrow-r{color:var(--text-dim);font-size:16px;padding:0 6px;align-self:center;}
+
+/* ---- cards ---- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+@media(max-width:800px){.grid2,.grid3,.core6{grid-template-columns:1fr;}}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;}
+.fcard{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:16px 0;}
+.fcard-h{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-elev);}
+.fcard-h .fn{color:var(--fn);font-weight:700;font-size:14px;}
+.fcard-h .src{color:var(--text-dim);font-size:11.5px;}
+.fcard-b{padding:14px 16px;display:grid;grid-template-columns:110px 1fr;gap:8px 14px;font-size:13px;}
+.fcard-b dt{color:var(--text-dim);font-family:var(--mono);font-size:11px;text-transform:uppercase;align-self:start;padding-top:2px;}
+.fcard-b dd{margin:0;}
+
+/* ---- table ---- */
+.twrap{overflow-x:auto;margin:16px 0;border:1px solid var(--border);border-radius:8px;}
+table{border-collapse:collapse;width:100%;font-size:13px;}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border-soft);vertical-align:top;}
+th{background:var(--bg-elev);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.02em;position:sticky;top:0;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--bg-hover);}
+
+/* ---- code ---- */
+.codebox{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin:16px 0;overflow:hidden;}
+.codebox-h{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;background:var(--bg-elev);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--src);}
+.copybtn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-size:11px;padding:3px 9px;border-radius:5px;cursor:pointer;font-family:var(--sans);}
+.copybtn:hover{color:var(--text);border-color:var(--accent);}
+pre.code{margin:0;padding:14px 16px;overflow-x:auto;font-size:12.5px;line-height:1.6;}
+pre.code .ln{color:var(--text-dim);display:inline-block;width:28px;user-select:none;text-align:right;margin-right:12px;}
+.kw{color:#ff7b72;} .tp{color:#79c0ff;} .cm{color:#8b949e;font-style:italic;} .st{color:#a5d6ff;} .mc{color:#d2a8ff;}
+
+/* struct field badges */
+.fieldrow{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border-soft);align-items:baseline;flex-wrap:wrap;}
+.fieldrow:last-child{border-bottom:none;}
+.fieldname{font-family:var(--mono);color:var(--struct);font-weight:700;min-width:130px;font-size:13px;}
+.fieldtype{font-family:var(--mono);color:var(--text-dim);font-size:12px;}
+.fielddesc{flex:1;font-size:13px;min-width:200px;}
+
+/* ---- accordion ---- */
+.acc-item{border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden;background:var(--bg-card);}
+.acc-head{padding:13px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;color:var(--text-bright);font-size:14px;}
+.acc-head:hover{background:var(--bg-hover);}
+.acc-head .chev{transition:.2s;color:var(--text-dim);}
+.acc-item.open .chev{transform:rotate(90deg);}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .25s ease;padding:0 16px;}
+.acc-item.open .acc-body{max-height:900px;padding:0 16px 16px;}
+.acc-body dl{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px;margin:0;}
+.acc-body dt{color:var(--text-dim);font-family:var(--mono);font-size:11px;text-transform:uppercase;}
+.acc-body dd{margin:0;}
+
+/* ---- glossary / search ---- */
+#glossaryList .gitem{padding:10px 0;border-bottom:1px solid var(--border-soft);}
+#glossaryList .gitem b{color:var(--fn);font-family:var(--mono);}
+#searchOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:none;align-items:flex-start;justify-content:center;padding-top:10vh;}
+#searchOverlay.show{display:flex;}
+#searchPanel{background:var(--bg-elev);border:1px solid var(--border);border-radius:10px;width:min(600px,90vw);max-height:60vh;overflow-y:auto;box-shadow:var(--shadow);}
+#searchPanel input{width:100%;padding:16px;border:none;background:transparent;color:var(--text-bright);font-size:16px;border-bottom:1px solid var(--border);outline:none;box-sizing:border-box;}
+.sresult{padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border-soft);}
+.sresult:hover,.sresult.sel{background:var(--bg-hover);}
+.sresult .rt{font-family:var(--mono);color:var(--fn);font-size:13px;}
+.sresult .rd{font-size:11.5px;color:var(--text-dim);margin-top:2px;}
+
+/* checklist */
+.chk-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13.5px;border-bottom:1px solid var(--border-soft);}
+.chk-row input{width:16px;height:16px;accent-color:var(--accent);}
+.chk-row.done label{color:var(--text-dim);text-decoration:line-through;}
+
+/* misc */
+.pillbtn{background:var(--bg-card);border:1px solid var(--border);padding:8px 10px;border-radius:6px;cursor:pointer;color:var(--text);font-size:12px;}
+#backtotop{position:fixed;bottom:24px;right:24px;background:var(--bg-card);border:1px solid var(--border);color:var(--text);width:40px;height:40px;border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow);z-index:800;}
+#backtotop.show{display:flex;}
+.note{border-left:3px solid var(--accent);background:rgba(88,166,255,.06);padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;margin:14px 0;}
+.warnbox{border-left:3px solid var(--warn);background:rgba(240,136,62,.08);padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;margin:14px 0;}
+.small{font-size:12px;color:var(--text-dim);}
+mark{background:rgba(240,136,62,.35);color:inherit;border-radius:2px;}
+.sourcepath{font-family:var(--mono);background:var(--bg-elev);border:1px solid var(--border);color:var(--src);padding:2px 8px;border-radius:5px;font-size:12px;cursor:pointer;}
+.sourcepath:hover{border-color:var(--src);}
+hr.soft{border:none;border-top:1px solid var(--border-soft);margin:26px 0;}
+.ctxbadge{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);margin-right:4px;}
+.ctx-proc{color:var(--modern);} .ctx-hard{color:var(--legacy);} .ctx-soft{color:var(--warn);} .ctx-wq{color:var(--fn);}
+footer{border-top:1px solid var(--border-soft);padding:30px 32px;color:var(--text-dim);font-size:12px;text-align:center;}
+@media(max-width:1000px){nav.sidebar{display:none;} main{max-width:100%;padding:16px;}}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">
+      <span class="t1">Linux Kernel Study</span>
+      <span class="t2">Block Device Drivers · Ánh xạ source code Chapter 14</span>
+    </div>
+    <span class="ver-badge">Source thực tế: 5.10.241</span>
+    <div class="header-actions">
+      <button class="hbtn" onclick="openSearch()">🔍 Tìm kiếm <kbd>Ctrl K</kbd></button>
+      <button class="hbtn" id="themeBtn" onclick="toggleTheme()">Dark/Light</button>
+      <button class="hbtn" onclick="location.hash='#source-map'">Source Map</button>
+      <button class="hbtn" onclick="location.hash='#master-flow'">Master Flow</button>
+    </div>
+  </div>
+</header>
+
+<div class="banner">
+  ⚠ <b>Lưu ý về version:</b> tài liệu nghiên cứu hướng tới Linux 5.4, nhưng source tree thực tế cung cấp tại
+  <span class="mono">Kernel\K-S800\Src</span> là <b>Linux 5.10.241</b> (xem <span class="mono">Makefile</span>: VERSION=5 PATCHLEVEL=10 SUBLEVEL=241).
+  Tài liệu này phân tích <b>source 5.10.241 thật</b>, và chỉ rõ mọi điểm mà 5.10 đã khác so với baseline 5.4 giả định hoặc so với mô tả thời 2.6 trong sách.
+</div>
+
+<div class="layout">
+<nav class="sidebar" id="sidebar">
+  <div class="side-group">
+    <a class="side-link" href="#overview"><span class="side-num">01</span>Tổng quan</a>
+    <a class="side-link" href="#architecture"><span class="side-num">02</span>Kiến trúc</a>
+    <a class="side-link" href="#concepts"><span class="side-num">03</span>Khái niệm Block Device</a>
+    <a class="side-link" href="#sbs"><span class="side-num">04</span>Sector / Block / Segment</a>
+    <a class="side-link" href="#bio"><span class="side-num">05</span>BIO</a>
+    <a class="side-link" href="#biovec"><span class="side-num">06</span>bio_vec</a>
+    <a class="side-link" href="#biovsreq"><span class="side-num">07</span>BIO vs Request</a>
+    <a class="side-link" href="#gendisk"><span class="side-num">08</span>gendisk</a>
+    <a class="side-link" href="#blockdevice"><span class="side-num">09</span>block_device</a>
+    <a class="side-link" href="#reqqueue"><span class="side-num">10</span>request_queue</a>
+    <a class="side-link" href="#request"><span class="side-num">11</span>struct request</a>
+    <a class="side-link" href="#blkmq"><span class="side-num">12</span>blk-mq</a>
+    <a class="side-link" href="#iosched"><span class="side-num">13</span>I/O Scheduler</a>
+    <a class="side-link" href="#merge"><span class="side-num">14</span>Request Merge</a>
+    <a class="side-link" href="#plug"><span class="side-num">15</span>Plugging</a>
+    <a class="side-link" href="#dma"><span class="side-num">16</span>DMA / Scatter-Gather</a>
+    <a class="side-link" href="#driver"><span class="side-num">17</span>Block Driver</a>
+    <a class="side-link" href="#reg"><span class="side-num">18</span>Đăng ký Driver</a>
+    <a class="side-link" href="#queuerq"><span class="side-num">19</span>queue_rq()</a>
+    <a class="side-link" href="#irq"><span class="side-num">20</span>Interrupt</a>
+    <a class="side-link" href="#completion"><span class="side-num">21</span>Completion</a>
+    <a class="side-link" href="#opendev"><span class="side-num">22</span>Mở /dev/sda</a>
+    <a class="side-link" href="#arm64"><span class="side-num">23</span>ARM64 Entry</a>
+    <a class="side-link" href="#legacy"><span class="side-num">24</span>Legacy vs Modern</a>
+    <a class="side-link" href="#source-map"><span class="side-num">25</span>Source Code Map</a>
+    <a class="side-link" href="#debug"><span class="side-num">26</span>Debug/Quan sát</a>
+    <a class="side-link" href="#labs"><span class="side-num">27</span>Bài Lab</a>
+    <a class="side-link" href="#miniram"><span class="side-num">28</span>Driver Tối thiểu</a>
+    <a class="side-link" href="#kmap"><span class="side-num">29</span>Bản đồ Kiến thức</a>
+    <a class="side-link" href="#glossary"><span class="side-num">30</span>Thuật ngữ</a>
+    <a class="side-link" href="#checklist"><span class="side-num">31</span>Checklist</a>
+    <a class="side-link" href="#master-flow"><span class="side-num">★</span>Master Flow</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<div class="hero">
+  <h1>Linux Kernel Block Device Drivers</h1>
+  <div class="sub">Từ <span class="mono">read()</span>/<span class="mono">write()</span> ở userspace đến DMA phần cứng và hoàn tất ngắt (interrupt completion) — được trace theo đúng source tree 5.10.241 thật, từng hàm một.</div>
+  <div class="badges">
+    <span class="badge">Linux 5.10.241</span>
+    <span class="badge">Block Layer</span>
+    <span class="badge">VFS</span>
+    <span class="badge">BIO</span>
+    <span class="badge">blk-mq</span>
+    <span class="badge">DMA</span>
+    <span class="badge">IRQ</span>
+    <span class="badge">ARM64</span>
+  </div>
+  <p style="color:var(--text-dim);font-size:13.5px;max-width:640px">Hiểu toàn bộ pipeline block I/O của Linux từ userspace đến phần cứng — mỗi node bên dưới đều có thể click và nhảy tới section đầy đủ, bám sát source code.</p>
+  <div class="flow-h" style="margin-top:20px">
+    <div class="fnode" onclick="jump('bio')">Userspace</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('arm64')">Syscall</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('opendev')">VFS</div><div class="arrow-r">→</div>
+    <div class="fnode dim">Filesystem</div><div class="arrow-r">→</div>
+    <div class="fnode dim">Page Cache</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('bio')">BIO</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('blkmq')">blk-mq</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('iosched')">I/O Scheduler</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('driver')">Block Driver</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('dma')">DMA</div><div class="arrow-r">→</div>
+    <div class="fnode dim">Hardware</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('irq')">IRQ</div><div class="arrow-r">→</div>
+    <div class="fnode" onclick="jump('completion')">Completion</div>
+  </div>
+  <div class="core6">
+    <a class="corecard" onclick="jump('bio')"><div class="cc-t">BIO</div><div class="cc-d">Đơn vị mô tả I/O bộ nhớ: các trang (pages) + dải sector + callback hoàn tất.</div></a>
+    <a class="corecard" onclick="jump('request')"><div class="cc-t">REQUEST</div><div class="cc-d">Một hoặc nhiều bio đã gộp lại, được đẩy tới hardware queue.</div></a>
+    <a class="corecard" onclick="jump('blkmq')"><div class="cc-t">BLK-MQ</div><div class="cc-d">Block layer đa hàng đợi: software queue theo từng CPU → hardware context.</div></a>
+    <a class="corecard" onclick="jump('iosched')"><div class="cc-t">SCHEDULER</div><div class="cc-d">mq-deadline / kyber / bfq / none — chính sách sắp xếp request.</div></a>
+    <a class="corecard" onclick="jump('dma')"><div class="cc-t">DMA</div><div class="cc-d">bio_vec → scatterlist → dma_map_sg() → mô tả cho thiết bị.</div></a>
+    <a class="corecard" onclick="jump('completion')"><div class="cc-t">COMPLETION</div><div class="cc-d">IRQ → blk_mq_end_request() → bio_endio() → đánh thức tiến trình.</div></a>
+  </div>
+</div>
+
+<!-- 01 OVERVIEW -->
+<section id="overview">
+<h2><span class="secno">01</span> Tổng quan</h2>
+<p class="lede">Tài liệu này là phần đối chiếu bám sát source code cho Chapter 14 (“Block Device Drivers”) của cuốn Linux Device Drivers kinh điển. Chương sách mô tả block layer gần như thời kernel 2.6: mỗi thiết bị có một <span class="mono">request_queue</span> duy nhất, một "strategy routine" <span class="mono">request_fn</span>, và các elevator như <span class="mono">CFQ</span>/<span class="mono">deadline</span>/<span class="mono">noop</span>/<span class="mono">anticipatory</span>. Toàn bộ đường đi single-queue kiểu cũ đó không còn tồn tại nữa — nó đã bị xoá hẳn trong Linux 5.0. Mọi block driver trong kernel hiện đại, kể cả cây source 5.10.241 này, đều đi qua <b>blk-mq</b> (block layer đa hàng đợi được merge từ 3.13 và trở thành bắt buộc sau khi đường cũ bị gỡ bỏ).</p>
+<p>Nguyên tắc xuyên suốt tài liệu: mọi tên hàm, field của struct, và đường dẫn file bên dưới đều đã được xác minh bằng cách đọc trực tiếp source tại <span class="mono">C:\Users\PC\Documents\IT6_Kernel\Kernel\K-S800\Src</span>. Ở đâu khái niệm trong sách không còn tương đương hiện đại trực tiếp, tài liệu ghi rõ là <span class="tag tag-removed">REMOVED</span>, <span class="tag tag-changed">REFACTORED</span>, hoặc <span class="tag tag-modern">REPLACED</span> — không có gì bị đoán mò hay lấy từ một phiên bản kernel khác để lấp chỗ trống.</p>
+<div class="grid3">
+  <div class="card"><b>Kernel được phân tích</b><div class="small" style="margin-top:6px">Linux 5.10.241<br>kiến trúc: arm64 (còn có arm, generic)<br>Đường dẫn: Kernel/K-S800/Src</div></div>
+  <div class="card"><b>Phương pháp</b><div class="small" style="margin-top:6px">grep/đọc trực tiếp block/*.c, include/linux/{blkdev,blk_types,blk-mq,genhd,bvec,fs}.h, fs/block_dev.c, fs/read_write.c, arch/arm64/kernel/*.</div></div>
+  <div class="card"><b>Độ tin cậy</b><div class="small" style="margin-top:6px"><span class="tag tag-verified">VERIFIED</span> = đã đọc trực tiếp trong cây source này.<br><span class="tag tag-unverified">UNVERIFIED</span> = hợp lý nhưng chưa được kiểm tra từng dòng ở đây.</div></div>
+</div>
+</section>
+
+<!-- 02 ARCHITECTURE -->
+<section id="architecture">
+<h2><span class="secno">02</span> Kiến trúc tổng thể</h2>
+<p class="lede">Toàn bộ đường đi của một byte, từ lời gọi <span class="mono">read()</span> của user cho tới đĩa vật lý và ngược lại.</p>
+<div class="flow">
+  <div class="fnode" onclick="jump('overview')">Userspace: read()/write()/pread()/pwrite()</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('arm64')">System Call (ARM64 svc #0)</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('opendev')">VFS (vfs_read / vfs_write)</div><div class="arrow-d">↓</div>
+  <div class="fnode dim">Filesystem (ext4)</div><div class="arrow-d">↓</div>
+  <div class="fnode dim">Page Cache</div><div class="arrow-d">↓</div>
+  <div class="fnode dim">Ánh xạ block filesystem (get_block / iomap)</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('bio')">BIO</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('bio')">Generic Block Layer: submit_bio() → submit_bio_noacct()</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('request')">Request Queue</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('iosched')">I/O Scheduler (mq-deadline / kyber / bfq / none)</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('driver')">Block Driver (blk_mq_ops.queue_rq)</div><div class="arrow-d">↓</div>
+  <div class="fnode" onclick="jump('dma')">DMA (scatterlist, dma_map_sg)</div><div class="arrow-d">↓</div>
+  <div class="fnode dim">Disk Controller</div><div class="arrow-d">↓</div>
+  <div class="fnode dim">Thiết bị lưu trữ</div>
+</div>
+
+<h3>Bảng chuyển tiếp (A → B)</h3>
+<div class="twrap"><table>
+<tr><th>Chuyển tiếp</th><th>Hàm</th><th>File</th><th>Data structure</th><th>Đồng bộ?</th><th>Context</th><th>Lock</th><th>Sleep?</th><th>Sở hữu (ownership)</th></tr>
+<tr><td>Syscall → VFS</td><td class="mono fn">ksys_read()</td><td class="mono src">fs/read_write.c</td><td>fd, struct file</td><td>Sync</td><td>Process</td><td>files_lock (fdtable)</td><td>Có</td><td>fd table của caller</td></tr>
+<tr><td>VFS → Filesystem</td><td class="mono fn">vfs_read() → f_op->read_iter</td><td class="mono src">fs/read_write.c</td><td>struct kiocb, iov_iter</td><td>Sync (có thể async qua AIO)</td><td>Process</td><td>i_rwsem (read)</td><td>Có</td><td>struct file</td></tr>
+<tr><td>Filesystem → Page Cache</td><td class="mono fn">generic_file_read_iter()</td><td class="mono src">mm/filemap.c <span class="tag tag-unverified">chưa xác minh ở đây</span></td><td>struct page, address_space</td><td>Sync</td><td>Process</td><td>page lock</td><td>Có (page fault-in / chờ I/O)</td><td>address_space (inode)</td></tr>
+<tr><td>Page Cache → BIO</td><td class="mono fn">ext4_mpage_readpages() / iomap_readpage()</td><td class="mono src">fs/ext4/readpage.c <span class="tag tag-unverified">chưa xác minh ở đây</span></td><td>struct bio</td><td>Async (I/O gửi đi, hoàn tất sau)</td><td>Process</td><td>không (bio chưa vào queue)</td><td>Cấp phát có thể sleep (GFP_KERNEL/NOIO)</td><td>Filesystem giữ bio cho tới khi submit</td></tr>
+<tr><td>BIO → Block Layer</td><td class="mono fn">submit_bio() → submit_bio_noacct()</td><td class="mono src">block/blk-core.c:1071,1036</td><td>struct bio</td><td>Async (trả về ngay, hoàn tất qua bi_end_io)</td><td>Process (đa số)</td><td>không có tại lời gọi này</td><td>Không (một số đường không được sleep từ điểm này trở đi)</td><td>Block layer sở hữu cho tới bio_endio()</td></tr>
+<tr><td>Block Layer → Request</td><td class="mono fn">blk_mq_submit_bio()</td><td class="mono src">block/blk-mq.c:2171</td><td>struct request</td><td>Async</td><td>Process</td><td>hctx->lock cho dispatch list; cấp tag có thể block ngắn</td><td>Tuỳ cờ REQ_NOWAIT</td><td>request_queue</td></tr>
+<tr><td>Request → Scheduler</td><td class="mono fn">blk_mq_sched_bio_merge() / elevator ops</td><td class="mono src">block/blk-mq-sched.c <span class="tag tag-unverified">chưa xác minh ở đây</span></td><td>struct request, rb-tree/list</td><td>Sync (quyết định ngay tại chỗ)</td><td>Process</td><td>hctx spinlock</td><td>Không</td><td>elevator_queue</td></tr>
+<tr><td>Scheduler → Driver</td><td class="mono fn">blk_mq_ops.queue_rq()</td><td class="mono src">include/linux/blk-mq.h:294 (do driver định nghĩa)</td><td>struct request, blk_mq_queue_data</td><td>Async (driver trả BLK_STS_OK, hoàn tất sau qua IRQ)</td><td>Process hoặc softirq (dispatch)</td><td>tuỳ driver</td><td>Không (không được sleep trong queue_rq)</td><td>Dữ liệu riêng của driver + hardware queue</td></tr>
+<tr><td>Driver → DMA</td><td class="mono fn">blk_rq_map_sg() → dma_map_sg()</td><td class="mono src">block/blk-merge.c:~400-460</td><td>struct scatterlist</td><td>Sync (lời gọi mapping)</td><td>Process</td><td>không (IOMMU tự khoá nội bộ)</td><td>Bản thân dma_map_sg: Không (không được sleep)</td><td>Driver sở hữu bảng sg</td></tr>
+<tr><td>Hardware → IRQ</td><td class="mono fn">handler request_irq() của driver</td><td class="mono src">drivers/block/*.c (tuỳ driver)</td><td>thanh ghi trạng thái phần cứng</td><td>Tín hiệu async</td><td><span class="ctxbadge ctx-hard">HARD IRQ</span></td><td>chỉ spin_lock_irqsave</td><td>Không bao giờ</td><td>Kernel (interrupt context)</td></tr>
+<tr><td>IRQ → Completion</td><td class="mono fn">blk_mq_complete_request() → blk_mq_end_request()</td><td class="mono src">block/blk-mq.c:699,564</td><td>struct request, blk_status_t</td><td>Async (có thể bật qua IPI/softirq về CPU đã submit)</td><td><span class="ctxbadge ctx-hard">HARD IRQ</span>/<span class="ctxbadge ctx-soft">SOFTIRQ</span></td><td>không thêm gì (request đã có chủ)</td><td>Không</td><td>request → trả lại tag set</td></tr>
+<tr><td>Completion → BIO</td><td class="mono fn">bio_endio()</td><td class="mono src">block/bio.c:1425</td><td>struct bio</td><td>Async callback (bi_end_io)</td><td><span class="ctxbadge ctx-soft">SOFTIRQ</span> hoặc process</td><td>không</td><td>Không</td><td>bio được free / trả về bio_set</td></tr>
+<tr><td>BIO → Wakeup</td><td class="mono fn">callback bi_end_io (tuỳ filesystem, vd end_buffer_async_read)</td><td class="mono src">fs/buffer.c <span class="tag tag-unverified">chưa xác minh ở đây</span></td><td>struct page, wait_queue</td><td>Async</td><td><span class="ctxbadge ctx-soft">SOFTIRQ</span>/process</td><td>giải phóng page lock + wake_up_page</td><td>Không</td><td>Page cache</td></tr>
+</table></div>
+</section>
+
+<!-- 03 CONCEPTS -->
+<section id="concepts">
+<h2><span class="secno">03</span> Khái niệm Block Device</h2>
+<p>Một <b>block device</b> là thiết bị lưu trữ truy cập ngẫu nhiên mà kernel giao tiếp theo từng khối kích thước cố định thay vì như một luồng byte (khác với character device). Mỗi block device mà kernel quản lý được biểu diễn trong bộ nhớ bằng ba struct phối hợp với nhau: <span class="mono struct">gendisk</span> (bản thân đĩa + danh tính trong device model), <span class="mono struct">request_queue</span> (pipeline I/O của nó), và <span class="mono struct">block_device</span> (handle hướng VFS, dùng khi ai đó <span class="mono">open()</span> <span class="mono">/dev/sda</span> hoặc một partition của nó).</p>
+<div class="twrap"><table>
+<tr><th>Thuật ngữ</th><th>Ý nghĩa</th><th>Biểu diễn</th></tr>
+<tr><td>Block Device Handling</td><td>Cách kernel đưa một request I/O của filesystem/user đi qua các queue tới phần cứng</td><td>gendisk + request_queue + blk_mq_ops</td></tr>
+<tr><td>Sector</td><td>Đơn vị địa chỉ nhỏ nhất mà block layer làm việc nội bộ — luôn là 512 byte trong các API kernel, bất kể sector size thật của phần cứng</td><td><span class="mono">sector_t</span> (u64)</td></tr>
+<tr><td>Block</td><td>Đơn vị cấp phát ở mức filesystem (vd ext4 block 4K)</td><td>số block <span class="mono">buffer_head</span>/<span class="mono">iomap</span></td></tr>
+<tr><td>Segment</td><td>Một vùng bộ nhớ liên tục về mặt vật lý bên trong bio/request, trở thành một entry scatter-gather DMA</td><td><span class="mono">bio_vec</span> / <span class="mono">scatterlist</span></td></tr>
+</table></div>
+</section>
+
+<!-- 04 SECTOR/BLOCK/SEGMENT -->
+<section id="sbs">
+<h2><span class="secno">04</span> Sector / Block / Segment</h2>
+<p class="lede">Ba từ này là những thuật ngữ bị dùng chồng chéo nhiều nhất trong block layer. Cần phân biệt chính xác.</p>
+<div class="grid3">
+  <div class="card"><b>Hardware sector</b><div class="small" style="margin-top:6px">Đơn vị vật lý mà media lưu trữ thực sự đọc/ghi trong một thao tác. Trước đây thường là 512 byte; ổ đĩa hiện đại thường native "4Kn" 4096 byte, hoặc "512e" (vật lý 4K, trình bày logic 512 để tương thích ngược).</div></div>
+  <div class="card"><b>Logical sector</b><div class="small" style="margin-top:6px">Đơn vị mà block layer của kernel dùng để đánh địa chỉ. <span class="mono">sector_t</span> <i>luôn</i> được tính theo đơn vị 512 byte trong các API lõi (<span class="mono">bi_iter.bi_sector</span>), kể cả trên đĩa 4Kn — driver/queue_limits.logical_block_size mới cho biết độ chi tiết thật.</div></div>
+  <div class="card"><b>Physical sector</b><div class="small" style="margin-top:6px">Độ chi tiết ghi thật của media, thể hiện qua <span class="mono">queue_limits.physical_block_size</span>. Đĩa 512e báo logical=512, physical=4096.</div></div>
+  <div class="card"><b>Filesystem block</b><div class="small" style="margin-top:6px">Đơn vị cấp phát của ext4, thường là 4096 byte = 8 logical sector. Độc lập với <span class="mono">PAGE_SIZE</span>.</div></div>
+  <div class="card"><b>Page</b><div class="small" style="margin-top:6px"><span class="mono">PAGE_SIZE</span> = 4096 trên arm64/x86 (có thể là 64K với một số cấu hình arm64). Một page có thể chứa 1 hoặc nhiều filesystem block; một bio_vec thường bao một page.</div></div>
+  <div class="card"><b>bio segment / DMA segment</b><div class="small" style="margin-top:6px">Một <span class="mono">bio_vec</span> (page+offset+len) trở thành một entry <span class="mono">scatterlist</span>, rồi thành một mô tả DMA phần cứng — trừ khi các segment liền kề được gộp vật lý với nhau.</div></div>
+</div>
+<h3>Ví dụ kinh điển</h3>
+<div class="codebox"><div class="codebox-h"><span>tính toán</span></div><pre class="code">PAGE_SIZE   = 4096 byte
+sector size = 512 byte
+──────────────────────────
+1 page = 4096 / 512 = 8 sector
+
+ext4 block size = 4096 (mặc định phổ biến)
+→ 1 filesystem block = 1 page = 8 sector  (trường hợp thường gặp, KHÔNG được đảm bảo)</pre></div>
+<h3>Các trường hợp phá vỡ giả định gọn gàng "1 page = 1 block"</h3>
+<div class="twrap"><table>
+<tr><th>Trường hợp</th><th>Điều gì xảy ra</th></tr>
+<tr><td>Đĩa native 4K (4Kn)</td><td>logical_block_size = physical_block_size = 4096. bio phải được căn theo bội số 4096; I/O nhỏ hơn 4K không căn chỉnh sẽ bị từ chối hoặc cần read-modify-write ở filesystem, không phải ở block layer.</td></tr>
+<tr><td>Đĩa 512e</td><td>logical_block_size = 512 (để tương thích), physical_block_size = 4096. Kernel có thể gửi I/O căn theo 512 byte nhưng ổ đĩa nội bộ vẫn phải read-modify-write, làm giảm hiệu năng khi ghi lệch căn chỉnh — đây chính là lý do có <span class="mono">alignment_offset</span> trong <span class="mono">queue_limits</span>.</td></tr>
+<tr><td>Filesystem block ≠ kích thước page</td><td>Trên kiến trúc dùng page 64K (một số cấu hình arm64) nhưng filesystem định dạng block 4K, một page chứa nhiều fs block — ánh xạ từ offset trong page sang số block không còn là 1:1, và buffer_head/iomap phải theo dõi nhiều block trên một page.</td></tr>
+<tr><td>Filesystem block &gt; kích thước page</td><td>ext4/XFS block lớn (block size &gt; PAGE_SIZE) cần multi-page folio; không liên quan tới cấu hình 5.10 page-4K/block-4K tiêu chuẩn, nêu ra để đầy đủ — <span class="tag tag-unverified">UNVERIFIED cho cây source này</span>.</td></tr>
+</table></div>
+<h3>Ánh xạ vào source</h3>
+<div class="grid2">
+<div class="card"><span class="mono struct">sector_t</span><div class="small" style="margin-top:6px">Typedef, <span class="mono">include/linux/types.h</span>. u64 (u32 nếu không bật CONFIG_LBDAF, nhưng cấu hình hiện đại luôn thực chất là u64). Luôn tính theo đơn vị 512 byte.</div></div>
+<div class="card"><span class="mono struct">struct bio</span><div class="small" style="margin-top:6px">Mang <span class="mono">bi_iter.bi_sector</span> (vị trí bắt đầu) và <span class="mono">bi_iter.bi_size</span> (số byte còn lại) — xem <a href="#bio">§05</a>.</div></div>
+<div class="card"><span class="mono struct">struct bio_vec</span><div class="small" style="margin-top:6px"><span class="mono">include/linux/bvec.h:31</span> — page + len + offset, một segment bộ nhớ vật lý. Xem <a href="#biovec">§06</a>.</div></div>
+<div class="card"><span class="mono struct">struct scatterlist</span><div class="small" style="margin-top:6px"><span class="mono">include/linux/scatterlist.h</span> <span class="tag tag-unverified">chưa xác minh ở đây</span> — danh sách segment sẵn sàng cho DMA, được dựng từ các bio_vec qua <span class="mono">blk_rq_map_sg()</span>. Xem <a href="#dma">§16</a>.</div></div>
+</div>
+</section>
+
+<!-- 05 BIO -->
+<section id="bio">
+<h2><span class="secno">05</span> struct bio</h2>
+<p class="lede">Đã xác minh tại <span class="sourcepath" onclick="copyText(this)">include/linux/blk_types.h:203</span> trong cây source này.</p>
+<div class="note">bio đại diện cho <b>một phần I/O bộ nhớ</b> cần thực hiện trên một dải sector — đây là đơn vị công việc cơ bản của block layer, được filesystem/page-cache tạo ra và <span class="mono">submit_bio()</span> tiêu thụ. Nó <i>không phải</i> một lệnh phần cứng và <i>không phải</i> thứ mà driver nhìn thấy trực tiếp (đó là <span class="mono">struct request</span>, được dựng bằng cách gộp một hoặc nhiều bio — xem <a href="#biovsreq">§07</a>).</p>
+<h3>Các field (theo khai báo trong cây source này)</h3>
+<div class="card">
+<div class="fieldrow"><span class="fieldname">bi_next</span><span class="fieldtype">struct bio *</span><span class="fielddesc">Con trỏ danh sách liên kết đơn, dùng khi nhiều bio được nối chuỗi (liên kết trong request queue).</span></div>
+<div class="fieldrow"><span class="fieldname">bi_disk</span><span class="fieldtype">struct gendisk *</span><span class="fielddesc"><span class="tag tag-changed">KHÁC so với sách</span> — 5.10 dùng <span class="mono">bi_disk</span> + <span class="mono">bi_partno</span> thay vì một con trỏ <span class="mono">bi_bdev</span> trực tiếp (việc gộp lại thành bi_bdev chỉ xảy ra sau này, từ 5.11+). Muốn lấy <span class="mono">block_device</span> thật phải tra qua <span class="mono">bio->bi_disk</span> + tra bảng partition.</span></div>
+<div class="fieldrow"><span class="fieldname">bi_opf</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Bit thấp = cờ request, bit cao = REQ_OP (REQ_OP_READ, REQ_OP_WRITE, REQ_OP_FLUSH, REQ_OP_DISCARD, …). Dùng macro accessor, không thao tác bit thô.</span></div>
+<div class="fieldrow"><span class="fieldname">bi_flags</span><span class="fieldtype">unsigned short</span><span class="fielddesc">Trạng thái nội bộ + chỉ số bvec pool (bio lấy mảng bvec từ mempool nào).</span></div>
+<div class="fieldrow"><span class="fieldname">bi_status</span><span class="fieldtype">blk_status_t</span><span class="fielddesc">Trạng thái hoàn tất (BLK_STS_OK, BLK_STS_IOERR, …) — được gán trước khi gọi bio_endio().</span></div>
+<div class="fieldrow"><span class="fieldname">bi_partno</span><span class="fieldtype">u8</span><span class="fielddesc">Chỉ số partition trên <span class="mono">bi_disk</span> mà bio này nhắm tới (0 = cả đĩa).</span></div>
+<div class="fieldrow"><span class="fieldname">bi_iter</span><span class="fieldtype">struct bvec_iter</span><span class="fielddesc">Con trỏ "sống": <span class="mono">bi_sector</span> (sector hiện tại), <span class="mono">bi_size</span> (số byte còn lại), <span class="mono">bi_idx</span> (chỉ số bio_vec hiện tại), <span class="mono">bi_bvec_done</span> (số byte đã xong trong bvec hiện tại). Đây là thứ tiến dần khi I/O hoàn tất từng phần.</span></div>
+<div class="fieldrow"><span class="fieldname">bi_end_io</span><span class="fieldtype">bio_end_io_t *</span><span class="fielddesc">Callback hoàn tất, được <span class="mono">bio_endio()</span> gọi — đây là cách filesystem/page-cache biết "I/O của bạn đã xong".</span></div>
+<div class="fieldrow"><span class="fieldname">bi_private</span><span class="fieldtype">void *</span><span class="fielddesc">Con trỏ context riêng để chủ sở hữu (filesystem) lưu trạng thái, lấy lại bên trong <span class="mono">bi_end_io</span>.</span></div>
+<div class="fieldrow"><span class="fieldname">bi_vcnt</span><span class="fieldtype">unsigned short</span><span class="fielddesc">Số entry bio_vec đã được điền trong <span class="mono">bi_io_vec</span>.</span></div>
+<div class="fieldrow"><span class="fieldname">bi_max_vecs</span><span class="fieldtype">unsigned short</span><span class="fielddesc">Dung lượng mảng bio_vec (bio_add_page sẽ fail khi bi_vcnt chạm mức này).</span></div>
+<div class="fieldrow"><span class="fieldname">bi_io_vec</span><span class="fieldtype">struct bio_vec *</span><span class="fielddesc">Mảng thật chứa các segment page+offset+len.</span></div>
+<div class="fieldrow"><span class="fieldname">__bi_cnt</span><span class="fieldtype">atomic_t</span><span class="fielddesc">Bộ đếm tham chiếu/pin, được <span class="mono">bio_get()</span>/<span class="mono">bio_put()</span> thao tác.</span></div>
+<div class="fieldrow"><span class="fieldname">bi_pool</span><span class="fieldtype">struct bio_set *</span><span class="fielddesc">Mempool mà bio này được cấp phát từ đó — cần thiết để <span class="mono">bio_put()</span> trả lại đúng chỗ.</span></div>
+</div>
+<div class="warnbox"><b>Ghi chú TEXTBOOK / LEGACY:</b> field <span class="mono">bi_bdev</span> cổ điển mà tài liệu nghiên cứu liệt kê không tồn tại trong 5.10.241. Nó đã bị thay bằng <span class="mono">bi_disk</span>+<span class="mono">bi_partno</span> khoảng bản 4.14, và chỉ được gộp lại thành con trỏ <span class="mono">bi_bdev</span> trực tiếp từ Linux 5.11+ (ngoài phạm vi cây source này). Đừng giả định <span class="mono">bio->bi_bdev</span> biên dịch được ở đây.</div>
+
+<h3>Vì sao bio không phải là request?</h3>
+<p>bio mô tả <i>vùng bộ nhớ nào</i> tham gia I/O và <i>dải sector nào</i> nó ánh xạ tới — nó được tạo ra mà chưa biết gì về một hardware queue cụ thể (filesystem không biết và không cần biết hardware queue nào cuối cùng sẽ mang nó đi). Ngược lại, <span class="mono">request</span> là đơn vị hướng phần cứng của block layer: một hoặc nhiều bio đã được gộp lại, được cấp một tag, gắn với một <span class="mono">blk_mq_hw_ctx</span> cụ thể, và sắp được đưa cho <span class="mono">queue_rq()</span>. Việc tách hai mối quan tâm này ra là điều khiến request merging, I/O scheduling, và multi-queue dispatch trở nên khả thi mà filesystem không cần biết gì về các queue.</p>
+
+<h3>Vòng đời</h3>
+<div class="flow">
+<div class="fnode dim">bio_alloc(gfp, nr_iovecs)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">khởi tạo: gán bi_opf, bi_iter.bi_sector, bi_disk, bi_end_io</div><div class="arrow-d">↓</div>
+<div class="fnode dim">bio_add_page(bio, page, len, offset)  (lặp lại cho mỗi page)</div><div class="arrow-d">↓</div>
+<div class="fnode onclick" onclick="jump('bio')">submit_bio(bio)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('reqqueue')">vào queue: được gộp vào một request</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('driver')">driver: queue_rq() → DMA → phần cứng</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('completion')">bio_endio(bio)  →  callback bi_end_io() được gọi</div><div class="arrow-d">↓</div>
+<div class="fnode dim">bio_put(bio)  → refcount về 0 → trả lại bi_pool</div>
+</div>
+
+<h3>Các thao tác chính — vị trí source đã xác minh</h3>
+<div class="fcard">
+  <div class="fcard-h"><span class="fn">submit_bio()</span><span class="src">block/blk-core.c:1071</span></div>
+  <div class="fcard-b">
+    <dt>Mục đích</dt><dd>Điểm vào công khai để submit một bio cho block layer; cộng thêm accounting (thống kê I/O của task, throttling writeback theo cgroup) rồi chuyển cho <span class="mono">submit_bio_noacct()</span>.</dd>
+    <dt>Caller</dt><dd>Filesystem, writeback của page cache, direct I/O, swap.</dd>
+    <dt>Callee</dt><dd><span class="mono">submit_bio_noacct()</span> (block/blk-core.c:1036)</dd>
+    <dt>Context</dt><dd>Process context (đôi khi softirq với thiết bị stacked/loop)</dd>
+    <dt>Có sleep được không</dt><dd>Tuỳ caller; bản thân hàm không bắt buộc cấp phát GFP_KERNEL trên đường hot path</dd>
+  </div>
+</div>
+<div class="fcard">
+  <div class="fcard-h"><span class="fn">submit_bio_noacct()</span><span class="src">block/blk-core.c:1036</span></div>
+  <div class="fcard-b">
+    <dt>Mục đích</dt><dd><span class="tag tag-modern">ĐÂY là hàm thay thế hiện đại cho <span class="mono">generic_make_request()</span> cũ</span>. Chuyển tới callback bio-based kiểu cũ <span class="mono">-&gt;submit_bio</span> của thiết bị (device-mapper, md, loop) qua <span class="mono">__submit_bio_noacct()</span>, hoặc đường blk-mq qua <span class="mono">__submit_bio_noacct_mq()</span> → cuối cùng là <span class="mono">blk_mq_submit_bio()</span>.</dd>
+    <dt>Structure quan trọng</dt><dd>struct bio, struct request_queue</dd>
+    <dt>Ghi chú theo phiên bản kernel</dt><dd><span class="mono">generic_make_request()</span> đã được đổi tên thành <span class="mono">submit_bio_noacct()</span> trong chu kỳ 5.9. Chuỗi ví dụ mà người dùng đưa ra <span class="mono">generic_make_request() → submit_bio() → blk_mq_submit_bio()</span> vì vậy đã lỗi thời với 5.10 — thứ tự đúng là <span class="mono">submit_bio() → submit_bio_noacct() → blk_mq_submit_bio()</span>.</dd>
+  </div>
+</div>
+<div class="grid2">
+<div class="card"><span class="mono fn">bio_alloc()</span><div class="small" style="margin-top:6px"><span class="mono src">block/bio.c</span> — cấp phát một bio (và mảng bvec của nó) từ mempool <span class="mono">bio_set</span>. Có thể sleep với GFP_KERNEL/GFP_NOIO.</div></div>
+<div class="card"><span class="mono fn">bio_add_page()</span><div class="small" style="margin-top:6px"><span class="mono src">block/bio.c</span> — thêm một page (kèm offset/len) thành bio_vec mới, gộp vào entry trước đó nếu liền kề vật lý và queue cho phép.</div></div>
+<div class="card"><span class="mono fn">bio_endio()</span><div class="small" style="margin-top:6px"><span class="mono src">block/bio.c:1425</span> — điểm vào hoàn tất; duyệt qua chuỗi bio nếu có (bi_private dùng để chain), giảm bộ đếm còn lại, gọi <span class="mono">bi_end_io</span>.</div></div>
+<div class="card"><span class="mono fn">bio_for_each_segment()</span><div class="small" style="margin-top:6px"><span class="mono src">include/linux/bio.h</span> <span class="tag tag-unverified">chưa xác minh ở đây</span> — macro iterator duyệt bi_io_vec, tôn trọng con trỏ hoàn tất từng phần của bi_iter.</div></div>
+<div class="card"><span class="mono fn">bio_put()</span> / <span class="mono fn">bio_get()</span><div class="small" style="margin-top:6px"><span class="mono src">block/bio.c</span> — thao tác refcount (__bi_cnt); bio_put trả về bi_pool khi về 0.</div></div>
+</div>
+</section>
+
+<!-- 06 BIO_VEC -->
+<section id="biovec">
+<h2><span class="secno">06</span> struct bio_vec</h2>
+<p class="lede">Đã xác minh: <span class="sourcepath" onclick="copyText(this)">include/linux/bvec.h:31</span></p>
+<div class="card">
+<div class="fieldrow"><span class="fieldname">bv_page</span><span class="fieldtype">struct page *</span><span class="fielddesc">Page vật lý chứa segment này.</span></div>
+<div class="fieldrow"><span class="fieldname">bv_len</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Chiều dài vùng dữ liệu bên trong page, tính bằng byte.</span></div>
+<div class="fieldrow"><span class="fieldname">bv_offset</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Offset byte của vùng dữ liệu tính từ đầu page.</span></div>
+</div>
+<h3>Hình dung một segment</h3>
+<svg viewBox="0 0 420 160" style="width:100%;max-width:420px;margin:16px 0" xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="400" height="140" rx="6" fill="none" stroke="var(--border)" stroke-width="2"/>
+  <text x="20" y="28" fill="var(--text-dim)" font-size="11" font-family="monospace">struct page (4096 byte)</text>
+  <rect x="20" y="40" width="180" height="30" fill="none" stroke="var(--border)" stroke-dasharray="3,3"/>
+  <text x="24" y="60" fill="var(--text-dim)" font-size="10" font-family="monospace">bv_offset = 512</text>
+  <rect x="200" y="40" width="160" height="90" rx="4" fill="rgba(88,166,255,.15)" stroke="var(--accent)" stroke-width="1.5"/>
+  <text x="212" y="65" fill="var(--fn)" font-size="11" font-family="monospace">data</text>
+  <text x="212" y="82" fill="var(--fn)" font-size="11" font-family="monospace">bv_len = 2048</text>
+  <text x="20" y="145" fill="var(--text-dim)" font-size="10" font-family="monospace">bv_page →</text>
+</svg>
+<h3>Vì sao dùng page + offset + length thay vì địa chỉ virtual?</h3>
+<div class="grid3">
+<div class="card"><b>Highmem</b><div class="small" style="margin-top:6px">Trên hệ 32-bit (không liên quan trực tiếp tới arm64, nhưng API dùng chung) các page highmem không được ánh xạ cố định vào không gian địa chỉ ảo của kernel — không thể giữ một con trỏ ổn định tới chúng mà không có <span class="mono">kmap()</span>. page+offset vẫn đúng bất kể page có đang được map hay không.</div></div>
+<div class="card"><b>DMA</b><div class="small" style="margin-top:6px">Các engine DMA cần địa chỉ vật lý/bus, không phải địa chỉ ảo của kernel. Bắt đầu từ <span class="mono">struct page</span> cho phép <span class="mono">dma_map_sg()</span> suy ra trực tiếp địa chỉ vật lý/IOMMU chính xác.</div></div>
+<div class="card"><b>Scatter-gather</b><div class="small" style="margin-top:6px">Driver dựng một entry <span class="mono">scatterlist</span> cho mỗi bio_vec qua <span class="mono">sg_set_page(sg, bv_page, bv_len, bv_offset)</span> (xem block/blk-merge.c) — cách biểu diễn ánh xạ trực tiếp, không cần dịch địa chỉ cho tới lúc map DMA.</div></div>
+</div>
+</section>
+
+<!-- 07 BIO vs REQUEST -->
+<section id="biovsreq">
+<h2><span class="secno">07</span> BIO vs REQUEST</h2>
+<div class="twrap"><table>
+<tr><th>BIO</th><th>REQUEST</th></tr>
+<tr><td>Mô tả I/O bộ nhớ: các page + dải sector + callback</td><td>Đại diện cho một lệnh block I/O sắp được đẩy tới một hardware queue cụ thể</td></tr>
+<tr><td>Được filesystem / page cache / direct I/O tạo ra</td><td>Được block layer tạo ra bằng cách gộp 1..N bio</td></tr>
+<tr><td>Không có tag, không gắn với hardware context nào</td><td>Có <span class="mono">tag</span> (chỉ số vào mảng lệnh của driver) và gắn với <span class="mono">mq_hctx</span></td></tr>
+<tr><td>Hoàn tất qua <span class="mono">bio_endio()</span> → <span class="mono">bi_end_io</span></td><td>Hoàn tất qua <span class="mono">blk_mq_end_request()</span>, hàm này nội bộ hoàn tất từng bio còn lại</td></tr>
+<tr><td>Struct: <span class="mono">struct bio</span> (block/blk_types.h)</td><td>Struct: <span class="mono">struct request</span> (include/linux/blkdev.h:135)</td></tr>
+<tr><td>Field: <span class="mono">bi_iter</span>, <span class="mono">bi_io_vec</span>, <span class="mono">bi_opf</span></td><td>Field: <span class="mono">bio</span>/<span class="mono">biotail</span> (chuỗi bio), <span class="mono">__sector</span>, <span class="mono">__data_len</span>, <span class="mono">tag</span>, <span class="mono">mq_hctx</span></td></tr>
+</table></div>
+<h3>Luồng gộp (merge)</h3>
+<div class="flow-h">
+<div class="fnode dim">bio1</div><div class="fnode dim">bio2</div><div class="fnode dim">bio3</div>
+<div class="arrow-r">→</div><div class="fnode" onclick="jump('merge')">merge</div><div class="arrow-r">→</div>
+<div class="fnode" onclick="jump('request')">request</div><div class="arrow-r">→</div>
+<div class="fnode" onclick="jump('blkmq')">hardware queue</div>
+</div>
+<p>Xem <a href="#merge">§14 Request Merging</a> để biết <span class="mono">bio_attempt_back_merge()</span> / <span class="mono">bio_attempt_front_merge()</span> (block/blk-merge.c:930,954) — hai hàm cài đặt back/front merge.</p>
+</section>
+
+<!-- 08 GENDISK -->
+<section id="gendisk">
+<h2><span class="secno">08</span> struct gendisk</h2>
+<p class="lede">Đã xác minh: <span class="sourcepath" onclick="copyText(this)">include/linux/genhd.h:172</span></p>
+<div class="card">
+<div class="fieldrow"><span class="fieldname">major</span><span class="fieldtype">int</span><span class="fielddesc">Số major của driver (chỉ là tham số đầu vào — dùng <span class="mono">disk_devt()</span> để đọc lại).</span></div>
+<div class="fieldrow"><span class="fieldname">first_minor</span><span class="fieldtype">int</span><span class="fielddesc">Số minor đầu tiên mà gendisk này sở hữu.</span></div>
+<div class="fieldrow"><span class="fieldname">minors</span><span class="fieldtype">int</span><span class="fielddesc">Số minor tối đa (partition); =1 với đĩa không thể chia partition.</span></div>
+<div class="fieldrow"><span class="fieldname">disk_name</span><span class="fieldtype">char[DISK_NAME_LEN]</span><span class="fielddesc">Tên hiển thị dạng <span class="mono">/dev/&lt;disk_name&gt;</span>.</span></div>
+<div class="fieldrow"><span class="fieldname">fops</span><span class="fieldtype">const struct block_device_operations *</span><span class="fielddesc">Bảng callback open/release/ioctl/getgeo/… — xem <a href="#opendev">§22</a>.</span></div>
+<div class="fieldrow"><span class="fieldname">queue</span><span class="fieldtype">struct request_queue *</span><span class="fielddesc">Pipeline I/O của đĩa này.</span></div>
+<div class="fieldrow"><span class="fieldname">private_data</span><span class="fieldtype">void *</span><span class="fielddesc">Con trỏ context riêng của driver.</span></div>
+<div class="fieldrow"><span class="fieldname">part0</span><span class="fieldtype">struct hd_struct</span><span class="fielddesc">"Pseudo-partition" đại diện cả đĩa (partition 0). <span class="tag tag-changed">Vẫn dựa trên hd_struct trong 5.10</span> — việc tái cấu trúc sau này gộp trạng thái partition thẳng vào block_device chỉ xảy ra sau phiên bản kernel này (≈5.11/5.12+).</span></div>
+<div class="fieldrow"><span class="fieldname">part_tbl</span><span class="fieldtype">struct disk_part_tbl __rcu *</span><span class="fielddesc">Mảng con trỏ được bảo vệ bằng RCU, trỏ tới <span class="mono">hd_struct</span> của từng partition.</span></div>
+</div>
+<p>Tất cả field mà tài liệu nghiên cứu liệt kê (major, first_minor, minors, disk_name, fops, queue, private_data, part0) đều có mặt không đổi trong 5.10.241 — struct này khá ổn định qua các phiên bản kernel.</p>
+<h3>Quan hệ</h3>
+<div class="flow">
+<div class="fnode" onclick="jump('gendisk')">gendisk</div>
+<div class="arrow-d">↓</div>
+<div class="flow-h">
+<div class="fnode" onclick="jump('reqqueue')">request_queue</div>
+<div class="fnode dim">block_device_operations</div>
+<div class="fnode dim">partitions (hd_struct[])</div>
+<div class="fnode dim">device model (struct device qua part0.__dev)</div>
+</div>
+</div>
+</section>
+
+<!-- 09 BLOCK DEVICE -->
+<section id="blockdevice">
+<h2><span class="secno">09</span> struct block_device</h2>
+<p class="lede">Đã xác minh: <span class="sourcepath" onclick="copyText(this)">include/linux/blk_types.h:22</span> — lưu ý struct này nằm trong <span class="mono">blk_types.h</span> ở 5.10, không phải <span class="mono">fs.h</span>.</p>
+<div class="card">
+<div class="fieldrow"><span class="fieldname">bd_dev</span><span class="fieldtype">dev_t</span><span class="fielddesc">Số thiết bị (major:minor) của block_device này.</span></div>
+<div class="fieldrow"><span class="fieldname">bd_inode</span><span class="fieldtype">struct inode *</span><span class="fielddesc">inode giả (bdev pseudo-filesystem) đại diện cho thiết bị này (comment trong source ghi thẳng "will die").</span></div>
+<div class="fieldrow"><span class="fieldname">bd_contains</span><span class="fieldtype">struct block_device *</span><span class="fielddesc">Với partition, trỏ ngược về block_device của cả đĩa; với cả đĩa, trỏ về chính nó.</span></div>
+<div class="fieldrow"><span class="fieldname">bd_partno</span><span class="fieldtype">u8</span><span class="fielddesc">Số thứ tự partition (0 = cả đĩa).</span></div>
+<div class="fieldrow"><span class="fieldname">bd_part</span><span class="fieldtype">struct hd_struct *</span><span class="fielddesc">Con trỏ tới struct accounting/geometry của partition này.</span></div>
+<div class="fieldrow"><span class="fieldname">bd_disk</span><span class="fieldtype">struct gendisk *</span><span class="fielddesc">gendisk sở hữu.</span></div>
+<div class="fieldrow"><span class="fieldname">bd_openers</span><span class="fieldtype">int</span><span class="fielddesc">Số lần đang mở (open reference count).</span></div>
+<div class="fieldrow"><span class="fieldname">bd_mutex</span><span class="fieldtype">struct mutex</span><span class="fielddesc">Đồng bộ hoá open()/close().</span></div>
+</div>
+<h3>Chuỗi quan hệ</h3>
+<div class="flow">
+<div class="fnode dim">inode (bdev pseudo-fs)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('blockdevice')">struct block_device</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('gendisk')">struct gendisk (bd_disk)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('reqqueue')">struct request_queue</div>
+</div>
+<h3>/dev/sda so với /dev/sda1</h3>
+<p><span class="mono">/dev/sda</span> mở một <span class="mono">block_device</span> với <span class="mono">bd_partno == 0</span> và <span class="mono">bd_contains == self</span> — thiết bị đại diện cả đĩa, dựa trên <span class="mono">gendisk-&gt;part0</span>. <span class="mono">/dev/sda1</span> mở một <span class="mono">block_device</span> khác với <span class="mono">bd_partno == 1</span>, <span class="mono">bd_contains</span> trỏ tới block_device của sda, và <span class="mono">bd_part</span> trỏ tới <span class="mono">hd_struct</span> lưu <span class="mono">start_sect</span>/<span class="mono">nr_sects</span> của partition đó (từ <span class="mono">include/linux/genhd.h:58</span>). Cả hai dùng chung một <span class="mono">gendisk</span>, do đó chung một <span class="mono">request_queue</span> — I/O vào một partition chỉ đơn giản là được điều chỉnh offset sector trước khi đi vào cùng một queue.</p>
+</section>
+
+<!-- 10 REQUEST QUEUE -->
+<section id="reqqueue">
+<h2><span class="secno">10</span> struct request_queue</h2>
+<p class="lede">Đã xác minh: <span class="sourcepath" onclick="copyText(this)">include/linux/blkdev.h:405</span> (một phần — struct rất lớn, các field chính bên dưới).</p>
+<div class="card">
+<div class="fieldrow"><span class="fieldname">mq_ops</span><span class="fieldtype">const struct blk_mq_ops *</span><span class="fielddesc">Bảng thao tác của driver (queue_rq, v.v.) — sự có mặt của field này chính là khác biệt cấu trúc lớn nhất so với queue kiểu request_fn cũ mà sách mô tả.</span></div>
+<div class="fieldrow"><span class="fieldname">queue_ctx</span><span class="fieldtype">struct blk_mq_ctx __percpu *</span><span class="fielddesc">Context software queue theo từng CPU.</span></div>
+<div class="fieldrow"><span class="fieldname">queue_hw_ctx</span><span class="fieldtype">struct blk_mq_hw_ctx **</span><span class="fielddesc">Mảng các context dispatch phần cứng.</span></div>
+<div class="fieldrow"><span class="fieldname">nr_hw_queues</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Số hardware queue mà thiết bị này công bố.</span></div>
+<div class="fieldrow"><span class="fieldname">elevator</span><span class="fieldtype">struct elevator_queue *</span><span class="fielddesc">Instance I/O scheduler đang hoạt động (NULL nghĩa là "none").</span></div>
+<div class="fieldrow"><span class="fieldname">limits</span><span class="fieldtype">struct queue_limits</span><span class="fielddesc">Toàn bộ ràng buộc DMA/segment/alignment — mở rộng bên dưới.</span></div>
+<div class="fieldrow"><span class="fieldname">queue_flags</span><span class="fieldtype">unsigned long</span><span class="fielddesc">Các bit QUEUE_FLAG_*: vd QUEUE_FLAG_NOMERGES, QUEUE_FLAG_SAME_COMP, QUEUE_FLAG_DISCARD, các cờ write-cache, v.v. <span class="tag tag-unverified">danh sách cờ chính xác chưa xác minh ở đây</span>.</span></div>
+<div class="fieldrow"><span class="fieldname">rq_timeout</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Timeout cho từng request, dùng bởi timeout work.</span></div>
+<div class="fieldrow"><span class="fieldname">last_merge</span><span class="fieldtype">struct request *</span><span class="fielddesc">Cache merge một-entry — request cuối cùng mà một bio đã gộp thành công vào.</span></div>
+</div>
+<h3>struct queue_limits (field nhúng <span class="mono">limits</span>)</h3>
+<div class="twrap"><table>
+<tr><th>Field</th><th>Ý nghĩa</th></tr>
+<tr><td class="mono">max_hw_sectors / max_sectors</td><td>Request lớn nhất mà phần cứng / giới hạn mềm hiện tại chấp nhận, tính bằng sector 512B</td></tr>
+<tr><td class="mono">max_segments</td><td>Số segment scatter-gather tối đa một request được phép có</td></tr>
+<tr><td class="mono">max_segment_size</td><td>Số byte tối đa trong một segment vật lý</td></tr>
+<tr><td class="mono">logical_block_size / physical_block_size</td><td>Sự khác biệt 512e/4Kn đã bàn ở §04</td></tr>
+<tr><td class="mono">seg_boundary_mask / virt_boundary_mask</td><td>Ràng buộc căn chỉnh DMA tại ranh giới segment</td></tr>
+<tr><td class="mono">discard_granularity / max_discard_sectors</td><td>Ràng buộc TRIM/discard</td></tr>
+<tr><td class="mono">alignment_offset / io_min / io_opt</td><td>Gợi ý căn chỉnh 512e cho công cụ phân vùng</td></tr>
+<tr><td class="mono">zoned</td><td>Mô hình zoned block device (SMR host-aware/host-managed)</td></tr>
+</table></div>
+<h3>Quan hệ</h3>
+<div class="flow">
+<div class="fnode" onclick="jump('gendisk')">gendisk</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('reqqueue')">request_queue</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('blkmq')">blk-mq (queue_ctx / queue_hw_ctx)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">hardware queue</div>
+</div>
+<div class="warnbox"><b>Legacy vs modern:</b> ở đường cũ trước 5.0, request_queue còn giữ một con trỏ "strategy routine" <span class="mono">request_fn_proc *request_fn</span> và một <span class="mono">struct list_head queue_head</span> đơn giản. Cả hai không tồn tại trong 5.10 — <span class="tag tag-removed">REMOVED</span>, thay thế hoàn toàn bằng <span class="mono">mq_ops</span> + các struct theo từng CPU/hardware-queue.</div>
+</section>
+
+<!-- 11 REQUEST -->
+<section id="request">
+<h2><span class="secno">11</span> struct request</h2>
+<p class="lede">Đã xác minh: <span class="sourcepath" onclick="copyText(this)">include/linux/blkdev.h:135</span></p>
+<div class="card">
+<div class="fieldrow"><span class="fieldname">q</span><span class="fieldtype">struct request_queue *</span><span class="fielddesc">Queue sở hữu.</span></div>
+<div class="fieldrow"><span class="fieldname">mq_ctx</span><span class="fieldtype">struct blk_mq_ctx *</span><span class="fielddesc">Context software queue (theo CPU) mà request này được cấp phát trên đó.</span></div>
+<div class="fieldrow"><span class="fieldname">mq_hctx</span><span class="fieldtype">struct blk_mq_hw_ctx *</span><span class="fielddesc">Hardware dispatch context mà request này gắn vào.</span></div>
+<div class="fieldrow"><span class="fieldname">cmd_flags</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Cờ operation + cờ request chung (REQ_OP_* cộng các modifier).</span></div>
+<div class="fieldrow"><span class="fieldname">tag / internal_tag</span><span class="fieldtype">int</span><span class="fielddesc">Chỉ số vào mảng lệnh của driver/scheduler — đây là "khe phần cứng" mà request chiếm giữ.</span></div>
+<div class="fieldrow"><span class="fieldname">__data_len</span><span class="fieldtype">unsigned int</span><span class="fielddesc">Tổng chiều dài dữ liệu — nội bộ, không bao giờ truy cập trực tiếp (theo comment trong source), dùng <span class="mono">blk_rq_bytes()</span>.</span></div>
+<div class="fieldrow"><span class="fieldname">__sector</span><span class="fieldtype">sector_t</span><span class="fielddesc">Con trỏ sector — nội bộ, dùng <span class="mono">blk_rq_pos()</span>.</span></div>
+<div class="fieldrow"><span class="fieldname">bio / biotail</span><span class="fieldtype">struct bio *</span><span class="fielddesc">Đầu/cuối chuỗi liên kết đơn các bio đã gộp vào request này.</span></div>
+<div class="fieldrow"><span class="fieldname">rq_disk</span><span class="fieldtype">struct gendisk *</span><span class="fielddesc">Đĩa đích.</span></div>
+<div class="fieldrow"><span class="fieldname">nr_phys_segments</span><span class="fieldtype">unsigned short</span><span class="fielddesc">Số cặp địa chỉ+độ dài DMA scatter-gather sau khi đã gộp vật lý — đây là con số <span class="mono">blk_rq_map_sg()</span> dùng để xác định kích thước scatterlist.</span></div>
+</div>
+<p>Tất cả field mà tài liệu nghiên cứu hỏi tới (<span class="mono">q</span>, <span class="mono">mq_ctx</span>, <span class="mono">mq_hctx</span>, <span class="mono">cmd_flags</span>, <span class="mono">tag</span>, <span class="mono">bio</span>, <span class="mono">biotail</span>, <span class="mono">__sector</span>, <span class="mono">__data_len</span>) đều tồn tại trong 5.10.241 đúng như tên gọi — struct này đã hoàn toàn theo hình dạng blk-mq; không có biến thể legacy nào để so sánh trong cây source này.</p>
+<h3>BIO → Request → lệnh phần cứng</h3>
+<div class="flow">
+<div class="fnode" onclick="jump('bio')">BIO(s)</div><div class="arrow-d">↓ merge</div>
+<div class="fnode" onclick="jump('request')">request (đã cấp tag, gắn với mq_hctx)</div><div class="arrow-d">↓ queue_rq()</div>
+<div class="fnode" onclick="jump('driver')">lệnh phần cứng (mô tả do driver tự định nghĩa)</div>
+</div>
+</section>
+
+<!-- 12 BLK-MQ -->
+<section id="blkmq">
+<h2><span class="secno">12</span> blk-mq — Block Layer hiện đại</h2>
+<p class="lede">blk-mq (block layer đa hàng đợi, merge từ 3.13) là <b>con đường request-based duy nhất</b> trong 5.10 — thiết kế single-queue/elevator kiểu cũ mà sách mô tả đã bị xoá trong Linux 5.0. Mọi block driver, dù thật hay tối thiểu, đều cài đặt <span class="mono struct">struct blk_mq_ops</span>.</p>
+<h3>CPU → software queue → hardware queue</h3>
+<svg viewBox="0 0 560 220" style="width:100%;max-width:560px" xmlns="http://www.w3.org/2000/svg">
+  <g font-family="monospace" font-size="11">
+  <rect x="10" y="10" width="90" height="26" rx="4" fill="none" stroke="var(--border)"/><text x="20" y="27" fill="var(--text)">CPU 0</text>
+  <rect x="10" y="46" width="90" height="26" rx="4" fill="none" stroke="var(--border)"/><text x="20" y="63" fill="var(--text)">CPU 1</text>
+  <rect x="10" y="82" width="90" height="26" rx="4" fill="none" stroke="var(--border)"/><text x="20" y="99" fill="var(--text)">CPU 2</text>
+  <rect x="10" y="118" width="90" height="26" rx="4" fill="none" stroke="var(--border)"/><text x="20" y="135" fill="var(--text)">CPU 3</text>
+  <rect x="150" y="10" width="150" height="26" rx="4" fill="rgba(210,168,255,.12)" stroke="var(--struct)"/><text x="160" y="27" fill="var(--struct)">sw queue (ctx0)</text>
+  <rect x="150" y="46" width="150" height="26" rx="4" fill="rgba(210,168,255,.12)" stroke="var(--struct)"/><text x="160" y="63" fill="var(--struct)">sw queue (ctx1)</text>
+  <rect x="150" y="82" width="150" height="26" rx="4" fill="rgba(210,168,255,.12)" stroke="var(--struct)"/><text x="160" y="99" fill="var(--struct)">sw queue (ctx2)</text>
+  <rect x="150" y="118" width="150" height="26" rx="4" fill="rgba(210,168,255,.12)" stroke="var(--struct)"/><text x="160" y="135" fill="var(--struct)">sw queue (ctx3)</text>
+  <rect x="380" y="55" width="170" height="46" rx="5" fill="rgba(88,166,255,.12)" stroke="var(--accent)"/><text x="395" y="83" fill="var(--fn)">hardware queue 0 (hctx)</text>
+  <path d="M100,23 L150,23 M100,59 L150,59 M100,95 L150,95 M100,131 L150,131" stroke="var(--border)" fill="none"/>
+  <path d="M300,23 L380,78 M300,59 L380,78 M300,95 L380,78 M300,131 L380,78" stroke="var(--border)" fill="none"/>
+  <rect x="10" y="164" width="90" height="26" rx="4" fill="none" stroke="var(--border)" opacity=".5"/><text x="20" y="181" fill="var(--text-dim)" opacity=".7">CPU 4..N</text>
+  <text x="150" y="200" fill="var(--text-dim)" font-size="10">(sw queue bổ sung → hardware queue 1, nếu nr_hw_queues &gt; 1)</text>
+  </g>
+</svg>
+<p>Mỗi CPU đang online có một <span class="mono">blk_mq_ctx</span> (software queue) để xếp request tạm; một ánh xạ (<span class="mono">blk_mq_queue_map</span>, từ <span class="mono">blk_mq_tag_set.map[]</span>) chỉ định mỗi ctx tới một <span class="mono">blk_mq_hw_ctx</span>. Thiết bị single-hw-queue (đa số driver đơn giản) ánh xạ mọi CPU về hctx 0; thiết bị đa hàng đợi kiểu NVMe có một hctx cho mỗi CPU hoặc mỗi vector ngắt.</p>
+<h3>Các structure cốt lõi — đã xác minh</h3>
+<div class="fcard"><div class="fcard-h"><span class="fn struct">struct blk_mq_ops</span><span class="src">include/linux/blk-mq.h:290</span></div>
+<div class="fcard-b"><dt>queue_rq</dt><dd><span class="mono">blk_status_t (*queue_rq)(struct blk_mq_hw_ctx *, const struct blk_mq_queue_data *)</span> — submit một request cho phần cứng. Xem <a href="#queuerq">§19</a>.</dd>
+<dt>commit_rqs</dt><dd>Đánh thức phần cứng sau một loạt request khi <span class="mono">bd-&gt;last</span> đã được dùng để quyết định "chưa cần rung chuông (ring doorbell) vội".</dd>
+<dt>get_budget/put_budget</dt><dd>Kiểm soát nhận request tuỳ chọn ở mức thiết bị, trước khi <span class="mono">queue_rq</span> chạy.</dd></div></div>
+<div class="fcard"><div class="fcard-h"><span class="fn struct">struct blk_mq_tag_set</span><span class="src">include/linux/blk-mq.h:249</span></div>
+<div class="fcard-b"><dt>ops</dt><dd>Con trỏ tới blk_mq_ops của driver.</dd>
+<dt>nr_hw_queues</dt><dd>Số hardware queue cần tạo.</dd>
+<dt>queue_depth</dt><dd>Độ sâu tag mỗi hardware queue (số lệnh tối đa đang bay).</dd>
+<dt>cmd_size</dt><dd>Kích thước vùng riêng của driver cho mỗi request, cấp phát liền sau struct request.</dd>
+<dt>tags</dt><dd>Bộ cấp phát <span class="mono">blk_mq_tags</span> theo từng hardware queue (dựa trên bitmap).</dd></div></div>
+<div class="grid2">
+<div class="card"><span class="mono struct fn">struct blk_mq_hw_ctx</span><div class="small" style="margin-top:6px"><span class="mono src">include/linux/blk-mq.h:16</span> — một cho mỗi hardware dispatch queue: dispatch list + lock, run_work (dispatch trễ), cpumask các CPU nó phục vụ.</div></div>
+<div class="card"><span class="mono struct fn">struct blk_mq_ctx</span><div class="small" style="margin-top:6px"><span class="mono src">include/linux/blk-mq.h</span> <span class="tag tag-unverified">danh sách field chưa xác minh ở đây</span> — software queue theo CPU: danh sách tạm trước khi request được dispatch hoặc chuyển cho scheduler.</div></div>
+</div>
+
+<h3>§15 — luồng request của blk-mq (call chain đã xác minh)</h3>
+<div class="flow">
+<div class="fnode fn" onclick="jump('bio')">submit_bio()</div><div class="arrow-d">↓ blk-core.c:1071</div>
+<div class="fnode fn">submit_bio_noacct()</div><div class="arrow-d">↓ blk-core.c:1036</div>
+<div class="fnode fn" onclick="jump('blkmq')">blk_mq_submit_bio()</div><div class="arrow-d">↓ blk-mq.c:2171</div>
+<div class="fnode dim">cấp phát request (blk_mq_get_new_requests / cấp tag)</div><div class="arrow-d">↓</div>
+<div class="fnode fn" onclick="jump('merge')">blk_attempt_plug_merge() / blk_mq_sched_bio_merge()</div><div class="arrow-d">↓ blk-mq.c:2193,2196</div>
+<div class="fnode dim" onclick="jump('iosched')">chèn vào I/O scheduler (elevator ops, nếu có gắn)</div><div class="arrow-d">↓</div>
+<div class="fnode fn">blk_mq_run_hw_queue() / blk_mq_run_hw_queues()</div><div class="arrow-d">↓ blk-mq.c:1649,1677</div>
+<div class="fnode fn" onclick="jump('driver')">driver-&gt;queue_rq()</div>
+</div>
+<div class="note">Đã xác minh trong <span class="mono">block/blk-mq.c</span>: <span class="mono">blk_mq_submit_bio()</span> tại dòng 2171 gọi <span class="mono">blk_attempt_plug_merge()</span> (dòng 2193) và <span class="mono">blk_mq_sched_bio_merge()</span> (dòng 2196) trước khi cấp phát/dispatch một request, sau đó <span class="mono">blk_mq_run_hw_queue()</span> (nhiều nơi gọi, vd dòng 2230) đánh thức hardware context.</div>
+<div class="warnbox">Các hàm mà tài liệu nghiên cứu nêu tên — <span class="mono">blk_mq_make_request()</span>, <span class="mono">blk_mq_get_request()</span>, <span class="mono">blk_mq_insert_request()</span>, <span class="mono">blk_mq_dispatch_rq_list()</span> — phản ánh nội bộ blk-mq của một thế hệ hơi khác. Trong 5.10.241, điểm vào hướng ra ngoài là <span class="mono">blk_mq_submit_bio()</span> (blk_mq_make_request là tên trước 5.9 của nó); <span class="mono">blk_mq_dispatch_rq_list()</span> vẫn tồn tại nội bộ trong blk-mq.c nhưng chưa được xác minh từng dòng ở trên — coi là <span class="tag tag-unverified">UNVERIFIED</span> cho tới khi grep trực tiếp.</div>
+</section>
+
+<!-- 13 IO SCHEDULER -->
+<section id="iosched">
+<h2><span class="secno">13</span> I/O Scheduler</h2>
+<p class="lede">Xác nhận bằng cách liệt kê thư mục <span class="mono">block/</span>: các file có mặt là <span class="mono">mq-deadline.c</span>, <span class="mono">kyber-iosched.c</span>, <span class="mono">bfq-iosched.c</span> (+ bfq-cgroup.c, bfq-wf2q.c). <b>Không có</b> <span class="mono">cfq-iosched.c</span>, <span class="mono">noop-iosched.c</span>, hay <span class="mono">as-iosched.c</span> ở bất kỳ đâu trong cây source này.</p>
+<div class="twrap"><table>
+<tr><th>Scheduler</th><th>Thời kỳ</th><th>Mục tiêu</th><th>Trạng thái trong 5.10.241</th></tr>
+<tr><td>NOOP</td><td>Legacy (2.6)</td><td>Overhead bằng 0, FIFO, dựa vào việc merge của phần cứng/driver</td><td><span class="tag tag-removed">REMOVED</span> — về mặt khái niệm được thay bằng <span class="mono">none</span> (không gắn scheduler nào vào queue blk-mq)</td></tr>
+<tr><td>Deadline</td><td>Legacy (2.6)</td><td>Giới hạn độ trễ tối đa mỗi request thông qua deadline theo từng chiều</td><td><span class="tag tag-modern">REPLACED</span> bằng <span class="mono">mq-deadline.c</span> — cùng ý tưởng cốt lõi, viết lại cho blk-mq</td></tr>
+<tr><td>CFQ (Completely Fair Queuing)</td><td>Legacy (2.6)</td><td>Công bằng theo process/cgroup qua round robin chia lát thời gian</td><td><span class="tag tag-removed">REMOVED</span> — mục tiêu công bằng+cgroup được hấp thụ bởi <span class="mono">bfq-iosched.c</span></td></tr>
+<tr><td>Anticipatory</td><td>Legacy (2.6, bị gỡ trước cả khi thời kỳ CFQ kết thúc)</td><td>Idle ngắn sau một lần đọc, dự đoán sẽ có lần đọc gần đó tiếp theo (giảm seek)</td><td><span class="tag tag-removed">REMOVED</span> từ rất lâu trước khi blk-mq ra đời</td></tr>
+<tr><td>none</td><td>Modern (blk-mq)</td><td>Không sắp xếp lại — cho request đi thẳng qua; tốt nhất cho NVMe/SSD rất nhanh nơi chi phí seek ≈ 0</td><td><span class="tag tag-modern">có mặt</span></td></tr>
+<tr><td>mq-deadline</td><td>Modern (blk-mq)</td><td>Giới hạn độ trễ mỗi request; mặc định cho phần lớn thiết bị dạng đĩa quay/SATA</td><td><span class="tag tag-modern">có mặt</span> — block/mq-deadline.c</td></tr>
+<tr><td>kyber</td><td>Modern (blk-mq)</td><td>Nhắm tới độ trễ đọc/ghi mục tiêu bằng vòng phản hồi; phù hợp SSD đa hàng đợi tốc độ cao</td><td><span class="tag tag-modern">có mặt</span> — block/kyber-iosched.c</td></tr>
+<tr><td>BFQ</td><td>Modern (blk-mq)</td><td>Công bằng theo tỷ lệ giữa các process/cgroup, độ trễ thấp cho I/O tương tác</td><td><span class="tag tag-modern">có mặt</span> — block/bfq-iosched.c (hậu duệ tinh thần của CFQ)</td></tr>
+</table></div>
+</section>
+
+<!-- 14 MERGE -->
+<section id="merge">
+<h2><span class="secno">14</span> Gộp Request (Request Merging)</h2>
+<p class="lede">Đã xác minh: <span class="mono src">block/blk-merge.c:930</span> (<span class="mono fn">bio_attempt_back_merge()</span>) và <span class="mono src">:954</span> (<span class="mono fn">bio_attempt_front_merge()</span>), được gọi từ một dispatcher quanh dòng 1017-1021 và lại ở 1126/1135.</p>
+<div class="grid2">
+<div class="card">
+<b>BACK MERGE</b>
+<div class="codebox" style="margin-top:10px"><pre class="code">request: sector 100 → 107
+bio:     sector 108 → 115
+────────────────────────────
+request mới: sector 100 → 115   (bio được nối vào cuối)</pre></div>
+</div>
+<div class="card">
+<b>FRONT MERGE</b>
+<div class="codebox" style="margin-top:10px"><pre class="code">request: sector 100 → 107
+bio:     sector 92  → 99
+────────────────────────────
+request mới: sector 92 → 107   (bio được chèn vào đầu)</pre></div>
+</div>
+</div>
+<p>Back merge phổ biến hơn nhiều trong thực tế (writeback tuần tự tự nhiên mở rộng về phía trước); front merge xảy ra khi I/O hoàn tất/tới hơi lệch thứ tự. Cả hai đều được thử trước khi rơi về cấp phát một request hoàn toàn mới — xem nơi gọi trong <span class="mono">blk_mq_submit_bio()</span> (<a href="#blkmq">§12</a>) qua <span class="mono">blk_attempt_plug_merge()</span> và <span class="mono">blk_mq_sched_bio_merge()</span>.</p>
+</section>
+
+<!-- 15 PLUGGING -->
+<section id="plug">
+<h2><span class="secno">15</span> Plugging</h2>
+<p class="lede">Đã xác minh: <span class="mono fn">blk_start_plug()</span> <span class="mono src">block/blk-core.c:1690</span>, <span class="mono fn">blk_finish_plug()</span> <span class="mono src">block/blk-core.c:1774</span>.</p>
+<div class="grid2">
+<div class="card"><b>Không dùng plug</b>
+<div class="flow" style="margin-top:8px">
+<div class="fnode dim">ghi A → dispatch</div>
+<div class="fnode dim">ghi B → dispatch</div>
+<div class="fnode dim">ghi C → dispatch</div>
+</div></div>
+<div class="card"><b>Có dùng plug</b>
+<div class="flow" style="margin-top:8px">
+<div class="fnode dim">ghi A ┐</div>
+<div class="fnode dim">ghi B ├── gom lại → gộp → dispatch một lần</div>
+<div class="fnode dim">ghi C ┘</div>
+</div></div>
+</div>
+<p><span class="mono">blk_start_plug()</span> gắn một <span class="mono">struct blk_plug</span> riêng cho từng task, chặn các lời gọi <span class="mono">submit_bio_noacct()</span> thực hiện trong lúc nó đang hoạt động, gom các request kết quả vào một danh sách cục bộ thay vì dispatch ngay. <span class="mono">blk_finish_plug()</span> đẩy danh sách đó ra — cho các bio liền kề (vd từ một <span class="mono">writev</span> nhiều trang) cơ hội gộp thành ít request lớn hơn trước khi chạm tới hardware queue, giảm cả overhead dispatch mỗi request lẫn số lần rung chuông (doorbell) phần cứng.</p>
+</section>
+
+<!-- 16 DMA -->
+<section id="dma">
+<h2><span class="secno">16</span> DMA / Scatter-Gather</h2>
+<p class="lede">Đã xác minh: <span class="mono src">block/blk-merge.c</span> quanh dòng 412-457 có kiểu thiết lập giống <span class="mono fn">sg_init_table()</span> và gọi <span class="mono fn">sg_set_page(*sg, page, len, offset)</span> (dòng 443, 457) — tức là <span class="mono fn">blk_rq_map_sg()</span> duyệt từng bio_vec của request và phát ra một entry scatterlist cho mỗi (page,len,offset), gộp các phần liền kề vật lý trước.</p>
+<div class="flow">
+<div class="fnode" onclick="jump('biovec')">bio_vec (page, len, offset)</div><div class="arrow-d">↓ blk_rq_map_sg()</div>
+<div class="fnode">struct scatterlist</div><div class="arrow-d">↓ dma_map_sg()</div>
+<div class="fnode">Mô tả DMA (địa chỉ bus/IOMMU)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">thiết bị</div>
+</div>
+<h3>Ba loại "địa chỉ" khác nhau — đừng nhầm lẫn</h3>
+<div class="twrap"><table>
+<tr><th>Loại địa chỉ</th><th>Là gì</th><th>Ai dùng</th></tr>
+<tr><td>Địa chỉ virtual</td><td>Con trỏ CPU nhìn thấy (sau khi qua MMU), vd <span class="mono">page_address()</span></td><td>Code kernel làm memcpy/truy cập bộ nhớ</td></tr>
+<tr><td>Địa chỉ physical</td><td>Địa chỉ RAM thật, vd <span class="mono">page_to_phys()</span></td><td>Sổ sách nội bộ của kernel, DMA không qua IOMMU</td></tr>
+<tr><td>Địa chỉ DMA (bus)</td><td>Địa chỉ mà thiết bị nhìn thấy trên bus — có thể khác physical nếu có IOMMU hoặc bounce buffer SWIOTLB tham gia</td><td>Giá trị trả về của <span class="mono">dma_map_sg()</span>; đây là thứ bạn nạp vào thanh ghi mô tả của thiết bị</td></tr>
+</table></div>
+<p><span class="mono">dma_map_sg()</span> không được sleep và phải đi kèm <span class="mono">dma_unmap_sg()</span> khi thiết bị báo hoàn tất (trong interrupt handler hoặc sau đó ở process context) — ánh xạ có thể đang giữ một bounce buffer hoặc entry IOMMU cần được giải phóng.</p>
+</section>
+
+<!-- 17 BLOCK DRIVER -->
+<section id="driver">
+<h2><span class="secno">17</span> Block Device Driver — Vòng đời</h2>
+<div class="flow">
+<div class="fnode dim">module_init()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">cấp phát dữ liệu riêng của driver + blk_mq_tag_set</div><div class="arrow-d">↓</div>
+<div class="fnode fn">register_blkdev()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">blk_mq_alloc_tag_set() + blk_mq_init_queue() (cấp phát gendisk + request_queue)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">gán các field của gendisk (major, fops, queue, disk_name, private_data)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">set_capacity()</div><div class="arrow-d">↓</div>
+<div class="fnode fn" onclick="jump('reg')">add_disk()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">device model: tạo /sys/block/&lt;name&gt;, node /dev/&lt;name&gt;</div><div class="arrow-d">↓</div>
+<div class="fnode dim">thiết bị sẵn sàng cho I/O</div><div class="arrow-d">↓</div>
+<div class="fnode dim">module_exit(): del_gendisk() + blk_cleanup_queue() + unregister_blkdev()</div>
+</div>
+</section>
+
+<!-- 18 DRIVER REGISTRATION -->
+<section id="reg">
+<h2><span class="secno">18</span> Đăng ký Driver — Ánh xạ API</h2>
+<div class="twrap"><table>
+<tr><th>API trong sách</th><th>Thực tế Linux 5.10.241</th><th>Trạng thái</th></tr>
+<tr><td class="mono">register_blkdev()</td><td class="mono">register_blkdev(major, name)</td><td><span class="tag tag-unchanged">UNCHANGED</span> — đã xác minh <span class="mono src">block/genhd.c:437</span></td></tr>
+<tr><td class="mono">alloc_disk()</td><td class="mono">alloc_disk(minors)</td><td><span class="tag tag-unchanged">vẫn còn</span>, là macro bọc quanh <span class="mono">__alloc_disk_node()</span> — đã xác minh <span class="mono src">include/linux/genhd.h:357,376,384</span>. (Lưu ý: macro này bị gỡ ở các kernel sau ≥5.15, thay bằng <span class="mono">blk_alloc_disk()</span> — không liên quan tới 5.10.241.)</td></tr>
+<tr><td class="mono">blk_init_queue()</td><td class="mono">blk_mq_init_queue()</td><td><span class="tag tag-replaced">REPLACED</span> — khởi tạo single-queue kiểu cũ không còn tồn tại; mọi queue đều là blk-mq queue, dựng từ một <span class="mono">blk_mq_tag_set</span> qua <span class="mono">blk_mq_alloc_tag_set()</span> + <span class="mono">blk_mq_init_queue()</span>, cả hai đều có mặt trong <span class="mono src">block/blk-mq.c</span> (đã xác nhận sự có mặt của file qua grep).</td></tr>
+<tr><td>(mới, sách không có tương đương)</td><td class="mono">set_capacity(gendisk, sectors)</td><td>Gán tổng số sector của đĩa.</td></tr>
+<tr><td class="mono">add_disk()</td><td class="mono">add_disk(gendisk)</td><td><span class="tag tag-unchanged">có mặt</span>, macro bọc quanh <span class="mono">__device_add_disk()</span> — đã xác minh <span class="mono src">block/genhd.c:776,850,856</span>. Đây là hàm thực sự tạo ra <span class="mono">/sys/block/&lt;name&gt;</span> và kích hoạt udev tạo <span class="mono">/dev/&lt;name&gt;</span>.</td></tr>
+</table></div>
+</section>
+
+<!-- 19 QUEUE_RQ -->
+<section id="queuerq">
+<h2><span class="secno">19</span> Driver → Phần cứng: queue_rq()</h2>
+<div class="flow">
+<div class="fnode" onclick="jump('request')">struct request</div><div class="arrow-d">↓</div>
+<div class="fnode fn">queue_rq(hctx, bd) của driver</div><div class="arrow-d">↓</div>
+<div class="fnode dim">phân tích request: blk_rq_pos(rq), blk_rq_bytes(rq), req_op(rq)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('dma')">blk_rq_map_sg() → scatterlist → dma_map_sg()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">dựng mô tả lệnh phần cứng, rung chuông (ring doorbell)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">trả về BLK_STS_OK (async — hoàn tất đến sau qua IRQ)</div>
+</div>
+<p><span class="mono">queue_rq()</span> (khai báo trong <span class="mono">struct blk_mq_ops</span>, <span class="mono src">include/linux/blk-mq.h:294</span>) là "strategy routine" hiện đại — hậu duệ chức năng trực tiếp của khái niệm "strategy routine" trong sách, nhưng theo từng hardware queue thay vì theo từng thiết bị, và bị cấm tuyệt đối việc sleep (nó có thể chạy khi ngắt đang tắt, hoặc trong một context mà việc block sẽ làm nghẽn dispatch của các CPU khác).</p>
+</section>
+
+<!-- 20 INTERRUPT -->
+<section id="irq">
+<h2><span class="secno">20</span> Xử lý Interrupt</h2>
+<div class="flow">
+<div class="fnode dim">thiết bị lưu trữ báo hoàn tất</div><div class="arrow-d">↓</div>
+<div class="fnode dim">DMA transfer hoàn tất</div><div class="arrow-d">↓</div>
+<div class="fnode"><span class="ctxbadge ctx-hard">HARD IRQ</span> nổ ra</div><div class="arrow-d">↓</div>
+<div class="fnode dim">handler request_irq() của driver: ack phần cứng, đọc trạng thái</div><div class="arrow-d">↓</div>
+<div class="fnode fn">blk_mq_complete_request()</div><div class="arrow-d">↓ blk-mq.c:699</div>
+<div class="fnode dim">blk_mq_complete_request_remote(): cùng CPU → đường softirq; khác CPU → IPI</div>
+</div>
+<h3>Đã xác minh cơ chế dispatch hoàn tất (block/blk-mq.c)</h3>
+<div class="codebox"><div class="codebox-h"><span>block/blk-mq.c — logic bật (bounce) khi hoàn tất</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div>
+<pre class="code"><span class="ln">1</span><span class="kw">bool</span> blk_mq_complete_request_remote(<span class="kw">struct</span> request *rq)
+<span class="ln">2</span>{
+<span class="ln">3</span>    WRITE_ONCE(rq->state, MQ_RQ_COMPLETE);
+<span class="ln">4</span>    <span class="cm">/* … */</span>
+<span class="ln">5</span>    <span class="kw">if</span> (rq->mq_ctx->cpu != raw_smp_processor_id()) {
+<span class="ln">6</span>        rq->csd.func = __blk_mq_complete_request_remote;
+<span class="ln">7</span>        rq->csd.info = rq;
+<span class="ln">8</span>        smp_call_function_single_async(rq->mq_ctx->cpu, &rq->csd); <span class="cm">// IPI về CPU đã submit</span>
+<span class="ln">9</span>    } <span class="kw">else</span> {
+<span class="ln">10</span>       <span class="kw">if</span> (rq->q->nr_hw_queues > 1) <span class="kw">return</span> <span class="kw">false</span>;
+<span class="ln">11</span>       <span class="kw">return</span> blk_mq_trigger_softirq(rq);  <span class="cm">// raise_softirq_irqoff(BLOCK_SOFTIRQ)</span>
+<span class="ln">12</span>   }
+<span class="ln">13</span>}</pre></div>
+<p>Hai cơ chế hoàn tất thật sự cùng tồn tại trong 5.10.241, cả hai đã được xác minh trong <span class="mono">block/blk-mq.c</span>: một <b>IPI</b> (<span class="mono">smp_call_function_single_async</span>, dòng ~681) bật hoàn tất trở về đúng CPU đã submit request ban đầu (giữ dữ liệu theo CPU nằm gần cache), và <b>BLOCK_SOFTIRQ</b> cổ điển (<span class="mono">raise_softirq_irqoff(BLOCK_SOFTIRQ)</span>, đăng ký qua <span class="mono">open_softirq(BLOCK_SOFTIRQ, blk_done_softirq)</span> tại dòng ~4010) dùng cho thiết bị single-hw-queue hoàn tất trên cùng CPU.</p>
+<div class="flow-h" style="margin-top:16px">
+<span class="ctxbadge ctx-hard">HARD IRQ</span><span class="small">ack phần cứng, không được sleep, làm việc tối thiểu</span>
+</div>
+<div class="flow-h">
+<span class="ctxbadge ctx-soft">SOFTIRQ</span><span class="small">BLOCK_SOFTIRQ / blk_done_softirq → chạy đường blk_mq_end_request, không được sleep</span>
+</div>
+<div class="flow-h">
+<span class="ctxbadge ctx-proc">PROCESS</span><span class="small">tiến trình submit ban đầu, chỉ được đánh thức sau khi bio_endio() giải phóng page/wait-queue</span>
+</div>
+</section>
+
+<!-- 21 COMPLETION -->
+<section id="completion">
+<h2><span class="secno">21</span> Hoàn tất Request/BIO</h2>
+<div class="flow">
+<div class="fnode fn">blk_mq_end_request()</div><div class="arrow-d">↓ blk-mq.c:564, gọi blk_update_request() rồi __blk_mq_end_request() (dòng 539)</div>
+<div class="fnode fn" onclick="jump('bio')">bio_endio()</div><div class="arrow-d">↓ bio.c:1425</div>
+<div class="fnode dim">callback bi_end_io() (tuỳ filesystem, vd end_buffer_async_read/write)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">page được đánh dấu Uptodate, mở khoá; wake_up_page()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">tiến trình đang chờ thức dậy trong vfs_read()/vfs_write()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">copy_to_user() → trả về userspace</div>
+</div>
+<p><span class="mono">blk_mq_end_request()</span> là bước hoàn tất ở mức request (trả lại tag, cập nhật thống kê); nó duyệt qua chuỗi bio của request và gọi <span class="mono">bio_endio()</span> ngay khi phần của mỗi bio đã được tính đủ (một request có thể hoàn tất nhiều bio đã gộp). <span class="mono">bio_endio()</span> được thiết kế chung chung một cách có chủ đích — nó không biết mình đang hoàn tất một lần đọc filesystem, một lần đọc block thô, hay một I/O swap; sự cụ thể đó hoàn toàn nằm ở callback <span class="mono">bi_end_io</span> mà bên tạo ra bio đã cài đặt.</p>
+</section>
+
+<!-- 22 OPEN DEV -->
+<section id="opendev">
+<h2><span class="secno">22</span> Mở một Block Device</h2>
+<p class="lede">Đã xác minh: <span class="mono fn">blkdev_open()</span> <span class="mono src">fs/block_dev.c:1747</span>.</p>
+<div class="flow">
+<div class="fnode dim">open("/dev/sda", O_RDONLY)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('arm64')">ARM64 syscall entry</div><div class="arrow-d">↓</div>
+<div class="fnode dim">do_sys_openat2() → tra đường dẫn (path lookup)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">inode được xác định (inode bdev pseudo-fs cho file đặc biệt)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">file->f_op được gán thành def_blk_fops</div><div class="arrow-d">↓</div>
+<div class="fnode fn">blkdev_open(inode, filp)</div><div class="arrow-d">↓ block_dev.c:1747</div>
+<div class="fnode" onclick="jump('blockdevice')">block_device được tra/tạo (kiểu tra cứu bdget/bd_acquire)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('gendisk')">gendisk được xác định qua số thiết bị</div><div class="arrow-d">↓</div>
+<div class="fnode dim">block_device_operations-&gt;open(bdev, mode)  (open riêng của driver, nếu có)</div>
+</div>
+<h3>File thường so với file block device</h3>
+<p><span class="mono">inode-&gt;i_fop</span> của một file thường trỏ tới file_operations riêng của filesystem (vd của ext4), và <span class="mono">open()</span> cuối cùng làm việc với page cache + ánh xạ block. inode của một file block đặc biệt (nhận diện qua <span class="mono">S_ISBLK(inode-&gt;i_mode)</span>) thay vào đó được gán <span class="mono">def_blk_fops</span>, với <span class="mono">.open</span> là <span class="mono">blkdev_open()</span> — đây là một nhánh ở mức VFS, không phải điều mà ext4 hay bất kỳ code filesystem nào quyết định; nó xảy ra tổng quát cho mọi file đặc biệt trong lúc <span class="mono">open()</span>.</p>
+</section>
+
+<!-- 23 ARM64 -->
+<section id="arm64">
+<h2><span class="secno">23</span> Đường vào Syscall của ARM64</h2>
+<p class="lede">Đã xác minh: <span class="mono src">arch/arm64/kernel/entry.S:696</span> (nhãn <span class="mono fn">el0_sync</span>, nhảy tới <span class="mono fn">el0_sync_handler</span>), và <span class="mono src">arch/arm64/kernel/syscall.c</span> / <span class="mono src">entry-common.c</span> chứa chuỗi dispatch ở mức C <span class="mono fn">el0_svc</span> / <span class="mono fn">do_el0_svc</span> / <span class="mono fn">invoke_syscall</span>.</p>
+<div class="flow">
+<div class="fnode dim">EL0 (userspace)</div><div class="arrow-d">↓ svc #0</div>
+<div class="fnode dim">bảng vector exception</div><div class="arrow-d">↓</div>
+<div class="fnode fn">el0_sync   (entry.S:696)</div><div class="arrow-d">↓ bl el0_sync_handler</div>
+<div class="fnode fn">el0_sync_handler   (entry-common.c)</div><div class="arrow-d">↓ (trường hợp ESR_ELx_EC_SVC64)</div>
+<div class="fnode fn">el0_svc → el0_svc_common → do_el0_svc</div><div class="arrow-d">↓</div>
+<div class="fnode fn">invoke_syscall()   (syscall.c)</div><div class="arrow-d">↓ sys_call_table[nr]</div>
+<div class="fnode fn">__arm64_sys_read()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">ksys_read() → vfs_read()</div>
+</div>
+<div class="note">Chuỗi này đặc thù theo kiến trúc và dừng đúng tại ranh giới syscall — mọi thứ từ <span class="mono">ksys_read()</span> trở xuống (VFS, filesystem, block layer) là code C độc lập kiến trúc, dùng chung cho mọi arch mà kernel này hỗ trợ.</div>
+</section>
+
+<!-- 24 LEGACY VS MODERN -->
+<section id="legacy">
+<h2><span class="secno">24</span> Linux 2.6 (sách) → Linux 5.10.241 (cây source này)</h2>
+<div class="twrap"><table>
+<tr><th>Khái niệm trong sách</th><th>Linux 2.6</th><th>Linux 5.10.241 (đã xác minh)</th><th>Trạng thái</th></tr>
+<tr><td class="mono">bio</td><td>struct bio có bi_bdev</td><td>struct bio có bi_disk + bi_partno (blk_types.h:203)</td><td><span class="tag tag-changed">CHANGED</span></td></tr>
+<tr><td class="mono">bio_vec</td><td>page/len/offset</td><td>giống hệt (bvec.h:31)</td><td><span class="tag tag-unchanged">UNCHANGED</span></td></tr>
+<tr><td class="mono">request</td><td>dựa trên request_fn, không có tag/mq_ctx</td><td>theo hình dạng blk-mq: tag, mq_ctx, mq_hctx (blkdev.h:135)</td><td><span class="tag tag-changed">CHANGED</span></td></tr>
+<tr><td class="mono">request_queue</td><td>một queue duy nhất + request_fn</td><td>mq_ops + ctx theo CPU + hctx theo hardware (blkdev.h:405)</td><td><span class="tag tag-changed">CHANGED</span></td></tr>
+<tr><td class="mono">gendisk</td><td>major/minors/fops/queue/part0</td><td>các field giống hệt (genhd.h:172)</td><td><span class="tag tag-unchanged">UNCHANGED</span></td></tr>
+<tr><td class="mono">hd_struct</td><td>struct accounting partition</td><td>vẫn còn, vẫn được gendisk.part0/part_tbl dùng (genhd.h:58)</td><td><span class="tag tag-unchanged">UNCHANGED (trong 5.10)</span></td></tr>
+<tr><td class="mono">generic_make_request()</td><td>điểm vào dispatch</td><td>đổi tên thành <span class="mono">submit_bio_noacct()</span> (blk-core.c:1036)</td><td><span class="tag tag-replaced">REPLACED</span></td></tr>
+<tr><td class="mono">make_request_fn</td><td>callback bio-based của driver trên request_queue</td><td>chuyển vào <span class="mono">block_device_operations.submit_bio</span> (blkdev.h:1890)</td><td><span class="tag tag-refactored">REFACTORED</span></td></tr>
+<tr><td class="mono">request_fn</td><td>strategy routine trên request_queue</td><td>biến mất hoàn toàn; thay bằng <span class="mono">blk_mq_ops.queue_rq</span></td><td><span class="tag tag-removed">REMOVED</span></td></tr>
+<tr><td class="mono">elevator (CFQ/deadline/noop/AS)</td><td>API elevator single-queue</td><td>API scheduler của blk-mq; chỉ còn mq-deadline/kyber/bfq/none</td><td><span class="tag tag-replaced">REPLACED</span></td></tr>
+<tr><td class="mono">CFQ</td><td>có mặt</td><td>không có cfq-iosched.c trong cây source</td><td><span class="tag tag-removed">REMOVED</span></td></tr>
+<tr><td class="mono">deadline</td><td>có mặt</td><td>mq-deadline.c có mặt</td><td><span class="tag tag-replaced">REPLACED</span></td></tr>
+<tr><td class="mono">noop</td><td>có mặt</td><td>không có file; cấu hình scheduler "none" là tương đương</td><td><span class="tag tag-removed">REMOVED</span></td></tr>
+<tr><td class="mono">blk_init_queue()</td><td>khởi tạo queue kiểu cũ</td><td>không tìm thấy hàm này; blk_mq_init_queue() là khởi tạo hiện đại</td><td><span class="tag tag-replaced">REPLACED</span></td></tr>
+<tr><td class="mono">blk-mq</td><td>chưa tồn tại</td><td>con đường request duy nhất trong kernel này</td><td><span class="tag tag-modern">BẮT BUỘC</span></td></tr>
+</table></div>
+</section>
+
+<!-- 25 SOURCE MAP -->
+<section id="source-map">
+<h2><span class="secno">25</span> Bản đồ Source Code</h2>
+<div class="twrap"><table>
+<tr><th>Khái niệm</th><th>Source</th><th>Hàm/Struct</th></tr>
+<tr><td>Submit BIO</td><td class="mono">block/blk-core.c</td><td class="mono">submit_bio(), submit_bio_noacct()</td></tr>
+<tr><td>Cấp phát/hoàn tất BIO</td><td class="mono">block/bio.c</td><td class="mono">bio_alloc(), bio_add_page(), bio_endio()</td></tr>
+<tr><td>Lõi blk-mq</td><td class="mono">block/blk-mq.c</td><td class="mono">blk_mq_submit_bio(), blk_mq_run_hw_queue(), blk_mq_end_request()</td></tr>
+<tr><td>Merging/plugging</td><td class="mono">block/blk-merge.c, block/blk-core.c</td><td class="mono">bio_attempt_back_merge(), bio_attempt_front_merge(), blk_rq_map_sg(), blk_start_plug()</td></tr>
+<tr><td>Cài đặt/giới hạn queue</td><td class="mono">block/blk-settings.c</td><td class="mono">các setter của queue_limits</td></tr>
+<tr><td>Khung elevator</td><td class="mono">block/elevator.c</td><td class="mono">dispatch ops của elevator_queue</td></tr>
+<tr><td>Scheduler mq-deadline</td><td class="mono">block/mq-deadline.c</td><td>—</td></tr>
+<tr><td>Scheduler kyber</td><td class="mono">block/kyber-iosched.c</td><td>—</td></tr>
+<tr><td>Scheduler BFQ</td><td class="mono">block/bfq-iosched.c, bfq-cgroup.c, bfq-wf2q.c</td><td>—</td></tr>
+<tr><td>gendisk / device model</td><td class="mono">block/genhd.c</td><td class="mono">register_blkdev(), add_disk(), __device_add_disk()</td></tr>
+<tr><td>Kết nối block_device open/VFS</td><td class="mono">fs/block_dev.c</td><td class="mono">blkdev_open()</td></tr>
+<tr><td>Syscall read/write</td><td class="mono">fs/read_write.c</td><td class="mono">SYSCALL_DEFINE3(read,...), ksys_read()</td></tr>
+<tr><td>Struct bio/bio_vec/block_device</td><td class="mono">include/linux/blk_types.h</td><td class="mono">struct bio, struct block_device</td></tr>
+<tr><td>bio_vec/bvec_iter</td><td class="mono">include/linux/bvec.h</td><td class="mono">struct bio_vec, struct bvec_iter</td></tr>
+<tr><td>request/request_queue/gendisk ops</td><td class="mono">include/linux/blkdev.h</td><td class="mono">struct request, struct request_queue, struct block_device_operations</td></tr>
+<tr><td>gendisk/hd_struct</td><td class="mono">include/linux/genhd.h</td><td class="mono">struct gendisk, struct hd_struct</td></tr>
+<tr><td>Các structure blk-mq</td><td class="mono">include/linux/blk-mq.h</td><td class="mono">struct blk_mq_ops, blk_mq_tag_set, blk_mq_hw_ctx</td></tr>
+<tr><td>ARM64 syscall entry (asm)</td><td class="mono">arch/arm64/kernel/entry.S</td><td class="mono">el0_sync</td></tr>
+<tr><td>ARM64 syscall entry (C)</td><td class="mono">arch/arm64/kernel/entry-common.c, syscall.c</td><td class="mono">el0_svc, do_el0_svc, invoke_syscall</td></tr>
+<tr><td>Driver thật ví dụ</td><td class="mono">drivers/block/</td><td>xem ở đây để có cài đặt blk_mq_ops đầy đủ</td></tr>
+</table></div>
+<p class="small">Click vào badge <span class="sourcepath" onclick="copyText(this)">path/like/this.c</span> bất kỳ trên trang này để copy vào clipboard.</p>
+</section>
+
+<!-- 26 DEBUG -->
+<section id="debug">
+<h2><span class="secno">26</span> Quan sát / Debug</h2>
+<div class="grid3">
+<div class="card"><b class="mono">lsblk</b><div class="small" style="margin-top:6px">Liệt kê block device và cấu trúc phân cấp (đĩa → partition), dung lượng, điểm mount.</div></div>
+<div class="card"><b class="mono">/proc/partitions</b><div class="small" style="margin-top:6px">Bảng partition do kernel báo cáo: major, minor, số block, tên.</div></div>
+<div class="card"><b class="mono">/sys/block/&lt;dev&gt;</b><div class="small" style="margin-top:6px">Sự hiện diện sysfs của gendisk: queue/ (scheduler, giới hạn), stat, size, holders/, slaves/.</div></div>
+<div class="card"><b class="mono">/sys/class/block</b><div class="small" style="margin-top:6px">Góc nhìn symlink phẳng của mọi block device mà device model biết.</div></div>
+<div class="card"><b class="mono">iostat</b><div class="small" style="margin-top:6px">Thông lượng/độ trễ/IOPS theo từng thiết bị, lấy từ thống kê block layer.</div></div>
+<div class="card"><b class="mono">blktrace / blkparse</b><div class="small" style="margin-top:6px">Trace đầy đủ mọi sự kiện bio/request qua block layer, gắn kèm process context.</div></div>
+<div class="card"><b class="mono">ftrace / trace-cmd</b><div class="small" style="margin-top:6px">Function tracer; kết hợp với các tracepoint block: bên dưới để trace có mục tiêu.</div></div>
+<div class="card"><b class="mono">perf</b><div class="small" style="margin-top:6px">Profiler lấy mẫu; <span class="mono">perf trace</span> cũng hiện được syscall, <span class="mono">perf record -e block:*</span> cho tracepoint block.</div></div>
+<div class="card"><b>BPF / bpftrace</b><div class="small" style="margin-top:6px">Gắn vào cùng các tracepoint block:* theo lập trình để làm histogram độ trễ tuỳ ý (vd biosnoop/biolatency từ bcc-tools).</div></div>
+</div>
+<h3>Các tracepoint quan trọng</h3>
+<div class="twrap"><table>
+<tr><th>Tracepoint</th><th>Nổ khi nào</th></tr>
+<tr><td class="mono">block:block_rq_insert</td><td>Một request được chèn vào scheduler/dispatch queue</td></tr>
+<tr><td class="mono">block:block_rq_issue</td><td>Một request được đưa cho driver (queue_rq sắp chạy)</td></tr>
+<tr><td class="mono">block:block_rq_complete</td><td>Một request hoàn tất (theo đường blk_mq_end_request)</td></tr>
+</table></div>
+<p class="small"><span class="tag tag-unverified">UNVERIFIED</span> — bản thân định nghĩa tracepoint chưa được grep trong cây source này; các tên trên là chuẩn phổ biến ở các kernel gần đây nhưng nên xác nhận bằng <span class="mono">grep -r TRACE_EVENT block/</span> nếu cần độ chính xác.</p>
+</section>
+
+<!-- 27 LABS -->
+<section id="labs">
+<h2><span class="secno">27</span> Bài Lab thực hành</h2>
+<div id="labsAccordion"></div>
+</section>
+
+<!-- 28 MINIMAL DRIVER -->
+<section id="miniram">
+<h2><span class="secno">28</span> Driver Block RAM tối thiểu (blk-mq)</h2>
+<p class="lede">Chỉ là skeleton — minh hoạ bộ khung blk-mq mà mọi driver thật đều theo. Không phải code chạy production.</p>
+<div class="flow">
+<div class="fnode dim">Userspace</div><div class="arrow-d">↓</div>
+<div class="fnode dim">/dev/myblock</div><div class="arrow-d">↓</div>
+<div class="fnode dim">VFS</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Block Layer</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('blkmq')">blk-mq</div><div class="arrow-d">↓</div>
+<div class="fnode fn" onclick="jump('queuerq')">queue_rq()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">buffer RAM (memcpy)</div>
+</div>
+<div class="codebox"><div class="codebox-h"><span>myblock.c (skeleton)</span><button class="copybtn" onclick="copyCode(this)">Copy</button></div>
+<pre class="code"><span class="ln">1</span><span class="cm">/* dung lượng: 16MB, sector size: 512 — chỉ minh hoạ */</span>
+<span class="ln">2</span><span class="tp">#define</span> MYBLK_SECTORS   (16UL * 1024 * 1024 / 512)
+<span class="ln">3</span>
+<span class="ln">4</span><span class="kw">struct</span> myblk_dev {
+<span class="ln">5</span>    <span class="kw">struct</span> gendisk       *disk;
+<span class="ln">6</span>    <span class="kw">struct</span> blk_mq_tag_set tag_set;
+<span class="ln">7</span>    <span class="kw">u8</span>                  *data;   <span class="cm">/* RAM lưu trữ */</span>
+<span class="ln">8</span>};
+<span class="ln">9</span>
+<span class="ln">10</span><span class="kw">static</span> blk_status_t myblk_queue_rq(<span class="kw">struct</span> blk_mq_hw_ctx *hctx,
+<span class="ln">11</span>                    <span class="kw">const struct</span> blk_mq_queue_data *bd)
+<span class="ln">12</span>{
+<span class="ln">13</span>    <span class="kw">struct</span> request *rq = bd->rq;
+<span class="ln">14</span>    <span class="kw">struct</span> myblk_dev *dev = rq->q->queuedata;
+<span class="ln">15</span>    <span class="kw">struct</span> bio_vec bv;
+<span class="ln">16</span>    <span class="kw">struct</span> req_iterator iter;
+<span class="ln">17</span>    <span class="kw">sector_t</span> pos = blk_rq_pos(rq);
+<span class="ln">18</span>
+<span class="ln">19</span>    blk_mq_start_request(rq);
+<span class="ln">20</span>    rq_for_each_segment(bv, rq, iter) {
+<span class="ln">21</span>        <span class="kw">void</span> *addr = dev->data + (pos * 512);
+<span class="ln">22</span>        <span class="kw">void</span> *buf  = page_address(bv.bv_page) + bv.bv_offset;
+<span class="ln">23</span>        <span class="kw">if</span> (rq_data_dir(rq) == WRITE)
+<span class="ln">24</span>            memcpy(addr, buf, bv.bv_len);
+<span class="ln">25</span>        <span class="kw">else</span>
+<span class="ln">26</span>            memcpy(buf, addr, bv.bv_len);
+<span class="ln">27</span>        pos += bv.bv_len / 512;
+<span class="ln">28</span>    }
+<span class="ln">29</span>    blk_mq_end_request(rq, BLK_STS_OK); <span class="cm">/* với RAM, hoàn tất xảy ra đồng bộ ngay tại đây */</span>
+<span class="ln">30</span>    <span class="kw">return</span> BLK_STS_OK;
+<span class="ln">31</span>}
+<span class="ln">32</span>
+<span class="ln">33</span><span class="kw">static const struct</span> blk_mq_ops myblk_mq_ops = {
+<span class="ln">34</span>    .queue_rq = myblk_queue_rq,
+<span class="ln">35</span>};
+<span class="ln">36</span>
+<span class="ln">37</span><span class="kw">static int</span> __init myblk_init(<span class="kw">void</span>)
+<span class="ln">38</span>{
+<span class="ln">39</span>    dev.tag_set.ops = &myblk_mq_ops;
+<span class="ln">40</span>    dev.tag_set.nr_hw_queues = 1;
+<span class="ln">41</span>    dev.tag_set.queue_depth = 128;
+<span class="ln">42</span>    blk_mq_alloc_tag_set(&dev.tag_set);
+<span class="ln">43</span>
+<span class="ln">44</span>    dev.disk = alloc_disk(1);
+<span class="ln">45</span>    dev.disk->queue = blk_mq_init_queue(&dev.tag_set);
+<span class="ln">46</span>    dev.disk->queue->queuedata = &dev;
+<span class="ln">47</span>    dev.disk->major = register_blkdev(0, "myblock");
+<span class="ln">48</span>    dev.disk->fops  = &myblk_fops;
+<span class="ln">49</span>    <span class="kw">strcpy</span>(dev.disk->disk_name, "myblock");
+<span class="ln">50</span>    set_capacity(dev.disk, MYBLK_SECTORS);
+<span class="ln">51</span>
+<span class="ln">52</span>    add_disk(dev.disk);   <span class="cm">/* tạo /dev/myblock */</span>
+<span class="ln">53</span>    <span class="kw">return</span> 0;
+<span class="ln">54</span>}</pre></div>
+<p>Mọi driver thật trong <span class="mono">drivers/block/</span> đều theo đúng bộ khung này: cấp phát một <span class="mono">blk_mq_tag_set</span>, dựng queue từ đó, điền một <span class="mono">gendisk</span>, rồi <span class="mono">add_disk()</span>. Phần duy nhất khác biệt theo từng thiết bị là <span class="mono">queue_rq()</span> thực sự làm gì với request — ở đây là memcpy vào RAM thay vì truyền DMA tới một controller.</p>
+</section>
+
+<!-- 29 KNOWLEDGE MAP -->
+<section id="kmap">
+<h2><span class="secno">29</span> Bản đồ Kiến thức</h2>
+<div class="flow">
+<div class="fnode dim" style="font-weight:700">BLOCK I/O</div>
+<div class="flow-h">
+<div class="fnode" onclick="jump('opendev')">VFS</div>
+<div class="fnode dim">Filesystem</div>
+<div class="fnode dim">Page Cache</div>
+<div class="fnode" onclick="jump('bio')">BIO</div>
+<div class="fnode" onclick="jump('request')">Request</div>
+<div class="fnode" onclick="jump('blkmq')">blk-mq</div>
+<div class="fnode" onclick="jump('iosched')">Scheduler</div>
+<div class="fnode" onclick="jump('reqqueue')">Queue</div>
+<div class="fnode" onclick="jump('driver')">Driver</div>
+<div class="fnode" onclick="jump('dma')">DMA</div>
+<div class="fnode" onclick="jump('irq')">Interrupt</div>
+<div class="fnode" onclick="jump('completion')">Completion</div>
+</div>
+</div>
+<p class="small">Mỗi node ở trên đều liên kết tới section đầy đủ, bám sát source. Dùng bảng thuật ngữ (§30) hoặc tìm kiếm Ctrl+K để nhảy thẳng tới bất kỳ struct hay hàm nào.</p>
+</section>
+
+<!-- 30 GLOSSARY -->
+<section id="glossary">
+<h2><span class="secno">30</span> Bảng thuật ngữ</h2>
+<input id="glossaryFilter" placeholder="Lọc thuật ngữ…" style="width:100%;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);margin-bottom:12px;font-family:var(--sans);">
+<div id="glossaryList"></div>
+</section>
+
+<!-- 31 CHECKLIST -->
+<section id="checklist">
+<h2><span class="secno">31</span> Checklist học tập</h2>
+<p class="small">Được tự động lưu vào localStorage của trình duyệt.</p>
+<div id="checklistBox"></div>
+</section>
+
+<!-- MASTER FLOW -->
+<section id="master-flow">
+<h2><span class="secno">★</span> Luồng Block I/O tổng thể (Master Flow)</h2>
+<div class="flow">
+<div class="fnode dim">read()/write()</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('arm64')">ARM64 syscall (el0_sync → el0_svc → __arm64_sys_read)</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('opendev')">VFS (vfs_read/vfs_write)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Filesystem (ext4)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Page Cache</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('bio')">BIO</div><div class="arrow-d">↓ submit_bio() → submit_bio_noacct()</div>
+<div class="fnode" onclick="jump('bio')">Generic Block Layer</div><div class="arrow-d">↓ bio_attempt_back/front_merge()</div>
+<div class="fnode" onclick="jump('merge')">Gộp BIO</div><div class="arrow-d">↓ blk_mq_submit_bio()</div>
+<div class="fnode" onclick="jump('request')">Request</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('blkmq')">blk-mq</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('iosched')">I/O Scheduler</div><div class="arrow-d">↓ blk_mq_run_hw_queue()</div>
+<div class="fnode" onclick="jump('blkmq')">Hardware Queue</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('queuerq')">Driver queue_rq()</div><div class="arrow-d">↓ blk_rq_map_sg() / dma_map_sg()</div>
+<div class="fnode" onclick="jump('dma')">DMA mapping</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Controller → Storage</div><div class="arrow-d">↓</div>
+<div class="fnode" onclick="jump('irq')">IRQ</div><div class="arrow-d">↓ blk_mq_complete_request()</div>
+<div class="fnode fn" onclick="jump('completion')">blk_mq_end_request()</div><div class="arrow-d">↓</div>
+<div class="fnode fn" onclick="jump('bio')">bio_endio()</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Hoàn tất page (mở khoá, đánh dấu uptodate)</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Đánh thức tiến trình</div><div class="arrow-d">↓</div>
+<div class="fnode dim">Userspace (copy_to_user / trả về)</div>
+</div>
+</section>
+
+</main>
+</div>
+
+<button id="backtotop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<div id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div id="searchPanel">
+    <input id="searchInput" placeholder="Tìm hàm, struct, source file, khái niệm…" autocomplete="off">
+    <div id="searchResults"></div>
+  </div>
+</div>
+
+<footer>Linux Kernel Block I/O Study Book — tạo từ source tại Kernel/K-S800/Src (Linux 5.10.241). Mọi nội dung đánh dấu VERIFIED đã được xác nhận bằng cách grep/đọc trực tiếp trong cây source này; các mục UNVERIFIED nên được kiểm tra lại trước khi dựa vào.</footer>
+
+<script>
+/* ---------- theme ---------- */
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+function toggleTheme(){
+  var cur=document.documentElement.getAttribute('data-theme');
+  var next = cur==='light' ? 'dark' : 'light';
+  applyTheme(next);
+}
+(function(){
+  try{
+    var saved=localStorage.getItem('theme');
+    applyTheme(saved || 'dark');
+  }catch(e){applyTheme('dark');}
+})();
+
+/* ---------- smooth jump ---------- */
+function jump(id){ var el=document.getElementById(id); if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); history.pushState(null,'','#'+id);} }
+
+/* ---------- progress bar + back to top + active sidebar ---------- */
+var mainEl = document.getElementById('main');
+window.addEventListener('scroll', function(){
+  var h = document.documentElement;
+  var scrolled = (h.scrollTop||document.body.scrollTop);
+  var height = h.scrollHeight - h.clientHeight;
+  document.getElementById('progress').style.width = (height>0? (scrolled/height*100):0)+'%';
+  document.getElementById('backtotop').classList.toggle('show', scrolled>500);
+},{passive:true});
+
+var sections = Array.from(document.querySelectorAll('main section[id]'));
+var sideLinks = Array.from(document.querySelectorAll('.side-link'));
+var io = new IntersectionObserver(function(entries){
+  entries.forEach(function(en){
+    if(en.isIntersecting){
+      sideLinks.forEach(function(l){l.classList.remove('active');});
+      var link = document.querySelector('.side-link[href="#'+en.target.id+'"]');
+      if(link) link.classList.add('active');
+    }
+  });
+},{rootMargin:'-20% 0px -70% 0px'});
+sections.forEach(function(s){io.observe(s);});
+
+/* ---------- copy code / path ---------- */
+function fallbackCopy(text){
+  var ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+}
+function doCopy(text){
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).catch(function(){fallbackCopy(text);});
+  } else { fallbackCopy(text); }
+}
+function copyCode(btn){
+  var pre = btn.closest('.codebox').querySelector('pre.code');
+  var lines = Array.from(pre.querySelectorAll('.ln'));
+  var text = pre.innerText.split('\n').map(function(l){return l.replace(/^\s*\d+/, '').trim();}).join('\n');
+  doCopy(pre.textContent.replace(/^\d+/gm,''));
+  var old=btn.textContent; btn.textContent='Đã copy!'; setTimeout(function(){btn.textContent=old;},1200);
+}
+function copyText(el){
+  doCopy(el.textContent.trim());
+  var old=el.textContent; el.textContent='đã copy!'; setTimeout(function(){el.textContent=old;},900);
+}
+
+/* ---------- labs accordion ---------- */
+var labs = [
+  {t:"Lab 1 — Khám phá /sys/block", goal:"Xem gendisk được ánh xạ vào device model như thế nào.", cmds:"ls /sys/block\ncat /sys/block/sda/size\ncat /sys/block/sda/queue/scheduler\ncat /sys/block/sda/queue/logical_block_size", expected:"Một thư mục cho mỗi đĩa; queue/scheduler hiện [mq-deadline] none kyber bfq (cái đang dùng nằm trong ngoặc vuông).", fns:"add_disk(), register_blkdev()", observe:"Scheduler nào đang hoạt động cho từng thiết bị; logical block size so với physical block size."},
+  {t:"Lab 2 — Trace open(\"/dev/sda\")", goal:"Quan sát đường VFS→blkdev_open() được kích hoạt.", cmds:"sudo strace -e trace=open,openat cat /dev/sda | head -c1\n# hoặc: sudo bpftrace -e 'kprobe:blkdev_open { printf(\"opened\\n\"); }'", expected:"Probe blkdev_open() nổ một lần mỗi lần open.", fns:"blkdev_open() — fs/block_dev.c:1747", observe:"Việc mở cả một đĩa cần quyền (CAP_SYS_ADMIN hoặc thuộc nhóm block)."},
+  {t:"Lab 3 — Trace submit_bio", goal:"Liên hệ một I/O của user với việc submit bio.", cmds:"sudo bpftrace -e 'kprobe:submit_bio { printf(\"pid=%d comm=%s\\n\", pid, comm); }'\ndd if=/dev/zero of=/tmp/test bs=4k count=100 oflag=direct", expected:"Một hoặc nhiều lần submit_bio khớp với tiến trình dd.", fns:"submit_bio() — block/blk-core.c:1071", observe:"Một lần gọi dd tạo ra bao nhiêu bio, tuỳ theo bs= và O_DIRECT."},
+  {t:"Lab 4 — Trace insert/issue/complete của request", goal:"Xem trọn vòng đời của request từ đầu tới cuối.", cmds:"sudo trace-cmd record -e block:block_rq_insert -e block:block_rq_issue -e block:block_rq_complete -- dd if=/dev/sda of=/dev/null bs=4k count=50\ntrace-cmd report", expected:"Các bộ ba insert→issue→complete khớp nhau kèm dải sector.", fns:"blk_mq_submit_bio(), queue_rq(), blk_mq_end_request()", observe:"Khoảng cách thời gian giữa issue và complete = thời gian phục vụ thật của thiết bị."},
+  {t:"Lab 5 — I/O tuần tự so với ngẫu nhiên", goal:"Cảm nhận vì sao merging/scheduling quan trọng.", cmds:"fio --name=seq --rw=read --bs=128k --size=256M --filename=/dev/sda\nfio --name=rand --rw=randread --bs=4k --size=256M --filename=/dev/sda", expected:"Thông lượng tuần tự vượt xa thông lượng ngẫu nhiên bị giới hạn bởi IOPS trên đĩa quay; gần nhau hơn nhiều trên NVMe/SSD.", fns:"bio_attempt_back_merge(), dispatch của mq-deadline", observe:"iostat -x 1 trong lúc chạy mỗi bài: %util, avgqu-sz, await."},
+  {t:"Lab 6 — Quan sát I/O scheduler", goal:"Đổi scheduler khi đang chạy và xem hiệu ứng.", cmds:"echo mq-deadline | sudo tee /sys/block/sda/queue/scheduler\necho none        | sudo tee /sys/block/sda/queue/scheduler\ncat /sys/block/sda/queue/scheduler", expected:"Giá trị trong ngoặc thay đổi; độ trễ workload ghi ngẫu nhiên hỗn hợp cũng thay đổi theo.", fns:"chuyển elevator_queue, block/elevator.c", observe:"Độ trễ đuôi (fio --lat) giữa mq-deadline, none và bfq."},
+  {t:"Lab 7 — Build & nạp driver block RAM tối thiểu", goal:"Xem skeleton ở §28 chạy trọn vẹn từ đầu tới cuối.", cmds:"insmod myblock.ko\nlsblk | grep myblock\ndd if=/dev/zero of=/dev/myblock bs=4k count=10\ndd if=/dev/myblock of=/tmp/out bs=4k count=10", expected:"/dev/myblock xuất hiện, chấp nhận ghi/đọc và dữ liệu round-trip đúng.", fns:"myblk_queue_rq(), add_disk(), blk_mq_alloc_tag_set()", observe:"dmesg xem có WARN nào từ blk-mq về hoàn tất không hợp lệ (vd gọi blk_mq_end_request hai lần)."}
+];
+(function(){
+  var box = document.getElementById('labsAccordion');
+  labs.forEach(function(l,i){
+    var d=document.createElement('div'); d.className='acc-item';
+    d.innerHTML = '<div class="acc-head" onclick="this.parentElement.classList.toggle(\'open\')"><span>'+l.t+'</span><span class="chev">▶</span></div>'+
+      '<div class="acc-body"><dl>'+
+      '<dt>Mục tiêu</dt><dd>'+l.goal+'</dd>'+
+      '<dt>Lệnh</dt><dd><pre style="white-space:pre-wrap;margin:0;font-family:var(--mono);font-size:12px;background:var(--bg-elev);padding:8px;border-radius:6px;border:1px solid var(--border)">'+l.cmds+'</pre></dd>'+
+      '<dt>Kết quả mong đợi</dt><dd>'+l.expected+'</dd>'+
+      '<dt>Các hàm</dt><dd class="mono">'+l.fns+'</dd>'+
+      '<dt>Cần quan sát</dt><dd>'+l.observe+'</dd>'+
+      '</dl></div>';
+    box.appendChild(d);
+  });
+})();
+
+/* ---------- glossary ---------- */
+var glossary = [
+  ["BIO","Đơn vị mô tả I/O bộ nhớ: các page + dải sector + callback hoàn tất. struct bio, include/linux/blk_types.h:203.", "bio"],
+  ["Block","Đơn vị cấp phát của filesystem (vd ext4 4K); độc lập với sector size của phần cứng.", "sbs"],
+  ["Sector","Đơn vị địa chỉ 512-byte dùng xuyên suốt các API lõi của block layer (sector_t), bất kể sector size thật của phần cứng.", "sbs"],
+  ["Segment","Một vùng bộ nhớ liên tục vật lý bên trong bio/request; trở thành một entry scatterlist/DMA.", "sbs"],
+  ["Request","Đơn vị hướng phần cứng, dựng bằng cách gộp các bio; struct request, include/linux/blkdev.h:135.", "request"],
+  ["Request Queue","Pipeline I/O theo từng thiết bị; struct request_queue, include/linux/blkdev.h:405.", "reqqueue"],
+  ["blk-mq","Block layer đa hàng đợi: software queue theo CPU được ánh xạ tới hardware dispatch context.", "blkmq"],
+  ["gendisk","Biểu diễn trong bộ nhớ của một đĩa: major/minor, fops, queue, partition. include/linux/genhd.h:172.", "gendisk"],
+  ["block_device","Handle hướng VFS cho cả đĩa hoặc một partition; include/linux/blk_types.h:22.", "blockdevice"],
+  ["bio_vec","page + len + offset — một segment bộ nhớ vật lý. include/linux/bvec.h:31.", "biovec"],
+  ["DMA","Direct Memory Access — thiết bị đọc/ghi RAM mà không cần CPU copy, điều khiển bằng mô tả scatterlist.", "dma"],
+  ["Scatter-Gather","Kỹ thuật mô tả nhiều vùng bộ nhớ không liên tục như một danh sách cho một lần truyền DMA.", "dma"],
+  ["I/O Scheduler","Lớp chính sách quyết định thứ tự/gộp request: none, mq-deadline, kyber, bfq trong 5.10.", "iosched"],
+  ["Plugging","Cơ chế trì hoãn dispatch (blk_start_plug/blk_finish_plug) gom các lần gộp trước khi chạm phần cứng.", "plug"],
+  ["Completion","Chuỗi blk_mq_end_request() → bio_endio() → bi_end_io() hoàn tất một I/O.", "completion"],
+  ["IRQ","Ngắt phần cứng báo hiệu I/O hoàn tất; xử lý trong hard-IRQ context, chỉ làm việc tối thiểu.", "irq"]
+];
+(function(){
+  var list=document.getElementById('glossaryList');
+  function render(filter){
+    list.innerHTML='';
+    glossary.filter(function(g){return !filter || g[0].toLowerCase().indexOf(filter)>-1 || g[1].toLowerCase().indexOf(filter)>-1;})
+      .forEach(function(g){
+        var d=document.createElement('div'); d.className='gitem';
+        d.innerHTML='<b>'+g[0]+'</b> — '+g[1]+' <a href="#'+g[2]+'" style="font-size:11px">[đi tới]</a>';
+        list.appendChild(d);
+      });
+  }
+  render('');
+  document.getElementById('glossaryFilter').addEventListener('input', function(e){render(e.target.value.toLowerCase());});
+})();
+
+/* ---------- checklist (localStorage) ---------- */
+var checklistItems = [
+ "Hiểu sector/block/segment","Hiểu bio","Hiểu bio_vec","Hiểu request","Hiểu request_queue",
+ "Hiểu blk-mq","Hiểu I/O scheduler","Hiểu request merging","Hiểu plugging","Hiểu DMA",
+ "Hiểu interrupt completion","Hiểu gendisk","Hiểu block_device","Hiểu đăng ký block driver",
+ "Hiểu queue_rq()","Hiểu việc mở /dev/sda","Trace read() từ đầu tới cuối","Trace write() từ đầu tới cuối","Build driver block RAM tối thiểu"
+];
+(function(){
+  var box=document.getElementById('checklistBox');
+  var state={};
+  try{state=JSON.parse(localStorage.getItem('blockio_checklist')||'{}');}catch(e){state={};}
+  checklistItems.forEach(function(item,i){
+    var row=document.createElement('div'); row.className='chk-row'+(state[i]?' done':'');
+    row.innerHTML='<input type="checkbox" id="chk'+i+'" '+(state[i]?'checked':'')+'><label for="chk'+i+'">'+item+'</label>';
+    row.querySelector('input').addEventListener('change', function(e){
+      state[i]=e.target.checked; row.classList.toggle('done', e.target.checked);
+      try{localStorage.setItem('blockio_checklist', JSON.stringify(state));}catch(err){}
+    });
+    box.appendChild(row);
+  });
+})();
+
+/* ---------- search ---------- */
+var searchIndex = [
+  ["submit_bio()", "BIO · Block Layer · block/blk-core.c:1071", "bio"],
+  ["submit_bio_noacct()", "hàm thay thế hiện đại cho generic_make_request() · block/blk-core.c:1036", "bio"],
+  ["blk_mq_submit_bio()", "điểm vào của blk-mq · block/blk-mq.c:2171", "blkmq"],
+  ["bio_alloc()", "cấp phát một bio · block/bio.c", "bio"],
+  ["bio_add_page()", "thêm một page segment · block/bio.c", "bio"],
+  ["bio_endio()", "điểm vào hoàn tất · block/bio.c:1425", "bio"],
+  ["bio_put() / bio_get()", "đếm tham chiếu · block/bio.c", "bio"],
+  ["struct bio", "include/linux/blk_types.h:203", "bio"],
+  ["struct bio_vec", "include/linux/bvec.h:31", "biovec"],
+  ["struct request", "include/linux/blkdev.h:135", "request"],
+  ["struct request_queue", "include/linux/blkdev.h:405", "reqqueue"],
+  ["struct queue_limits", "nhúng trong request_queue.limits", "reqqueue"],
+  ["struct gendisk", "include/linux/genhd.h:172", "gendisk"],
+  ["struct hd_struct", "include/linux/genhd.h:58", "gendisk"],
+  ["struct block_device", "include/linux/blk_types.h:22", "blockdevice"],
+  ["struct block_device_operations", "include/linux/blkdev.h:1889", "opendev"],
+  ["struct blk_mq_ops", "include/linux/blk-mq.h:290", "blkmq"],
+  ["struct blk_mq_tag_set", "include/linux/blk-mq.h:249", "blkmq"],
+  ["struct blk_mq_hw_ctx", "include/linux/blk-mq.h:16", "blkmq"],
+  ["struct blk_mq_ctx", "include/linux/blk-mq.h", "blkmq"],
+  ["queue_rq()", "strategy routine của driver · include/linux/blk-mq.h:294", "queuerq"],
+  ["blk_mq_run_hw_queue()", "block/blk-mq.c:1649", "blkmq"],
+  ["blk_mq_end_request()", "block/blk-mq.c:564", "completion"],
+  ["blk_mq_complete_request()", "block/blk-mq.c:699", "irq"],
+  ["blk_mq_complete_request_remote()", "bật (bounce) qua IPI/softirq · block/blk-mq.c", "irq"],
+  ["bio_attempt_back_merge()", "block/blk-merge.c:930", "merge"],
+  ["bio_attempt_front_merge()", "block/blk-merge.c:954", "merge"],
+  ["blk_start_plug() / blk_finish_plug()", "block/blk-core.c:1690,1774", "plug"],
+  ["blk_rq_map_sg()", "dựng scatterlist · block/blk-merge.c", "dma"],
+  ["dma_map_sg()", "API ánh xạ DMA", "dma"],
+  ["register_blkdev()", "block/genhd.c:437", "reg"],
+  ["alloc_disk()", "include/linux/genhd.h:357,376,384", "reg"],
+  ["add_disk()", "block/genhd.c:776,850,856", "reg"],
+  ["blkdev_open()", "fs/block_dev.c:1747", "opendev"],
+  ["mq-deadline", "block/mq-deadline.c", "iosched"],
+  ["kyber", "block/kyber-iosched.c", "iosched"],
+  ["bfq", "block/bfq-iosched.c", "iosched"],
+  ["CFQ", "REMOVED — được thay thế về khái niệm bởi bfq", "iosched"],
+  ["noop", "REMOVED — được thay thế về khái niệm bởi scheduler=none", "iosched"],
+  ["generic_make_request()", "REPLACED bởi submit_bio_noacct()", "legacy"],
+  ["el0_sync", "vector exception của ARM64 · arch/arm64/kernel/entry.S:696", "arm64"],
+  ["__arm64_sys_read", "entry trong bảng syscall", "arm64"],
+  ["ext4", "lớp filesystem phía trên block layer", "architecture"],
+  ["page cache", "đệm dữ liệu filesystem trong RAM", "architecture"],
+  ["gendisk", "struct biểu diễn đĩa", "gendisk"],
+  ["block_device", "handle thiết bị hướng VFS", "blockdevice"],
+  ["scatterlist", "danh sách segment DMA", "dma"],
+  ["glossary", "bảng thuật ngữ đầy đủ", "glossary"],
+  ["checklist", "checklist học tập", "checklist"],
+  ["labs", "bài lab thực hành", "labs"],
+  ["minimal driver", "skeleton driver block RAM", "miniram"]
+];
+function openSearch(){document.getElementById('searchOverlay').classList.add('show'); var i=document.getElementById('searchInput'); i.value=''; renderSearch(''); setTimeout(function(){i.focus();},30);}
+function closeSearch(){document.getElementById('searchOverlay').classList.remove('show');}
+function renderSearch(q){
+  var res=document.getElementById('searchResults'); res.innerHTML='';
+  q=q.toLowerCase();
+  var matches = searchIndex.filter(function(r){return !q || r[0].toLowerCase().indexOf(q)>-1 || r[1].toLowerCase().indexOf(q)>-1;}).slice(0,30);
+  matches.forEach(function(m,idx){
+    var d=document.createElement('div'); d.className='sresult'+(idx===0?' sel':'');
+    d.innerHTML='<div class="rt">'+m[0]+'</div><div class="rd">'+m[1]+'</div>';
+    d.addEventListener('click', function(){ closeSearch(); jump(m[2]); });
+    res.appendChild(d);
+  });
+}
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openSearch(); }
+  if(e.key==='Escape') closeSearch();
+});
+document.getElementById('searchInput')?.addEventListener('input', function(e){renderSearch(e.target.value);});
+document.getElementById('searchInput')?.addEventListener('keydown', function(e){
+  var results = Array.from(document.querySelectorAll('.sresult'));
+  var selIdx = results.findIndex(function(r){return r.classList.contains('sel');});
+  if(e.key==='ArrowDown'){ e.preventDefault(); if(selIdx<results.length-1){results[selIdx]&&results[selIdx].classList.remove('sel'); results[selIdx+1].classList.add('sel'); results[selIdx+1].scrollIntoView({block:'nearest'});} }
+  if(e.key==='ArrowUp'){ e.preventDefault(); if(selIdx>0){results[selIdx].classList.remove('sel'); results[selIdx-1].classList.add('sel'); results[selIdx-1].scrollIntoView({block:'nearest'});} }
+  if(e.key==='Enter'){ var sel=document.querySelector('.sresult.sel'); if(sel) sel.click(); }
+});
+</script>
+</body>
+</html>

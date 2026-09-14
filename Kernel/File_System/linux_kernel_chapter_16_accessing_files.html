@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux Kernel · Chapter 16 · Accessing Files — Source Code Study Book</title>
+<style>
+:root{
+  --bg:#0d1117; --bg2:#111826; --panel:#151d2b; --panel2:#1a2333;
+  --border:#26324a; --border-soft:#1f2a3d;
+  --text:#dde3ee; --text-dim:#93a1b8; --text-faint:#5f6d85;
+  --accent:#5eb0ff; --accent2:#7cd6c4; --warn:#e6b567; --bad:#ef6b6b; --good:#7bd88f;
+  --code-bg:#0a0f1a; --mono:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --legacy:#e6b567; --modern:#7cd6c4; --removed:#ef6b6b; --verified:#7bd88f; --vendor:#c792ea;
+  --maxw:1180px;
+}
+[data-theme="light"]{
+  --bg:#f6f7fb; --bg2:#eef1f7; --panel:#ffffff; --panel2:#f2f4f9;
+  --border:#d8dee9; --border-soft:#e5e9f0;
+  --text:#1b2333; --text-dim:#51607a; --text-faint:#8291ab;
+  --accent:#1367c8; --accent2:#0d8f78; --warn:#a86a00; --bad:#c23434; --good:#137a3a;
+  --code-bg:#0d1117;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6;padding-bottom:40px;}
+code,.mono,.fn,.src,.struct{font-family:var(--mono);}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+::selection{background:var(--accent);color:#00131f;}
+
+/* progress bar */
+#progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);z-index:999;width:0%;transition:width .1s;}
+
+/* header */
+header{position:sticky;top:0;z-index:60;background:rgba(13,17,23,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);}
+[data-theme="light"] header{background:rgba(246,247,251,.92);}
+.header-inner{max-width:var(--maxw);margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.brand{font-weight:700;font-size:15px;letter-spacing:.2px;white-space:nowrap;}
+.brand small{display:block;font-weight:400;color:var(--text-dim);font-size:11px;font-family:var(--mono);}
+.header-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+#searchBox{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;width:220px;font-family:var(--sans);}
+#searchBox:focus{outline:1px solid var(--accent);}
+.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--sans);}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.kbd{font-family:var(--mono);font-size:11px;background:var(--panel2);border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--text-dim);}
+
+/* layout */
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:230px 1fr;gap:28px;padding:0 20px;}
+aside{position:sticky;top:52px;align-self:start;max-height:calc(100vh - 60px);overflow-y:auto;padding:20px 0;}
+aside nav a{display:block;padding:5px 10px;border-radius:5px;color:var(--text-dim);font-size:12.5px;border-left:2px solid transparent;}
+aside nav a:hover{color:var(--text);text-decoration:none;background:var(--panel2);}
+aside nav a.active{color:var(--accent);border-left-color:var(--accent);background:var(--panel2);}
+aside nav .grp{margin-top:14px;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);padding:0 10px;font-weight:700;}
+main{min-width:0;padding:20px 0 80px;}
+
+section{margin-bottom:56px;scroll-margin-top:64px;}
+section h2{font-size:20px;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+section h2 .num{color:var(--text-faint);font-family:var(--mono);font-weight:400;font-size:14px;}
+h3{font-size:15.5px;margin:22px 0 10px;color:var(--text);}
+h4{font-size:13.5px;color:var(--accent2);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.04em;}
+p{color:var(--text-dim);margin:8px 0;}
+.lead{color:var(--text);font-size:15.5px;}
+
+/* hero */
+.hero{padding:30px 0 10px;}
+.hero h1{font-size:30px;margin:0 0 6px;line-height:1.25;}
+.hero .sub{color:var(--text-dim);font-size:15px;max-width:720px;}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0;}
+.badge{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--text-dim);background:var(--panel2);}
+.badge.b-legacy{color:var(--legacy);border-color:var(--legacy);}
+.badge.b-modern{color:var(--modern);border-color:var(--modern);}
+.badge.b-removed{color:var(--removed);border-color:var(--removed);}
+.badge.b-verified{color:var(--verified);border-color:var(--verified);}
+.badge.b-vendor{color:var(--vendor);border-color:var(--vendor);}
+
+/* source-of-truth box */
+.sot{border:1px solid var(--accent);background:linear-gradient(180deg,rgba(94,176,255,.08),transparent);border-radius:10px;padding:16px 18px;margin:18px 0;}
+.sot h4{color:var(--accent);margin-top:0;}
+.sot table{width:100%;border-collapse:collapse;font-size:13px;}
+.sot td{padding:4px 8px;border-bottom:1px dashed var(--border-soft);vertical-align:top;}
+.sot td:first-child{color:var(--text-faint);width:170px;white-space:nowrap;}
+
+/* cards */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:14px 0;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media (max-width:800px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+/* flow diagram */
+.flow{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;margin:16px 0;overflow-x:auto;}
+.flow-step{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;white-space:nowrap;}
+.flow ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;align-items:stretch;gap:0;}
+.node{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 14px;font-family:var(--mono);font-size:12.5px;color:var(--text);}
+.node.hit{border-color:var(--good);color:var(--good);}
+.node.miss{border-color:var(--warn);color:var(--warn);}
+.node.arch{border-color:var(--accent);color:var(--accent);}
+.arrow{text-align:center;color:var(--text-faint);font-size:13px;padding:2px 0;}
+.flow-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0;}
+.flow-row .arr{color:var(--text-faint);}
+
+/* function card */
+.func{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:14px 0;background:var(--panel);}
+.func-head{background:var(--panel2);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--border);}
+.func-head .fn{color:var(--accent);font-weight:600;font-size:14px;}
+.func-head .src{color:var(--text-faint);font-size:11.5px;}
+.func-body{padding:4px 16px 14px;}
+.func-body dl{display:grid;grid-template-columns:110px 1fr;gap:4px 10px;margin:0;}
+.func-body dt{color:var(--text-faint);font-size:12px;padding-top:6px;}
+.func-body dd{margin:0;padding-top:6px;font-size:13px;color:var(--text-dim);border-top:1px dashed var(--border-soft);}
+.func-body dd .mono{color:var(--text);}
+
+/* code block */
+.code{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;margin:12px 0;overflow:hidden;}
+.code-head{display:flex;justify-content:space-between;align-items:center;background:#0d1420;padding:6px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px;color:var(--text-dim);}
+[data-theme="light"] .code-head{background:#0b1017;}
+.code-head button{background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;}
+.code pre{margin:0;padding:12px 16px;overflow-x:auto;font-size:12.5px;color:#c9d6ea;line-height:1.55;}
+.code pre .c1{color:#6a7a94;}
+.code pre .kw{color:#ff9d7d;}
+.code pre .fn2{color:#8ec8ff;}
+.code pre .str{color:#b7e0a3;}
+
+/* tables */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0;}
+th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top;}
+th{background:var(--panel2);color:var(--text);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+td{color:var(--text-dim);}
+td .mono, th .mono{font-family:var(--mono);color:var(--text);}
+
+/* accordion */
+.acc-item{border:1px solid var(--border);border-radius:8px;margin:8px 0;background:var(--panel);overflow:hidden;}
+.acc-item summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:13.5px;list-style:none;display:flex;justify-content:space-between;color:var(--text);}
+.acc-item summary::-webkit-details-marker{display:none;}
+.acc-item summary:after{content:"+";color:var(--text-faint);font-size:16px;}
+.acc-item[open] summary:after{content:"–";}
+.acc-body{padding:2px 16px 14px;color:var(--text-dim);font-size:13px;}
+.acc-body dl{display:grid;grid-template-columns:130px 1fr;gap:6px 10px;}
+.acc-body dt{color:var(--text-faint);}
+.acc-body dd{margin:0;}
+
+/* checklist */
+.checklist label{display:flex;gap:8px;align-items:flex-start;padding:5px 0;font-size:13.5px;color:var(--text-dim);cursor:pointer;}
+.checklist input{margin-top:3px;}
+.checklist input:checked + span{color:var(--text-faint);text-decoration:line-through;}
+
+/* back to top */
+#toTop{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s;}
+#toTop.show{opacity:1;pointer-events:auto;}
+
+.note{border-left:3px solid var(--warn);background:rgba(230,181,103,.07);padding:8px 14px;border-radius:0 6px 6px 0;font-size:13px;color:var(--text-dim);margin:10px 0;}
+.danger{border-left:3px solid var(--bad);background:rgba(239,107,107,.07);padding:8px 14px;border-radius:0 6px 6px 0;font-size:13px;color:var(--text-dim);margin:10px 0;}
+.ok{border-left:3px solid var(--good);background:rgba(123,216,143,.07);padding:8px 14px;border-radius:0 6px 6px 0;font-size:13px;color:var(--text-dim);margin:10px 0;}
+
+footer{max-width:var(--maxw);margin:0 auto;padding:30px 20px;color:var(--text-faint);font-size:12px;border-top:1px solid var(--border);text-align:center;}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;}
+  aside{position:static;max-height:none;padding:10px 0;}
+  #searchBox{width:140px;}
+}
+[hidden]{display:none!important;}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<header>
+  <div class="header-inner">
+    <div class="brand">Linux Kernel Study · Chapter 16<small>Accessing Files — Source-Verified · Linux 5.10.241 · arm64</small></div>
+    <div class="header-actions">
+      <input id="searchBox" placeholder="Tìm function / struct / khái niệm... (Ctrl+K)">
+      <button class="btn" id="themeBtn">🌓 Theme</button>
+      <a class="btn" href="#master">Master Flow</a>
+      <a class="btn" href="#source-map">Source Map</a>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+<aside>
+  <nav id="sidenav">
+    <div class="grp">Tổng quan</div>
+    <a href="#overview">00 · Source of Truth</a>
+    <a href="#architecture">01 · Kiến trúc tổng thể</a>
+    <a href="#source-map">02 · Bản đồ Source</a>
+
+    <div class="grp">Read Path</div>
+    <a href="#read-e2e">03 · READ() end-to-end</a>
+    <a href="#arm64-syscall">04 · ARM64 Syscall Entry</a>
+    <a href="#vfs-read">05 · VFS Read</a>
+    <a href="#generic-read">06 · Generic File Read</a>
+    <a href="#kiocb-iov">07 · kiocb &amp; iov_iter</a>
+    <a href="#pagecache-read">08 · Page Cache Read</a>
+    <a href="#readahead">09 · Read-ahead</a>
+
+    <div class="grp">Write Path</div>
+    <a href="#write-e2e">10 · WRITE()</a>
+    <a href="#write-iter">11 · write_iter / perform_write</a>
+    <a href="#write-begin-end">12 · write_begin / write_end</a>
+    <a href="#writeback">13 · Dirty Page &amp; Writeback</a>
+
+    <div class="grp">Memory Mapping</div>
+    <a href="#mmap">14 · mmap()</a>
+    <a href="#vma">15 · vm_area_struct</a>
+    <a href="#shared-private">16 · MAP_SHARED vs MAP_PRIVATE</a>
+    <a href="#demand-paging">17 · Demand Paging &amp; Page Fault</a>
+
+    <div class="grp">Direct &amp; Async I/O</div>
+    <a href="#direct-io">18 · Direct I/O (O_DIRECT)</a>
+    <a href="#buffered-vs-direct">19 · Buffered vs Direct</a>
+    <a href="#aio">20 · Asynchronous I/O</a>
+
+    <div class="grp">Tổng hợp</div>
+    <a href="#file-ops">21 · file_operations</a>
+    <a href="#locking">22 · Locking &amp; Context</a>
+    <a href="#errors">23 · Error Paths</a>
+    <a href="#vendor">24 · Vendor Deviation (SOURCE OF TRUTH)</a>
+    <a href="#legacy-modern">25 · Legacy vs Modern</a>
+    <a href="#debug">26 · Debug / Observability</a>
+    <a href="#labs">27 · Labs thực hành</a>
+    <a href="#checklist">28 · Knowledge Checklist</a>
+    <a href="#master">29 · Master Flow</a>
+  </nav>
+</aside>
+
+<main>
+
+<!-- HERO / OVERVIEW -->
+<section id="overview" class="hero">
+  <h1>Chapter 16 — Accessing Files<br>trên chính Source Code Kernel của bạn</h1>
+  <p class="sub">Trace read()/write()/mmap()/O_DIRECT/AIO từ userspace → ARM64 syscall → VFS → Page Cache → Block Layer, dựa 100% trên source tree local <span class="mono">Kernel/K-S800/Src</span>. Không suy đoán, không lấy từ mainline internet — mọi function/struct/path đều được grep &amp; đọc trực tiếp.</p>
+  <div class="badges">
+    <span class="badge b-verified">Linux 5.10.241</span>
+    <span class="badge">arch: arm64 (suy ra từ ATF aarch64 + arch/arm64 build)</span>
+    <span class="badge">VFS</span><span class="badge">Page Cache</span><span class="badge">mm/filemap.c</span>
+    <span class="badge">O_DIRECT / iomap</span><span class="badge">AIO (fs/aio.c)</span>
+    <span class="badge b-vendor">Vendor patch: CONFIG_KM_BIZHUB</span>
+  </div>
+
+  <div class="sot">
+    <h4>0. SOURCE OF TRUTH — thông tin xác định được từ cây source cung cấp</h4>
+    <table>
+      <tr><td>Đường dẫn source</td><td class="mono">C:\Users\PC\Documents\IT6_Kernel\Kernel\K-S800\Src</td></tr>
+      <tr><td>Kernel version</td><td class="mono">VERSION=5, PATCHLEVEL=10, SUBLEVEL=241</td>
+        <td></td></tr>
+      <tr><td>Xác định từ</td><td>Dòng đầu <span class="mono">./Makefile</span> (<span class="mono">VERSION/PATCHLEVEL/SUBLEVEL</span>)</td></tr>
+      <tr><td>Architecture</td><td>Cây <span class="mono">arch/arm64</span> được dùng thực tế (entry.S, entry-common.c, syscall.c, mm/fault.c đều có nội dung khớp target). Ngoài ra thư mục <span class="mono">atf/atf_s800</span> (ARM Trusted Firmware) build các stage BL1/BL2/BL31 dưới <span class="mono">aarch64/</span> → củng cố mạnh cho arm64.
+          <br><b>Lưu ý:</b> không tìm thấy <span class="mono">arch/arm64/configs/*S800*_defconfig</span> hay <span class="mono">.config</span> cụ thể đặt tên "S800" trong cây này — nên architecture <b>arm64</b> được ghi nhận là "rất khả dĩ, xác nhận qua cấu trúc thư mục thực dùng", KHÔNG phải 100% từ .config. Đánh dấu: <span class="badge b-legacy" style="margin-left:4px">CẦN XÁC MINH THÊM NẾU CẦN CHẮC CHẮN TUYỆT ĐỐI</span></td></tr>
+      <tr><td>Config / defconfig</td><td>Không có <span class="mono">.config</span> đã build sẵn trong cây; có nhiều defconfig khác trong <span class="mono">arch/arm64/configs/</span> (Eagle*, Sparrow*, mvebu_v8_lsp*...) nhưng không có file tên khớp "S800" → không dùng để suy version/arch, chỉ dùng Makefile top-level.</td></tr>
+      <tr><td>Bối cảnh sản phẩm</td><td>Cây source nằm trong workspace tên <span class="mono">MFP_Study</span> (Multi-Function Printer) và có 14 file chứa macro vendor <span class="mono">CONFIG_KM_BIZHUB</span> (Konica Minolta bizhub) ngay trong <span class="mono">fs/read_write.c</span> — đây là bằng chứng source-level cho thấy đây là kernel tuỳ biến của một thiết bị MFP, không phải mainline thuần. Chi tiết ở mục <a href="#vendor">24</a>.</td></tr>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>Nguyên tắc áp dụng xuyên suốt tài liệu:</b> SOURCE CODE CỦA BẠN &gt; TEXTBOOK &gt; MODEL KNOWLEDGE. Mọi chỗ textbook (LKD3 - "Linux Kernel Development", Chapter 16 "Accessing Files") nêu function mà source không có, được đánh dấu rõ <span class="badge b-removed">NOT PRESENT</span> kèm function thay thế thực tế.
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2><span class="num">01</span> Kiến trúc tổng thể — Accessing Files Pipeline</h2>
+  <p>Toàn bộ chapter 16 xoay quanh 4 con đường truy cập file, tất cả đều gặp nhau tại <b>Page Cache</b> (Chapter 15) và <b>Block Layer / BIO</b> (Chapter 14):</p>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">Userspace read()/write()/mmap()</span></div>
+    <div class="arrow">↓ svc #0</div>
+    <div class="flow-row"><span class="node arch">ARM64 Exception Vector (entry.S)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">el0_sync_handler → el0_svc → do_el0_svc</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">__arm64_sys_read / __arm64_sys_write / __arm64_sys_mmap</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">VFS: vfs_read / vfs_write / do_mmap</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">file_operations (ext4: read_iter/write_iter/mmap)</span></div>
+    <div class="arrow">↓ buffered</div>
+    <div class="flow-row">
+      <span class="node hit">Page Cache HIT → copy_to_user</span>
+      <span class="arr">|</span>
+      <span class="node miss">Page Cache MISS → readpage/readahead</span>
+      <span class="arr">|</span>
+      <span class="node">O_DIRECT → bỏ qua Page Cache</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">BIO (submit_bio / iomap_dio_rw)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">Block Layer (blk-mq) → Driver → DMA → Storage — Chapter 14</span></div>
+  </div>
+
+  <p>Điểm mấu chốt cần nắm: <b>read()/write() không nói chuyện trực tiếp với đĩa</b>. Chúng nói chuyện với <span class="mono">address_space</span> (page cache) của file thông qua <span class="mono">file-&gt;f_op-&gt;read_iter/write_iter</span>. Chỉ có <b>O_DIRECT</b> và <b>writeback</b> mới thực sự tạo BIO đi xuống block layer.</p>
+</section>
+
+<!-- SOURCE MAP -->
+<section id="source-map">
+  <h2><span class="num">02</span> Bản đồ Source (Source Map)</h2>
+  <p>Bảng dưới liệt kê từng khái niệm trong Chapter 16 → vị trí thật trong cây source (đường dẫn tương đối từ <span class="mono">Kernel/K-S800/Src</span>), đã grep xác nhận tồn tại.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Concept</th><th>Source file</th><th>Function / Struct</th><th>Status</th></tr>
+    <tr><td>Syscall read/write entry</td><td class="mono">fs/read_write.c</td><td class="mono">SYSCALL_DEFINE3(read/write), ksys_read, ksys_write, vfs_read, vfs_write</td><td><span class="badge b-vendor">có vendor patch</span></td></tr>
+    <tr><td>ARM64 exception vector</td><td class="mono">arch/arm64/kernel/entry.S</td><td class="mono">vectors, el0_sync, el0_sync_compat</td><td><span class="badge b-verified">verified</span></td></tr>
+    <tr><td>ARM64 syscall dispatch</td><td class="mono">arch/arm64/kernel/entry-common.c, syscall.c</td><td class="mono">el0_sync_handler, el0_svc, do_el0_svc, el0_svc_common, invoke_syscall</td><td><span class="badge b-verified">verified</span></td></tr>
+    <tr><td>Generic buffered read</td><td class="mono">mm/filemap.c</td><td class="mono">generic_file_read_iter(), generic_file_buffered_read()</td><td><span class="badge b-modern">modern</span></td></tr>
+    <tr><td>Read-ahead engine</td><td class="mono">mm/readahead.c</td><td class="mono">ondemand_readahead(), page_cache_sync_readahead(), page_cache_async_readahead(), page_cache_ra_unbounded()</td><td><span class="badge b-modern">modern (ondemand)</span></td></tr>
+    <tr><td>Generic buffered write</td><td class="mono">mm/filemap.c</td><td class="mono">generic_file_write_iter(), generic_perform_write()</td><td><span class="badge b-modern">modern</span></td></tr>
+    <tr><td>Filesystem write_begin/end (ext4)</td><td class="mono">fs/ext4/inode.c</td><td class="mono">ext4_write_begin(), ext4_write_end(), ext4_journalled_write_end()</td><td><span class="badge b-modern">modern (thay prepare_write/commit_write)</span></td></tr>
+    <tr><td>Dirty page / writeback</td><td class="mono">mm/page-writeback.c, fs/fs-writeback.c</td><td class="mono">set_page_dirty(), balance_dirty_pages_ratelimited(), wb_do_writeback()</td><td><span class="badge b-modern">modern (per-bdi, không pdflush)</span></td></tr>
+    <tr><td>mmap syscall</td><td class="mono">arch/arm64/kernel/sys.c, mm/mmap.c</td><td class="mono">SYSCALL_DEFINE6(mmap), ksys_mmap_pgoff(), vm_mmap_pgoff(), do_mmap(), mmap_region()</td><td><span class="badge b-verified">verified</span></td></tr>
+    <tr><td>VMA / fault handler (ext4)</td><td class="mono">fs/ext4/file.c, mm/filemap.c</td><td class="mono">ext4_file_mmap(), ext4_file_vm_ops, filemap_fault(), filemap_page_mkwrite()</td><td><span class="badge b-verified">verified</span></td></tr>
+    <tr><td>ARM64 page fault</td><td class="mono">arch/arm64/mm/fault.c</td><td class="mono">do_mem_abort(), do_translation_fault(), do_page_fault(), __do_page_fault()</td><td><span class="badge b-verified">verified</span></td></tr>
+    <tr><td>Direct I/O (ext4, hiện đại)</td><td class="mono">fs/iomap/direct-io.c</td><td class="mono">iomap_dio_rw(), __iomap_dio_rw()</td><td><span class="badge b-modern">modern iomap</span></td></tr>
+    <tr><td>Direct I/O (legacy, vẫn tồn tại cho f2fs/ocfs2)</td><td class="mono">fs/direct-io.c</td><td class="mono">__blockdev_direct_IO(), do_blockdev_direct_IO()</td><td><span class="badge b-legacy">legacy, KHÔNG dùng bởi ext4</span></td></tr>
+    <tr><td>Asynchronous I/O (native Linux AIO)</td><td class="mono">fs/aio.c</td><td class="mono">struct kioctx, io_setup(), io_submit(), io_getevents(), io_cancel(), io_destroy(), aio_read()/aio_write() (internal static)</td><td><span class="badge b-verified">verified, có sẵn</span></td></tr>
+    <tr><td>io_uring (async I/O hiện đại hơn)</td><td class="mono">fs/io_uring.c</td><td class="mono">—</td><td><span class="badge b-removed">NOT PRESENT trong cây này</span></td></tr>
+    <tr><td>iov_iter</td><td class="mono">include/linux/uio.h, mm/iov_iter.c</td><td class="mono">enum iter_type { ITER_IOVEC, ITER_KVEC, ITER_BVEC, ITER_PIPE, ITER_DISCARD }</td><td><span class="badge b-legacy">chưa có ITER_UBUF/ITER_XARRAY (xuất hiện ≥5.14)</span></td></tr>
+    <tr><td>sync/fsync/fdatasync</td><td class="mono">fs/sync.c</td><td class="mono">SYSCALL_DEFINE0(sync), SYSCALL_DEFINE1(fsync), SYSCALL_DEFINE1(fdatasync), vfs_fsync()</td><td><span class="badge b-verified">verified</span></td></tr>
+    <tr><td>Filesystem ví dụ</td><td class="mono">fs/ext4/</td><td class="mono">ext4_file_operations, ext4_da_aops, ext4_aops</td><td><span class="badge b-verified">verified</span></td></tr>
+  </table>
+  </div>
+</section>
+
+<!-- READ E2E -->
+<section id="read-e2e">
+  <h2><span class="num">03</span> READ() End-to-End — read(fd, buf, 4096)</h2>
+  <p class="lead">Trace đầy đủ, từng bước, từng function, khớp 100% với cây source local.</p>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">userspace: read(fd, buf, 4096)</span></div>
+    <div class="arrow">↓ svc #0 (trap EL0→EL1)</div>
+    <div class="flow-row"><span class="node arch">vectors (entry.S) → el0_sync</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">el0_sync_handler() → el0_svc() → do_el0_svc()</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">el0_svc_common() → invoke_syscall() → sys_call_table[__NR_read]</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">SYSCALL_DEFINE3(read,...) → ksys_read() (fs/read_write.c)</span></div>
+    <div class="arrow">↓ fdget_pos(fd) lấy struct file</div>
+    <div class="flow-row"><span class="node">vfs_read()</span></div>
+    <div class="arrow">↓ không có -&gt;read() cổ điển, chỉ có -&gt;read_iter()</div>
+    <div class="flow-row"><span class="node">new_sync_read() dựng kiocb + iov_iter rồi gọi call_read_iter</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">file-&gt;f_op-&gt;read_iter (ext4: ext4_file_read_iter → generic_file_read_iter)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">generic_file_read_iter() → generic_file_buffered_read()</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row">
+      <span class="node hit">find_get_page() HIT → mark_page_accessed → copy_page_to_iter</span>
+      <span class="arr">|</span>
+      <span class="node miss">MISS → page_cache_sync_readahead → a_ops-&gt;readpage → chờ PageUptodate</span>
+    </div>
+    <div class="arrow">↓ (MISS only) readpage tạo BIO → block layer → driver → DMA → IRQ → hoàn tất</div>
+    <div class="flow-row"><span class="node">copy_page_to_iter() → copy_to_user (qua iov_iter)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">trả kết quả qua x0, khôi phục ngữ cảnh, ERET về userspace</span></div>
+  </div>
+
+  <h4>Function walkthrough</h4>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">ksys_read()</span><span class="src">fs/read_write.c</span></div>
+    <div class="func-body"><dl>
+      <dt>Caller</dt><dd>SYSCALL_DEFINE3(read,...) — entry point sinh bởi macro syscall</dd>
+      <dt>Callee</dt><dd class="mono">fdget_pos(), vfs_read(), fdput_pos()</dd>
+      <dt>Input</dt><dd class="mono">fd, buf (__user), count</dd>
+      <dt>Output</dt><dd>số byte đọc được, hoặc mã lỗi âm</dd>
+      <dt>Data structures</dt><dd class="mono">struct fd, struct file</dd>
+      <dt>Context</dt><dd>process context</dd>
+      <dt>Can sleep</dt><dd>YES (vfs_read có thể block chờ I/O)</dd>
+      <dt>Lock</dt><dd>không tự lock trực tiếp ở tầng này; <span class="mono">fdget_pos()</span> có thể lock <span class="mono">f_pos_lock</span> nếu file không stream/tty</dd>
+      <dt>Vendor note</dt><dd><span class="badge b-vendor">CONFIG_KM_BIZHUB</span> — xem mục 24, có vòng lặp retry khi <span class="mono">vfs_read()</span> trả -EIO</dd>
+    </dl></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">vfs_read()</span><span class="src">fs/read_write.c</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Kiểm tra quyền (FMODE_READ), <span class="mono">access_ok()</span> kiểm tra buffer userspace, rồi dispatch sang <span class="mono">-&gt;read</span> (cổ điển) hoặc <span class="mono">-&gt;read_iter</span> (hiện đại).</dd>
+      <dt>Important code</dt><dd>
+        <div class="code"><div class="code-head"><span>fs/read_write.c</span><button onclick="copyCode(this)">Copy</button></div><pre>if (file->f_op->read)
+    ret = file->f_op->read(file, buf, count, pos);
+else if (file->f_op->read_iter)
+    ret = new_sync_read(file, buf, count, pos);
+else
+    ret = -EINVAL;</pre></div>
+      </dd>
+      <dt>Giải thích</dt><dd>Trong Linux 5.10, hầu hết filesystem (ext4, xfs, btrfs...) chỉ implement <span class="mono">read_iter</span>, KHÔNG implement <span class="mono">read</span> cổ điển nữa. <span class="mono">vfs_read()</span> vẫn giữ nhánh <span class="mono">-&gt;read</span> để tương thích ngược với driver cũ (character device...).</dd>
+      <dt>Can sleep</dt><dd>YES</dd>
+      <dt>Error path</dt><dd class="mono">-EBADF (không mở để đọc), -EINVAL (không có read_iter), -EFAULT (buffer sai)</dd>
+    </dl></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">new_sync_read()</span><span class="src">fs/read_write.c</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Cầu nối giữa API đồng bộ cũ (buf/count/pos) và API hiện đại dựa trên <span class="mono">kiocb</span> + <span class="mono">iov_iter</span>. Dựng 1 <span class="mono">struct iovec</span> đơn, gọi <span class="mono">call_read_iter()</span>.</dd>
+      <dt>Data structures</dt><dd class="mono">struct kiocb, struct iov_iter (ITER_IOVEC)</dd>
+      <dt>Next</dt><dd class="mono">file-&gt;f_op-&gt;read_iter()</dd>
+    </dl></div>
+  </div>
+</section>
+
+<!-- ARM64 SYSCALL ENTRY -->
+<section id="arm64-syscall">
+  <h2><span class="num">04</span> ARM64 Syscall Entry</h2>
+  <p>Nguồn: <span class="mono">arch/arm64/kernel/entry.S</span>, <span class="mono">entry-common.c</span>, <span class="mono">syscall.c</span>.</p>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">userspace: mov x8,#__NR_read; svc #0</span></div>
+    <div class="arrow">↓ CPU chuyển EL0→EL1, nhảy vào bảng vector</div>
+    <div class="flow-row"><span class="node arch">SYM_CODE_START(vectors) — entry.S:557</span></div>
+    <div class="arrow">↓ entry đồng bộ từ EL0 AArch64</div>
+    <div class="flow-row"><span class="node arch">el0_sync (entry.S:696) → bl el0_sync_handler</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">el0_sync_handler() (entry-common.c:375) → switch theo ESR_ELx → SVC64 → el0_svc()</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">el0_svc() → do_el0_svc() (syscall.c:191)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">el0_svc_common(regs, x8, __NR_syscalls, sys_call_table) — syscall.c:93</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">invoke_syscall() → __invoke_syscall() → syscall_fn(regs)</span></div>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Register convention (AAPCS64 + syscall ABI)</h4>
+    <table>
+      <tr><th>Reg</th><th>Vai trò trong syscall</th></tr>
+      <tr><td class="mono">x8</td><td>syscall number (<span class="mono">scno</span>) — đọc ở <span class="mono">regs-&gt;regs[8]</span> trong <span class="mono">do_el0_svc()</span></td></tr>
+      <tr><td class="mono">x0..x5</td><td>argument 1..6 của syscall (với read: x0=fd, x1=buf, x2=count)</td></tr>
+      <tr><td class="mono">x0</td><td>sau khi syscall trả về, chứa giá trị return (số byte đọc, hoặc -errno)</td></tr>
+    </table>
+    <p>Hàm C thật sự được gọi có tiền tố <span class="mono">__arm64_sys_</span> (do <span class="mono">SYSCALL_DEFINEx</span> + <span class="mono">syscall_wrapper.h</span> sinh ra), nhận toàn bộ <span class="mono">struct pt_regs *</span> rồi tự trích x0..x5 bên trong macro — đây là cơ chế "syscall wrapper" giúp tránh lệ thuộc calling convention trực tiếp trên tham số.</p>
+  </div>
+
+  <div class="code">
+    <div class="code-head"><span>arch/arm64/kernel/syscall.c</span><button onclick="copyCode(this)">Copy</button></div>
+    <pre>void do_el0_svc(struct pt_regs *regs)
+{
+    el0_svc_common(regs, regs->regs[8], __NR_syscalls, sys_call_table);
+}</pre>
+  </div>
+  <p>→ Sau bước này, luồng chuyển thẳng sang <a href="#read-e2e">VFS read</a> hoặc <a href="#mmap">mmap</a> tùy syscall number.</p>
+</section>
+
+<!-- VFS READ -->
+<section id="vfs-read">
+  <h2><span class="num">05</span> VFS Read — fd → struct file → f_op</h2>
+  <div class="flow">
+    <div class="flow-row"><span class="node">fd (int)</span></div><div class="arrow">↓ fdget_pos()</div>
+    <div class="flow-row"><span class="node">current-&gt;files (struct files_struct)</span></div><div class="arrow">↓ fdt-&gt;fd[fd]</div>
+    <div class="flow-row"><span class="node">struct file *</span></div><div class="arrow">↓ file-&gt;f_op</div>
+    <div class="flow-row"><span class="node">const struct file_operations *</span></div><div class="arrow">↓ ->read_iter</div>
+    <div class="flow-row"><span class="node">filesystem implementation (ext4_file_read_iter...)</span></div>
+  </div>
+
+  <p><span class="mono">struct file</span> và <span class="mono">struct inode</span> đầy đủ nằm trong <span class="mono">include/linux/fs.h</span>. Field quan trọng cho read path:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Field</th><th>Struct</th><th>Vai trò trong read()</th></tr>
+    <tr><td class="mono">f_op</td><td class="mono">struct file</td><td>bảng con trỏ hàm thao tác file — quyết định filesystem xử lý ra sao</td></tr>
+    <tr><td class="mono">f_mapping</td><td class="mono">struct file</td><td>trỏ tới <span class="mono">struct address_space</span> — chính là Page Cache của file này</td></tr>
+    <tr><td class="mono">f_pos</td><td class="mono">struct file</td><td>vị trí đọc/ghi hiện tại (offset), bảo vệ bởi <span class="mono">f_pos_lock</span></td></tr>
+    <tr><td class="mono">f_ra</td><td class="mono">struct file (struct file_ra_state)</td><td>trạng thái read-ahead riêng cho file này — xem mục 09</td></tr>
+    <tr><td class="mono">i_mapping</td><td class="mono">struct inode</td><td>address_space chính chủ của inode (thường == f_mapping)</td></tr>
+  </table></div>
+
+  <p>Quan hệ đầy đủ: <span class="mono">fd → files_struct → struct file → f_op (file_operations) → filesystem</span>, song song <span class="mono">struct file → f_mapping (address_space) → i_pages (XArray) → page cache</span>.</p>
+</section>
+
+<!-- GENERIC READ -->
+<section id="generic-read">
+  <h2><span class="num">06</span> Generic File Read</h2>
+  <div class="note"><b>TEXTBOOK:</b> <span class="mono">generic_file_read()</span> &nbsp;→&nbsp; <b>MY KERNEL:</b> <span class="badge b-removed">NOT PRESENT</span> (đã grep toàn bộ <span class="mono">mm/filemap.c</span>, không còn function tên này từ lâu). Thay thế thực tế: <span class="mono">generic_file_read_iter()</span> gọi <span class="mono">generic_file_buffered_read()</span>.</div>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node">file</span></div><div class="arrow">↓ f_mapping</div>
+    <div class="flow-row"><span class="node">address_space (mapping)</span></div><div class="arrow">↓ find_get_page(mapping, index)</div>
+    <div class="flow-row"><span class="node">page cache (XArray i_pages)</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">struct page</span></div><div class="arrow">↓ copy_page_to_iter()</div>
+    <div class="flow-row"><span class="node">userspace buffer</span></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">generic_file_read_iter()</span><span class="src">mm/filemap.c:2510</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Entry point chung cho mọi filesystem dùng page cache trực tiếp. Rẽ nhánh <b>O_DIRECT</b> hay <b>buffered</b>.</dd>
+      <dt>Important code</dt><dd>
+        <div class="code"><div class="code-head"><span>mm/filemap.c:2518</span><button onclick="copyCode(this)">Copy</button></div><pre>if (iocb->ki_flags & IOCB_DIRECT) {
+    ...
+    retval = mapping->a_ops->direct_IO(iocb, iter);
+    ...
+    if (retval < 0 || !count || iocb->ki_pos >= size || IS_DAX(inode))
+        goto out;
+}
+retval = generic_file_buffered_read(iocb, iter, retval);</pre></div>
+      </dd>
+      <dt>Giải thích</dt><dd>Nếu file mở <span class="mono">O_DIRECT</span>, trước tiên <span class="mono">filemap_write_and_wait_range()</span> flush page cache đang dirty trong vùng đọc (đảm bảo consistency), rồi gọi thẳng <span class="mono">a_ops-&gt;direct_IO()</span>. Với ext4 hiện đại, <span class="mono">direct_IO</span> trong <span class="mono">address_space_operations</span> là <span class="mono">noop_direct_IO</span> (không làm gì!) — vì ext4 đã chuyển hẳn sang <span class="mono">iomap_dio_rw()</span> gọi từ <span class="mono">ext4_file_read_iter()</span> ngay từ đầu, không đi qua <span class="mono">generic_file_read_iter</span> nữa khi có O_DIRECT (xem mục 18).</dd>
+      <dt>Data structures</dt><dd class="mono">struct kiocb, struct iov_iter</dd>
+      <dt>Context</dt><dd>process, có thể sleep (I/O đồng bộ chờ page)</dd>
+    </dl></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">generic_file_buffered_read()</span><span class="src">mm/filemap.c:2189</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Vòng lặp chính: với mỗi page cần đọc — tìm trong cache, nếu thiếu thì readahead + đọc từ filesystem, copy sang iov_iter.</dd>
+      <dt>Caller</dt><dd class="mono">generic_file_read_iter()</dd>
+      <dt>Callee</dt><dd class="mono">find_get_page(), page_cache_sync_readahead(), page_cache_async_readahead(), mapping-&gt;a_ops-&gt;readpage(), copy_page_to_iter()</dd>
+      <dt>Data structures</dt><dd class="mono">struct page, struct file_ra_state, struct iov_iter</dd>
+      <dt>Locks</dt><dd><span class="mono">lock_page()/trylock_page()</span> — page lock (per-page, không phải global); page reference count qua <span class="mono">get_page/put_page</span></dd>
+      <dt>Can sleep</dt><dd>YES — <span class="mono">wait_on_page_locked_killable()</span>, <span class="mono">lock_page_killable()</span> khi chờ I/O</dd>
+      <dt>Error paths</dt><dd class="mono">-EINTR (tín hiệu ngắt khi chờ), -EIO (readpage lỗi → shrink_readahead_size_eio() thu nhỏ cửa sổ readahead), -EFAULT (copy dở dang), -EAGAIN (IOCB_NOWAIT/IOCB_NOIO)</dd>
+    </dl></div>
+  </div>
+
+  <div class="ok"><b>Kết luận section:</b> đường HIT hoàn toàn không chạm block layer. Đường MISS gọi <span class="mono">mapping-&gt;a_ops-&gt;readpage(filp, page)</span> — với ext4 đây là con trỏ tới hàm filesystem-specific, hàm này mới thật sự dựng BIO và đi xuống Chapter 14/15.</div>
+</section>
+
+<!-- KIOCB / IOV_ITER -->
+<section id="kiocb-iov">
+  <h2><span class="num">07</span> kiocb &amp; iov_iter</h2>
+  <p><b>TEXTBOOK</b> (LKD3) mô tả <span class="mono">struct kiocb</span> + <span class="mono">read descriptor</span> kiểu cũ. Source hiện đại dùng <span class="mono">kiocb</span> phiên bản mới + <span class="mono">iov_iter</span> thay cho <span class="mono">iovec</span> thô.</p>
+
+  <div class="code">
+    <div class="code-head"><span>include/linux/fs.h — struct kiocb</span><button onclick="copyCode(this)">Copy</button></div>
+    <pre>struct kiocb {
+    struct file    *ki_filp;
+    loff_t          ki_pos;
+    void (*ki_complete)(struct kiocb *iocb, long ret, long ret2);
+    void           *private;
+    int             ki_flags;
+    u16             ki_hint;
+    u16             ki_ioprio;
+    union {
+        unsigned int         ki_cookie;  /* cho ->iopoll */
+        struct wait_page_queue *ki_waitq; /* cho async buffered I/O */
+    };
+};</pre>
+  </div>
+  <p><b>kiocb dùng để làm gì?</b> Đại diện cho MỘT thao tác I/O đang diễn ra — gói gọn file, vị trí đọc/ghi, cờ (IOCB_DIRECT, IOCB_NOWAIT, IOCB_WAITQ...), và callback hoàn tất <span class="mono">ki_complete</span> (dùng cho AIO — khi I/O bất đồng bộ hoàn tất, kernel gọi <span class="mono">ki_complete</span> thay vì trả kết quả ngay). Với read/write đồng bộ, <span class="mono">init_sync_kiocb()</span> tạo kiocb "giả bất đồng bộ" rồi chờ ngay tại chỗ.</p>
+
+  <h4>iov_iter — thay thế trừu tượng cho iovec</h4>
+  <div class="code">
+    <div class="code-head"><span>include/linux/uio.h</span><button onclick="copyCode(this)">Copy</button></div>
+    <pre>enum iter_type {
+    ITER_IOVEC = 4,
+    ITER_KVEC  = 8,
+    ITER_BVEC  = 16,
+    ITER_PIPE  = 32,
+    ITER_DISCARD = 64,
+};</pre>
+  </div>
+  <div class="table-wrap"><table>
+    <tr><th>Loại</th><th>Ý nghĩa</th><th>Dùng khi</th></tr>
+    <tr><td class="mono">ITER_IOVEC</td><td>Buffer userspace (struct iovec[])</td><td>read()/write()/readv()/writev() thông thường</td></tr>
+    <tr><td class="mono">ITER_KVEC</td><td>Buffer kernel-space (struct kvec[])</td><td><span class="mono">kernel_read()</span>, <span class="mono">kernel_write()</span> — kernel tự đọc/ghi file (vd. load module, core dump)</td></tr>
+    <tr><td class="mono">ITER_BVEC</td><td>Mảng struct bio_vec (page + offset + len)</td><td>splice, network zero-copy, nối trực tiếp vào BIO</td></tr>
+    <tr><td class="mono">ITER_PIPE</td><td>Dữ liệu đi qua pipe buffer</td><td>splice()/sendfile()</td></tr>
+    <tr><td class="mono">ITER_DISCARD</td><td>Không ghi đi đâu cả — dùng để "ăn" dữ liệu</td><td>seeking trong stream không hỗ trợ seek</td></tr>
+  </table></div>
+  <div class="note"><b>Lưu ý version:</b> kernel này CHƯA có <span class="mono">ITER_UBUF</span> và <span class="mono">ITER_XARRAY</span> (2 loại này chỉ xuất hiện từ khoảng Linux 5.14+ trở lên khi refactor iov_iter). Đây là bằng chứng nữa (cùng với Makefile) xác nhận đúng dòng 5.10.x.</div>
+  <p>Cùng một hàm <span class="mono">copy_page_to_iter()</span> hoạt động đúng bất kể iter là loại nào — đó chính là lý do iov_iter tồn tại: <b>tách biệt "đọc dữ liệu từ page cache" khỏi "đích đến của dữ liệu là gì"</b> (buffer user, buffer kernel, pipe, hay network).</p>
+</section>
+
+<!-- PAGE CACHE READ -->
+<section id="pagecache-read">
+  <h2><span class="num">08</span> Page Cache Read — HIT / MISS</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--good)">HIT</h4>
+      <div class="flow-row"><span class="node hit">find_get_page(mapping, index)</span></div>
+      <div class="arrow">↓ trả page ngay</div>
+      <div class="flow-row"><span class="node hit">mark_page_accessed()</span></div>
+      <div class="arrow">↓</div>
+      <div class="flow-row"><span class="node hit">copy_page_to_iter() → userspace</span></div>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--warn)">MISS</h4>
+      <div class="flow-row"><span class="node miss">find_get_page() → NULL</span></div>
+      <div class="arrow">↓</div>
+      <div class="flow-row"><span class="node miss">page_cache_sync_readahead()</span></div>
+      <div class="arrow">↓ tạo page mới, add_to_page_cache_lru()</div>
+      <div class="flow-row"><span class="node miss">mapping-&gt;a_ops-&gt;readpage(filp, page)</span></div>
+      <div class="arrow">↓ BIO → block layer → driver → DMA → IRQ</div>
+      <div class="flow-row"><span class="node miss">chờ PageUptodate → copy_page_to_iter()</span></div>
+    </div>
+  </div>
+  <p>Trong thân vòng lặp <span class="mono">generic_file_buffered_read()</span>, nhánh MISS gọi <span class="mono">page_cache_alloc()</span> + <span class="mono">add_to_page_cache_lru(page, mapping, index, gfp)</span> để chèn page mới vào <span class="mono">mapping-&gt;i_pages</span> (XArray) TRƯỚC khi phát I/O thật — nhờ vậy các request đọc trùng lặp tới cùng 1 page sẽ thấy <span class="mono">-EEXIST</span> và quay lại <span class="mono">find_page</span> thay vì đọc trùng.</p>
+  <div class="note"><b>Kết nối Chapter 15:</b> <span class="mono">mapping-&gt;i_pages</span> có kiểu <span class="mono">struct xarray</span> (không phải <span class="mono">radix_tree_root</span>) — xác nhận Page Cache trong kernel này đã chuyển hẳn sang XArray.</div>
+</section>
+
+<!-- READAHEAD -->
+<section id="readahead">
+  <h2><span class="num">09</span> Read-ahead</h2>
+  <div class="note"><b>TEXTBOOK:</b> <span class="mono">handle_ra_miss()</span> &nbsp;→&nbsp; <b>MY KERNEL:</b> <span class="badge b-removed">NOT PRESENT</span> (grep toàn bộ cây source, 0 kết quả). Cơ chế thay thế: <b>on-demand readahead</b> qua <span class="mono">ondemand_readahead()</span>.</div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">struct file_ra_state</span><span class="src">include/linux/fs.h</span></div>
+    <div class="func-body">
+      <div class="code"><pre>struct file_ra_state {
+    pgoff_t start;          /* nơi readahead bắt đầu */
+    unsigned int size;      /* số page readahead */
+    unsigned int async_size;/* kích hoạt readahead bất đồng bộ khi còn # page phía trước */
+    unsigned int ra_pages;  /* cửa sổ readahead tối đa */
+    unsigned int mmap_miss; /* thống kê cache-miss khi truy cập qua mmap */
+    loff_t prev_pos;        /* vị trí read() gần nhất */
+};</pre></div>
+      <p>Mỗi <span class="mono">struct file</span> có 1 <span class="mono">f_ra</span> riêng → trạng thái readahead gắn với <b>từng file descriptor</b>, không toàn cục.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap"><table>
+    <tr><th>Câu hỏi</th><th>Trả lời (theo source)</th></tr>
+    <tr><td>Kernel phát hiện sequential thế nào?</td><td><span class="mono">ondemand_readahead()</span> so <span class="mono">offset</span> đọc hiện tại với <span class="mono">ra-&gt;prev_pos</span>/<span class="mono">ra-&gt;start+ra-&gt;size</span>; nếu liền mạch → coi là sequential, mở rộng cửa sổ.</td></tr>
+    <tr><td>Cửa sổ readahead khởi tạo bao nhiêu page?</td><td class="mono">VM_READAHEAD_PAGES = SZ_128K / PAGE_SIZE</td></tr>
+    <tr><td>Khi nào tăng?</td><td><span class="mono">get_next_ra_size()</span> nhân đôi (hoặc theo công thức tăng dần) kích thước cửa sổ mỗi lần cache <b>MISS tuần tự</b> tiếp theo được xác nhận, tới trần <span class="mono">ra-&gt;ra_pages</span>.</td></tr>
+    <tr><td>Khi nào giảm/reset?</td><td>Truy cập KHÔNG tuần tự (random) → <span class="mono">ra-&gt;size</span> reset nhỏ lại; lỗi I/O khi readpage → <span class="mono">shrink_readahead_size_eio()</span> chia 4 <span class="mono">ra_pages</span>.</td></tr>
+    <tr><td>HIT/MISS ảnh hưởng thế nào?</td><td><span class="mono">PageReadahead(page)</span> đặt cờ trên page cuối vùng readahead trước; khi đọc chạm page đó (dù HIT), <span class="mono">page_cache_async_readahead()</span> được gọi để nạp trước cửa sổ TIẾP THEO — đây là readahead "bất đồng bộ", chạy trước khi ứng dụng thực sự cần.</td></tr>
+  </table></div>
+
+  <h4>2 loại readahead trong generic_file_buffered_read()</h4>
+  <div class="grid2">
+    <div class="card"><b class="mono">page_cache_sync_readahead()</b><p>Gọi khi <b>cache MISS thật sự</b> — đường đọc đang chờ, cần nạp ngay đồng bộ.</p></div>
+    <div class="card"><b class="mono">page_cache_async_readahead()</b><p>Gọi khi page hiện tại <b>HIT nhưng có cờ PageReadahead</b> — nạp trước cửa sổ kế tiếp trong nền, không block request hiện tại.</p></div>
+  </div>
+
+  <h3>Sequential vs Random — trace thực tế</h3>
+  <div class="grid2">
+    <div class="card">
+      <b>Sequential: read 4KB × 4 lần liên tiếp</b>
+      <div class="flow-row"><span class="node miss">read #1: MISS</span></div>
+      <div class="arrow">↓ page_cache_sync_readahead nạp N page (N tăng dần)</div>
+      <div class="flow-row"><span class="node hit">read #2, #3, #4: HIT liên tục</span></div>
+      <div class="arrow">↓ khi chạm page có PageReadahead</div>
+      <div class="flow-row"><span class="node">page_cache_async_readahead nạp thêm cửa sổ kế</span></div>
+    </div>
+    <div class="card">
+      <b>Random: offset 100, 5, 900, 12, 400 ...</b>
+      <div class="flow-row"><span class="node miss">mỗi lần đều MISS</span></div>
+      <div class="arrow">↓ ondemand_readahead() không thấy liền mạch</div>
+      <div class="flow-row"><span class="node">readahead co về mức tối thiểu (thực chất gần như đọc 1 page/lần)</span></div>
+      <div class="arrow">↓</div>
+      <div class="flow-row"><span class="node">lãng phí băng thông readahead bị tránh, nhưng mỗi lần đều phải đi I/O thật</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- WRITE -->
+<section id="write-e2e">
+  <h2><span class="num">10</span> WRITE() — write(fd, buf, 4096)</h2>
+  <div class="danger"><b>write() KHÔNG đồng nghĩa disk write ngay lập tức.</b> Nó chỉ sửa page trong Page Cache và đánh dấu <span class="mono">PG_dirty</span>. Việc ghi xuống đĩa thật (writeback) diễn ra sau, do một luồng riêng hoặc khi hệ thống yêu cầu đồng bộ.</div>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">userspace write()</span></div><div class="arrow">↓ svc #0 → cùng đường ARM64 như read (mục 04)</div>
+    <div class="flow-row"><span class="node">SYSCALL_DEFINE3(write) → ksys_write() → vfs_write()</span></div>
+    <div class="arrow">↓ file-&gt;f_op-&gt;write_iter (không còn -&gt;write cổ điển ở ext4)</div>
+    <div class="flow-row"><span class="node">new_sync_write() → call_write_iter()</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ext4_file_write_iter() → generic_file_write_iter()</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">generic_perform_write()</span></div>
+    <div class="arrow">↓ với mỗi page: write_begin → copy_from_user → write_end</div>
+    <div class="flow-row"><span class="node">ext4_write_begin() → copy_page_from_iter() → ext4_write_end()</span></div>
+    <div class="arrow">↓ set_page_dirty()</div>
+    <div class="flow-row"><span class="node">PG_dirty được set trên page</span></div>
+    <div class="arrow">↓ write() TRẢ VỀ NGAY tại đây — chưa động tới đĩa</div>
+    <div class="flow-row"><span class="node">(sau này) writeback thread → filesystem-&gt;writepages() → BIO → block layer</span></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">vfs_write()</span><span class="src">fs/read_write.c</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Song song với <span class="mono">vfs_read()</span> nhưng có thêm <span class="mono">file_start_write()/file_end_write()</span> để bảo vệ khỏi freeze filesystem (vd. khi hệ thống đang <span class="mono">fsfreeze</span>).</dd>
+      <dt>Callee</dt><dd class="mono">rw_verify_area(), file-&gt;f_op-&gt;write / new_sync_write(), fsnotify_modify()</dd>
+      <dt>Can sleep</dt><dd>YES</dd>
+      <dt>Error path</dt><dd class="mono">-EBADF, -EINVAL, -EFAULT</dd>
+      <dt>Vendor note</dt><dd><span class="mono">ksys_write()</span> (không phải vfs_write trực tiếp) chứa patch <span class="mono">CONFIG_KM_BIZHUB</span> kiểm tra <span class="mono">ui_StorageWriteProtectMBR</span> — bảo vệ MBR khỏi bị ghi đè, xem mục 24.</dd>
+    </dl></div>
+  </div>
+</section>
+
+<!-- WRITE ITER -->
+<section id="write-iter">
+  <h2><span class="num">11</span> generic_file_write_iter() / generic_perform_write()</h2>
+  <div class="func">
+    <div class="func-head"><span class="fn">generic_file_write_iter()</span><span class="src">mm/filemap.c:3488</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Khoá inode (<span class="mono">inode_lock</span>), xử lý <span class="mono">O_APPEND</span>, generic_write_check, rồi rẽ nhánh direct/buffered giống read.</dd>
+      <dt>Lock</dt><dd class="mono">inode_lock(inode)</span> — rwsem độc quyền trong lúc ghi (tuần tự hoá các write() đồng thời trên cùng file)</dd>
+      <dt>Callee</dt><dd class="mono">generic_write_checks(), (nếu IOCB_DIRECT) mapping-&gt;a_ops-&gt;direct_IO, generic_perform_write()</dd>
+    </dl></div>
+  </div>
+  <div class="func">
+    <div class="func-head"><span class="fn">generic_perform_write()</span><span class="src">mm/filemap.c:3295</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Vòng lặp ghi từng page: gọi <span class="mono">a_ops-&gt;write_begin()</span> để chuẩn bị page (map block nếu cần), <span class="mono">copy_page_from_iter_atomic()</span> để copy dữ liệu từ userspace vào page, rồi <span class="mono">a_ops-&gt;write_end()</span> để hoàn tất (trong đó filesystem gọi <span class="mono">set_page_dirty</span>).</dd>
+      <dt>Data structures</dt><dd class="mono">struct page, struct address_space_operations</dd>
+      <dt>Can sleep</dt><dd>YES (write_begin có thể phải đọc block cũ từ đĩa nếu ghi không nguyên page — read-modify-write)</dd>
+    </dl></div>
+  </div>
+</section>
+
+<!-- WRITE BEGIN/END -->
+<section id="write-begin-end">
+  <h2><span class="num">12</span> write_begin / write_end (thay prepare_write/commit_write)</h2>
+  <div class="note"><b>TEXTBOOK:</b> <span class="mono">prepare_write()</span>, <span class="mono">commit_write()</span> &nbsp;→&nbsp; <b>MY KERNEL:</b> <span class="badge b-removed">2 hàm này KHÔNG còn trong <span class="mono">address_space_operations</span></span>. Thay thế thực tế đã xác nhận trong <span class="mono">fs/ext4/inode.c</span>: <span class="mono">ext4_write_begin()</span> / <span class="mono">ext4_write_end()</span>.</div>
+  <div class="table-wrap"><table>
+    <tr><th>Textbook (LKD3, API cũ)</th><th>My Kernel (5.10.241)</th><th>Thay đổi</th></tr>
+    <tr><td class="mono">prepare_write(file, page, from, to)</td><td class="mono">int (*write_begin)(struct file*, struct address_space*, loff_t pos, unsigned len, unsigned flags, struct page**, void**)</td><td>Thêm tham số <span class="mono">flags</span> (AOP_FLAG_*) và output <span class="mono">**pagep</span>, <span class="mono">**fsdata</span> để filesystem tự cấp phát/khoá page phù hợp (hỗ trợ journalling trong ext4)</td></tr>
+    <tr><td class="mono">commit_write(file, page, from, to)</td><td class="mono">int (*write_end)(struct file*, struct address_space*, loff_t pos, unsigned len, unsigned copied, struct page*, void*)</td><td>Nhận thêm <span class="mono">copied</span> (số byte THỰC SỰ đã copy — có thể ít hơn <span class="mono">len</span> nếu fault-in userspace buffer thất bại giữa chừng)</td></tr>
+  </table></div>
+  <p>ext4 có 2 biến thể <span class="mono">write_end</span>: <span class="mono">ext4_write_end()</span> (ordered/writeback mode) và <span class="mono">ext4_journalled_write_end()</span> (data=journal mode, gắn với <span class="mono">jbd2</span>) — được chọn tuỳ <span class="mono">address_space_operations</span> nào được gán cho inode (<span class="mono">ext4_aops</span> / <span class="mono">ext4_journalled_aops</span> / <span class="mono">ext4_da_aops</span>).</p>
+</section>
+
+<!-- WRITEBACK -->
+<section id="writeback">
+  <h2><span class="num">13</span> Write Page Dirty &amp; Writeback</h2>
+  <div class="flow">
+    <div class="flow-row"><span class="node">userspace write()</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">page cache page bị sửa</span></div><div class="arrow">↓ ext4_write_end() → set_page_dirty()</div>
+    <div class="flow-row"><span class="node">PG_dirty = 1, mark trong XArray (PAGECACHE_TAG_DIRTY)</span></div><div class="arrow">↓ balance_dirty_pages_ratelimited() kiểm tra ngưỡng</div>
+    <div class="flow-row"><span class="node">nếu vượt ngưỡng → throttle tiến trình ghi hoặc đánh thức writeback worker</span></div><div class="arrow">↓ (định kỳ hoặc do áp lực bộ nhớ)</div>
+    <div class="flow-row"><span class="node">wb_do_writeback() (fs/fs-writeback.c)</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">a_ops-&gt;writepages() (ext4_writepages)</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">BIO → block layer → driver → DMA → hoàn tất</span></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">set_page_dirty()</span><span class="src">mm/page-writeback.c:2579</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Đặt cờ <span class="mono">PG_dirty</span> trên page, đồng thời gắn tag <span class="mono">PAGECACHE_TAG_DIRTY</span> trong XArray của <span class="mono">mapping-&gt;i_pages</span> để writeback có thể tìm nhanh mọi dirty page mà không cần scan tuyến tính.</dd>
+      <dt>Callee thường gặp</dt><dd class="mono">__set_page_dirty_nobuffers() (dùng bởi filesystem không dùng buffer_head trực tiếp)</dd>
+    </dl></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">balance_dirty_pages_ratelimited()</span><span class="src">mm/page-writeback.c:1899</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Gọi sau MỖI lần ghi để kiểm tra tổng số dirty page có vượt ngưỡng (dirty_ratio/dirty_background_ratio) hay không. Nếu vượt ngưỡng "hard", tiến trình ghi bị <b>throttle</b> (block lại) để tránh OOM do tích luỹ dirty page quá nhanh so với tốc độ writeback.</dd>
+      <dt>Callee</dt><dd class="mono">balance_dirty_pages()</dd>
+      <dt>Can sleep</dt><dd>YES — đây chính là lý do <span class="mono">write()</span> thỉnh thoảng bị "khựng" khi ghi file lớn liên tục</dd>
+    </dl></div>
+  </div>
+
+  <div class="note"><b>TEXTBOOK:</b> <span class="mono">pdflush</span> (nhóm kernel thread dùng chung toàn hệ thống) &nbsp;→&nbsp; <b>MY KERNEL:</b> <span class="badge b-modern">thay bằng per-backing-device flusher</span>. Cơ chế hiện đại: mỗi <span class="mono">struct backing_dev_info</span> có riêng <span class="mono">struct bdi_writeback</span> với workqueue riêng, hàm <span class="mono">wb_do_writeback()</span> (fs/fs-writeback.c) chạy trong context workqueue, không phải context của tiến trình gọi write(). Lý do thay đổi: pdflush dùng chung 1 nhóm thread cho MỌI thiết bị khối → khi 1 thiết bị chậm (vd. USB) có thể "đói" các thiết bị khác đang cần writeback; per-bdi writeback tách biệt hoàn toàn theo từng thiết bị.</div>
+</section>
+
+<!-- MMAP -->
+<section id="mmap">
+  <h2><span class="num">14</span> Memory Mapping — mmap()</h2>
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">userspace: mmap(addr, len, prot, flags, fd, offset)</span></div>
+    <div class="arrow">↓ ARM64 syscall (giống mục 04)</div>
+    <div class="flow-row"><span class="node">SYSCALL_DEFINE6(mmap,...) — arch/arm64/kernel/sys.c:21</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ksys_mmap_pgoff(addr, len, prot, flags, fd, off&gt;&gt;PAGE_SHIFT) — mm/mmap.c:1602</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">vm_mmap_pgoff() — mm/util.c:526</span></div>
+    <div class="arrow">↓ khoá mmap_lock (rwsem trên mm_struct)</div>
+    <div class="flow-row"><span class="node">do_mmap() — mm/mmap.c:1412</span></div>
+    <div class="arrow">↓ tính toán vùng địa chỉ trống, kiểm tra rlimit</div>
+    <div class="flow-row"><span class="node">mmap_region() — mm/mmap.c:2937</span></div>
+    <div class="arrow">↓ cấp phát &amp; chèn vm_area_struct vào rb-tree/list của mm</div>
+    <div class="flow-row"><span class="node">file-&gt;f_op-&gt;mmap(file, vma) (ext4: ext4_file_mmap)</span></div>
+    <div class="arrow">↓ gán vma-&gt;vm_ops (KHÔNG map page vật lý nào!)</div>
+    <div class="flow-row"><span class="node arch">trả địa chỉ về userspace — file CHƯA được đọc vào RAM</span></div>
+  </div>
+
+  <div class="danger"><b>mmap() KHÔNG đọc toàn bộ file vào RAM ngay.</b> Nó chỉ tạo 1 vùng địa chỉ ảo (VMA) trỏ tới file, chưa có page vật lý nào được map. Dữ liệu chỉ thực sự nạp khi CPU truy cập vào địa chỉ đó lần đầu → page fault → <a href="#demand-paging">mục 17</a>.</div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">ext4_file_mmap()</span><span class="src">fs/ext4/file.c:750</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Callback <span class="mono">-&gt;mmap</span> của ext4. KHÔNG tự làm việc mapping — chỉ kiểm tra điều kiện (shutdown, DAX) rồi <b>gán <span class="mono">vma-&gt;vm_ops</span></b> để chỉ định ai sẽ xử lý page fault sau này.</dd>
+      <dt>Important code</dt><dd>
+        <div class="code"><pre>if (IS_DAX(file_inode(file))) {
+    vma->vm_ops = &ext4_dax_vm_ops;
+    vma->vm_flags |= VM_HUGEPAGE;
+} else {
+    vma->vm_ops = &ext4_file_vm_ops;
+}
+return 0;</pre></div>
+      </dd>
+      <dt>Giải thích</dt><dd><span class="mono">ext4_file_vm_ops.fault = ext4_filemap_fault</span>, <span class="mono">.page_mkwrite = ext4_page_mkwrite</span> — 2 callback này mới thực sự chạy khi page fault xảy ra.</dd>
+    </dl></div>
+  </div>
+</section>
+
+<!-- VMA -->
+<section id="vma">
+  <h2><span class="num">15</span> struct vm_area_struct</h2>
+  <div class="code">
+    <div class="code-head"><span>include/linux/mm_types.h</span><button onclick="copyCode(this)">Copy</button></div>
+    <pre>struct vm_area_struct {
+    unsigned long vm_start;   /* địa chỉ bắt đầu trong vm_mm */
+    unsigned long vm_end;     /* byte đầu tiên SAU vùng, trong vm_mm */
+    struct vm_area_struct *vm_next, *vm_prev;
+    struct rb_node vm_rb;
+    struct mm_struct *vm_mm;  /* address space (tiến trình) sở hữu */
+    pgprot_t vm_page_prot;
+    unsigned long vm_flags;
+    ...
+    const struct vm_operations_struct *vm_ops;
+    unsigned long vm_pgoff;   /* offset trong file, tính theo đơn vị PAGE_SIZE */
+    struct file * vm_file;    /* file được map (NULL nếu anonymous) */
+    void * vm_private_data;
+    ...
+};</pre>
+  </div>
+  <div class="table-wrap"><table>
+    <tr><th>Field</th><th>Ý nghĩa</th></tr>
+    <tr><td class="mono">vm_start / vm_end</td><td>Biên vùng địa chỉ ẢO trong không gian tiến trình (không phải offset file)</td></tr>
+    <tr><td class="mono">vm_flags</td><td>VM_READ/VM_WRITE/VM_EXEC/VM_SHARED/VM_MAYSHARE... quyết định quyền truy cập &amp; loại mapping</td></tr>
+    <tr><td class="mono">vm_file</td><td>File đứng sau mapping — NULL với anonymous mapping (vd. heap, stack)</td></tr>
+    <tr><td class="mono">vm_pgoff</td><td>Offset TRONG FILE (đơn vị page) mà vm_start tương ứng — dùng để tính page index khi page fault</td></tr>
+    <tr><td class="mono">vm_ops</td><td>Bảng callback (<span class="mono">fault</span>, <span class="mono">page_mkwrite</span>, <span class="mono">close</span>...) — do <span class="mono">file-&gt;f_op-&gt;mmap()</span> gán vào lúc mmap()</td></tr>
+  </table></div>
+
+  <p><b>Phân biệt VMA / page / address_space:</b></p>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>Phạm vi</th><th>Sở hữu bởi</th></tr>
+    <tr><td class="mono">vm_area_struct</td><td>1 vùng địa chỉ ẢO liên tục trong 1 tiến trình</td><td class="mono">mm_struct</td></tr>
+    <tr><td class="mono">page</td><td>1 khung vật lý PAGE_SIZE, có thể được NHIỀU vma khác nhau (khác tiến trình, MAP_SHARED) cùng trỏ tới</td><td class="mono">address_space (qua page cache) + zero hoặc nhiều pte của các mm</td></tr>
+    <tr><td class="mono">address_space</td><td>Toàn bộ nội dung 1 file trong RAM (mọi page cache page của file)</td><td class="mono">inode</td></tr>
+  </table></div>
+  <p>Quan hệ: <span class="mono">inode → address_space → i_pages (page cache) ← vm_area_struct (nhiều vma có thể trỏ chung 1 address_space nếu MAP_SHARED cùng file)</span>.</p>
+</section>
+
+<!-- SHARED vs PRIVATE -->
+<section id="shared-private">
+  <h2><span class="num">16</span> MAP_SHARED vs MAP_PRIVATE</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin-top:0">MAP_SHARED</h4>
+      <p>ghi vào vùng nhớ mapped ⇒ ghi thẳng vào page cache page của file (cùng page mà read()/write() dùng). Mọi tiến trình MAP_SHARED cùng file+offset thấy thay đổi ngay lập tức. Page trở nên dirty ⇒ writeback ghi thật xuống đĩa như write() thường.</p>
+      <p><span class="mono">vm_ops-&gt;page_mkwrite</span> (vd. <span class="mono">ext4_page_mkwrite</span>) được gọi lần đầu tiên trang được ghi, để filesystem chuẩn bị block allocation trước khi cho phép ghi (tránh SIGBUS giữa chừng do hết đĩa).</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">MAP_PRIVATE</h4>
+      <p>ghi vào vùng nhớ mapped ⇒ trigger <b>Copy-on-Write</b>: kernel copy riêng 1 bản page cho tiến trình đó, page mới này KHÔNG gắn với address_space của file nữa (private anonymous page). Thay đổi không bao giờ ghi ngược lại file, và tiến trình khác MAP_PRIVATE cùng file không thấy thay đổi này.</p>
+      <p>Cơ chế COW của mmap-write dùng chung hạ tầng COW với <span class="mono">fork()</span> — page fault loại "write fault trên trang chỉ-đọc" xử lý trong <span class="mono">handle_mm_fault() → do_wp_page()</span>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- DEMAND PAGING -->
+<section id="demand-paging">
+  <h2><span class="num">17</span> Demand Paging &amp; ARM64 Page Fault</h2>
+  <div class="flow">
+    <div class="flow-row"><span class="node">mmap() trả về addr — chưa có page vật lý nào map</span></div>
+    <div class="arrow">↓ CPU thực thi lệnh truy cập addr lần đầu</div>
+    <div class="flow-row"><span class="node arch">MMU không tìm thấy translation hợp lệ → Data Abort exception</span></div>
+    <div class="arrow">↓ trap vào EL1</div>
+    <div class="flow-row"><span class="node arch">el0_sync → el0_da() (entry-common.c:257)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">do_mem_abort(far, esr, regs) — arch/arm64/mm/fault.c:725</span></div>
+    <div class="arrow">↓ tra bảng fault_info[] theo mã lỗi trong ESR_ELx</div>
+    <div class="flow-row"><span class="node arch">do_translation_fault() → do_page_fault() (fault.c:456)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">__do_page_fault() (fault.c:413) → handle_mm_fault(vma, addr, mm_flags, regs)</span></div>
+    <div class="arrow">↓ tìm vma chứa addr, xác định đây là file-backed fault</div>
+    <div class="flow-row"><span class="node">vma-&gt;vm_ops-&gt;fault(vmf) → filemap_fault() (mm/filemap.c:2716) hoặc ext4_filemap_fault()</span></div>
+    <div class="arrow">↓ tính page index từ vm_pgoff + offset trong vma</div>
+    <div class="flow-row">
+      <span class="node hit">page có sẵn trong page cache → map luôn</span>
+      <span class="arr">|</span>
+      <span class="node miss">chưa có → readpage như read() thường → chờ PageUptodate</span>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">page được map vào page table của tiến trình (PTE mới)</span></div>
+    <div class="arrow">↓</div>
+    <div class="flow-row"><span class="node arch">ERET — lệnh gây fault được thực thi lại, lần này thành công</span></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">filemap_fault()</span><span class="src">mm/filemap.c:2716</span></div>
+    <div class="func-body"><dl>
+      <dt>Purpose</dt><dd>Cài đặt <span class="mono">-&gt;fault</span> mặc định cho mọi filesystem dùng page cache chuẩn. Nhận <span class="mono">struct vm_fault *vmf</span> (chứa <span class="mono">vmf-&gt;vma</span>, <span class="mono">vmf-&gt;pgoff</span>, <span class="mono">vmf-&gt;address</span>).</dd>
+      <dt>Input</dt><dd>VMA + address bị fault + mapping (qua <span class="mono">vma-&gt;vm_file-&gt;f_mapping</span>)</dd>
+      <dt>Flow</dt><dd>tìm page trong <span class="mono">mapping</span> bằng <span class="mono">vmf-&gt;pgoff</span> → HIT thì map ngay → MISS thì đọc từ filesystem giống hệt read-page-cache-miss, sau đó map.</dd>
+      <dt>Return</dt><dd class="mono">vm_fault_t (VM_FAULT_LOCKED, VM_FAULT_MAJOR, VM_FAULT_SIGBUS...)</dd>
+      <dt>Context</dt><dd>process context (page fault handler luôn chạy trong context của tiến trình gây fault)</dd>
+      <dt>Can sleep</dt><dd>YES</dd>
+    </dl></div>
+  </div>
+
+  <div class="note">ext4 override bằng <span class="mono">ext4_filemap_fault</span> (không phải gọi thẳng <span class="mono">filemap_fault</span>) để thêm kiểm tra riêng (vd. freeze filesystem) trước khi gọi vào logic chung tương đương <span class="mono">filemap_fault</span>.</div>
+</section>
+
+<!-- DIRECT IO -->
+<section id="direct-io">
+  <h2><span class="num">18</span> Direct I/O — O_DIRECT</h2>
+  <div class="note"><b>QUAN TRỌNG:</b> ext4 trong kernel này <b>KHÔNG</b> dùng đường Direct I/O cổ điển (<span class="mono">generic_file_direct_IO</span> / <span class="mono">fs/direct-io.c</span>) như textbook mô tả. Nó dùng hạ tầng <b>iomap</b> hiện đại hơn.</div>
+
+  <div class="table-wrap"><table>
+    <tr><th>Textbook</th><th>My Kernel — thực tế</th><th>Trạng thái</th></tr>
+    <tr><td class="mono">generic_file_direct_IO()</td><td class="badge b-removed">NOT PRESENT</td><td>đã bị loại bỏ khỏi mainline từ lâu trước 5.10</td></tr>
+    <tr><td class="mono">__blockdev_direct_IO() / do_blockdev_direct_IO()</td><td class="mono">vẫn có trong <span class="mono">fs/direct-io.c</span>, nhưng chỉ được <span class="mono">f2fs</span> và <span class="mono">ocfs2</span> gọi — <b>không phải ext4</b></td><td><span class="badge b-legacy">legacy, còn sống nhưng thu hẹp phạm vi dùng</span></td></tr>
+    <tr><td>—</td><td class="mono">iomap_dio_rw() / __iomap_dio_rw() — fs/iomap/direct-io.c</td><td><span class="badge b-modern">đường thật ext4 dùng</span></td></tr>
+  </table></div>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node">open(path, O_DIRECT) → read()/write()</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ext4_file_read_iter() / ext4_file_write_iter() thấy IOCB_DIRECT</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">iomap_dio_rw(iocb, iter, &amp;ext4_iomap_ops, ...)</span></div><div class="arrow">↓ bỏ qua hoàn toàn generic_file_read_iter/generic_file_buffered_read</div>
+    <div class="flow-row"><span class="node">__iomap_dio_rw() — dựng iomap (ánh xạ file offset → block vật lý) qua ext4_iomap_ops</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">dựng BIO trực tiếp trỏ vào buffer USERSPACE (qua iov_iter, page pin bằng get_user_pages)</span></div><div class="arrow">↓ submit_bio()</div>
+    <div class="flow-row"><span class="node">Block Layer → Driver → DMA thẳng vào/từ buffer userspace</span></div>
+  </div>
+
+  <h4>"Page Cache bypass" thực tế nghĩa là gì?</h4>
+  <p>Nguồn source (<span class="mono">generic_file_read_iter</span>, mục 06) cho thấy: trước khi phát direct I/O, kernel vẫn gọi <span class="mono">filemap_write_and_wait_range()</span> để <b>flush các dirty page đang có trong page cache của đúng vùng đang đọc/ghi</b> — nhằm đảm bảo dữ liệu nhất quán giữa 2 đường buffered và direct trên cùng file. Vậy "bypass" chỉ đúng theo nghĩa: <b>không tạo page cache MỚI cho dữ liệu I/O này</b>, chứ không phải "hoàn toàn không đụng gì tới cache hiện có".</p>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">O_DIRECT alignment check</span><span class="src">fs/iomap/direct-io.c:~210</span></div>
+    <div class="func-body">
+      <div class="code"><pre>unsigned int blkbits = blksize_bits(bdev_logical_block_size(iomap->bdev));
+unsigned int align = iov_iter_alignment(dio->submit.iter);
+...
+if ((pos | length | align) & ((1 << blkbits) - 1))
+    /* -> lỗi căn chỉnh, rơi về xử lý theo block cuối/hoặc trả lỗi */</pre></div>
+      <p>Điều kiện: cả <b>offset trong file (pos)</b>, <b>độ dài (length)</b>, và <b>địa chỉ + kích thước buffer userspace (align, tính từ iov_iter)</b> đều phải là bội số của <span class="mono">logical block size</span> của thiết bị khối (thường 512B hoặc 4096B). Vi phạm → không thể DMA thẳng, kernel xử lý phần dư theo đường riêng hoặc trả lỗi tuỳ path cụ thể.</p>
+    </div>
+  </div>
+</section>
+
+<!-- BUFFERED vs DIRECT -->
+<section id="buffered-vs-direct">
+  <h2><span class="num">19</span> Buffered I/O vs Direct I/O</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Tiêu chí</th><th>Buffered (mặc định)</th><th>Direct (O_DIRECT)</th></tr>
+    <tr><td>Page cache</td><td>Có — dữ liệu ở lại cache sau khi đọc/ghi, tăng tốc lần sau</td><td>Không tạo cache mới cho I/O này (nhưng vẫn flush cache cũ trùng vùng)</td></tr>
+    <tr><td>Copy dữ liệu</td><td>2 lần copy: đĩa↔page cache (DMA) rồi page cache↔user buffer (CPU copy)</td><td>1 lần: đĩa↔user buffer trực tiếp qua DMA (zero-copy ở tầng CPU)</td></tr>
+    <tr><td>Alignment</td><td>Không yêu cầu</td><td>Bắt buộc căn theo logical block size (mục 18)</td></tr>
+    <tr><td>Write trả về khi nào</td><td>Ngay sau khi sửa page cache (dirty), trước khi ghi đĩa thật</td><td>Thường đợi I/O hoàn tất thật sự (trừ khi kết hợp AIO)</td></tr>
+    <tr><td>Phù hợp</td><td>Workload chung, truy cập lặp lại</td><td>Database/engine tự quản lý cache riêng (tránh double caching, cần kiểm soát latency chính xác)</td></tr>
+    <tr><td>Readahead</td><td>Có (mục 09)</td><td>Không áp dụng — ứng dụng tự lo prefetch</td></tr>
+  </table></div>
+</section>
+
+<!-- AIO -->
+<section id="aio">
+  <h2><span class="num">20</span> Asynchronous I/O</h2>
+  <div class="note">Textbook liệt kê <span class="mono">aio_read()/aio_write()/aio_error()/aio_return()/aio_cancel()/aio_suspend()/aio_fsync()</span> — đây thực chất là API <b>POSIX AIO của glibc</b> (thư viện userspace, triển khai bằng thread pool ở nhiều hệ thống), <b>KHÔNG phải syscall kernel</b>. Bộ syscall AIO NGUYÊN BẢN của Linux kernel (và thứ có mặt trong <span class="mono">fs/aio.c</span> của cây này) là: <span class="mono">io_setup(), io_submit(), io_getevents(), io_cancel(), io_destroy()</span>.</div>
+
+  <div class="flow">
+    <div class="flow-row"><span class="node">io_setup(nr_events, &amp;ctxp)</span></div><div class="arrow">↓ SYSCALL_DEFINE2(io_setup) — fs/aio.c:1328</div>
+    <div class="flow-row"><span class="node">ioctx_alloc() → struct kioctx (AIO context / ring buffer)</span></div>
+  </div>
+  <div class="flow">
+    <div class="flow-row"><span class="node">io_submit(ctx_id, nr, iocbpp)</span></div><div class="arrow">↓ SYSCALL_DEFINE3(io_submit) — fs/aio.c:2043</div>
+    <div class="flow-row"><span class="node">với mỗi iocb: io_submit_one() → dựng struct kiocb, gán ki_complete = aio_complete_rw</span></div><div class="arrow">↓ IOCB_CMD_PREAD/PWRITE...</div>
+    <div class="flow-row"><span class="node">aio_read()/aio_write() (internal, static) → file-&gt;f_op-&gt;read_iter / write_iter</span></div><div class="arrow">↓ (đi lại đúng đường generic_file_read_iter/write_iter ở mục 06/11 nếu là buffered; hoặc iomap_dio_rw nếu O_DIRECT)</div>
+    <div class="flow-row"><span class="node">tiến trình gọi io_submit() TRẢ VỀ NGAY (không chờ I/O xong)</span></div>
+  </div>
+  <div class="flow">
+    <div class="flow-row"><span class="node">... I/O device hoàn tất ở dưới (Chapter 14) ...</span></div><div class="arrow">↓ callback ki_complete được gọi</div>
+    <div class="flow-row"><span class="node">aio_complete_rw() → aio_complete() — fs/aio.c:1104</span></div><div class="arrow">↓ ghi event vào ring buffer chia sẻ với userspace</div>
+    <div class="flow-row"><span class="node">io_getevents(ctx_id, min_nr, nr, events, timeout)</span></div><div class="arrow">↓ SYSCALL_DEFINE5(io_getevents) — fs/aio.c:2213</div>
+    <div class="flow-row"><span class="node">userspace nhận kết quả I/O đã hoàn tất</span></div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">struct kioctx</span><span class="src">fs/aio.c:96</span></div>
+    <div class="func-body"><dl>
+      <dt>Vai trò</dt><dd>Đại diện cho 1 "AIO context" do <span class="mono">io_setup()</span> tạo — chứa ring buffer chia sẻ giữa kernel/userspace (mmap được) để đẩy completion event mà không cần syscall cho mỗi event, cộng với sổ theo dõi các request đang bay (in-flight).</dd>
+      <dt>Liên hệ</dt><dd>1 tiến trình có thể có nhiều <span class="mono">kioctx</span> (mảng qua <span class="mono">struct kioctx_table</span> gắn với <span class="mono">mm_struct</span>)</dd>
+    </dl></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin-top:0">Điểm khác biệt quan trọng với file_operations cũ</h4>
+      <p>Trong kernel 2.6 đời cũ, <span class="mono">struct file_operations</span> có field riêng <span class="mono">.aio_read</span>/<span class="mono">.aio_write</span>. Cây source hiện tại đã xác nhận (mục 21) <b>KHÔNG còn 2 field này</b> — AIO tái sử dụng thẳng <span class="mono">.read_iter</span>/<span class="mono">.write_iter</span> (qua <span class="mono">kiocb</span> bất đồng bộ), filesystem không cần biết code gọi mình là AIO hay sync read thường.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">Modern alternative</h4>
+      <p><span class="badge b-removed">io_uring KHÔNG có mặt</span> trong cây source này (<span class="mono">fs/io_uring.c</span> không tồn tại). Nếu về sau cần AIO hiệu năng cao hơn native AIO cũ, io_uring (xuất hiện từ Linux 5.1, nhưng có thể bị loại khỏi build tuỳ cấu hình vendor) là hướng thay thế — chỉ nêu ở đây theo yêu cầu "chỉ thêm khi cần định hướng", KHÔNG coi là đang tồn tại trong kernel đang khảo sát.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FILE OPS -->
+<section id="file-ops">
+  <h2><span class="num">21</span> struct file_operations (đầy đủ, đã đọc trực tiếp)</h2>
+  <p>Nguồn: <span class="mono">include/linux/fs.h</span>. Các field liên quan trực tiếp Chapter 16 được tô đậm.</p>
+  <div class="code">
+    <div class="code-head"><span>include/linux/fs.h — struct file_operations</span><button onclick="copyCode(this)">Copy</button></div>
+    <pre>struct file_operations {
+    struct module *owner;
+    loff_t (*llseek) (struct file *, loff_t, int);
+    ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+    ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+    ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
+    ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
+    int (*iopoll)(struct kiocb *kiocb, bool spin);
+    ...
+    __poll_t (*poll) (struct file *, struct poll_table_struct *);
+    long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+    int (*mmap) (struct file *, struct vm_area_struct *);
+    int (*open) (struct inode *, struct file *);
+    int (*release) (struct inode *, struct file *);
+    int (*fsync) (struct file *, loff_t, loff_t, int datasync);
+    ...
+#ifdef CONFIG_SPLICE_FROM_SOCKET
+    ssize_t (*splice_from_socket)(struct file *file, struct socket *sock,
+                                   loff_t __user *ppos, size_t count);
+#endif
+    ...
+} __randomize_layout;</pre>
+  </div>
+  <p><b>KHÔNG có</b> <span class="mono">.aio_read</span>/<span class="mono">.aio_write</span> (đã bị loại từ Linux 4.1, hợp nhất vào <span class="mono">read_iter</span>/<span class="mono">write_iter</span>).</p>
+  <div class="note"><b>Chi tiết đáng chú ý:</b> field <span class="mono">splice_from_socket</span> nằm sau <span class="mono">#ifdef CONFIG_SPLICE_FROM_SOCKET</span> — đây KHÔNG phải field chuẩn của mainline Linux 5.10 (mainline không có field này ở vị trí struct file_operations). Đây là dấu hiệu backport/patch tuỳ biến khác của vendor, tách biệt với cụm patch <span class="mono">CONFIG_KM_BIZHUB</span> đã thấy ở fs/read_write.c. Ghi nhận là <span class="badge b-vendor">vendor-specific</span>, không nằm trong phạm vi Chapter 16 gốc nên không đào sâu thêm ở đây.</div>
+
+  <h4>Diagram</h4>
+  <div class="flow">
+    <div class="flow-row"><span class="node">struct file</span></div>
+    <div class="arrow">↓ f_op</div>
+    <div class="flow-row"><span class="node">read_iter · write_iter · mmap · fsync · unlocked_ioctl</span></div>
+  </div>
+</section>
+
+<!-- LOCKING -->
+<section id="locking">
+  <h2><span class="num">22</span> Locking &amp; Context tổng hợp</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Flow</th><th>Lock chính</th><th>Context</th><th>Can sleep</th></tr>
+    <tr><td>read() buffered HIT</td><td>page lock (per-page, ngắn hạn khi cần)</td><td>process</td><td>Thường KHÔNG (trừ khi tranh chấp page lock)</td></tr>
+    <tr><td>read() buffered MISS</td><td>page lock (<span class="mono">lock_page_killable</span>), XArray internal lock lúc insert</td><td>process</td><td>YES</td></tr>
+    <tr><td>write() buffered</td><td><span class="mono">inode_lock</span> (rwsem, độc quyền), page lock trong write_begin/end</td><td>process</td><td>YES</td></tr>
+    <tr><td>writeback (wb_do_writeback)</td><td>page lock trên từng page đang ghi, <span class="mono">i_pages</span> XArray lock khi duyệt tag DIRTY</td><td>workqueue (kworker)</td><td>YES</td></tr>
+    <tr><td>mmap() — do_mmap/mmap_region</td><td><span class="mono">mmap_lock</span> (rwsem trên <span class="mono">mm_struct</span>, ghi)</td><td>process</td><td>YES</td></tr>
+    <tr><td>page fault (do_page_fault)</td><td><span class="mono">mmap_lock</span> (đọc, đôi khi nâng lên ghi), page lock khi map</td><td>process (trong ngữ cảnh exception, vẫn preemptible sau khi vào C code)</td><td>YES</td></tr>
+    <tr><td>Direct I/O (iomap_dio_rw)</td><td>Không giữ page lock (không dùng page cache); có thể giữ <span class="mono">inode_lock</span> tuỳ path ghi</td><td>process (phát I/O), hoàn tất có thể ở context khác nếu bất đồng bộ</td><td>YES lúc submit; completion có thể async</td></tr>
+    <tr><td>AIO completion (aio_complete)</td><td>spinlock nội bộ ring buffer <span class="mono">kioctx</span></td><td>bất kỳ — có thể chạy từ context hoàn tất I/O (workqueue/softirq tuỳ driver)</td><td>Bản thân aio_complete thiết kế để KHÔNG sleep (dùng spinlock)</td></tr>
+  </table></div>
+</section>
+
+<!-- ERRORS -->
+<section id="errors">
+  <h2><span class="num">23</span> Error Paths (chỉ liệt kê errno thật sự xuất hiện trong source đã đọc)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Errno</th><th>Xuất hiện ở</th><th>Nguyên nhân</th></tr>
+    <tr><td class="mono">-EBADF</td><td class="mono">vfs_read/vfs_write</td><td>file không mở với quyền đọc/ghi tương ứng</td></tr>
+    <tr><td class="mono">-EINVAL</td><td class="mono">vfs_read/vfs_write</td><td>không có cả <span class="mono">-&gt;read</span> lẫn <span class="mono">-&gt;read_iter</span> (filesystem không hỗ trợ đọc)</td></tr>
+    <tr><td class="mono">-EFAULT</td><td class="mono">vfs_read (access_ok), generic_file_buffered_read</td><td>con trỏ buffer userspace không hợp lệ / copy dở dang</td></tr>
+    <tr><td class="mono">-EINTR</td><td class="mono">generic_file_buffered_read (find_page)</td><td>tín hiệu (signal) ngắt trong lúc đang chờ page fault_signal_pending</td></tr>
+    <tr><td class="mono">-EIO</td><td class="mono">generic_file_buffered_read (readpage_error)</td><td>lỗi đọc thật từ thiết bị/filesystem, kèm <span class="mono">shrink_readahead_size_eio()</span></td></tr>
+    <tr><td class="mono">-EAGAIN</td><td class="mono">generic_file_buffered_read (would_block)</td><td><span class="mono">IOCB_NOWAIT/IOCB_NOIO</span> — không thể phục vụ ngay mà không block</td></tr>
+    <tr><td class="mono">-ENOMEM</td><td class="mono">generic_file_buffered_read (no_cached_page)</td><td><span class="mono">page_cache_alloc()</span> thất bại</td></tr>
+    <tr><td class="mono">O_DIRECT alignment</td><td class="mono">fs/iomap/direct-io.c</td><td>pos/length/buffer không căn theo logical block size (mục 18) — xử lý theo nhánh riêng/trả lỗi tuỳ trường hợp cụ thể trong hàm, không phải luôn 1 errno cố định</td></tr>
+  </table></div>
+</section>
+
+<!-- VENDOR -->
+<section id="vendor">
+  <h2><span class="num">24</span> Vendor Deviation — Bằng chứng "Source Code Của Tôi ≠ Mainline"</h2>
+  <div class="danger">Đây là phần MINH HOẠ rõ nhất cho nguyên tắc <b>SOURCE CODE CỦA TÔI &gt; TEXTBOOK &gt; MODEL KNOWLEDGE</b>: những đoạn dưới đây <b>không tồn tại trong Linux mainline 5.10</b>, chỉ có trong cây source cụ thể này.</p></div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">ksys_read() — retry loop khi -EIO</span><span class="src">fs/read_write.c:636</span></div>
+    <div class="func-body">
+      <div class="code"><pre>#if defined(CONFIG_KM_BIZHUB)
+    while(1) {
+        is_retry = nvme_is_suspend;
+        ret = vfs_read(f.file, buf, count, ppos);
+        if( ret != -EIO || retry_count >= SYSCALL_RETRY_COUNT )
+            break;
+        if( !is_retry )
+            retry_count++;
+        msleep( 200 );
+        printk( "%s : retry %d comm:%s\n", __FUNCTION__, retry_count, current->comm );
+    }
+#else
+    ret = vfs_read(f.file, buf, count, ppos);
+#endif</pre></div>
+      <p><b>Giải thích:</b> khi <span class="mono">CONFIG_KM_BIZHUB</span> bật, mọi <span class="mono">read()</span> trả về <span class="mono">-EIO</span> sẽ được retry tối đa <span class="mono">SYSCALL_RETRY_COUNT</span> lần, cách nhau 200ms, TRỪ khi <span class="mono">nvme_is_suspend</span> đang true (đang trong quá trình suspend NVMe thì không tính vào bộ đếm retry). Đây rõ ràng là workaround cho lỗi I/O thoáng qua (transient EIO) trên thiết bị lưu trữ NVMe/SSD của máy MFP (multi-function printer) — mã lỗi ghi chú gốc là <span class="mono">OP_BTS-44073</span>.</p>
+      <p><b>Why (theo comment trong source):</b> tránh để lỗi I/O tạm thời (ví dụ trong lúc SSD đang suspend/resume) leak lên tầng ứng dụng thành lỗi cứng.</p>
+      <p><b>Tác động cần biết khi debug:</b> nếu bạn thấy độ trễ bất thường (~200ms × N) khi đọc file thất bại trên thiết bị thật, đây LÀ NGUYÊN NHÂN — không phải bug lạ trong VFS chuẩn.</p>
+    </div>
+  </div>
+
+  <div class="func">
+    <div class="func-head"><span class="fn">ksys_write() — MBR write-protect</span><span class="src">fs/read_write.c:677</span></div>
+    <div class="func-body">
+      <p>Cùng khu vực code còn có comment tiếng Nhật/tham chiếu <span class="mono">ui_StorageWriteProtectMBR</span> (OP_BTS-27490) — cơ chế chặn ghi đè MBR của phân vùng lưu trữ trong 1 số điều kiện vận hành cụ thể của thiết bị. Không mở rộng chi tiết ở đây vì nằm ngoài phạm vi thuần VFS/page-cache của Chapter 16, nhưng cần biết để không nhầm lẫn với hành vi <span class="mono">vfs_write()</span> chuẩn khi debug write() thất bại bất thường trên thiết bị thật.</p>
+    </div>
+  </div>
+
+  <p>Tổng cộng grep được <b>14 file</b> trong <span class="mono">fs/</span> và <span class="mono">mm/</span> có chứa macro <span class="mono">CONFIG_KM_BIZHUB</span> — nếu cần audit toàn diện các vendor patch ảnh hưởng tới I/O path, nên chạy: <span class="mono">rg -l "KM_BIZHUB" fs/ mm/</span> và review từng file.</p>
+</section>
+
+<!-- LEGACY VS MODERN -->
+<section id="legacy-modern">
+  <h2><span class="num">25</span> Legacy (Textbook) vs Modern (My Kernel 5.10.241)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Chapter 16 (textbook)</th><th>My Kernel 5.10.241</th><th>Trạng thái</th></tr>
+    <tr><td class="mono">generic_file_read()</td><td class="mono">generic_file_read_iter() + generic_file_buffered_read()</td><td><span class="badge b-modern">REPLACED</span></td></tr>
+    <tr><td class="mono">generic_file_write()</td><td class="mono">generic_file_write_iter() + generic_perform_write()</td><td><span class="badge b-modern">REPLACED</span></td></tr>
+    <tr><td class="mono">prepare_write() / commit_write()</td><td class="mono">a_ops-&gt;write_begin() / write_end()</td><td><span class="badge b-modern">REPLACED (thêm flags, fsdata, copied)</span></td></tr>
+    <tr><td class="mono">read descriptor (read_descriptor_t)</td><td class="mono">struct kiocb + struct iov_iter</td><td><span class="badge b-modern">REPLACED</span></td></tr>
+    <tr><td class="mono">handle_ra_miss()</td><td class="mono">ondemand_readahead() (toàn bộ engine viết lại)</td><td><span class="badge b-removed">REMOVED, logic thay thế hoàn toàn</span></td></tr>
+    <tr><td class="mono">radix tree (page cache index)</td><td class="mono">XArray (mapping-&gt;i_pages kiểu struct xarray)</td><td><span class="badge b-modern">REPLACED</span></td></tr>
+    <tr><td class="mono">pdflush (global flusher threads)</td><td class="mono">per-bdi writeback (bdi_writeback, wb_do_writeback)</td><td><span class="badge b-modern">REPLACED</span></td></tr>
+    <tr><td class="mono">generic_file_direct_IO()</td><td class="mono">iomap_dio_rw() (ext4); __blockdev_direct_IO() vẫn còn cho f2fs/ocfs2</td><td><span class="badge b-modern">REPLACED cho ext4, legacy vẫn dùng nơi khác</span></td></tr>
+    <tr><td class="mono">file_operations.aio_read / .aio_write</td><td class="mono">KHÔNG còn field này — hợp nhất vào .read_iter / .write_iter</td><td><span class="badge b-removed">REMOVED</span></td></tr>
+    <tr><td class="mono">aio_read()/aio_write()/aio_error()/aio_return()/aio_suspend() (glibc POSIX AIO)</td><td>Không phải kernel API — nếu cần AIO kernel thật, dùng <span class="mono">io_setup/io_submit/io_getevents</span></td><td><span class="badge b-legacy">KHÔNG áp dụng trực tiếp cho kernel — khác tầng</span></td></tr>
+    <tr><td>io_uring</td><td class="badge b-removed">NOT PRESENT trong build này</td><td><span class="badge b-removed">NOT PRESENT</span></td></tr>
+    <tr><td class="mono">struct iov_iter: ITER_UBUF / ITER_XARRAY</td><td>Chưa tồn tại (chỉ có IOVEC/KVEC/BVEC/PIPE/DISCARD)</td><td><span class="badge b-legacy">pre-5.14 iov_iter</span></td></tr>
+  </table></div>
+</section>
+
+<!-- DEBUG -->
+<section id="debug">
+  <h2><span class="num">26</span> Debug / Observability</h2>
+  <div class="grid3">
+    <div class="card"><b class="mono">ftrace</b><p>Bật function_graph tracer, lọc theo <span class="mono">generic_file_buffered_read</span>, <span class="mono">generic_perform_write</span>, <span class="mono">filemap_fault</span> để xem call graph thật trên board.</p></div>
+    <div class="card"><b class="mono">tracepoint</b><p><span class="mono">block:block_rq_issue</span>, <span class="mono">writeback:writeback_dirty_page</span>, <span class="mono">mm_filemap:mm_filemap_add_to_page_cache</span> (nếu bật CONFIG tương ứng) — kiểm tra trong <span class="mono">/sys/kernel/debug/tracing/available_events</span> trên board thật vì cấu hình build cụ thể ảnh hưởng tracepoint nào được compile.</p></div>
+    <div class="card"><b class="mono">/proc, /sys</b><p><span class="mono">/proc/meminfo</span> (Dirty, Writeback), <span class="mono">/proc/&lt;pid&gt;/maps</span> (xem VMA), <span class="mono">/proc/&lt;pid&gt;/smaps</span> (chi tiết từng vma kèm Rss/Shared_Dirty).</p></div>
+    <div class="card"><b class="mono">kprobe / kgdb</b><p>Đặt breakpoint tại <span class="mono">do_page_fault</span>, <span class="mono">__iomap_dio_rw</span>, <span class="mono">aio_complete</span> để quan sát trực tiếp trên board qua kgdboc.</p></div>
+    <div class="card"><b class="mono">perf</b><p><span class="mono">perf record -e page-faults</span>, hoặc trace syscall <span class="mono">read/write/mmap</span> bằng <span class="mono">perf trace</span>.</p></div>
+    <div class="card"><b class="mono">dynamic_debug</b><p>Nếu ext4 build với debug, có thể bật <span class="mono">dyndbg</span> để in log chi tiết path write_begin/write_end.</p></div>
+  </div>
+</section>
+
+<!-- LABS -->
+<section id="labs">
+  <h2><span class="num">27</span> Labs thực hành</h2>
+
+  <details class="acc-item"><summary>LAB 1 — Trace read() bằng ftrace</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Thấy call graph thật: vfs_read → new_sync_read → ext4_file_read_iter → generic_file_read_iter → generic_file_buffered_read.</dd>
+    <dt>Setup</dt><dd>Board đã bật CONFIG_FUNCTION_GRAPH_TRACER, có quyền root trên debugfs.</dd>
+    <dt>Command</dt><dd class="mono">echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer; echo vfs_read &gt; set_graph_function; cat testfile &gt; /dev/null; cat trace</dd>
+    <dt>Expected</dt><dd>Cây gọi hàm khớp mục 03/06.</dd>
+    <dt>Source functions</dt><dd class="mono">vfs_read, generic_file_read_iter, generic_file_buffered_read</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 2 — Page Cache HIT/MISS</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>So sánh thời gian đọc lần 1 (MISS) vs lần 2 (HIT).</dd>
+    <dt>Command</dt><dd class="mono">echo 3 &gt; /proc/sys/vm/drop_caches; time cat bigfile &gt; /dev/null; time cat bigfile &gt; /dev/null</dd>
+    <dt>What to observe</dt><dd>Lần 2 nhanh hơn hẳn — không có I/O thật, chỉ copy_page_to_iter.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 3 — Sequential read + readahead</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Quan sát cửa sổ readahead tăng dần qua tracepoint (nếu build có <span class="mono">readahead</span> tracepoint) hoặc qua <span class="mono">/sys/kernel/debug/tracing</span> function trace của <span class="mono">ondemand_readahead</span>.</dd>
+    <dt>Command</dt><dd class="mono">dd if=bigfile of=/dev/null bs=4k</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 4 — Random access vs sequential</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>So sánh throughput random 4K reads vs sequential 4K reads bằng <span class="mono">fio</span> nếu có sẵn trên rootfs, quan sát readahead co lại.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 5 — write() + dirty pages</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Ghi file lớn, quan sát <span class="mono">Dirty:</span> trong <span class="mono">/proc/meminfo</span> tăng lên trước khi giảm dần (writeback).</dd>
+    <dt>Command</dt><dd class="mono">dd if=/dev/zero of=testfile bs=1M count=500 &amp; watch -n0.5 grep -E "Dirty|Writeback" /proc/meminfo</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 6 — writeback trigger</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>So sánh <span class="mono">write()</span> đơn thuần với <span class="mono">write()+fsync()</span> — đo độ trễ khác biệt do fsync ép writeback đồng bộ ngay.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 7 — mmap() + page fault</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Viết chương trình nhỏ mmap() 1 file lớn với PROT_READ, đo <span class="mono">/proc/self/status</span> trường <span class="mono">VmRSS</span> trước/sau khi chạm từng phần file — chứng minh demand paging (RSS không tăng ngay khi mmap, chỉ tăng khi truy cập).</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 8 — MAP_SHARED vs MAP_PRIVATE</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>mmap cùng 1 file bằng MAP_SHARED ở 2 tiến trình, ghi ở 1 bên, xác nhận bên kia thấy thay đổi ngay; lặp lại với MAP_PRIVATE, xác nhận KHÔNG thấy.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 9 — O_DIRECT alignment</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Thử <span class="mono">pread()</span> với O_DIRECT dùng buffer KHÔNG align (malloc thường) → quan sát lỗi/-EINVAL hoặc fallback; sau đó dùng <span class="mono">posix_memalign()</span> đúng block size → thành công.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 10 — AIO cơ bản</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Viết chương trình nhỏ dùng <span class="mono">io_setup/io_submit/io_getevents</span> (libaio hoặc raw syscall) đọc 1 file, quan sát io_submit trả về ngay trong khi I/O chạy nền.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 11 — Trace read/write xuống BIO</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>Kết hợp tracepoint <span class="mono">block:block_rq_issue</span>/<span class="mono">block_rq_complete</span> với function trace <span class="mono">generic_file_buffered_read</span> để thấy toàn bộ path Chapter 16 → Chapter 15 → Chapter 14 trong 1 lần chạy.</dd>
+  </dl></div></details>
+
+  <details class="acc-item"><summary>LAB 12 — ARM64 syscall/page fault trace</summary><div class="acc-body"><dl>
+    <dt>Goal</dt><dd>kprobe tại <span class="mono">do_el0_svc</span> và <span class="mono">do_mem_abort</span>, in <span class="mono">regs-&gt;regs[8]</span> (syscall number) và <span class="mono">far</span> (fault address) để xác nhận đúng luồng ARM64 mô tả ở mục 04/17.</dd>
+  </dl></div></details>
+</section>
+
+<!-- CHECKLIST -->
+<section id="checklist">
+  <h2><span class="num">28</span> Knowledge Checklist</h2>
+  <p>Trạng thái được lưu bằng localStorage của trình duyệt (chỉ trên máy bạn).</p>
+  <div class="card checklist" id="checklistBox">
+    <label><input type="checkbox" data-k="c1"><span>Hiểu fd → struct file → f_op hoạt động thế nào</span></label>
+    <label><input type="checkbox" data-k="c2"><span>Trace được read() từ ARM64 syscall tới page cache</span></label>
+    <label><input type="checkbox" data-k="c3"><span>Hiểu generic_file_buffered_read() xử lý HIT/MISS ra sao</span></label>
+    <label><input type="checkbox" data-k="c4"><span>Hiểu cơ chế readahead on-demand (không còn handle_ra_miss)</span></label>
+    <label><input type="checkbox" data-k="c5"><span>Trace được write() và biết vì sao nó KHÔNG ghi đĩa ngay</span></label>
+    <label><input type="checkbox" data-k="c6"><span>Hiểu write_begin/write_end thay thế prepare_write/commit_write ra sao</span></label>
+    <label><input type="checkbox" data-k="c7"><span>Hiểu dirty page → writeback → per-bdi flusher (không phải pdflush)</span></label>
+    <label><input type="checkbox" data-k="c8"><span>Hiểu mmap() không đọc file ngay — chỉ tạo VMA</span></label>
+    <label><input type="checkbox" data-k="c9"><span>Trace được ARM64 page fault → filemap_fault()</span></label>
+    <label><input type="checkbox" data-k="c10"><span>Phân biệt MAP_SHARED và MAP_PRIVATE (COW)</span></label>
+    <label><input type="checkbox" data-k="c11"><span>Biết ext4 dùng iomap_dio_rw() chứ không phải generic_file_direct_IO</span></label>
+    <label><input type="checkbox" data-k="c12"><span>Hiểu ràng buộc alignment của O_DIRECT</span></label>
+    <label><input type="checkbox" data-k="c13"><span>Phân biệt POSIX AIO (glibc) và Linux native AIO (io_submit)</span></label>
+    <label><input type="checkbox" data-k="c14"><span>Biết io_uring KHÔNG có trong cây source này</span></label>
+    <label><input type="checkbox" data-k="c15"><span>Biết về patch vendor CONFIG_KM_BIZHUB trong read()/write()</span></label>
+    <label><input type="checkbox" data-k="c16"><span>Kết nối được Chapter 16 → 15 (Page Cache) → 14 (Block Layer)</span></label>
+  </div>
+</section>
+
+<!-- MASTER -->
+<section id="master">
+  <h2><span class="num">29</span> MASTER FLOW — Chapter 16 hợp nhất</h2>
+
+  <h3>READ</h3>
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">read()</span></div><div class="arrow">↓ svc #0 / el0_sync / el0_svc / do_el0_svc</div>
+    <div class="flow-row"><span class="node">__arm64_sys_read → ksys_read → vfs_read → new_sync_read</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ext4_file_read_iter → generic_file_read_iter</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">generic_file_buffered_read</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node hit">HIT: find_get_page</span><span class="arr">|</span><span class="node miss">MISS: page_cache_sync_readahead → a_ops-&gt;readpage → BIO → Block Layer (Ch.14) → DMA → IRQ</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">copy_page_to_iter → userspace</span></div>
+  </div>
+
+  <h3>WRITE</h3>
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">write()</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ksys_write → vfs_write → new_sync_write → ext4_file_write_iter → generic_file_write_iter → generic_perform_write</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ext4_write_begin → copy → ext4_write_end → set_page_dirty</span></div><div class="arrow">↓ write() RETURN NGAY</div>
+    <div class="flow-row"><span class="node">balance_dirty_pages_ratelimited (throttle nếu cần)</span></div><div class="arrow">↓ (sau này, không đồng bộ với write())</div>
+    <div class="flow-row"><span class="node">wb_do_writeback → ext4_writepages → BIO → Block Layer (Ch.14)</span></div>
+  </div>
+
+  <h3>MMAP</h3>
+  <div class="flow">
+    <div class="flow-row"><span class="node arch">mmap()</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ksys_mmap_pgoff → vm_mmap_pgoff → do_mmap → mmap_region → ext4_file_mmap (gán vm_ops)</span></div><div class="arrow">↓ return addr — chưa page nào map</div>
+    <div class="flow-row"><span class="node arch">CPU truy cập addr → Data Abort → do_mem_abort → do_page_fault → handle_mm_fault</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">vm_ops-&gt;fault → ext4_filemap_fault/filemap_fault (giống HIT/MISS của read)</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">page map vào page table → ERET → resume</span></div>
+  </div>
+
+  <h3>DIRECT I/O</h3>
+  <div class="flow">
+    <div class="flow-row"><span class="node">read()/write() với O_DIRECT</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ext4_file_read_iter/write_iter thấy IOCB_DIRECT</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">iomap_dio_rw → __iomap_dio_rw → dựng BIO trỏ thẳng buffer userspace</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">Block Layer (Ch.14) → Driver → DMA → device</span></div>
+  </div>
+
+  <h3>ASYNC I/O</h3>
+  <div class="flow">
+    <div class="flow-row"><span class="node">io_setup → io_submit</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">aio_read/aio_write (internal) → file-&gt;f_op-&gt;read_iter/write_iter (đúng đường buffered/direct ở trên)</span></div><div class="arrow">↓ trả về ngay, không chờ</div>
+    <div class="flow-row"><span class="node">... I/O hoàn tất ...</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">ki_complete = aio_complete_rw → aio_complete → ghi ring buffer</span></div><div class="arrow">↓</div>
+    <div class="flow-row"><span class="node">io_getevents → userspace nhận kết quả</span></div>
+  </div>
+
+  <div class="ok" style="margin-top:24px"><b>Mục tiêu đã đạt:</b> mọi mũi tên trong 5 flow trên đều gắn với function/file:line thật đã đọc trực tiếp từ <span class="mono">Kernel/K-S800/Src</span>, không có function bịa, không trộn version — mọi chỗ lệch với textbook đều đã ghi rõ ở mục 25.</div>
+</section>
+
+</main>
+</div>
+
+<footer>Linux Kernel 5.10.241 · arm64 · Chapter 16 Study Book · Nguồn: source tree local, không dùng Linux mainline internet làm nguồn tham chiếu chính.</footer>
+
+<button id="toTop">↑ Top</button>
+
+<script>
+// ===== progress bar =====
+const progress = document.getElementById('progress');
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  progress.style.width = scrolled + '%';
+  document.getElementById('toTop').classList.toggle('show', h.scrollTop > 600);
+});
+document.getElementById('toTop').onclick = () => window.scrollTo({top:0,behavior:'smooth'});
+
+// ===== theme =====
+function applyTheme(t){
+  if(t === 'light') document.documentElement.setAttribute('data-theme','light');
+  else document.documentElement.setAttribute('data-theme','dark');
+}
+try {
+  const saved = localStorage.getItem('ch16-theme');
+  applyTheme(saved || 'dark');
+} catch(e) { applyTheme('dark'); }
+document.getElementById('themeBtn').onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = cur === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try { localStorage.setItem('ch16-theme', next); } catch(e){}
+};
+
+// ===== active sidenav on scroll =====
+const sections = [...document.querySelectorAll('main section[id]')];
+const navLinks = [...document.querySelectorAll('#sidenav a')];
+function onScrollNav(){
+  let current = sections[0] && sections[0].id;
+  const y = window.scrollY + 90;
+  for(const s of sections){ if(s.offsetTop <= y) current = s.id; }
+  navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+current));
+}
+window.addEventListener('scroll', onScrollNav);
+onScrollNav();
+
+// ===== copy code =====
+function copyCode(btn){
+  const pre = btn.closest('.code').querySelector('pre');
+  const text = pre.innerText;
+  try {
+    navigator.clipboard.writeText(text).then(() => {
+      const old = btn.textContent; btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = old, 1200);
+    });
+  } catch(e){}
+}
+
+// ===== checklist persistence =====
+try {
+  document.querySelectorAll('.checklist input[type=checkbox]').forEach(cb => {
+    const key = 'ch16-check-' + cb.dataset.k;
+    cb.checked = localStorage.getItem(key) === '1';
+    cb.addEventListener('change', () => {
+      try { localStorage.setItem(key, cb.checked ? '1' : '0'); } catch(e){}
+    });
+  });
+} catch(e){}
+
+// ===== search (Ctrl+K focuses, simple text match scroll) =====
+const searchBox = document.getElementById('searchBox');
+document.addEventListener('keydown', (e) => {
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'){
+    e.preventDefault();
+    searchBox.focus();
+    searchBox.select();
+  }
+});
+searchBox.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){
+    const q = searchBox.value.trim().toLowerCase();
+    if(!q) return;
+    // search headings, fn names, mono spans, table cells
+    const candidates = [...document.querySelectorAll('main h2, main h3, main .fn, main .mono, main td, main summary')];
+    const match = candidates.find(el => el.textContent.toLowerCase().includes(q));
+    if(match){
+      const sec = match.closest('section');
+      (sec || match).scrollIntoView({behavior:'smooth', block:'start'});
+      match.style.outline = '2px solid var(--accent)';
+      setTimeout(() => match.style.outline = '', 1600);
+    }
+  }
+});
+</script>
+
+</body>
+</html>

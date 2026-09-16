@@ -1,0 +1,77 @@
+try_to_wake_up — giải thích cho người mới bắt đầu
+Trước tiên: process/task là gì, "ngủ" và "chạy" nghĩa là gì?
+Mỗi chương trình đang chạy trong Linux được biểu diễn bởi một struct task_struct (gọi là "task" hoặc "process"). Task này có một trường state cho biết nó đang ở trạng thái nào:
+
+TASK_RUNNING: sẵn sàng chạy hoặc đang chạy trên CPU.
+TASK_INTERRUPTIBLE / TASK_UNINTERRUPTIBLE: đang "ngủ" — không làm gì cả, không chiếm CPU — vì nó đang chờ một sự kiện gì đó (ví dụ chờ dữ liệu từ ổ đĩa, chờ mạng, chờ mutex được mở khoá...).
+Ví dụ dễ hình dung: bạn gọi read() để đọc file trên ổ cứng chậm. Kernel không bắt CPU đứng chờ vô ích — nó set task của bạn thành "ngủ" rồi cho task khác chạy. Khi ổ đĩa đọc xong dữ liệu, driver ổ đĩa phải đánh thức task của bạn dậy để nó tiếp tục chạy. Đó chính là việc try_to_wake_up làm.
+
+Chức năng cốt lõi (rất đơn giản, phần còn lại là tối ưu hoá)
+
+static int
+try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
+p: task cần đánh thức.
+state: một bitmask các trạng thái ngủ mà nếu p đang ở trong đó thì mới được đánh thức (ví dụ chỉ đánh thức nếu nó đang TASK_INTERRUPTIBLE, bỏ qua nếu nó đang ở trạng thái khác).
+Trả về: true nếu thực sự đánh thức được, false nếu task không ở đúng trạng thái chờ đó (coi như "gọi thức dậy nhưng nó không ngủ kiểu đó nên bỏ qua").
+Về khái niệm (comment dòng 2834-2838 đã nói rõ), hàm này làm đúng 2 việc:
+
+
+Nếu (state & p->state) khớp:
+    1. p->state = TASK_RUNNING       // đổi trạng thái thành "sẵn sàng chạy"
+    2. Nếu p chưa nằm trong hàng đợi runqueue → đưa nó vào runqueue
+Sau khi vào lại runqueue, scheduler sẽ coi nó là ứng viên để được cấp CPU (đây chính là chỗ nối với check_preempt_curr mà ta đã nói ở câu hỏi trước — nếu p có priority cao hơn task đang chạy, nó sẽ preempt ngay).
+
+Đi qua từng đoạn code theo trình tự thực thi
+1. Trường hợp đặc biệt: tự đánh thức chính mình (dòng 2872-2884)
+
+if (p == current) {
+    if (!(p->state & state))
+        goto out;
+    success = 1;
+    p->state = TASK_RUNNING;
+    goto out;
+}
+Nếu task gọi hàm này để tự đánh thức chính nó (p == current, tức đang chạy trên CPU này) thì không cần khoá phức tạp gì cả — vì nó đang chạy, chắc chắn on_rq đã đúng, chỉ cần đổi state sang TASK_RUNNING là xong. Đây là đường tắt (fast path) cho hiệu năng.
+
+2. Trường hợp chung: đánh thức task khác (dòng 2897 trở đi)
+
+raw_spin_lock_irqsave(&p->pi_lock, flags);
+...
+if (!(p->state & state))
+    goto unlock;      // task không ngủ ở trạng thái mong muốn → bỏ qua, coi như không làm gì
+success = 1;
+Vì p có thể đang chạy trên CPU khác (hệ thống đa nhân — SMP), nên cần khoá p->pi_lock để tránh 2 CPU cùng lúc cố đánh thức p.
+
+3. Kiểm tra: task đã ở trong runqueue chưa? (dòng 2933-2934)
+
+if (READ_ONCE(p->on_rq) && ttwu_runnable(p, wake_flags))
+    goto unlock;
+Có 2 khả năng khi ta gọi "đánh thức":
+
+p->on_rq == 1: task vẫn còn nằm trong runqueue (chưa kịp bị dequeue khỏi CPU, dù state đang là "ngủ" trên đường chuyển tiếp) → chỉ cần gọi ttwu_runnable() để cập nhật lại, không cần enqueue lại từ đầu.
+p->on_rq == 0: task đã thực sự bị lấy ra khỏi runqueue (do gọi schedule() để nhường CPU) → phải làm đầy đủ các bước enqueue lại từ đầu (phần dưới).
+4. Chọn CPU nào để chạy task này (dòng 3009)
+
+cpu = select_task_rq(p, p->wake_cpu, SD_BALANCE_WAKE, wake_flags);
+if (task_cpu(p) != cpu) {
+    ...
+    set_task_cpu(p, cpu);   // di chuyển task sang CPU khác nếu cần cân bằng tải
+}
+Trên máy nhiều nhân, task không nhất thiết chạy lại đúng CPU cũ — kernel có thể chọn một CPU khác đang rảnh hơn (load balancing) để tối ưu hiệu năng.
+
+5. Đưa task vào runqueue của CPU đã chọn (dòng 3020)
+
+ttwu_queue(p, cpu, wake_flags);
+Đây là bước cuối cùng: chèn p vào hàng đợi chạy (rq) của CPU đó. Từ giờ, scheduler sẽ coi p là một ứng viên sẵn sàng — nếu priority của nó cao hơn task đang chạy trên CPU đó, cơ chế check_preempt_curr (đã giải thích ở câu trước) sẽ kích hoạt preemption ngay lập tức.
+
+Phần khó nhất: tại sao code có nhiều memory barrier (smp_rmb, smp_mb__after_spinlock...)?
+Đây là phần "advanced" — bạn mới học có thể tạm bỏ qua chi tiết, chỉ cần hiểu ý tưởng:
+
+Trên hệ thống nhiều CPU, mỗi CPU có cache riêng. Khi CPU-A ghi p->on_rq = 1 và CPU-B đọc lại giá trị đó, thứ tự CPU thấy các thay đổi bộ nhớ không được đảm bảo tự động — CPU có thể đọc "nhầm" giá trị cũ do compiler/CPU tối ưu hoá reorder lệnh. Các dòng comment như:
+
+
+sched_ttwu_pending()        try_to_wake_up()
+  STORE p->on_rq = 1          LOAD p->state
+là để giải thích: "chúng ta cần đảm bảo CPU đọc p->state sau khi CPU kia đã ghi xong p->on_rq, nếu không sẽ có race condition (2 CPU tranh nhau đọc/ghi dữ liệu chung mà không đồng bộ, dẫn tới lỗi khó tái hiện)". smp_rmb()/smp_mb__after_spinlock() là các "hàng rào bộ nhớ" (memory barrier) ép CPU phải tuân thủ đúng thứ tự đó.
+
+Tóm gọn 1 câu: try_to_wake_up = tìm task đang ngủ đúng kiểu mình muốn đánh thức → đổi state thành RUNNING → nếu chưa có trong runqueue thì chọn CPU phù hợp và nhét nó vào đó, để scheduler có cơ hội cấp CPU cho nó chạy tiếp.

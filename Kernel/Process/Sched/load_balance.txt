@@ -1,0 +1,85 @@
+load_balance — giải thích cho người mới bắt đầu
+Bối cảnh: tại sao cần hàm này?
+Máy tính hiện đại có nhiều CPU/nhân. Mỗi CPU có runqueue riêng (bạn đã học ở activate_task) — hàng đợi các task chờ chạy trên CPU đó. Vấn đề: nếu để mặc, có thể xảy ra tình trạng mất cân bằng: CPU-0 có 10 task xếp hàng chờ trong khi CPU-1 đang rảnh không có task nào. Rất lãng phí!
+
+load_balance() chính là hàm giải quyết vấn đề đó — nó được gọi định kỳ (bạn đã thấy dòng trigger_load_balance(rq) trong scheduler_tick() ở câu hỏi trước) để: kiểm tra CPU nào đang "quá tải" (busiest) và "kéo" bớt task từ đó sang CPU đang rảnh hơn (this_cpu).
+
+Bạn không cần hiểu từng dòng — hãy nắm luồng chính theo các bước lớn.
+
+Tham số đầu vào
+
+static int load_balance(int this_cpu, struct rq *this_rq,
+            struct sched_domain *sd, enum cpu_idle_type idle,
+            int *continue_balancing)
+this_cpu / this_rq: CPU đang thực hiện việc cân bằng tải (thường là CPU đang gọi hàm, vì nó rảnh nên muốn "xin" thêm việc).
+sd (sched_domain): một nhóm CPU được coi là "cùng phạm vi" để cân bằng (ví dụ nhóm các core cùng chip, hay nhóm các CPU cùng NUMA node — hệ thống phân cấp domain để tránh kéo task từ quá xa gây tốn kém cache).
+idle: CPU gọi hàm này đang ở trạng thái nào (đang rảnh hoàn toàn, mới rảnh, hay đang bận nhưng vẫn tranh thủ cân bằng).
+Luồng xử lý chính (bỏ qua chi tiết edge-case)
+Bước 1: Có cần cân bằng không?
+
+if (!should_we_balance(&env)) {
+    *continue_balancing = 0;
+    goto out_balanced;
+}
+Kiểm tra xem CPU này có "trách nhiệm" thực hiện việc cân bằng lúc này không (tránh việc nhiều CPU cùng lúc đều cố gắng cân bằng, gây lãng phí và tranh chấp khoá).
+
+Bước 2: Tìm "nhóm CPU bận nhất" và "CPU bận nhất trong nhóm đó"
+
+group = find_busiest_group(&env);
+...
+busiest = find_busiest_queue(&env, group);
+find_busiest_group(): so sánh tổng tải (load) giữa các nhóm CPU trong sd, tìm nhóm nào đang "gánh" nhiều việc nhất so với khả năng của nó.
+find_busiest_queue(): trong nhóm đó, tìm cụ thể 1 CPU (busiest) có runqueue đông nhất — đây là "nạn nhân" sẽ bị lấy bớt task.
+Nếu không tìm thấy nhóm/CPU nào thực sự mất cân bằng → coi như hệ thống đã cân bằng, nhảy tới out_balanced (không làm gì cả).
+
+Bước 3: Di chuyển task (phần lõi — dòng more_balance:)
+
+if (busiest->nr_running > 1) {
+    ...
+more_balance:
+    rq_lock_irqsave(busiest, &rf);      // khoá runqueue của CPU busiest
+    cur_ld_moved = detach_tasks(&env);   // "gỡ" một số task ra khỏi runqueue đó
+    rq_unlock(busiest, &rf);             // mở khoá ngay (để không giữ khoá quá lâu)
+
+    if (cur_ld_moved) {
+        attach_tasks(&env);              // "gắn" các task đó vào runqueue của this_cpu
+        ld_moved += cur_ld_moved;
+    }
+Đây là ý tưởng cốt lõi: gỡ task ra khỏi CPU đông, gắn vào CPU rảnh — về bản chất tương tự việc dequeue_task() trên CPU cũ rồi enqueue_task() (giống activate_task bạn vừa học) trên CPU mới, chỉ khác là làm hàng loạt và có tối ưu khoá để không giữ runqueue "busiest" bị khoá quá lâu (vì lúc bị khoá, CPU đó không lên lịch được, ảnh hưởng tới các task đang chạy thật trên nó).
+
+Tại sao phải tách "detach" rồi "attach" riêng thay vì di chuyển thẳng luôn?
+Vì trong lúc gỡ, task được đánh dấu cờ đặc biệt TASK_ON_RQ_MIGRATING (comment ngay trong code) để đảm bảo an toàn tạm thời — không ai khác được đụng vào task đó trong lúc nó đang "lơ lửng" giữa 2 CPU, tránh race condition (2 CPU cùng thao tác trên 1 task lúc chưa rõ nó thuộc runqueue nào).
+
+Bước 4: Các trường hợp không di chuyển được (CPU affinity)
+
+if (unlikely(env.flags & LBF_ALL_PINNED)) {
+Một số task bị "ghim" (pinned) vào 1 CPU cụ thể — ví dụ do lập trình viên gọi sched_setaffinity() giới hạn task đó chỉ được chạy trên CPU 0. Nếu tất cả task trên busiest đều bị ghim như vậy, load_balance không thể lấy được task nào → đánh dấu LBF_ALL_PINNED, loại CPU đó ra khỏi danh sách xem xét (cpumask_clear_cpu) rồi goto redo để thử tìm CPU bận khác thay thế.
+
+Bước 5: Nếu vẫn thất bại — "Active Balance" (biện pháp mạnh tay)
+
+if (!ld_moved) {
+    sd->nr_balance_failed++;
+    if (need_active_balance(&env)) {
+        ...
+        busiest->active_balance = 1;
+        stop_one_cpu_nowait(cpu_of(busiest),
+            active_load_balance_cpu_stop, busiest, ...);
+    }
+}
+Nếu không kéo được task nào theo cách "êm ái" ở trên (ví dụ vì tất cả task rảnh đều đang chạy — nr_running <= 1 — nên detach_tasks không có gì để lấy, hoặc do bị pin hết), kernel dùng biện pháp mạnh hơn: gửi 1 yêu cầu đặc biệt (stop_one_cpu_nowait) buộc chính CPU busiest phải tạm dừng ngay cả task đang chạy của nó (không phải task đang chờ) và đẩy nó sang CPU khác. Đây gọi là "active balance" — chỉ dùng khi các cách thông thường thất bại nhiều lần liên tiếp (nr_balance_failed).
+
+Bước 6: Điều chỉnh tần suất cân bằng cho lần sau
+
+if (likely(!active_balance) || voluntary_active_balance(&env)) {
+    sd->balance_interval = sd->min_interval;   // cân bằng thành công → giữ tần suất kiểm tra bình thường
+} else {
+    if (sd->balance_interval < sd->max_interval)
+        sd->balance_interval *= 2;             // liên tục thất bại → giãn thời gian giữa các lần thử (tránh tốn CPU vô ích)
+}
+Đây là kiểu "exponential backoff" quen thuộc: nếu cân bằng liên tục thất bại (ví dụ do tất cả task đều bị pin), kernel tự động giảm tần suất thử lại để đỡ lãng phí, thay vì cứ vài tick lại thử và luôn thất bại.
+
+Các nhãn cuối (out_balanced, out_all_pinned, out_one_pinned, out)
+Đây chỉ là các điểm "return" khác nhau tuỳ tình huống dừng sớm (đã cân bằng sẵn, tất cả bị pin, v.v.), dùng goto theo phong cách C truyền thống của kernel để tránh lồng nhiều tầng if — không có logic mới, chỉ dọn dẹp và trả về ld_moved (số lượng task đã thực sự di chuyển được).
+
+Tóm gọn 1 câu
+load_balance() = định kỳ so sánh tải giữa các CPU trong cùng một "domain", tìm ra CPU đang quá tải nhất, rồi gỡ bớt vài task từ runqueue của nó sang runqueue của CPU đang gọi hàm này (đang rảnh hơn) — nếu cách nhẹ nhàng thất bại nhiều lần thì dùng biện pháp mạnh (ép cả task đang chạy phải nhường), và tự điều chỉnh tần suất thử lại để tránh lãng phí CPU.

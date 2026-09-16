@@ -1,0 +1,2602 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCU Stall — Source Code Deep Dive</title>
+<style>
+:root{--bg:#0b1020;--panel:#121a2d;--panel2:#18233b;--text:#e8edf7;--muted:#9eabc2;--accent:#63b3ed;--green:#68d391;--yellow:#f6d365;--red:#fc8181;--purple:#b794f4;--line:#2a3857}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:linear-gradient(135deg,#080c18,#10182a 55%,#0b1221);color:var(--text);font:15px/1.65 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:10;background:rgba(11,16,32,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 22px}
+.head{max-width:1450px;margin:auto;display:flex;gap:18px;align-items:center;justify-content:space-between}.brand{font-weight:800;font-size:18px}.brand span{color:var(--red)}
+input{background:#0b1221;border:1px solid var(--line);color:var(--text);padding:10px 13px;border-radius:10px;width:min(360px,45vw);outline:none}
+.layout{max-width:1450px;margin:auto;display:grid;grid-template-columns:245px 1fr;gap:24px;padding:25px 20px}
+aside{position:sticky;top:82px;height:calc(100vh - 105px);overflow:auto;border-right:1px solid var(--line);padding-right:14px}
+nav a{display:block;color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:7px}nav a:hover{background:var(--panel2);color:#fff}
+main{min-width:0}.hero{padding:25px 28px;border:1px solid #304260;border-radius:18px;background:linear-gradient(145deg,#16233c,#10192d);box-shadow:0 15px 45px #0004}
+h1{font-size:clamp(30px,5vw,50px);line-height:1.08;margin:0 0 10px}h2{margin-top:42px;border-bottom:1px solid var(--line);padding-bottom:8px}h3{color:var(--accent);margin-top:28px}
+.badge{display:inline-block;padding:4px 9px;border-radius:999px;background:#253554;color:#bfe3ff;margin:3px;font-size:12px}.danger{background:#48252b;color:#ffb4b4}.ok{background:#18382e;color:#9ff0c6}
+.card{background:rgba(18,26,45,.86);border:1px solid var(--line);border-radius:13px;padding:18px;margin:14px 0}.callout{border-left:4px solid var(--accent);background:#13233a;padding:14px 17px;border-radius:0 10px 10px 0}.warn{border-left-color:var(--yellow);background:#30291a}.critical{border-left-color:var(--red);background:#321b22}
+pre{background:#070b14;border:1px solid #202d45;border-radius:10px;padding:15px;overflow:auto;color:#dbe7ff;font:13px/1.6 "SFMono-Regular",Consolas,monospace}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#bfe3ff}
+table{width:100%;border-collapse:collapse;margin:15px 0;background:#0f1728;border-radius:10px;overflow:hidden}th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}th{background:#1a2945;color:#cfe5ff}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:16px;background:#0b1220;border:1px solid var(--line);border-radius:12px}.node{padding:9px 12px;border-radius:9px;background:#203250;border:1px solid #36527b;font-family:monospace;font-size:13px}.arrow{color:var(--yellow);font-weight:900}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}.mini{background:#111b30;border:1px solid var(--line);padding:14px;border-radius:11px}
+.num{color:var(--accent);font-weight:800}.muted{color:var(--muted)}.red{color:var(--red);font-weight:700}.green{color:var(--green);font-weight:700}
+footer{text-align:center;color:var(--muted);padding:40px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}aside{display:none}.head{flex-wrap:wrap}input{width:100%}}
+.hidden{display:none!important}
+
+.kernel-flow { width: min(760px, 100%); margin: 30px auto; padding: 10px 0; display: flex; flex-direction: column; align-items: center; font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif; } .flow-item { width: 100%; max-width: 620px; position: relative; padding: 18px 24px; border: 1px solid #d8dee9; border-radius: 14px; background: #ffffff; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; } .flow-item:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.09); } .source { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; } .file { color: #5b6472; font-family: "SFMono-Regular", Consolas, monospace; font-weight: 600; } .line { color: #8b95a5; font-family: "SFMono-Regular", Consolas, monospace; } .function { font-family: "SFMono-Regular", Consolas, monospace; font-size: 20px; font-weight: 700; color: #172033; } .flow-arrow { height: 46px; display: flex; align-items: center; justify-content: center; } .flow-arrow span { font-size: 28px; font-weight: 700; color: #7b8494; } .highlight { border: 2px solid #f0a34a; background: linear-gradient( 135deg, #fffaf2 0%, #fff4df 100% ); } .highlight .function { color: #9a5a00; } .final { border: 2px solid #d9534f; background: linear-gradient( 135deg, #fff7f7 0%, #ffecec 100% ); } .final .function { color: #a92828; } .tag { display: inline-block; margin-top: 12px; padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #ffffff; background: #6b7280; } .highlight .tag { background: #d88922; } .final .tag { background: #c43d39; }
+
+.rcu-section { font-family: Inter, "Segoe UI", Arial, sans-serif; line-height: 1.7; color: #dce7f5; background: #0f172a; padding: 28px; border-radius: 16px; margin: 28px 0; } .rcu-section h2 { color: #f8fafc; margin-top: 0; font-size: 28px; border-left: 5px solid #ef4444; padding-left: 14px; } .rcu-section h3 { color: #93c5fd; margin-top: 28px; font-size: 21px; } .rcu-section p { color: #cbd5e1; } .rcu-section strong { color: #f8fafc; } .source-box { background: #111c2f; border: 1px solid #334155; border-left: 4px solid #38bdf8; padding: 16px 18px; margin: 18px 0; border-radius: 10px; } .source-label { display: inline-block; background: #0c4a6e; color: #7dd3fc; padding: 4px 9px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-bottom: 8px; letter-spacing: 0.4px; } .warning-box { background: #2a1518; border: 1px solid #7f1d1d; border-left: 4px solid #ef4444; padding: 17px 18px; margin: 20px 0; border-radius: 10px; } .warning-box strong { color: #fca5a5; } .highlight-box { background: #172033; border: 1px solid #475569; border-left: 4px solid #f59e0b; padding: 17px 18px; margin: 20px 0; border-radius: 10px; } .highlight-box strong { color: #fbbf24; } .success-box { background: #10231d; border: 1px solid #166534; border-left: 4px solid #22c55e; padding: 17px 18px; margin: 20px 0; border-radius: 10px; } .success-box strong { color: #86efac; } .flow { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 24px 0; } .flow-node { width: min(760px, 95%); background: #172033; border: 1px solid #475569; border-radius: 10px; padding: 13px 18px; text-align: center; font-family: "JetBrains Mono", Consolas, monospace; color: #e2e8f0; } .flow-node.important { border-color: #ef4444; background: #29171a; color: #fecaca; font-weight: 700; } .flow-node.source { border-color: #0ea5e9; color: #7dd3fc; } .flow-arrow { color: #64748b; font-size: 22px; line-height: 1; } .code-block { background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 18px; overflow-x: auto; margin: 16px 0; } .code-block pre { margin: 0; color: #cbd5e1; font-family: "JetBrains Mono", Consolas, monospace; font-size: 14px; line-height: 1.65; white-space: pre; } .code-comment { color: #64748b; } .code-key { color: #fca5a5; font-weight: 700; } .code-fn { color: #7dd3fc; } .code-important { color: #fbbf24; font-weight: 700; } .timeline { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 20px 0; } .timeline-item { background: #131d30; border: 1px solid #334155; border-radius: 9px; padding: 13px 15px; } .timeline-item .num { display: inline-block; width: 26px; height: 26px; line-height: 26px; text-align: center; background: #2563eb; color: white; border-radius: 50%; font-size: 13px; font-weight: 700; margin-right: 8px; } .inline-code { font-family: "JetBrains Mono", Consolas, monospace; background: #1e293b; color: #7dd3fc; padding: 2px 6px; border-radius: 5px; font-size: 0.95em; } .tag-red { display: inline-block; background: #7f1d1d; color: #fecaca; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; } .tag-green { display: inline-block; background: #14532d; color: #bbf7d0; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; } .compare { width: 100%; border-collapse: collapse; margin: 20px 0; background: #111827; border-radius: 10px; overflow: hidden; } .compare th, .compare td { border: 1px solid #334155; padding: 12px 14px; text-align: left; vertical-align: top; } .compare th { background: #172033; color: #93c5fd; } .compare td { color: #cbd5e1; } .summary-quote { font-size: 19px; font-weight: 700; color: #f8fafc; background: #111827; border-left: 5px solid #22c55e; padding: 18px 20px; border-radius: 8px; margin: 22px 0 0; }
+</style>
+</head>
+<body>
+<header><div class="head"><div class="brand">RCU Stall <span>•</span> Source Code Deep Dive</div><input id="search" placeholder="🔎 Tìm function, file, variable, concept..."></div></header>
+<div class="layout">
+<aside><nav id="nav">
+<a href="#s01">01. Overview</a><a href="#s02">02. Source Tree</a><a href="#s03">03. Initialization</a><a href="#s04">04. GP Lifecycle</a><a href="#s05">05. Stall Detection</a><a href="#s06">06. Stall Condition</a><a href="#s07">07. Stall Types</a><a href="#s08">08. Warning Fields</a><a href="#s09">09. QS Trace</a><a href="#s10">10. Dynticks</a><a href="#s11">11. Why CPU A Stalls</a><a href="#s12">12. Detector Timing</a><a href="#s13">13. Timeout Config</a><a href="#s14">14. Warning Code</a><a href="#s15">15. Stack Dump</a><a href="#s16">16. Case Studies</a><a href="#s17">17–19. Interactions</a><a href="#s20">20. Debug Config</a><a href="#s21">21. Full Call Graph</a><a href="#s22">22. Evidence Table</a><a href="#s23">23. 5.10 ↓ 6.x</a><a href="#s24">24. Debug Checklist</a></nav></aside>
+<main id="content">
+<section class="hero searchable"><h1>RCU Stall trong Linux Kernel</h1><p>Trace từ <b>source code thật</b> của repo <code>Source_MFP/Kernel/Src</code>, lấy Linux 5.10.x làm baseline.</p><span class="badge danger">BSP vendor-patched</span><span class="badge">CONFIG_KM_BIZHUB</span><span class="badge">PREEMPT_RCU</span><span class="badge">Source-first</span>
+<div class="callout critical"><b>Phát hiện quan trọng:</b> đây không phải mainline kernel sạch. BSP có vendor patch tự động gọi <code>rebootCPU()</code> trong <code>print_cpu_stall()</code>/<code>print_other_cpu_stall()</code>. Vì vậy RCU stall có thể dẫn trực tiếp tới reboot.</div></section>
+
+
+
+<section id="s01" class="searchable"><h2><span class="num">01.</span> RCU Stall Overview</h2><p>RCU stall là hiện tượng <b>grace period (GP)</b> không đóng lại được trong thời gian dài, thường do CPU/task chưa báo <b>quiescent state (QS)</b>. Cơ chế phát hiện trong tree RCU không phải một watchdog timer riêng; nó tận dụng scheduler tick để các CPU đang chạy kiểm tra state global.</p>
+<div class="flow"> <div class="node">scheduler_tick()</div> <div class="arrow">↓</div> <div class="node">rcu_sched_clock_irq()</div> <div class="arrow">↓</div> <div class="node">rcu_pending()</div> <div class="arrow">↓</div> <div class="node">check_cpu_stall()</div> </div> <style> .flow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; } .node { min-width: 240px; padding: 12px 20px; text-align: center; } .arrow { font-size: 24px; line-height: 1; } </style>
+
+<section class="rcu-section" id="rcu-stall-mechanism">
+
+    <h2>🔴 RCU Stall — Từ Grace Period đến CPU Stall</h2>
+
+    <div class="callout">
+        <strong>Core Idea:</strong>
+        RCU stall là hiện tượng một <strong>Grace Period (GP)</strong> không thể
+        hoàn tất trong thời gian dài vì RCU vẫn chưa có đủ bằng chứng rằng
+        các <strong>reader cũ</strong> đã biến mất, thường do CPU/task chưa báo
+        <strong>Quiescent State (QS)</strong>.
+    </div>
+
+
+    <h3>1. Trước tiên: RCU đang bảo vệ cái gì?</h3>
+
+    <p>
+        Hãy giả sử kernel có một object mà nhiều CPU có thể đọc bằng RCU:
+    </p>
+
+    <pre>
+struct node *p;
+    </pre>
+
+    <p>
+        CPU đang đọc:
+    </p>
+
+    <pre>
+rcu_read_lock();
+
+p = rcu_dereference(global_node);
+do_something(p);
+
+rcu_read_unlock();
+    </pre>
+
+    <p>
+        Một CPU khác muốn thay object:
+    </p>
+
+    <pre>
+old = global_node;
+global_node = new_node;
+    </pre>
+
+    <p>
+        Nhưng nó <strong>không được free <code>old</code> ngay lập tức</strong>.
+        Vì có thể một CPU khác vẫn đang giữ pointer tới object cũ.
+    </p>
+
+
+    <div class="flow">
+
+        <div class="node">
+            CPU A đang đọc <code>old</code>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            CPU B thay <code>global_node = new</code>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            Nhưng CPU A vẫn có thể dùng <code>old</code>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            Không được <code>kfree(old)</code> ngay
+        </div>
+
+    </div>
+
+
+    <div class="critical">
+
+        <strong>⚠️ Nếu free ngay:</strong>
+
+        <pre>
+CPU A                         CPU B
+  │                             │
+  │ đang dùng old               │
+  │                             │
+  │                       kfree(old)
+  │                             │
+  ▼                             │
+use(old)                        │
+  │                             │
+  └───────────────► USE-AFTER-FREE
+        </pre>
+
+    </div>
+
+
+    <h3>2. "RCU bắt đầu Grace Period" nghĩa là gì?</h3>
+
+    <p>
+        Đây là điểm rất dễ hiểu sai.
+    </p>
+
+    <p>
+        <strong>Grace Period không đơn thuần là một khoảng thời gian.</strong>
+        Nó là một <strong>mốc logic</strong> do RCU tạo ra để xác định:
+    </p>
+
+    <div class="callout warn">
+
+        <strong>
+            "Từ mốc này trở đi, khi tất cả reader cũ đã đi qua QS,
+            những reader tồn tại trước GP không còn có thể giữ reference
+            tới object cũ nữa."
+        </strong>
+
+    </div>
+
+
+    <div class="flow">
+
+        <div class="node">
+            CPU A: <code>rcu_read_lock()</code>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            CPU A đang đọc <code>old</code>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            CPU B thay pointer
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            RCU START GP
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            Chờ các reader cũ biến mất
+        </div>
+
+    </div>
+
+
+    <h3>3. Tại sao phải chờ CPU/task đi qua QS?</h3>
+
+    <p>
+        RCU không đi hỏi trực tiếp từng CPU:
+    </p>
+
+    <pre>
+CPU A: "Mày còn đọc object cũ không?"
+
+CPU B: "Mày còn đọc object cũ không?"
+
+CPU C: "Mày còn đọc object cũ không?"
+    </pre>
+
+    <p>
+        Làm như vậy sẽ rất tốn kém.
+    </p>
+
+    <p>
+        Thay vào đó, RCU sử dụng một khái niệm đơn giản hơn:
+    </p>
+
+    <div class="callout">
+
+        <strong>
+            Nếu CPU đã đi qua một Quiescent State phù hợp,
+            RCU có thể suy luận rằng các RCU read-side critical section
+            cũ trên CPU đó đã kết thúc.
+        </strong>
+
+    </div>
+
+
+    <h3>4. QS thực sự có ý nghĩa gì?</h3>
+
+    <p>
+        QS không nhất thiết phải được hiểu là "một function duy nhất".
+        Nó là một <strong>trạng thái/sự kiện</strong> mà RCU có thể dùng
+        làm bằng chứng rằng CPU không còn giữ reader cũ.
+    </p>
+
+
+    <div class="grid">
+
+        <div class="mini">
+
+            <span class="red">
+                ❌ Reader Active
+            </span>
+
+            <p>
+                CPU vẫn nằm trong RCU read-side critical section.
+            </p>
+
+            <pre>
+rcu_read_lock()
+    ↓
+   ...
+    ↓
+chưa unlock
+            </pre>
+
+            <p>
+                RCU chưa thể coi CPU này đã vượt qua QS cần thiết.
+            </p>
+
+        </div>
+
+
+        <div class="mini">
+
+            <span class="green">
+                ✅ Quiescent State
+            </span>
+
+            <p>
+                CPU đã đi qua một trạng thái mà RCU có thể dùng
+                để xác nhận reader cũ không còn giữ CPU đó.
+            </p>
+
+            <pre>
+rcu_read_unlock()
+    ↓
+QS
+            </pre>
+
+        </div>
+
+    </div>
+
+
+    <h3>5. Tại sao GP không thể kết thúc?</h3>
+
+    <p>
+        Bởi vì RCU vẫn chưa thể chứng minh rằng <strong>tất cả reader cũ
+        đã biến mất</strong>.
+    </p>
+
+
+    <pre>
+                GP START
+                   │
+          ┌────────┼────────┐
+          ▼        ▼        ▼
+        CPU A    CPU B    CPU C
+          │        │        │
+       reader      QS       QS
+       active
+          │
+          ▼
+        NO QS
+    </pre>
+
+
+    <p>
+        RCU có trạng thái:
+    </p>
+
+    <pre>
+CPU A = chưa QS
+CPU B = QS
+CPU C = QS
+    </pre>
+
+    <p>
+        RCU <strong>không được phép</strong> kết luận:
+    </p>
+
+    <pre>
+GP COMPLETE
+    </pre>
+
+    <p>
+        vì CPU A vẫn có thể đang sử dụng object cũ.
+    </p>
+
+
+    <div class="critical">
+
+        <strong>⚠️ Nếu GP hoàn tất quá sớm:</strong>
+
+        <pre>
+GP COMPLETE
+     ↓
+kfree(old)
+     ↓
+CPU A vẫn đang dùng old
+     ↓
+USE-AFTER-FREE
+        </pre>
+
+    </div>
+
+
+    <h3>6. "Một CPU chưa QS" nghĩa là gì?</h3>
+
+    <p>
+        Chỉ cần <strong>một CPU/task vẫn còn outstanding</strong>
+        theo nghĩa RCU đang chờ nó cung cấp QS, GP vẫn có thể phải tiếp tục chờ.
+    </p>
+
+
+    <pre>
+CPU0    CPU1    CPU2    CPU3
+ │       │       │       │
+ QS      QS    NO QS     QS
+ │       │       │       │
+ 0       0       1       0
+                 │
+                 └── CPU2 vẫn outstanding
+    </pre>
+
+
+    <p>
+        Vì CPU2 chưa được xác nhận QS nên:
+    </p>
+
+    <div class="callout warn">
+
+        <strong>
+            GP chưa thể đóng lại.
+        </strong>
+
+    </div>
+
+
+    <h3>7. qsmask — "Danh sách CPU chưa nộp bài"</h3>
+
+    <p>
+        Một mental model rất dễ nhớ cho <code>qsmask</code> là:
+    </p>
+
+    <div class="callout">
+
+        <strong>
+            <code>qsmask</code> giống như danh sách các CPU vẫn còn
+            "nợ QS".
+        </strong>
+
+    </div>
+
+
+    <pre>
+qsmask = 0100
+
+CPU0 → QS
+CPU1 → QS
+CPU2 → chưa QS
+CPU3 → QS
+    </pre>
+
+
+    <p>
+        Khi CPU2 đi qua QS phù hợp, bit tương ứng có thể được clear:
+    </p>
+
+    <pre>
+qsmask: 0100
+           ↓
+        CPU2 QS
+           ↓
+qsmask: 0000
+    </pre>
+
+
+    <p>
+        Nếu CPU2 là CPU cuối cùng mà GP đang chờ:
+    </p>
+
+    <div class="flow">
+
+        <div class="node">
+            CPU0 ✅
+        </div>
+
+        <div class="node">
+            CPU1 ✅
+        </div>
+
+        <div class="node">
+            CPU2 ✅
+        </div>
+
+        <div class="node">
+            CPU3 ✅
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            ALL REQUIRED QS
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            GP COMPLETE
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            object cũ có thể được reclaim/free
+        </div>
+
+    </div>
+
+
+    <h3>8. Toàn bộ quá trình Grace Period</h3>
+
+    <div class="kernel-flow">
+
+        <div class="flow-item">
+
+            <div class="source">
+                <span class="file">RCU</span>
+            </div>
+
+            <div class="function">
+                Reader đang active
+            </div>
+
+            <span class="tag">
+                RCU READ-SIDE
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item highlight">
+
+            <div class="source">
+                <span class="file">RCU State</span>
+            </div>
+
+            <div class="function">
+                START GRACE PERIOD
+            </div>
+
+            <span class="tag">
+                GP START
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="source">
+                <span class="file">RCU</span>
+            </div>
+
+            <div class="function">
+                Chờ các CPU/task cung cấp QS
+            </div>
+
+            <span class="tag">
+                WAIT FOR QS
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="source">
+                <span class="file">qsmask</span>
+            </div>
+
+            <div class="function">
+                CPU nào còn outstanding?
+            </div>
+
+            <span class="tag">
+                TRACK STATE
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="source">
+                <span class="file">RCU</span>
+            </div>
+
+            <div class="function">
+                ALL REQUIRED QS RECEIVED
+            </div>
+
+            <span class="tag">
+                COMPLETE
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item final">
+
+            <div class="source">
+                <span class="file">Reclaim</span>
+            </div>
+
+            <div class="function">
+                object cũ có thể được free
+            </div>
+
+            <span class="tag">
+                SAFE TO RECLAIM
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <h3>9. Vậy RCU Stall xuất hiện như thế nào?</h3>
+
+    <p>
+        Trong trường hợp bình thường:
+    </p>
+
+    <pre>
+GP START
+   ↓
+CPU A → QS
+CPU B → QS
+CPU C → QS
+   ↓
+GP COMPLETE
+    </pre>
+
+    <p>
+        Nhưng nếu một CPU/task không cung cấp QS trong thời gian rất lâu:
+    </p>
+
+
+    <pre>
+GP START
+   ↓
+CPU A → QS
+CPU B → QS
+CPU C → NO QS
+   ↓
+GP vẫn chờ
+   ↓
+thời gian tiếp tục tăng
+   ↓
+jiffies vượt stall deadline
+   ↓
+RCU STALL
+    </pre>
+
+
+    <div class="critical">
+
+        <strong>
+            RCU STALL ≠ CPU chắc chắn đã chết.
+        </strong>
+
+        <p>
+            Nó có nghĩa chính xác hơn:
+        </p>
+
+        <p>
+            <strong>
+                Grace Period đã không đạt được tiến triển cần thiết
+                trong thời gian đủ lâu.
+            </strong>
+        </p>
+
+    </div>
+
+
+    <h3>10. Scheduler Tick tham gia vào Stall Detection như thế nào?</h3>
+
+    <div class="callout warn">
+
+        <strong>⚠️ SOURCE CORRECTION</strong>
+
+        <p>
+            <code>scheduler_tick()</code> <strong>không gọi</strong>
+            <code>rcu_sched_clock_irq()</code>.
+        </p>
+
+        <p>
+            Hai hàm là <strong>hai lời gọi anh em</strong>,
+            cùng nằm trong <code>update_process_times()</code>.
+        </p>
+
+    </div>
+
+
+    <pre>
+void update_process_times(int user_tick)
+{
+    ...
+    run_local_timers();
+
+    rcu_sched_clock_irq(user_tick);
+
+    ...
+
+    scheduler_tick();
+
+    ...
+}
+    </pre>
+
+
+    <p>
+        Vì vậy call path cần nhớ là:
+    </p>
+
+
+    <div class="flow">
+
+        <div class="node">
+            Timer interrupt
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            <code>update_process_times()</code>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            <strong>rcu_sched_clock_irq()</strong>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            <strong>rcu_pending()</strong>
+        </div>
+
+        <div class="arrow">
+            ↓
+        </div>
+
+        <div class="node">
+            <strong>check_cpu_stall()</strong>
+        </div>
+
+    </div>
+
+
+    <h3>11. Vì sao RCU không cần watchdog timer riêng?</h3>
+
+    <p>
+        Tree RCU tận dụng tick processing đã tồn tại của kernel.
+        Mỗi lần CPU chạy qua phần xử lý tick, RCU có cơ hội kiểm tra state.
+    </p>
+
+
+    <div class="callout">
+
+        <strong>
+            Mỗi tick là một cơ hội để RCU hỏi:
+        </strong>
+
+        <pre>
+"GP có đang chạy không?"
+
+"GP đã chờ quá lâu chưa?"
+
+"CPU nào vẫn còn outstanding?"
+
+"Có cần report stall không?"
+        </pre>
+
+    </div>
+
+
+    <h3>12. rcu_pending() — Stall Check được ưu tiên</h3>
+
+    <pre>
+static int rcu_pending(int user)
+{
+    ...
+
+    check_cpu_stall(rdp);
+
+    if (rcu_nocb_need_deferred_wakeup(rdp))
+        return 1;
+
+    ...
+}
+    </pre>
+
+
+    <div class="callout">
+
+        <strong>
+            Ý nghĩa:
+        </strong>
+
+        <p>
+            <code>check_cpu_stall()</code> được đặt rất sớm,
+            trước các check khác, vì nếu để sau các check có thể
+            <code>return</code> sớm thì RCU có thể mất cơ hội phát hiện stall.
+        </p>
+
+    </div>
+
+
+    <h3>13. Bên trong check_cpu_stall()</h3>
+
+    <div class="grid">
+
+        <div class="mini">
+
+            <span class="num">1.</span>
+
+            <strong>
+                Có GP đang chạy?
+            </strong>
+
+            <pre>
+!rcu_gp_in_progress()
+        ↓
+     return
+            </pre>
+
+        </div>
+
+
+        <div class="mini">
+
+            <span class="num">2.</span>
+
+            <strong>
+                Snapshot GP state
+            </strong>
+
+            <p>
+                RCU kiểm tra <code>gp_seq</code> với memory barrier
+                để tránh kết luận sai khi GP vừa thay đổi trạng thái.
+            </p>
+
+        </div>
+
+
+        <div class="mini">
+
+            <span class="num">3.</span>
+
+            <strong>
+                Deadline đã vượt?
+            </strong>
+
+            <pre>
+jiffies >= jiffies_stall
+        ↓
+điều tra stall
+            </pre>
+
+        </div>
+
+
+        <div class="mini">
+
+            <span class="num">4.</span>
+
+            <strong>
+                Ai còn nợ QS?
+            </strong>
+
+            <pre>
+qsmask
+   +
+grpmask
+   ↓
+identify outstanding CPU
+            </pre>
+
+        </div>
+
+    </div>
+
+
+    <h3>14. CPU B làm sao biết CPU A đang stall?</h3>
+
+    <p>
+        Đây chính là điểm quan trọng nhất:
+    </p>
+
+    <div class="callout">
+
+        <strong>
+            CPU B không trực tiếp hỏi CPU A.
+        </strong>
+
+        <p>
+            CPU B chỉ đọc trạng thái RCU đã được duy trì trong
+            shared/global/per-CPU state.
+        </p>
+
+    </div>
+
+
+    <pre>
+                         RCU SHARED STATE
+                                │
+                ┌───────────────┴───────────────┐
+                │                               │
+             CPU A                            CPU B
+                │                               │
+           long critical                    tick chạy
+             section                             │
+                │                               ▼
+                │                       check_cpu_stall()
+                │                               │
+                ▼                               ▼
+          qsmask bit A = 1              đọc qsmask/state
+                                                │
+                                                ▼
+                                      thấy CPU A outstanding
+                                                │
+                                                ▼
+                                     report CPU A stall
+    </pre>
+
+
+    <h3>15. Hai trường hợp report stall</h3>
+
+    <table>
+
+        <thead>
+
+            <tr>
+                <th>Trường hợp</th>
+                <th>CPU hiện tại</th>
+                <th>Điều kiện</th>
+                <th>Report</th>
+            </tr>
+
+        </thead>
+
+
+        <tbody>
+
+            <tr>
+
+                <td>
+                    <span class="badge danger">
+                        SELF
+                    </span>
+                </td>
+
+                <td>
+                    Chính CPU đang nợ QS
+                </td>
+
+                <td>
+                    <code>rnp-&gt;qsmask &amp; rdp-&gt;grpmask</code>
+                    khác 0
+                </td>
+
+                <td>
+                    <code>print_cpu_stall()</code>
+                </td>
+
+            </tr>
+
+
+            <tr>
+
+                <td>
+                    <span class="badge ok">
+                        OTHER CPU
+                    </span>
+                </td>
+
+                <td>
+                    CPU hiện tại không nợ QS
+                </td>
+
+                <td>
+                    GP vẫn stall và CPU khác còn outstanding
+                </td>
+
+                <td>
+                    <code>print_other_cpu_stall()</code>
+                </td>
+
+            </tr>
+
+        </tbody>
+
+    </table>
+
+
+    <h3>16. RCU_STALL_RAT_DELAY = 2 là gì?</h3>
+
+    <div class="callout warn">
+
+        <strong>
+            ⚠️ Không phải chu kỳ giữa các lần stall check.
+        </strong>
+
+        <p>
+            Stall detector vẫn có cơ hội chạy theo tick.
+            <code>RCU_STALL_RAT_DELAY</code> chỉ liên quan đến
+            nhánh CPU khác đứng ra report.
+        </p>
+
+    </div>
+
+
+    <pre>
+CPU A = CPU đang stall
+
+       ↓
+
+CPU A có cơ hội tự check
+
+       ↓
+
+print_cpu_stall()
+       hoặc
+
+CPU A chưa tự report
+
+       ↓
+đợi thêm RCU_STALL_RAT_DELAY
+
+       ↓
+
+CPU B có thể:
+
+print_other_cpu_stall()
+    </pre>
+
+
+    <p>
+        Ý tưởng của khoảng delay này là cho CPU thực sự đang stall
+        một cơ hội ngắn để tự dump thông tin của chính nó trước khi
+        CPU khác đứng ra báo cáo.
+    </p>
+
+
+    <h3>17. Flow hoàn chỉnh: GP → QS → Stall Detection</h3>
+
+    <div class="kernel-flow">
+
+        <div class="flow-item highlight">
+
+            <div class="function">
+                RCU START GP
+            </div>
+
+            <span class="tag">
+                GP START
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="function">
+                Track CPUs / tasks cần QS
+            </div>
+
+            <span class="tag">
+                QSMASK
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="function">
+                CPU/task đi qua QS
+            </div>
+
+            <span class="tag">
+                PROGRESS
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="function">
+                Clear outstanding state
+            </div>
+
+            <span class="tag">
+                QSMASK UPDATE
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item">
+
+            <div class="function">
+                Tất cả required QS đã hoàn tất?
+            </div>
+
+            <span class="tag">
+                CHECK
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item highlight">
+
+            <div class="function">
+                YES → GP COMPLETE
+            </div>
+
+            <span class="tag">
+                SUCCESS
+            </span>
+
+        </div>
+
+
+        <div class="flow-arrow">
+            <span>↓</span>
+        </div>
+
+
+        <div class="flow-item final">
+
+            <div class="function">
+                NO + chờ quá lâu → RCU STALL
+            </div>
+
+            <span class="tag">
+                STALL
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <h3>18. Mental Model — 3 câu hỏi của RCU</h3>
+
+    <div class="grid">
+
+        <div class="mini">
+
+            <div class="num">
+                1. GP Question
+            </div>
+
+            <p>
+                <strong>
+                    "Ai chưa đi qua QS?"
+                </strong>
+            </p>
+
+            <p>
+                → theo dõi bằng state như <code>qsmask</code>.
+            </p>
+
+        </div>
+
+
+        <div class="mini">
+
+            <div class="num">
+                2. Time Question
+            </div>
+
+            <p>
+                <strong>
+                    "GP đã chờ quá lâu chưa?"
+                </strong>
+            </p>
+
+            <p>
+                → dựa trên timing như <code>jiffies_stall</code>.
+            </p>
+
+        </div>
+
+
+        <div class="mini">
+
+            <div class="num">
+                3. Report Question
+            </div>
+
+            <p>
+                <strong>
+                    "Ai đang làm GP không đóng được?"
+                </strong>
+            </p>
+
+            <p>
+                → <code>print_cpu_stall()</code>
+                hoặc
+                <code>print_other_cpu_stall()</code>.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <h3>🎯 Kết luận quan trọng nhất</h3>
+
+    <div class="callout">
+
+        <p>
+            <strong>
+                RCU không chờ CPU "chạy xong".
+            </strong>
+        </p>
+
+        <p>
+            RCU chờ một <strong>bằng chứng</strong> rằng những reader cũ
+            không còn tồn tại.
+        </p>
+
+        <p>
+            <strong>Quiescent State (QS)</strong> là một trong những
+            bằng chứng đó.
+        </p>
+
+        <p>
+            Khi chưa có đủ bằng chứng:
+        </p>
+
+        <pre>
+reader cũ có thể vẫn tồn tại
+        ↓
+GP phải tiếp tục
+        ↓
+object cũ chưa được reclaim
+        </pre>
+
+        <p>
+            Nếu tình trạng này kéo dài quá lâu:
+        </p>
+
+        <pre>
+GP không complete
+        ↓
+stall deadline exceeded
+        ↓
+check_cpu_stall()
+        ↓
+RCU STALL
+        </pre>
+
+    </div>
+
+
+    <div class="critical">
+
+        <strong>
+            🧠 Một câu để nhớ:
+        </strong>
+
+        <p style="font-size:18px;">
+            <strong>
+                RCU bắt đầu GP để chờ các reader cũ biến mất;
+                CPU/task đi qua QS chính là bằng chứng cho RCU rằng
+                reader cũ không còn tồn tại; chỉ khi đủ các bằng chứng đó
+                GP mới được phép hoàn tất. Nếu GP chờ quá lâu,
+                tree RCU dùng tick để chạy <code>check_cpu_stall()</code>
+                và report RCU stall.
+            </strong>
+        </p>
+
+    </div>
+
+</section>
+
+<section id="s02" class="searchable"><h2><span class="num">02.</span> Source Tree</h2><table><tr><th>File</th><th>Function / nội dung</th><th>Vai trò</th></tr>
+<tr><td><code>kernel/rcu/tree.c</code></td><td><code>rcu_gp_kthread()</code>, <code>rcu_gp_init()</code>, <code>rcu_gp_fqs_loop()</code>, <code>rcu_gp_cleanup()</code>, <code>rcu_sched_clock_irq()</code>, <code>rcu_pending()</code>, <code>rcu_report_qs_rdp()</code>, <code>rcu_report_qs_rnp()</code>, <code>force_qs_rnp()</code>, dynticks</td><td>Core GP, QS, dynticks</td></tr>
+<tr><td><code>kernel/rcu/tree.h</code></td><td><code>struct rcu_data</code>, <code>struct rcu_state</code>, <code>RCU_STALL_RAT_DELAY</code>, enum <code>RCU_GP_*</code></td><td>State/struct/constants</td></tr>
+<tr><td><code>kernel/rcu/tree_stall.h</code></td><td><code>check_cpu_stall()</code>, <code>print_cpu_stall()</code>, <code>print_other_cpu_stall()</code>, starvation helpers</td><td><b>Toàn bộ stall detection</b></td></tr>
+<tr><td><code>kernel/rcu/tree_plugin.h</code></td><td><code>rcu_qs()</code>, <code>rcu_note_context_switch()</code>, <code>rcu_flavor_sched_clock_irq()</code></td><td>PREEMPT_RCU QS behavior</td></tr>
+<tr><td><code>kernel/rcu/rcu.h</code></td><td><code>rcu_seq_*</code>, <code>ULONG_CMP_*</code></td><td>GP sequence helpers</td></tr></table><p class="muted"><code>tiny.c</code> không thuộc build SMP PREEMPT_RCU đang phân tích. <code>srcutree.c</code> là SRCU, cơ chế stall tách biệt.</p></section>
+
+<section id="s03" class="searchable"><h2><span class="num">03.</span> Initialization ↓ Stall Check Clock</h2><p><code>record_gp_stall_check_time()</code> trong <code>tree_stall.h:134</code> được gọi khi bắt đầu GP trong <code>rcu_gp_init()</code>.</p><pre>static void record_gp_stall_check_time(void)
+{
+    unsigned long j = jiffies;
+    unsigned long j1;
+
+    WRITE_ONCE(rcu_state.gp_start, j);
+    j1 = rcu_jiffies_till_stall_check();
+    smp_mb();
+    WRITE_ONCE(rcu_state.jiffies_stall, j + j1);
+    rcu_state.jiffies_resched = j + j1 / 2;
+    rcu_state.n_force_qs_gpstart =
+        READ_ONCE(rcu_state.n_force_qs);
+}</pre><div class="grid"><div class="mini"><b>gp_start</b><br>jiffies tại lúc GP bắt đầu.</div><div class="mini"><b>jiffies_stall</b><br>Ngưỡng tuyệt đối: <code>gp_start + timeout</code>.</div><div class="mini"><b>jiffies_resched</b><br>Mốc dùng cho reschedule-related handling.</div></div></section>
+
+<section id="s04" class="searchable"><h2><span class="num">04.</span> RCU GP Lifecycle — <code>rcu_gp_kthread()</code></h2><pre>static int __noreturn rcu_gp_kthread(void *unused)
+{
+    rcu_bind_gp_kthread();
+    for (;;) {
+        for (;;) {
+            rcu_state.gp_state = RCU_GP_WAIT_GPS;
+            swait_event_idle_exclusive(
+                rcu_state.gp_wq,
+                READ_ONCE(rcu_state.gp_flags) &
+                    RCU_GP_FLAG_INIT);
+
+            rcu_state.gp_state = RCU_GP_DONE_GPS;
+            if (rcu_gp_init())
+                break;
+            ...
+        }
+
+        rcu_gp_fqs_loop();
+
+        rcu_state.gp_state = RCU_GP_CLEANUP;
+        rcu_gp_cleanup();
+        rcu_state.gp_state = RCU_GP_CLEANED;
+    }
+}</pre><div class="flow"><div class="node">WAIT_GPS</div><div class="arrow">↓</div><div class="node">DONE_GPS</div><div class="arrow">↓</div><div class="node">rcu_gp_init()</div><div class="arrow">↓</div><div class="node">WAIT_FQS</div><div class="arrow">↓</div><div class="node">DOING_FQS</div><div class="arrow">↓</div><div class="node">CLEANUP</div><div class="arrow">↓</div><div class="node">CLEANED</div></div><p><code>rcu_gp_fqs_loop()</code> chờ và định kỳ gọi force-quiescent-state scan. <b>GP kthread không trực tiếp in stall warning</b>; stall reporting nằm ở <code>tree_stall.h</code>.</p></section>
+
+<section id="s05" class="searchable"><h2><span class="num">05.</span> Ai gọi <code>check_cpu_stall()</code>?</h2><div class="callout"><b>Call chain đã verify:</b></div>
+
+<div class="kernel-flow">
+
+    <div class="flow-item">
+        <div class="source">
+            <span class="file">kernel/sched/core.c</span>
+        </div>
+        <div class="function">scheduler_tick()</div>
+    </div>
+
+    <div class="flow-arrow">
+        <span>↓</span>
+    </div>
+
+    <div class="flow-item">
+        <div class="source">
+            <span class="file">kernel/rcu/tree.c</span>
+            <span class="line">:2612</span>
+        </div>
+        <div class="function">rcu_sched_clock_irq(int user)</div>
+    </div>
+
+    <div class="flow-arrow">
+        <span>↓</span>
+    </div>
+
+    <div class="flow-item">
+        <div class="source">
+            <span class="file">kernel/rcu/tree.c</span>
+            <span class="line">:2627</span>
+        </div>
+        <div class="function">rcu_pending(user)</div>
+    </div>
+
+    <div class="flow-arrow">
+        <span>↓</span>
+    </div>
+
+    <div class="flow-item highlight">
+        <div class="source">
+            <span class="file">kernel/rcu/tree.c</span>
+            <span class="line">:3823</span>
+        </div>
+        <div class="function">check_cpu_stall(rdp)</div>
+        <div class="tag">STALL CHECK</div>
+    </div>
+
+    <div class="flow-arrow">
+        <span>↓</span>
+    </div>
+
+    <div class="flow-item final">
+        <div class="source">
+            <span class="file">kernel/rcu/tree_stall.h</span>
+            <span class="line">:627</span>
+        </div>
+        <div class="function">check_cpu_stall()</div>
+        <div class="tag">RCU STALL DETECTION</div>
+    </div>
+
+</div>
+
+
+<p>Không có timer/hrtimer/workqueue riêng cho stall detector trong phần tree RCU này. Mỗi CPU còn nhận scheduler tick có cơ hội tự kiểm tra state global.</p></section>
+
+<section id="s06" class="searchable"><h2><span class="num">06.</span> Điều kiện chính xác trong <code>check_cpu_stall()</code></h2><pre>static void check_cpu_stall(struct rcu_data *rdp)
+{
+    lockdep_assert_irqs_disabled();
+
+    if ((rcu_stall_is_suppressed() &&
+         !READ_ONCE(rcu_kick_kthreads)) ||
+        !rcu_gp_in_progress())
+        return;
+
+    j = jiffies;
+
+    gs1 = READ_ONCE(rcu_state.gp_seq);
+    smp_rmb();
+    js  = READ_ONCE(rcu_state.jiffies_stall);
+    smp_rmb();
+    gps = READ_ONCE(rcu_state.gp_start);
+    gs2 = READ_ONCE(rcu_state.gp_seq);
+
+    if (gs1 != gs2 ||
+        ULONG_CMP_LT(j, js) ||
+        ULONG_CMP_GE(gps, js))
+        return;
+
+    rnp = rdp->mynode;
+    jn = jiffies +
+         3 * rcu_jiffies_till_stall_check() + 3;
+
+    if (rcu_gp_in_progress() &&
+        (READ_ONCE(rnp->qsmask) & rdp->grpmask) &&
+        cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+        print_cpu_stall(gps);
+    } else if (rcu_gp_in_progress() &&
+               ULONG_CMP_GE(j, js + RCU_STALL_RAT_DELAY) &&
+               cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+        print_other_cpu_stall(gs2, gps);
+    }
+}</pre><table><tr><th>Variable</th><th>Flow</th><th>Ý nghĩa</th></tr>
+<tr><td><code>jiffies</code></td><td>global tick ↓ snapshot ↓ compare <code>js</code></td><td>thời gian hiện tại</td></tr>
+<tr><td><code>gp_start</code></td><td>set khi GP start ↓ đọc trong check</td><td>mốc GP hiện tại</td></tr>
+<tr><td><code>jiffies_stall</code></td><td>set tại GP start ↓ đẩy xa sau mỗi report</td><td>stall threshold</td></tr>
+<tr><td><code>gp_seq</code></td><td>đọc trước/sau snapshot</td><td>tránh false positive nếu GP đổi giữa lúc đọc</td></tr>
+<tr><td><code>rnp-&gt;qsmask</code></td><td>bit clear khi CPU report QS</td><td>CPU/task nào còn nợ QS</td></tr></table>
+<div class="callout warn"><b>Hai nhánh:</b> bit của CPU hiện tại còn set ↓ <code>print_cpu_stall()</code>. CPU hiện tại đã QS nhưng GP vẫn treo ↓ sau <code>RCU_STALL_RAT_DELAY=2</code> jiffies ↓ <code>print_other_cpu_stall()</code>.</div></section>
+
+<section id="s07" class="searchable"><h2><span class="num">07.</span> Phân biệt các loại Stall</h2><table><tr><th>Loại</th><th>Detection</th><th>Điều kiện</th><th>Hệ quả</th></tr>
+<tr><td><b>CPU Stall</b></td><td><code>print_cpu_stall()</code></td><td>CPU hiện tại vẫn có bit trong <code>qsmask</code> khi tới threshold</td><td>self-detected warning, resched handling</td></tr>
+<tr><td><b>GP Stall / Other CPU</b></td><td><code>print_other_cpu_stall()</code></td><td>CPU hiện tại đã QS nhưng GP còn pending</td><td><code>rcu_preempt detected stalls on CPUs/tasks</code></td></tr>
+<tr><td><b>GP kthread starvation</b></td><td><code>rcu_check_gp_kthread_starvation()</code></td><td><code>jiffies - gp_activity &gt; 2*HZ</code></td><td>warning + wake GP kthread</td></tr>
+<tr><td><b>Callback backlog</b></td><td><code>rcu_do_batch()</code>/<code>rcu_pending()</code></td><td>overload state</td><td>ép FQS sớm; không tự đồng nghĩa stall warning</td></tr></table><div class="callout"><b>Không đánh đồng:</b> CPU stall ≠ GP stall ≠ callback backlog ≠ GP-kthread starvation.</div></section>
+
+<section id="s08" class="searchable"><h2><span class="num">08.</span> Giải mã Warning Fields</h2><pre>INFO: rcu_preempt detected stalls on CPUs/tasks:
+    2-...0: (1 GPs behind) idle=8ea/1/0x4000...
+             softirq=396095/396096 fqs=10336
+    (detected by 1, t=24005 jiffies, g=184341, q=49966)</pre><table><tr><th>Field</th><th>Nguồn</th><th>Ý nghĩa</th></tr>
+<tr><td><code>2-...0</code></td><td><code>print_cpu_stall_info()</code></td><td>CPU2 + các trạng thái/cờ</td></tr>
+<tr><td><code>1 GPs behind</code></td><td><code>rcu_seq_ctr(gp_seq - rdp-&gt;gp_seq)</code></td><td>CPU2 chậm 1 GP</td></tr>
+<tr><td><code>idle=...</code></td><td><code>rcu_dynticks_snap()</code>, nesting fields</td><td>snapshot dynticks + nesting</td></tr>
+<tr><td><code>softirq=396095/396096</code></td><td><code>softirq_snap</code> / <code>kstat_softirqs_cpu()</code></td><td>RCU_SOFTIRQ đã raise 396096 nhưng snapshot mới 396095</td></tr>
+<tr><td><code>fqs=10336</code></td><td><code>n_force_qs</code> delta</td><td>số force-QS scans trong GP</td></tr>
+<tr><td><code>detected by 1</code></td><td><code>smp_processor_id()</code></td><td>CPU1 phát hiện</td></tr>
+<tr><td><code>t=24005</code></td><td><code>jiffies-gp_start</code></td><td>GP kéo dài 24005 jiffies</td></tr>
+<tr><td><code>g=184341</code></td><td><code>rcu_seq_current(gp_seq)</code></td><td>GP sequence</td></tr>
+<tr><td><code>q=49966</code></td><td><code>totqlen</code></td><td>tổng callback pending</td></tr></table></section>
+
+<section id="s09" class="searchable"><h2><span class="num">09.</span> Quiescent State — Source Flow</h2>
+<pre>tree_plugin.h:263
+    rcu_qs()
+        ↓
+tree.c:2285
+    rcu_report_qs_rdp(rdp)
+        ↓
+tree.c:2181
+    rcu_report_qs_rnp(mask, rnp, ...)
+        ↓
+    clear rnp->qsmask bit
+        ↓
+    walk toward root
+        ↓
+tree.c:2156
+    rcu_report_qs_rsp()
+        ↓
+    GP kthread can complete</pre><p><code>rcu_report_qs_rnp()</code> là điểm quan trọng vì nó clear bit trong <code>rnp-&gt;qsmask</code>, chính biến mà <code>check_cpu_stall()</code> dùng để xác định CPU còn nợ QS.</p><pre>WRITE_ONCE(rnp->qsmask, rnp->qsmask & ~mask);
+if (rnp->qsmask != 0 ||
+    rcu_preempt_blocked_readers_cgp(rnp)) {
+    raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+    return;
+}
+...</pre>
+</section>
+
+<section id="s10" class="searchable"><h2><span class="num">10.</span> Dynticks</h2><p><code>rdp-&gt;dynticks</code> là atomic counter. Bit <code>RCU_DYNTICK_CTRL_CTR</code> dùng parity để biểu diễn CPU đang "watching" hay ở extended quiescent state (EQS).</p><pre>tree.c:248
+rcu_dynticks_eqs_enter()
+    atomic add RCU_DYNTICK_CTRL_CTR
+    ↓ bit CTR = 0 ↓ not watching
+
+tree.c:273
+rcu_dynticks_eqs_exit()
+    atomic add RCU_DYNTICK_CTRL_CTR
+    ↓ bit CTR = 1 ↓ watching
+
+rcu_dynticks_curr_cpu_in_eqs()
+    ↓ !(atomic_read(&rdp->dynticks) &
+       RCU_DYNTICK_CTRL_CTR)</pre><p><code>dyntick_save_progress_counter()</code> chụp snapshot lúc GP quét; <code>rcu_implicit_dynticks_qs()</code> so sánh lại. Nếu counter thay đổi theo cách chứng minh CPU đã đi qua EQS, RCU có thể suy ra implicit QS.</p><div class="flow"><div class="node">Userspace / Idle</div><div class="arrow">↓</div><div class="node">EQS</div><div class="arrow">↓</div><div class="node">dynticks ctr</div><div class="arrow">↓</div><div class="node">GP scan</div><div class="arrow">↓</div><div class="node">Implicit QS</div></div></section>
+
+<section id="s11" class="searchable"><h2><span class="num">11.</span> Vì sao CPU khác biết CPU A bị Stall?</h2>
+<pre>CPU A
+    rcu_read_lock()
+    ↓
+    long critical section / không QS
+    ↓
+    rnp->qsmask vẫn giữ bit A
+
+RCU GP kthread
+    ↓
+    rcu_gp_fqs_loop()
+    ↓
+    force_qs_rnp()
+    ↓
+    rcu_implicit_dynticks_qs(rdp_A)
+    ↓
+    dynticks không progress
+    ↓
+    A vẫn nợ QS
+
+CPU B
+    ↓
+    scheduler_tick()
+    ↓
+    rcu_sched_clock_irq()
+    ↓
+    rcu_pending()
+    ↓
+    check_cpu_stall(rdp_B)
+    ↓
+    đọc global jiffies_stall + qsmask
+    ↓
+    print_other_cpu_stall()
+    ↓
+    liệt kê CPU A</pre>
+    
+<div class="callout critical"><b>Điểm mấu chốt:</b> nếu CPU A bị disable IRQ hoàn toàn, chính A có thể không chạy được stall check. Một CPU khác còn sống và còn tick sẽ phát hiện GP đang quá hạn và nhìn vào <code>qsmask</code> để xác định CPU đang chặn GP.</div></section>
+
+<h2>RCU Stall Flow — CPU A gây stall, CPU B phát hiện</h2>
+
+    <div class="explanation">
+
+        <p>
+            CPU A bắt đầu một RCU read-side critical section bằng
+            <code>rcu_read_lock()</code>. Sau đó CPU A ở trong critical section
+            trong thời gian rất dài và chưa đi qua một Quiescent State (QS)
+            mà RCU có thể ghi nhận. Vì vậy, trong RCU tree, bit tương ứng với
+            CPU A trong <code>rnp-&gt;qsmask</code> vẫn được giữ lại.
+        </p>
+
+        <p>
+            Có thể hiểu đơn giản là Grace Period hiện tại vẫn đang chờ CPU A:
+            <code>bit A = 1</code> nghĩa là CPU A vẫn chưa hoàn thành nghĩa vụ QS.
+        </p>
+
+        <p>
+            Trong khi CPU A vẫn chưa thoát khỏi tình trạng đó, RCU GP kthread
+            tiếp tục xử lý Grace Period. Khi cần buộc các CPU còn thiếu QS phải
+            tiến triển, GP kthread đi vào <code>rcu_gp_fqs_loop()</code>, sau đó
+            gọi <code>force_qs_rnp()</code>.
+        </p>
+
+        <p>
+            Hàm này kiểm tra các CPU vẫn còn có bit trong
+            <code>qsmask</code>, trong đó có CPU A, rồi đi tới
+            <code>rcu_implicit_dynticks_qs(rdp_A)</code> để xem trạng thái
+            <code>dynticks</code> của CPU A có cho phép RCU suy ra rằng CPU A
+            đã có Quiescent State hoặc ít nhất đã có progress hay không.
+        </p>
+
+        <p>
+            Trong tình huống này, <code>dynticks</code> không cho thấy progress
+            cần thiết, nên RCU không thể clear bit A. Kết quả là CPU A tiếp tục
+            được xem là CPU đang <strong>"nợ QS"</strong>, và Grace Period vẫn
+            chưa thể hoàn tất.
+        </p>
+
+        <p>
+            Trong lúc đó, CPU B vẫn đang chạy bình thường. Mỗi khi nhận
+            scheduler tick, CPU B đi qua <code>scheduler_tick()</code>, rồi vào
+            <code>rcu_sched_clock_irq()</code>, tiếp tục tới
+            <code>rcu_pending()</code>.
+        </p>
+
+        <p>
+            Từ đây RCU kiểm tra xem có cần phát hiện CPU stall hay không và
+            cuối cùng thực hiện <code>check_cpu_stall(rdp_B)</code>.
+        </p>
+
+        <p>
+            Hàm này kiểm tra thời gian Grace Period đã chạy bao lâu, trạng thái
+            RCU hiện tại và các thông tin như <code>qsmask</code>. Khi phát hiện
+            Grace Period đã kéo dài quá lâu nhưng vẫn còn bit CPU chưa được
+            clear, RCU xác định rằng đang có dấu hiệu stall.
+        </p>
+
+        <p>
+            Sau đó CPU B gọi <code>print_other_cpu_stall()</code>. Hàm này tìm
+            các CPU khác vẫn còn nằm trong trạng thái chưa hoàn thành QS.
+            Vì bit tương ứng với CPU A vẫn còn trong <code>qsmask</code>,
+            CPU A được xác định là một CPU đang cản trở Grace Period.
+        </p>
+
+        <div class="key-point">
+            <strong>Điểm quan trọng:</strong>
+            CPU A là CPU gây trì hoãn Grace Period,
+            GP kthread là bên cố gắng thúc đẩy Grace Period bằng FQS,
+            còn CPU B là bên phát hiện Grace Period đã bị trì hoãn bất thường
+            và báo cáo CPU A.
+        </div>
+
+    </div>
+
+<section id="s12" class="searchable"><h2><span class="num">12.</span> Stall Detector Timing</h2><p>Cơ chế check định kỳ nằm trên scheduler tick:</p><pre>scheduler_tick()
+    ↓
+rcu_sched_clock_irq()
+    ↓
+rcu_pending()
+    ↓
+check_cpu_stall()</pre><p><code>RCU_STALL_RAT_DELAY=2</code> là grace period nhỏ cho nhánh "other CPU", không phải khoảng thời gian giữa các lần check.</p>
+
+<h2>
+    🔴 Vì sao CPU khác biết CPU A bị Stall?
+</h2>
+
+
+<div class="warning-box">
+
+    <strong>
+        ⚠️ SOURCE CORRECTION:
+    </strong>
+
+    <p>
+        <span class="inline-code">scheduler_tick()</span>
+        <strong>không gọi</strong>
+        <span class="inline-code">rcu_sched_clock_irq()</span>.
+        Hai hàm này là <strong>hai lời gọi anh em</strong>,
+        cùng nằm trong
+        <span class="inline-code">update_process_times()</span>
+        (<span class="inline-code">kernel/time/timer.c:1733-1747</span>).
+    </p>
+
+    <p>
+        Quan trọng hơn,
+        <span class="inline-code">rcu_sched_clock_irq()</span>
+        chạy <strong>trước</strong>
+        <span class="inline-code">scheduler_tick()</span>.
+    </p>
+
+</div>
+
+
+<h3>
+    📌 Source Code Thực Tế
+</h3>
+
+
+<div class="source-box">
+
+    <div class="source-label">
+        SOURCE
+    </div>
+
+    <div class="code-block">
+
+        <pre>
+
+void update_process_times(int user_tick)
+{
+...
+run_local_timers();
+
+rcu_sched_clock_irq(user_tick);   // line 1742 — RCU xử lý trước
+
+...
+
+scheduler_tick();                  // line 1747 — scheduler xử lý sau
+
+...
+
+}
+</pre>
+
+    </div>
+
+</div>
+
+
+<h3>
+    🔄 Luồng Đúng: Timer → RCU Stall Detector
+</h3>
+
+
+<div class="flow">
+
+    <div class="flow-node source">
+        Timer interrupt handler
+        <br>
+
+        <small>
+            kiến trúc cụ thể, ví dụ tick_periodic() / tick_sched_handle()
+        </small>
+    </div>
+
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+
+    <div class="flow-node">
+        update_process_times(user)
+        <br>
+
+        <small>
+            kernel/time/timer.c:1733
+        </small>
+    </div>
+
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+
+    <div class="flow-node important">
+        rcu_sched_clock_irq(user)
+        <br>
+
+        <small>
+            kernel/rcu/tree.c:2612
+        </small>
+    </div>
+
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+
+    <div class="flow-node important">
+        rcu_pending(user)
+        <br>
+
+        <small>
+            tree.c:2627 → tree.c:3814
+        </small>
+    </div>
+
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+
+    <div class="flow-node important">
+        check_cpu_stall(rdp)
+        <br>
+
+        <small>
+            tree.c:3823 → tree_stall.h:627
+        </small>
+    </div>
+
+</div>
+
+
+<h3>
+    🔥 rcu_pending() — check_cpu_stall() Chạy Trước Các Check Khác
+</h3>
+
+
+<div class="highlight-box">
+
+    <strong>
+        Điểm rất quan trọng:
+    </strong>
+
+    <p>
+        <span class="inline-code">check_cpu_stall(rdp)</span>
+        chạy <strong>vô điều kiện ngay đầu</strong>
+        <span class="inline-code">rcu_pending()</span>,
+        trước các kiểm tra khác.
+    </p>
+
+    <p>
+        Điều này được giải thích trực tiếp bằng comment trong source:
+    </p>
+
+</div>
+
+
+<div class="source-box">
+
+    <div class="source-label">
+        SOURCE — tree.c:3807-3823
+    </div>
+
+    <div class="code-block">
+
+        <pre>
+
+/*
+
+Check to see if there is any immediate RCU-related work...
+The checks are in order of increasing expense...
+However, we must check for CPU stalls first, else we might not get a chance.
+*/
+
+static int rcu_pending(int user)
+{
+...
+
+check_cpu_stall(rdp);
+
+if (rcu_nocb_need_deferred_wakeup(rdp))
+    return 1;
+
+...
+
+}
+</pre>
+
+    </div>
+
+</div>
+
+
+<div class="success-box">
+
+    <strong>
+        ✅ Ý nghĩa:
+    </strong>
+
+    <p>
+        Mỗi lần
+        <span class="inline-code">update_process_times()</span>
+        được gọi, RCU đều có cơ hội chạy
+        <span class="inline-code">check_cpu_stall()</span>.
+    </p>
+
+    <p>
+        Điều này <strong>không phụ thuộc</strong>
+        vào việc
+        <span class="inline-code">rcu_pending()</span>
+        cuối cùng trả về
+        <span class="inline-code">0</span>
+        hay
+        <span class="inline-code">1</span>.
+    </p>
+
+    <p>
+        Lý do là nếu stall check đặt sau các check khác
+        và một check nào đó <strong>return sớm</strong>,
+        RCU có thể mất cơ hội phát hiện CPU stall.
+    </p>
+
+</div>
+
+
+<h3>
+    ⏱️ Bên Trong check_cpu_stall() — Timing Thật
+</h3>
+
+
+<div class="source-box">
+
+    <div class="source-label">
+        SOURCE — tree_stall.h:627-708
+    </div>
+
+</div>
+
+
+<div class="timeline">
+
+    <div class="timeline-item">
+
+        <span class="num">
+            1
+        </span>
+
+        <strong>
+            Early Exit — chưa có GP chạy
+        </strong>
+
+        <p>
+            Nếu
+            <span class="inline-code">!rcu_gp_in_progress()</span>,
+            stall detector không tiếp tục.
+        </p>
+
+        <p>
+            Stall chỉ có ý nghĩa khi đang có một
+            <strong>RCU Grace Period dở dang</strong>.
+        </p>
+
+    </div>
+
+
+    <div class="timeline-item">
+
+        <span class="num">
+            2
+        </span>
+
+        <strong>
+            Snapshot chống False Positive
+        </strong>
+
+        <p>
+            RCU đọc
+            <span class="inline-code">gp_seq</span>
+            hai lần,
+            có memory barrier xen giữa.
+        </p>
+
+        <p>
+            Nếu GP kết thúc hoặc GP mới bắt đầu ngay trong lúc snapshot,
+            lần kiểm tra hiện tại sẽ được bỏ qua bằng
+            <span class="inline-code">return</span>.
+        </p>
+
+        <p>
+            Mục đích là tránh kết luận sai do trạng thái GP thay đổi
+            giữa lúc kiểm tra.
+        </p>
+
+    </div>
+
+
+    <div class="timeline-item">
+
+        <span class="num">
+            3
+        </span>
+
+        <strong>
+            Kiểm tra Deadline
+        </strong>
+
+        <p>
+            Nếu
+            <span class="inline-code">jiffies</span>
+            hiện tại đã vượt
+            <span class="inline-code">rcu_state.jiffies_stall</span>,
+            RCU chuyển sang xử lý stall.
+        </p>
+
+        <p>
+            Deadline này được thiết lập khi GP bắt đầu
+            hoặc được cập nhật sau những lần stall check trước.
+        </p>
+
+    </div>
+
+</div>
+
+
+<h3>
+    🚨 Hai Nhánh Khi Phát Hiện Stall
+</h3>
+
+
+<div class="code-block">
+
+    <pre>
+
+jn = jiffies + 3 * rcu_jiffies_till_stall_check() + 3;
+
+if (rcu_gp_in_progress() &&
+(READ_ONCE(rnp->qsmask) & rdp->grpmask) &&
+cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+
+print_cpu_stall(gps);
+
+}
+else if (rcu_gp_in_progress() &&
+ULONG_CMP_GE(j, js + RCU_STALL_RAT_DELAY) &&
+cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+
+print_other_cpu_stall(gs2, gps);
+
+}
+</pre>
+
+</div>
+
+
+<table class="compare">
+
+    <thead>
+
+        <tr>
+            <th>
+                Nhánh
+            </th>
+
+            <th>
+                Điều kiện
+            </th>
+
+            <th>
+                Ý nghĩa
+            </th>
+
+            <th>
+                Hành động
+            </th>
+        </tr>
+
+    </thead>
+
+
+    <tbody>
+
+        <tr>
+
+            <td>
+                <span class="tag-red">
+                    SELF
+                </span>
+            </td>
+
+            <td>
+                <span class="inline-code">
+                    rnp-&gt;qsmask &amp; rdp-&gt;grpmask
+                </span>
+                khác 0
+            </td>
+
+            <td>
+                CPU hiện tại chính là CPU vẫn đang nợ QS.
+            </td>
+
+            <td>
+                <span class="inline-code">
+                    print_cpu_stall()
+                </span>
+
+                <br>
+
+                CPU tự báo cáo stall của chính mình.
+            </td>
+
+        </tr>
+
+
+        <tr>
+
+            <td>
+                <span class="tag-green">
+                    OTHER CPU
+                </span>
+            </td>
+
+            <td>
+                CPU hiện tại không phải CPU còn nợ QS,
+                nhưng GP vẫn bị stall.
+            </td>
+
+            <td>
+                Một CPU khác đang ngăn GP hoàn tất.
+            </td>
+
+            <td>
+                <span class="inline-code">
+                    print_other_cpu_stall()
+                </span>
+
+                <br>
+
+                CPU hiện tại báo cáo CPU khác.
+            </td>
+
+        </tr>
+
+    </tbody>
+
+</table>
+
+
+<h3>
+    ⏳ RCU_STALL_RAT_DELAY = 2 Có Ý Nghĩa Gì?
+</h3>
+
+
+<div class="highlight-box">
+
+    <strong>
+        ⚠️ Không phải chu kỳ giữa các lần check.
+    </strong>
+
+    <p>
+        Chu kỳ thực tế để
+        <span class="inline-code">check_cpu_stall()</span>
+        có cơ hội chạy đến từ tick:
+    </p>
+
+
+    <div class="code-block">
+
+        <pre>
+
+update_process_times()
+↓
+rcu_sched_clock_irq()
+↓
+rcu_pending()
+↓
+check_cpu_stall()
+</pre>
+
+    </div>
+
+
+    <p>
+        Nghĩa là tần suất cơ hội kiểm tra phụ thuộc vào
+        <strong>tần suất tick / HZ</strong>.
+    </p>
+
+
+    <p>
+        Ví dụ:
+        <span class="inline-code">HZ = 100</span>
+        → khoảng 100 tick/giây;
+        <span class="inline-code">HZ = 1000</span>
+        → khoảng 1000 tick/giây.
+    </p>
+
+
+    <p>
+        Trong khi đó,
+        <span class="inline-code">RCU_STALL_RAT_DELAY = 2</span>
+        chỉ là một <strong>khoảng nhượng bộ nhỏ 2 jiffies</strong>
+        dành cho nhánh phát hiện CPU khác.
+    </p>
+
+</div>
+
+
+<div class="source-box">
+
+    <div class="source-label">
+        SOURCE — tree.h:271
+    </div>
+
+    <p>
+        Comment gốc:
+        <strong>
+            "Allow other CPUs time to take"
+        </strong>
+    </p>
+
+    <p>
+        Tức là RCU cố tình cho CPU đang bị stall thêm một khoảng nhỏ
+        để có cơ hội tự mình phát hiện và báo cáo trước.
+    </p>
+
+</div>
+
+
+<h3>
+    🧠 Tại Sao Cho CPU B Đợi Trước Khi “Tố Cáo” CPU A?
+</h3>
+
+
+<div class="flow">
+
+    <div class="flow-node">
+        CPU A thực sự đang stall
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        CPU A có thể tự chạy
+        <span class="inline-code">
+            check_cpu_stall()
+        </span>
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        print_cpu_stall()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        CPU A tự dump thông tin của chính nó
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        Thông tin thường đầy đủ và chính xác hơn
+    </div>
+
+</div>
+
+
+<p>
+    Nếu CPU A không tự báo trong khoảng nhượng bộ đó,
+    một CPU khác có thể đứng ra báo cáo:
+</p>
+
+
+<div class="flow">
+
+    <div class="flow-node">
+        CPU B
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        check_cpu_stall()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        phát hiện GP vẫn bị stall
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        print_other_cpu_stall()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        báo CPU A là CPU còn nợ QS
+    </div>
+
+</div>
+
+
+<div class="source-box">
+
+    <div class="source-label">
+        SOURCE — tree_stall.h:704
+    </div>
+
+    <p>
+        Comment giải thích:
+        <strong>
+            "They had a few time units to dump stack, so complain"
+        </strong>
+    </p>
+
+    <p>
+        Ý nghĩa: CPU đang bị stall đã có một khoảng thời gian ngắn
+        để tự dump stack; nếu vẫn không làm được thì CPU khác mới đứng ra báo cáo.
+    </p>
+
+</div>
+
+
+<h3>
+    🔬 Toàn Bộ Flow Từ Timer Đến CPU Stall Report
+</h3>
+
+
+<div class="flow">
+
+    <div class="flow-node">
+        Hardware / Timer Interrupt
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        update_process_times()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        rcu_sched_clock_irq()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        rcu_pending()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        check_cpu_stall()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        !rcu_gp_in_progress() ?
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        Snapshot gp_seq
+        <br>
+        + Memory Barrier
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        jiffies &gt; jiffies_stall ?
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node">
+        Kiểm tra
+        <span class="inline-code">
+            rnp-&gt;qsmask &amp; rdp-&gt;grpmask
+        </span>
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        CPU hiện tại nợ QS?
+        <br>
+        → print_cpu_stall()
+    </div>
+
+    <div class="flow-arrow">
+        ↓
+    </div>
+
+    <div class="flow-node important">
+        CPU khác nợ QS?
+        <br>
+        → đợi RCU_STALL_RAT_DELAY
+        <br>
+        → print_other_cpu_stall()
+    </div>
+
+</div>
+
+
+<h3>
+    🎯 Ý Chính Cần Nhớ
+</h3>
+
+
+<div class="summary-quote">
+
+    Mỗi tick, RCU có cơ hội chạy
+    <span class="inline-code">
+        check_cpu_stall()
+    </span>.
+
+    CPU B không trực tiếp hỏi CPU A có stall hay không.
+
+    Thay vào đó, CPU B đọc trạng thái RCU global/per-CPU như
+    <span class="inline-code">
+        qsmask
+    </span>
+    và trạng thái liên quan đến
+    <span class="inline-code">
+        dynticks
+    </span>
+    để suy ra CPU nào vẫn còn nợ Quiescent State.
+
+</div>
+
+
+<div class="success-box">
+
+    <strong>
+        ✅ Tóm tắt 1 câu:
+    </strong>
+
+    <p style="font-size: 18px; margin-bottom: 0;">
+
+        Mỗi tick, RCU luôn kiểm tra deadline;
+
+        nếu đã quá hạn,
+        CPU thực sự bị stall sẽ có cơ hội tự báo ngay;
+
+        nếu là CPU khác phát hiện hộ thì phải đợi thêm
+        <span class="inline-code">
+            RCU_STALL_RAT_DELAY = 2
+        </span>
+        jiffies trước khi đứng ra “tố cáo” qua
+        <span class="inline-code">
+            print_other_cpu_stall()
+        </span>.
+
+    </p>
+
+</div>
+</section>
+
+<section id="s13" class="searchable"><h2><span class="num">13.</span> CONFIG_RCU_CPU_STALL_TIMEOUT</h2><pre>config RCU_CPU_STALL_TIMEOUT
+    int "RCU CPU stall timeout in seconds"
+    depends on RCU_STALL_COMMON
+    range 3 300
+    default 21</pre><div class="flow"><div class="node">CONFIG_RCU_CPU_STALL_TIMEOUT</div><div class="arrow">↓</div><div class="node">rcu_cpu_stall_timeout</div><div class="arrow">↓</div><div class="node">rcu_jiffies_till_stall_check()</div><div class="arrow">↓</div><div class="node">record_gp_stall_check_time()</div><div class="arrow">↓</div><div class="node">jiffies_stall</div><div class="arrow">↓</div><div class="node">check_cpu_stall()</div></div><p>Baseline được xác định từ Kconfig trong repo: default 21 giây, clamp 3–300 giây. Runtime module parameter có thể ghi đè giá trị khởi tạo.</p></section>
+
+<section id="s14" class="searchable"><h2><span class="num">14.</span> Warning Generation</h2><pre>check_cpu_stall()
+ ├── self
+ │    └── print_cpu_stall(gps)
+ │         ├── print_cpu_stall_info()
+ │         ├── rcu_check_gp_kthread_starvation()
+ │         └── rcu_dump_cpu_stacks()
+ │
+ └── other
+      └── print_other_cpu_stall(gs2, gps)
+           ├── print_cpu_stall_info()
+           ├── rcu_print_task_stall()
+           ├── rcu_dump_cpu_stacks()
+           └── rcu_check_gp_kthread_starvation()</pre><p>Message <code>INFO: rcu_preempt detected stalls on CPUs/tasks:</code> được tạo trong <code>print_other_cpu_stall()</code>.</p></section>
+
+<section id="s15" class="searchable"><h2><span class="num">15.</span> Vì sao dump stack?</h2><pre>rcu_dump_cpu_stacks()
+    ↓
+for each leaf rcu_node
+    ↓
+for each CPU trong qsmask
+    ↓
+trigger_single_cpu_backtrace(cpu)
+    ↓
+nếu arch không hỗ trợ
+    dump_cpu_task(cpu)</pre><p>Ưu tiên cơ chế backtrace architecture-specific (có thể dùng NMI) để lấy stack tại CPU đích. Fallback đọc task/stack state đã lưu. Mục tiêu là trả lời: <b>CPU bị stall đang mắc ở đâu?</b></p></section>
+
+<section id="s16" class="searchable"><h2><span class="num">16.</span> Case Studies</h2><div class="card"><h3>Case 1 — RCU read-side loop</h3><pre>rcu_read_lock();
+while (1)
+    cpu_relax();
+rcu_read_unlock();</pre><p>Với PREEMPT_RCU, <code>rcu_read_lock()</code> không đơn giản đồng nghĩa disable preemption; task có thể bị preempt. Nhưng nếu task chạy liên tục và không tạo QS/context switch phù hợp, CPU có thể tiếp tục nợ QS ↓ stall.</p></div>
+<div class="card"><h3>Case 2 — Spin loop không có RCU read-side</h3><pre>spin_lock(&lock);
+while (1)
+    ...</pre><p>Không trực tiếp tạo RCU stall chỉ vì giữ spinlock. Đây thường gần softlockup hơn. Nó trở thành vấn đề RCU nếu CPU/task cũng ngăn QS hoặc GP progress.</p></div>
+<div class="card"><h3>Case 3 — IRQ disabled</h3><pre>local_irq_disable();
+while (1)
+    ...</pre><p>Scheduler tick không thể chạy trên CPU đó; CPU không tự vào <code>check_cpu_stall()</code>. CPU khác có thể phát hiện. <code>irq_work</code> và các trường trạng thái IRQ-disabled có thể để lại dấu vết trong stall diagnostics.</p></div>
+<div class="card"><h3>Case 4 — Preemption disabled</h3><pre>preempt_disable();
+while (1)
+    ...</pre><p>IRQ vẫn có thể chạy nên tick vẫn có thể vào và self-detect stall. Nhưng task không bị context-switch bình thường; nếu đang trong RCU read-side thì QS bị trì hoãn.</p></div>
+<div class="card"><h3>Case 5 — GP kthread starvation</h3><pre>SCHED_FIFO RT task
+       ↓
+chiếm CPU của GP kthread
+       ↓
+gp_activity không được cập nhật
+       ↓
+rcu_is_gp_kthread_starving()
+       ↓
+warning + wake_up_process(gpk)</pre><p><code>rcu_is_gp_kthread_starving()</code>: <code>jiffies - rcu_state.gp_activity &gt; 2*HZ</code>.</p></div></section>
+
+<section id="s17" class="searchable"><h2><span class="num">17–19.</span> Scheduler / Interrupt / Softirq</h2><h3>Scheduler</h3><p><code>rcu_note_context_switch()</code> nằm trong PREEMPT_RCU path và được gắn với scheduler context-switch. Đây là một nguồn QS quan trọng.</p><h3>Interrupt</h3><p><code>rcu_nmi_enter()</code>/<code>rcu_nmi_exit()</code> cập nhật dynticks/NMI nesting để RCU phân biệt interrupt đến từ idle hay từ code đang chạy.</p><h3>Softirq</h3><pre>invoke_rcu_core()
+    ↓
+RCU_SOFTIRQ
+    ↓
+rcu_core()
+    ↓
+rcu_do_batch()</pre><p>Callback backlog có thể gây áp lực lên FQS và softirq counters, nhưng không nên tự động kết luận "callback backlog = RCU stall".</p></section>
+
+<section id="s20" class="searchable"><h2><span class="num">20.</span> Debug Configs</h2><table><tr><th>Config</th><th>Ý nghĩa</th><th>Quan hệ với Stall</th></tr><tr><td><code>CONFIG_DEBUG_OBJECTS</code></td><td>Object debug framework</td><td>gián tiếp</td></tr><tr><td><code>CONFIG_DEBUG_OBJECTS_RCU_HEAD</code></td><td>Debug lifecycle của <code>rcu_head</code>, ví dụ double use/call</td><td>correctness, không phải stall detector</td></tr><tr><td><code>CONFIG_DEBUG_OBJECTS_FREE</code></td><td>Debug object/free lifecycle</td><td>correctness, không phải stall detector</td></tr></table><div class="callout critical"><b>Vendor patch riêng:</b> repo có logic <code>CONFIG_KM_BIZHUB</code> liên quan kiểm tra callback/object và gọi <code>PMU_Reboot_RCU()</code>. Đây không phải hành vi mainline chuẩn.</div></section>
+
+<section id="s21" class="searchable"><h2><span class="num">21.</span> Full Call Graph</h2><pre>kernel/sched/core.c
+    scheduler_tick()
+        ↓
+kernel/rcu/tree.c:2612
+    rcu_sched_clock_irq(user)
+        ↓
+kernel/rcu/tree.c:2627
+    rcu_pending(user)
+        ↓
+kernel/rcu/tree.c:3823
+    check_cpu_stall(rdp)
+        ├── tree_stall.h:557
+        │   print_cpu_stall(gps)
+        │      ├── print_cpu_stall_info()
+        │      ├── rcu_check_gp_kthread_starvation()
+        │      └── rcu_dump_cpu_stacks()
+        │
+        └── tree_stall.h:472
+            print_other_cpu_stall(gs2, gps)
+               ├── print_cpu_stall_info()
+               ├── rcu_print_task_stall()
+               ├── rcu_dump_cpu_stacks()
+               └── rcu_check_gp_kthread_starvation()
+
+[VENDOR PATCH]
+print_cpu_stall()/print_other_cpu_stall()
+    ↓
+rebootCPU()
+    ↓
+drivers/thr_commondrvr/thr_commondrvr.c:1571
+    RebootCPUWrapper()
+    ↓
+int_sendMessageDrv(...)
+    ↓
+TM_REQ_RebootCPU
+    ↓
+PMU reboot path</pre></section>
+
+<section id="s22" class="searchable"><h2><span class="num">22.</span> Source Code Evidence Table</h2><table><tr><th>Concept</th><th>Function</th><th>File:Line</th><th>Key variable / condition</th></tr>
+<tr><td>GP start</td><td><code>record_gp_stall_check_time()</code></td><td>tree_stall.h:134</td><td><code>gp_start</code>, <code>jiffies_stall</code></td></tr>
+<tr><td>QS leaf↓root</td><td><code>rcu_report_qs_rnp()</code></td><td>tree.c:2181</td><td>clear <code>qsmask</code></td></tr>
+<tr><td>PREEMPT QS</td><td><code>rcu_qs()</code></td><td>tree_plugin.h:263</td><td><code>cpu_no_qs</code></td></tr>
+<tr><td>Stall check</td><td><code>check_cpu_stall()</code></td><td>tree_stall.h:627</td><td><code>gp_seq/jiffies_stall/gp_start/qsmask</code></td></tr>
+<tr><td>Timeout</td><td><code>rcu_jiffies_till_stall_check()</code></td><td>tree_stall.h:28</td><td><code>rcu_cpu_stall_timeout</code></td></tr>
+<tr><td>Stack dump</td><td><code>rcu_dump_cpu_stacks()</code></td><td>tree_stall.h:328</td><td>CPU bits in <code>qsmask</code></td></tr>
+<tr><td>GP starvation</td><td><code>rcu_is_gp_kthread_starving()</code></td><td>tree_stall.h:387</td><td><code>gp_activity</code>, &gt;2*HZ</td></tr>
+<tr><td>Dynticks</td><td><code>rcu_dynticks_eqs_enter/exit()</code></td><td>tree.c:248/273</td><td><code>dynticks</code> parity</td></tr></table></section>
+
+<section id="s23" class="searchable"><h2><span class="num">23.</span> Kernel 5.10 ↓ 6.x</h2><div class="callout warn"><b>VERIFY FROM SOURCE:</b> repo hiện tại không chứa cây 6.x nên phần so sánh không được coi là evidence từ source. Baseline đáng tin cậy ở đây là tree vendor hiện tại, khớp dòng 5.10.x.</div><p>Không nên lấy các khác biệt 6.x từ trí nhớ làm kết luận về BSP. Muốn so sánh chính xác cần checkout/source tree 6.x tương ứng rồi trace lại cùng các function/variables.</p></section>
+
+<section id="s24" class="searchable"><h2><span class="num">24.</span> Debug Checklist thực tế</h2><ol><li>Đọc CPU list sau <code>rcu_preempt detected stalls on CPUs/tasks</code>. CPU đó thường tương ứng bit còn set trong <code>qsmask</code>.</li><li>Đọc <code>softirq=A/B</code>: chênh lệch là dấu hiệu RCU softirq chưa catch up, nhưng chưa đủ để kết luận root cause.</li><li>Đọc <code>idle=</code> và dynticks để xem CPU có progress qua EQS hay không.</li><li>Đọc task/stack dump của CPU bị liệt kê để tìm code đang chạy.</li><li>Kiểm tra có message <code>kthread starved</code> không; nếu có, điều tra scheduler/RT starvation.</li><li>Trong BSP này, kiểm tra <code>###RebootCPUWrapper###</code>/<code>PMU_Reboot_RCU</code>: stall có thể bị vendor patch biến thành reboot.</li><li>Dùng trace/ftrace/RCU trace + <code>/proc/interrupts</code> và softirq statistics để tìm interrupt storm hoặc CPU starvation.</li></ol><div class="callout critical"><b>Câu hỏi debug cốt lõi:</b><br><br>Thấy <code>rcu_preempt detected stalls on CPUs/tasks</code> ↓ đi vào <code>check_cpu_stall()</code> ↓ xác định nhánh self/other ↓ đọc <code>qsmask</code> ↓ xác định CPU/task nợ QS ↓ xem dynticks/QS progress ↓ đọc stack ↓ truy ngược driver/IRQ/softirq/scheduler gây chặn progress.</div><h3>Source locations quan trọng</h3><pre>kernel/rcu/tree_stall.h
+kernel/rcu/tree.c:1748, 1942, 2011, 2181, 2285,
+                  248, 273, 2612, 2635, 3814-3830
+kernel/rcu/tree.h:271, 369-377
+kernel/rcu/tree_plugin.h:263-330, 685
+kernel/rcu/rcu.h
+drivers/thr_commondrvr/thr_commondrvr.c:1568-1573
+drivers/pmu/mdels800_pmu.c:5185-5194</pre></section>
+<footer>RCU Stall Source-Code Study • Linux 5.10.x BSP baseline • Source-first / VERIFY FROM SOURCE</footer>
+</main></div>
+<script>
+const input=document.getElementById('search');
+const sections=[...document.querySelectorAll('.searchable')];
+input.addEventListener('input',()=>{const q=input.value.trim().toLowerCase();sections.forEach(s=>s.classList.toggle('hidden',q&&!s.innerText.toLowerCase().includes(q)))});
+</script>
+</body></html>

@@ -1,0 +1,73 @@
+schedule() — giải thích cho người mới bắt đầu
+Đây là gì?
+Nếu try_to_wake_up/activate_task là bước đưa 1 task vào hàng đợi để nó có cơ hội chạy, thì schedule() là hàm thực sự thực hiện việc chuyển CPU từ task đang chạy sang task khác — hành động "context switch" mà bạn hay nghe nhắc tới. Đây là hàm public, ai trong kernel cũng có thể gọi khi muốn chủ động nhường CPU (ví dụ: task tự đi ngủ chờ dữ liệu, hoặc bị timer tick đánh dấu hết quantum).
+
+
+asmlinkage __visible void __sched schedule(void)
+{
+    struct task_struct *tsk = current;
+
+    sched_submit_work(tsk);
+    do {
+        preempt_disable();
+        __schedule(false);
+        sched_preempt_enable_no_resched();
+    } while (need_resched());
+    sched_update_worker(tsk);
+}
+EXPORT_SYMBOL(schedule);
+current là macro lấy ra task đang chạy trên CPU hiện tại — tức chính "cái task đang gọi hàm schedule() này".
+
+Giải thích từng phần
+1. sched_submit_work(tsk) — dọn dẹp trước khi rời CPU
+
+static inline void sched_submit_work(struct task_struct *tsk)
+{
+    if (!tsk->state)
+        return;
+    ...
+    if (task_flags & (PF_WQ_WORKER | PF_IO_WORKER)) {
+        wq_worker_sleeping(tsk);   // báo cho workqueue biết "worker này sắp ngủ"
+        ...
+    }
+    ...
+    if (blk_needs_flush_plug(tsk))
+        blk_schedule_flush_plug(tsk);   // đẩy nốt các I/O đang gom (plugged) ra đĩa, tránh deadlock
+}
+Ý tưởng: nếu tsk->state == 0 (tức là TASK_RUNNING, task chưa hề chủ động đi ngủ mà chỉ đơn giản bị hết quota/preempt) thì không cần dọn gì — return luôn.
+
+Nếu task thực sự đang chuẩn bị đi ngủ (state khác 0, ví dụ TASK_INTERRUPTIBLE), kernel cần làm vài việc dọn dẹp trước khi rời CPU: ví dụ nếu đây là 1 "worker thread" trong workqueue (cơ chế chạy công việc nền của kernel) sắp ngủ, cần báo cho workqueue biết để nó có thể đánh thức 1 worker khác thay thế, tránh cả hệ thống công việc nền bị đứng.
+
+Bạn chỉ cần nhớ: đây là bước "dọn dẹp phụ trợ", không phải logic chính của việc chuyển task.
+
+2. Vòng lặp do { ... } while (need_resched()) — phần quan trọng nhất
+
+do {
+    preempt_disable();
+    __schedule(false);
+    sched_preempt_enable_no_resched();
+} while (need_resched());
+preempt_disable(): tạm khoá không cho phép bản thân việc schedule() này bị ngắt giữa chừng bởi 1 lần preempt khác (tránh đệ quy/lộn xộn). Đây không liên quan gì tới việc task nào được chọn, chỉ là bảo vệ chính quá trình chọn lịch.
+
+__schedule(false): đây mới là hàm làm toàn bộ việc thật:
+
+Chọn task tiếp theo nên chạy (dựa vào pick_next_task() — duyệt qua các sched_class theo thứ tự ưu tiên: stop → deadline → realtime → CFS → idle).
+Nếu task hiện tại (tsk) đang ở trạng thái ngủ (không phải TASK_RUNNING) → gọi deactivate_task() (ngược lại với activate_task() bạn vừa học) để lấy nó ra khỏi runqueue.
+Thực hiện context switch thực sự: lưu lại thanh ghi CPU của task cũ, nạp thanh ghi của task mới, chuyển bảng địa chỉ bộ nhớ (nếu khác process) — đây là lúc CPU "nhảy" từ chạy code của task A sang chạy code của task B.
+Tham số false nghĩa là: đây là lần gọi schedule() tự nguyện (task chủ động nhường CPU), khác với lần gọi preempt=true khi bị ép nhường CPU giữa chừng (như preempt_schedule_irq ta đã nói ở câu về timer interrupt).
+sched_preempt_enable_no_resched(): mở lại preempt, nhưng không kiểm tra need_resched ngay lập tức tại đây (để tránh gọi schedule() lồng nhau ngay bên trong chính schedule()).
+
+while (need_resched()): sau khi __schedule() chạy xong và CPU đã chuyển sang chạy 1 task khác... rồi tới một lúc nào đó CPU quay lại chạy đúng đoạn code này (tức là tsk lại được chọn chạy lần nữa) — kernel kiểm tra lại cờ TIF_NEED_RESCHED (chính là cờ set_tsk_need_resched mà bạn học ở câu hỏi trước). Nếu cờ này vẫn còn được set (nghĩa là có ai đó lại vừa đánh dấu "cần lên lịch lại" trong lúc tsk đang chờ), vòng lặp sẽ gọi __schedule() thêm lần nữa thay vì trả về ngay — đảm bảo không bỏ sót yêu cầu resched nào.
+
+3. sched_update_worker(tsk) — dọn dẹp sau khi được chạy lại
+
+static void sched_update_worker(struct task_struct *tsk)
+{
+    if (tsk->flags & (PF_WQ_WORKER | PF_IO_WORKER)) {
+        wq_worker_running(tsk);   // báo workqueue: "worker này đã chạy lại rồi"
+    }
+}
+Đối xứng với bước 1: khi tsk cuối cùng được scheduler chọn chạy lại (tức hàm schedule() sắp return về nơi gọi nó), nếu nó là worker thread thì báo lại cho workqueue biết nó đã "tỉnh dậy".
+
+Tóm gọn 1 câu
+schedule() là cổng vào chính thức để yêu cầu kernel "hãy tìm và chuyển sang chạy task khác" — nó tự dọn dẹp trước/sau, gọi __schedule() (bộ não thật sự chọn task + đổi context CPU), và lặp lại nếu vẫn còn cờ resched treo, để đảm bảo CPU luôn chạy đúng task có quyền ưu tiên cao nhất tại mọi thời điểm.

@@ -1,0 +1,63 @@
+activate_task — giải thích cho người mới bắt đầu
+Bối cảnh cần biết trước
+Bạn có thể tưởng tượng mỗi CPU có một hàng đợi các task đang chờ được chạy, gọi là runqueue (rq). Đây không phải hàng đợi FIFO đơn giản mà là một cấu trúc dữ liệu (ví dụ cây đỏ-đen cho CFS) sắp xếp theo độ ưu tiên/thời gian đã chạy.
+
+Một task chỉ có thể được scheduler chọn để chạy nếu nó đang nằm trong runqueue. Trường p->on_rq là cờ đánh dấu "task này có đang nằm trong runqueue hay không":
+
+on_rq == 0: task không nằm trong hàng đợi (ví dụ đang ngủ, hoặc mới được tạo, hoặc vừa bị lấy ra để chuyển CPU).
+on_rq == TASK_ON_RQ_QUEUED: task đang nằm trong hàng đợi, sẵn sàng được chọn chạy.
+activate_task() chính là hàm làm việc "đưa 1 task vào runqueue". Nó được gọi ở đúng bước cuối trong luồng đánh thức task mà chúng ta đã xem trước đó (try_to_wake_up → ttwu_queue → cuối cùng gọi activate_task).
+
+Giải thích từng dòng
+
+void activate_task(struct rq *rq, struct task_struct *p, int flags)
+{
+    if (task_on_rq_migrating(p))
+        flags |= ENQUEUE_MIGRATED;
+
+    enqueue_task(rq, p, flags);
+
+    p->on_rq = TASK_ON_RQ_QUEUED;
+}
+Tham số:
+
+rq: runqueue của CPU mà ta muốn đưa task vào (đã được chọn từ trước, ví dụ qua select_task_rq mà bạn thấy trong try_to_wake_up).
+p: task cần đưa vào hàng đợi.
+flags: các cờ mô tả "lý do/ngữ cảnh" của việc enqueue này (ví dụ: do wakeup, do di chuyển CPU, do phục hồi sau khi bị dequeue tạm thời...).
+Dòng 1-2: kiểm tra có phải đang "di chuyển" task không
+
+
+if (task_on_rq_migrating(p))
+    flags |= ENQUEUE_MIGRATED;
+task_on_rq_migrating(p) kiểm tra xem task này có đang trong trạng thái đặc biệt "đang được chuyển từ CPU này sang CPU khác" hay không (ví dụ do load balancing). Nếu đúng, ta thêm cờ ENQUEUE_MIGRATED để các lớp scheduler bên dưới (CFS, RT...) biết mà xử lý phù hợp — ví dụ CFS cần biết đây là task "mới tới" từ CPU khác để tính lại vruntime cho công bằng, không để nó nhảy vào tranh CPU ngay với vruntime cũ (có thể quá thấp so với các task đã có trên CPU mới, gây bất công).
+
+Dòng 3: gọi enqueue_task() — việc thực sự "nhét" task vào hàng đợi
+
+
+enqueue_task(rq, p, flags);
+Nhìn vào định nghĩa của enqueue_task (core.c:1578):
+
+
+static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
+{
+    if (!(flags & ENQUEUE_NOCLOCK))
+        update_rq_clock(rq);          // cập nhật đồng hồ nội bộ của runqueue
+
+    if (!(flags & ENQUEUE_RESTORE)) {
+        sched_info_queued(rq, p);     // ghi thống kê debug (thời điểm được xếp hàng)
+        psi_enqueue(p, flags & ENQUEUE_WAKEUP);  // cập nhật số liệu "áp lực" hệ thống
+    }
+
+    uclamp_rq_inc(rq, p);             // cập nhật giới hạn utilization (cho cơ chế uclamp)
+    p->sched_class->enqueue_task(rq, p, flags);  // <-- việc chính, đa hình theo lớp
+}
+Dòng cuối cùng p->sched_class->enqueue_task(...) mới là chỗ thực sự chèn task vào cấu trúc dữ liệu hàng đợi — và giống hàm task_tick ta đã nói ở câu trước, đây là lời gọi đa hình: tuỳ p thuộc lớp nào (CFS/fair_sched_class, RT/rt_sched_class...), nó sẽ gọi đúng hàm enqueue_task_fair() hay enqueue_task_rt() — mỗi lớp có cách tổ chức hàng đợi khác nhau (CFS dùng cây đỏ-đen theo vruntime, RT dùng mảng theo mức priority).
+
+Dòng 4: đánh dấu cờ "đã ở trong runqueue"
+
+
+p->on_rq = TASK_ON_RQ_QUEUED;
+Sau khi đã thực sự nằm trong cấu trúc dữ liệu hàng đợi, cập nhật cờ on_rq để các phần khác của kernel (ví dụ chính try_to_wake_up mà bạn vừa đọc, dòng kiểm tra READ_ONCE(p->on_rq)) biết được trạng thái này mà không cần dò tìm trong cấu trúc dữ liệu phức tạp — chỉ cần đọc 1 cờ boolean là biết ngay.
+
+Tóm gọn 1 câu
+activate_task() = "chính thức đưa 1 task vào hàng đợi chạy của một CPU cụ thể" — nó là bước trung gian nối giữa quyết định "task này cần chạy" (ở try_to_wake_up, hoặc khi tạo task mới bằng fork()) và việc scheduler thực sự nhìn thấy nó trong runqueue để có thể chọn chạy ở lần schedule() tiếp theo.

@@ -1,0 +1,59 @@
+scheduler_tick() — high-level
+Vai trò: đây là "trái tim" của time-sharing — hàm được gọi bởi timer interrupt handler mỗi khi có một tick hệ thống (tần số HZ), chạy với ngắt đã tắt (interrupts disabled), trên CPU cục bộ (không phải toàn hệ thống — mỗi CPU tự tick riêng cho task đang chạy trên nó).
+
+
+void scheduler_tick(void)
+{
+	int cpu = smp_processor_id();
+	struct rq *rq = cpu_rq(cpu);
+	struct task_struct *curr = rq->curr;
+	struct rq_flags rf;
+	unsigned long thermal_pressure;
+
+	arch_scale_freq_tick();
+	sched_clock_tick();
+
+	rq_lock(rq, &rf);
+
+	update_rq_clock(rq);
+	thermal_pressure = arch_scale_thermal_pressure(cpu_of(rq));
+	update_thermal_load_avg(rq_clock_thermal(rq), rq, thermal_pressure);
+	curr->sched_class->task_tick(rq, curr, 0);
+	calc_global_load_tick(rq);
+	psi_task_tick(rq);
+
+	rq_unlock(rq, &rf);
+
+	perf_event_task_tick();
+
+#ifdef CONFIG_SMP
+	rq->idle_balance = idle_cpu(cpu);
+	trigger_load_balance(rq);
+#endif
+}
+
+Luồng xử lý (4 bước)
+1. Xác định runqueue của CPU hiện tại và task đang chạy
+cpu = smp_processor_id() → rq = cpu_rq(cpu) → curr = rq->curr. Không cần khoá cross-CPU vì mỗi CPU chỉ đụng vào runqueue của chính nó tại đây.
+
+2. Cập nhật đồng hồ & polymorphism qua sched_class (dòng trọng tâm nhất)
+curr->sched_class->task_tick(rq, curr, 0) — đây là điểm phân phối đa hình: tuỳ curr thuộc lớp nào (stop, dl, rt, fair, idle), con trỏ hàm này trỏ tới cài đặt riêng:
+
+CFS (task_tick_fair → entity_tick, fair.c:10996, 4720): gọi update_curr() để cộng dồn vruntime/sum_exec_runtime theo thời gian thực đã chạy, rồi so với ngân sách timeslice hiện có (sched_slice/sysctl_sched_min_granularity); nếu hết quota → gọi resched_curr(rq) → set TIF_NEED_RESCHED trên curr.
+RT (task_tick_rt, quantum RR policy): nếu là SCHED_RR và hết timeslice round-robin → cũng resched_curr().
+Deadline (task_tick_dl): kiểm tra deadline miss.
+→ Đây chính là nơi quantum bị "khấu trừ" mỗi tick, nhưng bản thân scheduler_tick() không tự gọi schedule() — nó chỉ đánh dấu cần lên lịch lại. Việc chuyển ngữ cảnh thực sự chỉ xảy ra sau đó, tại điểm return-from-interrupt (arm64_preempt_schedule_irq trong entry.S), khớp với lý thuyết "scheduler chạy khi timer interrupt handler kết thúc".
+
+3. Cập nhật thống kê hệ thống
+calc_global_load_tick() (load average toàn hệ thống, hiển thị qua uptime/top), psi_task_tick() (Pressure Stall Information — đo mức độ task phải chờ CPU/IO/memory), perf_event_task_tick() (hook cho perf subsystem).
+
+4. Cân bằng tải SMP (#ifdef CONFIG_SMP)
+trigger_load_balance(rq) — không di chuyển task ngay tại đây (vì đang giữ rq_lock và ngắt tắt) mà chỉ lên lịch một softirq (SCHED_SOFTIRQ) để load-balancer chạy sau, kiểm tra xem CPU này có nên "kéo" task từ CPU khác đang quá tải sang không.
+
+Điểm mấu chốt về tính "trong suốt"
+scheduler_tick() không trực tiếp chuyển context — nó chỉ:
+
+Trừ dần quota thời gian của task đang chạy,
+Set cờ TIF_NEED_RESCHED khi quota hết hoặc điều kiện preempt khác thoả,
+Giao việc thực sự chuyển task lại cho logic return-from-interrupt.
+Nhờ tách 2 việc này, scheduler_tick() chạy rất nhanh (giữ spinlock, ngắt tắt) và không làm nghẽn interrupt path, đúng như lý thuyết "timer interrupt làm việc chia sẻ quantum một cách trong suốt với chương trình" — chương trình đang chạy không biết được bị đếm ngược tick, chỉ đơn giản bị chuyển đi ngay trước khi trở lại user-space nếu quota đã cạn.

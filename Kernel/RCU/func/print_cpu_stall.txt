@@ -1,0 +1,97 @@
+print_cpu_stall() — hàm "tự thú" khi chính CPU này gây stall
+Được gọi từ check_cpu_stall() (hàm bạn vừa học) khi CPU hiện tại phát hiện chính nó là "thủ phạm" — còn nợ quiescent state quá lâu. Tên hàm rất đúng nghĩa đen: comment trong code gọi đây là lúc "rat on ourselves" (tự khai báo/tự tố cáo bản thân).
+
+Giải thích từng đoạn
+
+static void print_cpu_stall(unsigned long gps)
+{
+	int cpu;
+	unsigned long flags;
+	struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
+	struct rcu_node *rnp = rcu_get_root();
+	long totqlen = 0;
+
+	lockdep_assert_irqs_disabled();
+Chuẩn bị biến. gps = thời điểm GP hiện tại bắt đầu (đã tính từ check_cpu_stall). rnp = rcu_get_root() lấy node gốc của cây rcu_node (nhớ lại: cấu trúc cây giúp nhiều CPU không tranh 1 lock). Assert interrupt đang tắt — đúng như mọi hàm RCU core khác.
+
+
+	rcu_stall_kick_kthreads();
+	if (rcu_stall_is_suppressed())
+		return;
+Đánh thức lại các kthread RCU (phòng chúng bị đói CPU). Rồi kiểm tra lần nữa: nếu cảnh báo đang bị tắt (sysctl) → thoát, không in gì. (check_cpu_stall đã kiểm tra 1 lần rồi, nhưng có thể trạng thái đổi giữa lúc gọi, nên check lại cho chắc.)
+
+
+	pr_err("INFO: %s self-detected stall on CPU\n", rcu_state.name);
+Đây là dòng log chính — đây chính là dòng bạn sẽ thấy trên console/dmesg khi có RCU stall thật: "INFO: rcu_sched self-detected stall on CPU". pr_err = in ra với mức độ lỗi (error), sẽ hiện trên console kernel.
+
+
+	raw_spin_lock_irqsave_rcu_node(rdp->mynode, flags);
+	print_cpu_stall_info(smp_processor_id());
+	raw_spin_unlock_irqrestore_rcu_node(rdp->mynode, flags);
+Đây là một "cụm 3 dòng" rất hay gặp trong kernel — cần hiểu spinlock trước:
+
+Spinlock là gì? Một loại khoá (lock) đơn giản nhất: nếu 1 CPU đang giữ lock, CPU khác muốn lấy sẽ "quay vòng" (busy-wait, liên tục kiểm tra) chứ không được ngủ, cho tới khi lock được nhả ra. Dùng khi vùng code được bảo vệ rất ngắn — ngủ (sleep) sẽ tốn kém hơn quay vòng.
+
+raw_spin_lock_irqsave_rcu_node(...) = khoá lock của node RCU này lại, đồng thời tắt interrupt và lưu trạng thái interrupt cũ vào flags (để lát sau khôi phục đúng trạng thái). Việc tắt interrupt cần thiết vì: nếu đang giữ lock mà 1 interrupt xảy ra, và interrupt đó lại cố lấy cùng lock này → deadlock (tự khoá chính mình). Giữa 2 dòng lock/unlock là print_cpu_stall_info(smp_processor_id()) — in thông tin chi tiết của CPU hiện tại (trạng thái dynticks, đã qua QS chưa, softirq...), phải giữ lock vì đang đọc dữ liệu chia sẻ trong rnp mà CPU khác cũng có thể sửa.
+
+
+	for_each_possible_cpu(cpu)
+		totqlen += rcu_get_n_cbs_cpu(cpu);
+	pr_cont("\t(t=%lu jiffies g=%ld q=%lu)\n",
+		jiffies - gps,
+		(long)rcu_seq_current(&rcu_state.gp_seq), totqlen);
+Duyệt qua tất cả CPU có thể có trên hệ thống (for_each_possible_cpu), cộng dồn số callback (n_cbs) đang chờ trên từng CPU vào totqlen. Rồi in tiếp dòng log (pr_cont = nối tiếp vào dòng log trước, không xuống dòng mới): thời gian đã trôi (jiffies - gps = đã bao lâu kể từ khi GP này bắt đầu), số thứ tự GP hiện tại (g=), và tổng số callback đang xếp hàng chờ toàn hệ thống (q=). 3 con số này chính là thứ bạn cần đọc đầu tiên khi debug 1 log stall thật.
+
+
+	rcu_check_gp_kthread_starvation();
+Kiểm tra riêng: có phải rcu_gp_kthread (kthread điều phối GP, đã học ở sơ đồ state machine) bị "đói CPU" — tức là nó muốn chạy nhưng scheduler không cho nó cơ hội chạy — hay không. Đây là 1 nguyên nhân khác gây "giống stall" nhưng bản chất là vấn đề lập lịch (priority), không phải RCU tự nó có bug.
+
+
+	rcu_dump_cpu_stacks();
+In ra stack trace (chuỗi hàm đang được gọi lồng nhau) của các CPU nghi ngờ — đây là thông tin quan trọng nhất để debug: nó cho biết CPU đang "kẹt" ở đâu, đang chạy hàm gì khi bị stall.
+
+
+	raw_spin_lock_irqsave_rcu_node(rnp, flags);
+	/* Rewrite if needed in case of slow consoles. */
+	if (ULONG_CMP_GE(jiffies, READ_ONCE(rcu_state.jiffies_stall)))
+		WRITE_ONCE(rcu_state.jiffies_stall,
+			   jiffies + 3 * rcu_jiffies_till_stall_check() + 3);
+	raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+Sau khi in xong (việc in ra console có thể rất chậm, đặc biệt nếu console là UART tốc độ thấp — "slow consoles" trong comment), kiểm tra: nếu trong lúc in, jiffies đã vượt qua mốc hẹn giờ tiếp theo luôn rồi → đẩy mốc hẹn giờ (jiffies_stall) xa hơn nữa. Mục đích: tránh việc vừa in xong 1 cảnh báo đã lập tức in tiếp cảnh báo thứ 2 chỉ vì việc in log quá chậm chiếm hết thời gian.
+
+Phần đặc thù của board (không có trong mainline Linux)
+
+#if defined(CONFIG_KM_BIZHUB)
+#if !defined(FUM_LINUX)
+	THRL_DispCpuStallTM();
+#endif
+#endif
+Nếu build cho dòng máy KM_BIZHUB (thương hiệu Konica Minolta Bizhub — máy photocopy/máy in đa chức năng) và không phải biến thể FUM_LINUX, gọi THRL_DispCpuStallTM() — hiển thị thông tin stall lên 1 "task monitor" riêng của hãng (có thể là màn hình LCD trên máy photocopy thật).
+
+
+#if defined(CONFIG_KM_BIZHUB)
+#if defined(FUM_LINUX)
+	panic_on_rcu_stall();
+#endif
+#endif
+Ngược lại, nếu là biến thể FUM_LINUX, gọi panic_on_rcu_stall() — chủ động làm kernel panic (crash có kiểm soát) ngay khi stall xảy ra, thay vì chỉ cảnh báo rồi tiếp tục chạy.
+
+
+	set_tsk_need_resched(current);
+	set_preempt_need_resched();
+Giống hệt logic đã giải thích ở rcu_sched_clock_irq() — đánh dấu "cần chuyển task", với hy vọng một context switch sẽ giúp RCU machinery "sống lại" nếu nguyên nhân là do CPU bị kẹt trong 1 đoạn code kernel dài không nhường CPU.
+
+
+#if !defined(FUM_LINUX)
+	rebootCPU();
+#endif
+Và đây là dòng bạn đã thấy ở lần trước — nếu không phải FUM_LINUX (tức các biến thể build khác của board này), gọi thẳng rebootCPU() để tự động khởi động lại máy ngay sau khi đã in xong toàn bộ log ở trên.
+
+Tóm tắt bằng 1 câu
+print_cpu_stall() là hàm "khai báo" toàn bộ trạng thái debug khi 1 CPU tự phát hiện chính nó gây stall: in thông tin CPU (có khoá lock để đọc dữ liệu an toàn), tổng số callback đang chờ, kiểm tra kthread có bị đói không, dump stack trace, rồi cố "cứu" bằng cách ép context switch — và trên board K-S800 cụ thể này, còn có thêm 2 nhánh đặc thù hãng: hiện task monitor riêng, hoặc tự động reboot máy.
+
+Vài khái niệm mới xuất hiện — nếu bạn muốn học tiếp
+Spinlock (raw_spin_lock_irqsave...) — cơ chế khoá cơ bản nhất trong kernel, khác mutex ở chỗ không cho phép ngủ.
+Stack trace — chuỗi hàm gọi lồng nhau, công cụ debug quan trọng nhất khi 1 CPU bị kẹt.
+Kernel panic — trạng thái kernel dừng hẳn có kiểm soát khi phát hiện lỗi nghiêm trọng không thể tiếp tục an toàn.
+Nếu muốn, mình có thể giải thích riêng khái niệm spinlock vs mutex vs semaphore (rất hay gặp trong kernel) — đây là kiến thức nền cần thiết trước khi đọc sâu hơn vào RCU hay bất kỳ subsystem nào khác.

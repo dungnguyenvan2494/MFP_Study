@@ -1,0 +1,62 @@
+rcu_check_gp_kthread_starvation() — phát hiện "GP kthread bị bỏ đói CPU"
+Được gọi từ print_cpu_stall(), ngay sau dòng in thông tin CPU. Đây là bước kiểm tra riêng cho 1 nguyên nhân khác hẳn so với các hàm bạn đã học trước đó: không phải "1 CPU không báo QS", mà là "kthread điều phối GP (rcu_gp_kthread) sẵn sàng chạy nhưng bị scheduler bỏ đói, không cho cơ hội chạy".
+
+Nhắc lại khái niệm "starvation" (bị đói CPU)
+Một task ở trạng thái runnable (sẵn sàng chạy — không ngủ, không chờ I/O) nhưng vẫn không được CPU chọn để chạy trong 1 thời gian dài, vì có các task khác ưu tiên cao hơn liên tục chiếm hết CPU. Đây gọi là "starvation" (bị đói). Khác hẳn với "stall" mà bạn học trước — stall là do code đang chạy nhưng không nhường CPU; starvation là code muốn chạy nhưng không được chạy.
+
+Giải thích từng dòng
+
+static void rcu_check_gp_kthread_starvation(void)
+{
+	struct task_struct *gpk = rcu_state.gp_kthread;
+	unsigned long j;
+task_struct là cấu trúc trung tâm đại diện cho 1 task trong kernel Linux — mọi process, mọi thread, mọi kthread đều có 1 task_struct. gpk ở đây là con trỏ tới task_struct của chính kthread điều phối GP (chính là cái bạn đã học ở sơ đồ state machine, rcu_gp_kthread()).
+
+
+	if (rcu_is_gp_kthread_starving(&j)) {
+Gọi hàm kiểm tra (không nằm trong đoạn code bạn chọn, nhưng logic của nó là: so sánh thời gian hiện tại với lần cuối kthread này "báo cáo còn sống" — rcu_state.gp_activity — nếu khoảng cách quá lớn, coi là đang bị đói). Nếu đúng là đang starve, j sẽ được set = số jiffies đã bị đói.
+
+Dòng log đầu tiên — trạng thái tổng quan
+
+		pr_err("%s kthread starved for %ld jiffies! g%ld f%#x %s(%d) ->state=%#lx ->cpu=%d\n",
+		       rcu_state.name, j,
+		       (long)rcu_seq_current(&rcu_state.gp_seq),
+		       data_race(rcu_state.gp_flags),
+		       gp_state_getname(rcu_state.gp_state), rcu_state.gp_state,
+		       gpk ? gpk->state : ~0, gpk ? task_cpu(gpk) : -1);
+Giải mã từng field:
+
+%s kthread starved for %ld jiffies! — tên RCU flavor (rcu_sched/rcu_preempt...) + đã bị đói bao lâu, tính bằng jiffies.
+g%ld — số thứ tự Grace Period hiện tại (gp_seq) — để biết đang ở GP nào khi phát hiện vấn đề.
+f%#x — gp_flags, các cờ điều khiển trạng thái GP (dạng bitmask, in ở dạng hex %#x).
+%s(%d) — tên trạng thái của state machine rcu_gp_kthread dưới dạng chữ (gp_state_getname) và dạng số — đây chính là "đang ở state nào" trong sơ đồ rcu-gp-statemachine.md bạn đã có (Idle/Initializing/WaitingQS/Cleanup).
+->state=%#lx — đây là trạng thái scheduler của chính task_struct (gpk->state) — khác với "state" ở trên (đó là state riêng của RCU logic). Trạng thái task ở đây là các giá trị chuẩn của kernel như TASK_RUNNING, TASK_INTERRUPTIBLE (đang ngủ, có thể bị đánh thức bởi signal), TASK_UNINTERRUPTIBLE... Nếu gpk là NULL (kthread chưa được tạo), in ~0 (toàn bit 1, nghĩa là "không xác định").
+->cpu=%d — kthread này đang (hoặc lần cuối) chạy trên CPU số mấy. Nếu NULL, in -1.
+Điểm quan trọng cần hiểu: có 2 khái niệm "state" khác nhau trong 1 dòng log này — 1 là state máy trạng thái nội bộ của RCU (do chính code RCU tự định nghĩa và quản lý), 2 là state chuẩn của scheduler cho biết task đang chạy/ngủ/chờ gì. Đây là 1 nguồn nhầm lẫn rất phổ biến khi mới đọc kernel — cùng từ "state" nhưng 2 tầng khác nhau hoàn toàn.
+
+Nếu kthread thực sự tồn tại — hành động thêm
+
+		if (gpk) {
+			pr_err("\tUnless %s kthread gets sufficient CPU time, OOM is now expected behavior.\n", rcu_state.name);
+Một câu cảnh báo rất đáng chú ý: "Nếu kthread này không được cấp đủ thời gian CPU, OOM (Out-Of-Memory — hết bộ nhớ) là hành vi được dự đoán trước." Vì sao? Vì nếu GP kthread không chạy được, GP không bao giờ hoàn tất → callback không bao giờ được invoke → bộ nhớ mà các callback đó đáng lẽ phải giải phóng (đây là mục đích chính của RCU — trì hoãn việc free memory tới khi an toàn) sẽ tích tụ vô hạn, cuối cùng dẫn tới hết bộ nhớ. Đây là hệ quả dây chuyền rất quan trọng để hiểu tại sao "starvation của 1 kthread nhỏ" lại có thể gây sập cả hệ thống.
+
+
+			pr_err("RCU grace-period kthread stack dump:\n");
+			sched_show_task(gpk);
+sched_show_task(gpk) — in ra thông tin lập lịch chi tiết + stack trace của riêng kthread gpk (khác với rcu_dump_cpu_stacks() ở hàm trước — hàm đó dump stack của CPU hiện tại đang chạy gì; còn hàm này dump đúng task cụ thể gpk, bất kể nó đang nằm ở CPU nào hay đang ngủ).
+
+
+			wake_up_process(gpk);
+		}
+	}
+}
+Cuối cùng, giống hệt hàm rcu_stall_kick_kthreads() bạn đã học — chủ động gọi wake_up_process(gpk) để đánh thức/đưa kthread này vào runqueue của scheduler ngay lập tức, như 1 nỗ lực "cứu chữa" cuối cùng.
+
+Tóm tắt bằng 1 câu
+Hàm này kiểm tra riêng khả năng "chính kthread điều phối GP bị bỏ đói CPU" (khác với việc 1 CPU thường không báo QS) — nếu đúng, in đầy đủ 2 tầng trạng thái (RCU state machine + scheduler task state) kèm cảnh báo hậu quả OOM, dump stack riêng của kthread đó, rồi thử đánh thức nó bằng tay.
+
+Khái niệm mới, nên học riêng nếu muốn đào sâu hơn
+task_struct — cấu trúc trung tâm của mọi task trong Linux, đáng để đọc kỹ 1 lần (bạn có diagram task-struct-arm64.md đã có sẵn trong repo).
+Task state (TASK_RUNNING/TASK_INTERRUPTIBLE/...) — nền tảng của scheduler, khác với "state" tự định nghĩa trong logic RCU.
+OOM (Out-Of-Memory killer) — cơ chế kernel xử lý khi hết bộ nhớ, liên quan tới hệ quả nêu ở đây.
+Bạn đã có sẵn diagram task-struct-arm64.md trong docs/diagrams/ — muốn mình đối chiếu nó với đoạn code này để làm rõ 2 tầng "state" luôn không?

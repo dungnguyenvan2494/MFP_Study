@@ -1,0 +1,154 @@
+<mxfile host="app.diagrams.net" agent="ChatGPT">
+  <diagram id="panelcom-clean" name="PanelCom UART RX → Task Flow">
+    <mxGraphModel dx="1654" dy="1968" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1050" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hw" parent="1" style="swimlane;horizontal=1;startSize=32;rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#eef2f7;strokeColor=#9aa8b5;" value="UART PANEL HW" vertex="1">
+          <mxGeometry height="90" width="1260" x="20" y="-200" as="geometry" />
+        </mxCell>
+        <mxCell id="hw1" parent="hw" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e8f1ff;strokeColor=#4a78a8;" value="UART RX data / FIFO" vertex="1">
+          <mxGeometry height="45" width="220" x="520" y="43" as="geometry" />
+        </mxCell>
+        <mxCell id="irq" parent="1" style="swimlane;horizontal=1;startSize=32;rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fff1f0;strokeColor=#d9534f;fontColor=#9b1c1c;" value="🔴 INTERRUPT CONTEXT" vertex="1">
+          <mxGeometry height="250" width="1260" x="20" y="-70" as="geometry" />
+        </mxCell>
+        <mxCell id="i1" parent="irq" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="THRF_SerialCommunication()" vertex="1">
+          <mxGeometry height="58" width="205" x="50" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i2" parent="irq" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="SerialComProsess() &amp;pPnlComManage" vertex="1">
+          <mxGeometry height="58" width="205" x="295" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i3" parent="irq" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="sysBspPanelUartRxCheck() == true?" vertex="1">
+          <mxGeometry height="58" width="205" x="540" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i4" parent="irq" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="RxSerialCommunication() sysBspPanelUartRxChar()" vertex="1">
+          <mxGeometry height="58" width="225" x="785" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="i5" parent="irq" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="SetAnalyzeRingBuffer() &lt;br&gt;&lt;br&gt;buf, byteCnt" vertex="1">
+          <mxGeometry height="58" width="190" x="1050" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="shared" parent="1" style="swimlane;horizontal=1;startSize=32;rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#f3edff;strokeColor=#8e6cc7;fontColor=#65429b;" value="🟣 SHARED DATA — RING BUFFER" vertex="1">
+          <mxGeometry height="120" width="1260" x="20" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="buf" parent="shared" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#eee5ff;strokeColor=#8e6cc7;fontStyle=1;" value="AnalyzeBuffer Ring Buffer:&amp;nbsp; AnlyzeStorageByte += byteCnt" vertex="1">
+          <mxGeometry height="65" width="330" x="455" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="bufnote" parent="shared" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" value="Producer: IRQ Consumer: AnalyzeControlTask Protected by sysBspPanelSpinLock" vertex="1">
+          <mxGeometry height="80" width="330" x="850" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="soft" parent="1" style="swimlane;horizontal=1;startSize=32;rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fff7e6;strokeColor=#e6a23c;fontColor=#9a6700;" value="🟠 SOFTIRQ / TASKLET CONTEXT" vertex="1">
+          <mxGeometry height="150" width="1260" x="20" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" parent="soft" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="tasklet_schedule(&amp;pIntTasklet)" vertex="1">
+          <mxGeometry height="55" width="270" x="90" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" parent="soft" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="PanelCom_tasklet(v)" vertex="1">
+          <mxGeometry height="55" width="220" x="430" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" parent="soft" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="i32_AnalyzeCount++ AnalyzeFlag = ACTIVE wake_up(&amp;AnalyzeWaitq)" vertex="1">
+          <mxGeometry height="75" width="330" x="720" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="task" parent="1" style="swimlane;horizontal=1;startSize=32;rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#eef9f0;strokeColor=#4caf50;fontColor=#237a35;" value="🟢 PROCESS CONTEXT — KTHREAD" vertex="1">
+          <mxGeometry height="300" width="1260" x="20" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="t1" parent="task" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="AnalyzeControlTask (kthread)" vertex="1">
+          <mxGeometry height="58" width="190" x="45" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="t2" parent="task" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e8f1ff;strokeColor=#4a78a8;" value="wait_event( AnalyzeWaitq, AnalyzeFlag)" vertex="1">
+          <mxGeometry height="58" width="225" x="275" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="t3" parent="task" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="AnalyzeReceiveData() SpinLock → read AnalyzeBuffer" vertex="1">
+          <mxGeometry height="78" width="250" x="540" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="t4" parent="task" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="Find DEF_CMD_RX_HEADER + command length" vertex="1">
+          <mxGeometry height="58" width="225" x="830" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="t5" parent="task" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="SerialCommandAnalyze() Dispatch command" vertex="1">
+          <mxGeometry height="58" width="170" x="1090" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="t6" parent="task" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="i32_AnalyzeCount-- Hết việc → AnalyzeFlag = WAIT" vertex="1">
+          <mxGeometry height="65" width="300" x="600" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="cmd" parent="task" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" value="Command handlers: Key • Touch • NFC • ..." vertex="1">
+          <mxGeometry height="70" width="250" x="930" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="hw1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="i1" value="RX interrupt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="i1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="i2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="i2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="i3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="i3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="i4" value="true">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="i4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="i5" value="byteCnt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="i5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="buf" value="write">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1120" y="250" />
+              <mxPoint x="640" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="i5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="s1" value="result &gt; 0">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1340" y="29.06" />
+              <mxPoint x="1340" y="210" />
+              <mxPoint x="244.94" y="210" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="s1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="s2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="s2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="s3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t2" value="wake_up">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="610" />
+              <mxPoint x="407.53" y="610" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="t1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t2" value="start / wait">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="t2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t3" value="wake">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="buf" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;dashed=1;strokeColor=#777777;" target="t3" value="read">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="t3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="t4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="t5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t6" value="done">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1195.06" y="880" />
+              <mxPoint x="770" y="880" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="t6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="t2" value="loop / wait again">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="t5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;" target="cmd" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

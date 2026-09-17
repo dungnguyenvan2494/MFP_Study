@@ -1,0 +1,167 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="rcu-clean" name="RCU call_rcu to Callback">
+    <mxGraphModel dx="1562" dy="1767" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="lane0" parent="1" style="swimlane;horizontal=0;startSize=30;rounded=1;fillColor=#eef2f7;strokeColor=#718096;fontStyle=1;" value="① CALLER / PRODUCER" vertex="1">
+          <mxGeometry height="90" width="1280" x="20" y="-190" as="geometry" />
+        </mxCell>
+        <mxCell id="A" parent="lane0" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e8f1ff;strokeColor=#4a78a8;" value="call_rcu(head, func) tree.c:3089" vertex="1">
+          <mxGeometry height="55" width="210" x="70" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="B" parent="lane0" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e8f1ff;strokeColor=#4a78a8;" value="__call_rcu() tree.c:2990" vertex="1">
+          <mxGeometry height="55" width="200" x="340" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="a" edge="1" parent="lane0" source="A" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="B" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C" parent="lane0" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e8f1ff;strokeColor=#4a78a8;" value="__call_rcu_core() → invoke_rcu_core()" vertex="1">
+          <mxGeometry height="55" width="235" x="590" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="e" edge="1" parent="lane0" source="B" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="C" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="D" parent="lane0" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e8f1ff;strokeColor=#4a78a8;" value="rcu_accelerate_cbs() request GP nếu cần" vertex="1">
+          <mxGeometry height="55" width="240" x="920" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="f" edge="1" parent="lane0" source="C" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="D" value="nếu cần GP">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lane1" parent="1" style="swimlane;horizontal=0;startSize=30;rounded=1;fillColor=#f3edff;strokeColor=#8e6cc7;fontStyle=1;" value="② PER-CPU CALLBACK LIST" vertex="1">
+          <mxGeometry height="145" width="1280" x="20" y="-40" as="geometry" />
+        </mxCell>
+        <mxCell id="E" parent="lane1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#eee5ff;strokeColor=#8e6cc7;" value="rcu_segcblist_enqueue() → RCU_NEXT_TAIL" vertex="1">
+          <mxGeometry height="62" width="280" x="130" y="41.5" as="geometry" />
+        </mxCell>
+        <mxCell id="F" parent="lane1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#eee5ff;strokeColor=#8e6cc7;" value="RCU segments NEXT / WAIT / DONE" vertex="1">
+          <mxGeometry height="62" width="240" x="480" y="41.5" as="geometry" />
+        </mxCell>
+        <mxCell id="c" edge="1" parent="lane1" source="E" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="F" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="G" parent="lane1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#eee5ff;strokeColor=#8e6cc7;" value="Callback đang chờ GP" vertex="1">
+          <mxGeometry height="62" width="230" x="800" y="41.5" as="geometry" />
+        </mxCell>
+        <mxCell id="d" edge="1" parent="lane1" source="F" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="G" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lane2" parent="1" style="swimlane;horizontal=0;startSize=30;rounded=1;fillColor=#fff7e6;strokeColor=#e6a23c;fontStyle=1;" value="③ RCU CORE / SCHEDULER TICK" vertex="1">
+          <mxGeometry height="260" width="1280" x="20" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="H" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="rcu_sched_clock_irq() tree.c:2612" vertex="1">
+          <mxGeometry height="60" width="220" x="120" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="I" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="invoke_rcu_core() tree.c:2628" vertex="1">
+          <mxGeometry height="60" width="205" x="497.5" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="h" edge="1" parent="lane2" source="H" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="I" value="mỗi scheduler tick">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="J" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="rcu_core() tree.c:2734" vertex="1">
+          <mxGeometry height="60" width="185" x="760" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="i" edge="1" parent="lane2" source="I" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="J" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="K" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="rcu_check_quiescent_state() tree.c:2337" vertex="1">
+          <mxGeometry height="80" width="260" x="1020" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="j" edge="1" parent="lane2" source="J" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="K" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="L" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="note_gp_changes() tree.c:1682 / 1634" vertex="1">
+          <mxGeometry height="60" width="160" x="1070" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="k" edge="1" parent="lane2" source="K" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="L" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lane3" parent="1" style="swimlane;horizontal=0;startSize=30;rounded=1;fillColor=#fff1f0;strokeColor=#d9534f;fontStyle=1;" value="④ GP KTHREAD / RCU-NODE TREE" vertex="1">
+          <mxGeometry height="285" width="1280" x="20" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="O" parent="lane3" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="rcu_node tree rnp-&gt;qsmask" vertex="1">
+          <mxGeometry height="60" width="200" x="590" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="lane4" parent="1" style="swimlane;horizontal=0;startSize=30;rounded=1;fillColor=#eef9f0;strokeColor=#4caf50;fontStyle=1;" value="⑤ CALLBACK INVOCATION" vertex="1">
+          <mxGeometry height="120" width="1280" x="20" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="U" parent="lane4" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="rcu_segcblist_extract_done_cbs() → callback ready" vertex="1">
+          <mxGeometry height="60" width="315" x="200" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="V" parent="lane4" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#e0f4e4;strokeColor=#4caf50;" value="invoke callback func(head) Callback execution" vertex="1">
+          <mxGeometry height="60" width="300" x="690" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t" edge="1" parent="lane4" source="U" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="V" value="invoke">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="M" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="rcu_gp_kthread() tree.c:2112" vertex="1">
+          <mxGeometry height="60" width="215" x="55" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="N" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="rcu_gp_init() snapshot CPU + tăng gp_seq" vertex="1">
+          <mxGeometry height="80" width="245" x="315" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="P" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="rcu_report_qs_rnp() tree.c:2181" vertex="1">
+          <mxGeometry height="80" width="220" x="850" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="Q" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="root qsmask == 0 → GP complete" vertex="1">
+          <mxGeometry height="60" width="135" x="1120" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="R" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffe1df;strokeColor=#d9534f;" value="rcu_gp_cleanup() tree.c:2011" vertex="1">
+          <mxGeometry height="60" width="235" x="315" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="S" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#eee5ff;strokeColor=#8e6cc7;" value="rcu_segcblist_advance() → RCU_DONE_TAIL" vertex="1">
+          <mxGeometry height="80" width="270" x="605" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="T" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontSize=13;fillColor=#ffedd0;strokeColor=#e6a23c;" value="__note_gp_changes() trên từng CPU" vertex="1">
+          <mxGeometry height="60" width="240" x="930" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="b" edge="1" parent="1" source="B" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="E" value="enqueue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g" edge="1" parent="1" source="D" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="M" value="request GP">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1060" y="-80" />
+              <mxPoint x="120" y="-80" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l" edge="1" parent="1" source="M" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="N" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m" edge="1" parent="1" source="N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="O" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n" edge="1" parent="1" source="O" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="P" value="CPU QS">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="o" edge="1" parent="1" source="P" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="Q" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p" edge="1" parent="1" source="Q" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="R" value="GP complete">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1270" y="565" />
+              <mxPoint x="1270" y="720" />
+              <mxPoint x="432.56" y="720" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="q" edge="1" parent="1" source="R" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="S" value="advance">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r" edge="1" parent="1" source="S" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="T" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s" edge="1" parent="1" source="T" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeWidth=2;" target="U" value="done callbacks">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1050" y="770" />
+              <mxPoint x="377.56" y="770" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

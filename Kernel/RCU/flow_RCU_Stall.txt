@@ -1,0 +1,103 @@
+# RCU CPU Stall Warning — flow function
+
+Nguồn: `Kernel/K-S800/Src/kernel/rcu/tree_stall.h` + `tree.c` (đọc trực tiếp từ source thật trên board K-S800).
+
+## Sequence diagram: từ scheduler tick đến khi in stall warning
+
+```mermaid
+
+sequenceDiagram
+
+    participant Tick as rcu_sched_clock_irq() [tree.c:2612]
+
+    participant Pending as rcu_pending() [tree.c:3814]
+
+    participant Check as check_cpu_stall() [tree_stall.h:627]
+
+    participant Print1 as print_cpu_stall() [tree_stall.h:557]
+
+    participant PrintN as print_other_cpu_stall() [tree_stall.h]
+
+    participant Core as rcu_core() [tree.c:2734]
+
+    participant GPStall as rcu_check_gp_start_stall() [tree_stall.h:776]
+
+    Tick->>Pending: gọi mỗi tick, kiểm tra CPU-local work
+
+    Pending->>Check: check_cpu_stall(rdp) [tree.c:3823]<br/>(luôn check trước tiên, expensive nhất)
+
+    Check->>Check: đọc rcu_state.gp_seq, jiffies_stall, gp_start<br/>với memory barrier để loại false positive
+
+    alt Không có GP đang chạy hoặc chưa quá hạn
+
+        Check-->>Pending: return (không làm gì)
+
+    else jiffies vượt rcu_state.jiffies_stall<br/>VÀ rnp->qsmask còn bit của CPU này
+
+        Check->>Check: kvm_check_and_clear_guest_paused()<br/>(loại trừ case VM bị host tạm dừng)
+
+        alt CPU tự phát hiện mình là thủ phạm
+
+            Check->>Print1: print_cpu_stall(gps)
+
+            Print1->>Print1: rcu_stall_kick_kthreads()<br/>đánh thức rcuc/rcub kthread nghi bị đói CPU
+
+            Print1->>Print1: print_cpu_stall_info()<br/>dump ->dynticks, ->qs, softirq state
+
+            Print1->>Print1: rcu_check_gp_kthread_starvation()<br/>kiểm tra rcu_gp_kthread có bị đói không
+
+            Print1->>Print1: rcu_dump_cpu_stacks()<br/>in stack của các CPU nghi ngờ
+
+            Print1->>Print1: set_tsk_need_resched(current)<br/>ép context switch để "cứu" RCU
+
+        else Đã cho các CPU khác thời gian dump stack<br/>nhưng vẫn không báo QS
+
+            Check->>PrintN: print_other_cpu_stall(gs2, gps)
+
+            PrintN->>PrintN: dump stack toàn bộ CPU<br/>còn set trong rnp->qsmask
+
+        end
+
+    end
+
+    Core->>GPStall: rcu_check_gp_start_stall(rnp, rdp, delay) [tree.c:2767]
+
+    Note over GPStall: phát hiện trường hợp khác:<br/>GP được request nhưng rcu_gp_kthread<br/>không bao giờ khởi động (CONFIG_PROVE_RCU)
+
+```
+
+## Đọc sơ đồ này thế nào
+
+1. **Điểm vào là `rcu_pending()`**, được gọi từ mỗi scheduler tick (`rcu_sched_clock_irq()`). Comment trong code (tree.c:3811) nói rõ: *"we must check for CPU stalls first, else we might not get a chance"* — stall check luôn chạy trước mọi việc khác.
+
+2. **`check_cpu_stall()` dùng 3 lần đọc + memory barrier** (`gs1`, `js`, `gps`, `gs2`) để tránh false positive khi 1 GP vừa kết thúc và 1 GP mới bắt đầu ngay giữa lúc đang kiểm tra.
+
+3. **Hai nhánh warning khác nhau**:
+
+   - `print_cpu_stall()` — khi **chính CPU đang chạy** là CPU chưa báo QS (tự phát hiện chính mình).
+
+   - `print_other_cpu_stall()` — khi CPU hiện tại phát hiện **CPU khác** chưa báo QS sau khi đã cho chúng thời gian (`RCU_STALL_RAT_DELAY`) để tự dump.
+
+4. **`rcu_check_gp_start_stall()`** là cơ chế riêng, tách biệt: nó không phát hiện "GP chạy quá lâu" mà phát hiện "GP được yêu cầu nhưng `rcu_gp_kthread` không bao giờ chạy" — chỉ bật khi `CONFIG_PROVE_RCU`.
+
+5. **`set_tsk_need_resched(current)`** ở cuối `print_cpu_stall()` là hành động "cứu chữa" — ép một context switch xảy ra, vì context switch chính là 1 quiescent state, có thể giúp RCU machinery thoát kẹt.
+
+## ⚠️ Customization đặc biệt trên BSP này (K-S800 / KM_BIZHUB)
+
+Khác với mainline Linux, `print_cpu_stall()` trong file này có thêm code dưới `#if defined(CONFIG_KM_BIZHUB)` ở [tree_stall.h:598-624](Kernel/K-S800/Src/kernel/rcu/tree_stall.h#L598-L624):
+
+- Gọi `THRL_DispCpuStallTM()` để hiển thị task monitor khi stall xảy ra.
+
+- Gọi `panic_on_rcu_stall()` nếu build `FUM_LINUX`.
+
+- **Gọi `rebootCPU()` để tự động reboot board** khi phát hiện CPU stall (comment tiếng Nhật "2020/02/13 Sky CPUストールを検出したらリブートさせる" — "khi phát hiện CPU stall thì reboot").
+
+Đây là hành vi **không có trong RCU mainline** — nếu bạn debug 1 RCU stall thật trên board này, cần biết rằng board có thể tự reboot ngay sau khi in xong stack dump, nên log phải được capture qua console/UART trước khi mất.
+
+## Liên quan
+
+- [rcu-gp-statemachine.md](rcu-gp-statemachine.md) — stall thường xảy ra khi `rcu_gp_kthread` bị kẹt ở state **WaitingQS**.
+
+- [rcu-callflow.md](rcu-callflow.md) — luồng bình thường khi RCU hoạt động đúng (không stall).
+
+- Dùng skill `kernel-debug-toolkit` nếu bạn có log stall thật cần giải mã (`INFO: rcu_sched detected stalls...`).

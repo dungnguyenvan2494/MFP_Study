@@ -1,0 +1,93 @@
+rcu_check_gp_start_stall() — phát hiện bug hiếm: "yêu cầu GP nhưng không ai bắt đầu nó"
+Hàm này khác hẳn mọi hàm bạn học trước đó — nó không phát hiện "GP chạy quá lâu", mà phát hiện 1 loại bug nghiêm trọng hơn nhiều: "đã có ai đó yêu cầu 1 Grace Period mới, nhưng rcu_gp_kthread chưa bao giờ bắt đầu xử lý yêu cầu đó". Đây là dấu hiệu của 1 lỗi logic thật trong chính code RCU (không phải do CPU nào đó chạy chậm) — vì vậy nó chỉ bật khi CONFIG_PROVE_RCU (chế độ debug đặc biệt để "chứng minh" tính đúng đắn của RCU, dùng khi phát triển/test kernel, không bật trên bản production thông thường).
+
+Cấu trúc hàm này là 1 mẫu lập trình rất kinh điển trong kernel gọi là "double-checked locking" (kiểm tra 2-3 lần, càng về sau càng chắc chắn hơn nhưng cũng tốn kém hơn) — mình sẽ giải thích kỹ mẫu này vì bạn sẽ gặp lại nó rất nhiều trong kernel.
+
+Bước 1 — Kiểm tra nhanh, không khoá gì cả (rẻ nhất)
+
+struct rcu_node *rnp_root = rcu_get_root();
+static atomic_t warned = ATOMIC_INIT(0);
+
+if (!IS_ENABLED(CONFIG_PROVE_RCU) || rcu_gp_in_progress() ||
+    ULONG_CMP_GE(READ_ONCE(rnp_root->gp_seq),
+                 READ_ONCE(rnp_root->gp_seq_needed)) ||
+    !smp_load_acquire(&rcu_state.gp_kthread)) // Get stable kthread.
+    return;
+static atomic_t warned — 1 biến đếm atomic (đảm bảo đọc/ghi an toàn giữa nhiều CPU cùng lúc mà không cần lock), dùng làm "cờ đã cảnh báo chưa" — mục đích là chỉ in cảnh báo này đúng 1 lần trong toàn bộ vòng đời hệ thống (giống WARN_ONCE bạn đã học, nhưng ở đây tự viết tay bằng atomic để kiểm soát chi tiết hơn).
+
+4 điều kiện thoát sớm (return ngay, không làm gì thêm):
+
+!IS_ENABLED(CONFIG_PROVE_RCU) — tính năng debug này không được bật khi build kernel → thoát luôn.
+rcu_gp_in_progress() — đang có 1 GP chạy rồi → không có gì bất thường, GP đã bắt đầu đúng như mong đợi.
+rnp_root->gp_seq >= rnp_root->gp_seq_needed — số GP hiện tại đã "đủ" so với số GP mà hệ thống cần → nghĩa là không có yêu cầu GP nào đang bị treo cả.
+!smp_load_acquire(&rcu_state.gp_kthread) — kthread GP còn chưa được tạo (hệ thống đang khởi động sớm) → chưa có gì để kiểm tra.
+Đây là bước rẻ nhất — chỉ đọc vài biến, không cần khoá lock. Trong vận hành bình thường (hệ thống khoẻ mạnh), hàm sẽ thoát ngay ở đây gần như 100% số lần gọi.
+
+Bước 2 — Vẫn chưa khoá, nhưng thêm điều kiện thời gian
+
+j = jiffies; /* Expensive access, and in common case don't get here. */
+if (time_before(j, READ_ONCE(rcu_state.gp_req_activity) + gpssdelay) ||
+    time_before(j, READ_ONCE(rcu_state.gp_activity) + gpssdelay) ||
+    atomic_read(&warned))
+    return;
+Comment ngay dòng đầu rất đáng chú ý: "Expensive access, and in common case don't get here" — đọc jiffies được coi là "đắt" tương đối (trên 1 số kiến trúc phải qua 1 lớp trừu tượng), và code cố tình viết để trường hợp bình thường không bao giờ chạy tới đây (đã bị chặn ở bước 1 rồi).
+
+3 điều kiện:
+
+j < gp_req_activity + gpssdelay — thời điểm yêu cầu GP gần nhất (gp_req_activity) cộng thêm khoảng trễ cho phép (gpssdelay) vẫn còn ở tương lai → chưa đủ lâu để coi là bất thường, còn quá sớm để kết luận.
+Tương tự với gp_activity — lần cuối kthread GP "còn sống" (báo hoạt động) cũng chưa đủ lâu.
+atomic_read(&warned) — đã cảnh báo 1 lần rồi → không cần lặp lại.
+Nếu qua được cả 2 bước trên mà vẫn chưa return — nghĩa là tình huống thực sự đáng ngờ, lúc này mới đáng bỏ công khoá lock để kiểm tra kỹ, chính xác hơn.
+
+Bước 3 — Khoá lock của node hiện tại, kiểm tra lại (double-check)
+
+raw_spin_lock_irqsave_rcu_node(rnp, flags);
+j = jiffies;
+if (rcu_gp_in_progress() ||
+    ULONG_CMP_GE(READ_ONCE(rnp_root->gp_seq), READ_ONCE(rnp_root->gp_seq_needed)) ||
+    time_before(j, READ_ONCE(rcu_state.gp_req_activity) + gpssdelay) ||
+    time_before(j, READ_ONCE(rcu_state.gp_activity) + gpssdelay) ||
+    atomic_read(&warned)) {
+    raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+    return;
+}
+Vì sao phải kiểm tra lại y hệt các điều kiện ở bước 1-2, sau khi đã khoá lock? Đây chính là bản chất của "double-checked locking": giữa lúc bước 1-2 đọc dữ liệu không có lock và lúc này lấy được lock, có thể một CPU khác đã thay đổi tình huống (ví dụ GP vừa mới bắt đầu đúng lúc đó) — nên phải đọc lại có lock để chắc chắn 100% trước khi tiến thêm bước tốn kém hơn (chuẩn bị in cảnh báo). Nếu bất kỳ điều kiện nào giờ đã đúng (tình huống đã "lành" trở lại) → nhả lock, thoát, không báo động giả.
+
+Bước 4 — Khoá thêm node gốc nếu cần, kiểm tra lần 3, rồi mới thực sự cảnh báo
+
+/* Hold onto the leaf lock to make others see warned==1. */
+if (rnp_root != rnp)
+    raw_spin_lock_rcu_node(rnp_root); /* irqs already disabled. */
+j = jiffies;
+if (rcu_gp_in_progress() ||
+    ULONG_CMP_GE(READ_ONCE(rnp_root->gp_seq), READ_ONCE(rnp_root->gp_seq_needed)) ||
+    time_before(j, READ_ONCE(rcu_state.gp_req_activity) + gpssdelay) ||
+    time_before(j, READ_ONCE(rcu_state.gp_activity) + gpssdelay) ||
+    atomic_xchg(&warned, 1)) {
+    if (rnp_root != rnp)
+        raw_spin_unlock_rcu_node(rnp_root);
+    raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+    return;
+}
+if (rnp_root != rnp) — nhớ lại cây rcu_node: rnp (tham số truyền vào, thường là leaf node của CPU đang gọi) có thể khác với rnp_root (node gốc của cả cây). Nếu hệ thống chỉ có 1 node duy nhất, chúng là cùng 1 node, không cần khoá thêm; nếu có nhiều tầng, cần khoá cả node gốc trước khi sửa dữ liệu ở đó.
+Điểm khác biệt quan trọng nhất ở bước này: atomic_xchg(&warned, 1) thay vì atomic_read(&warned). atomic_xchg = "đọc giá trị cũ, đồng thời ghi giá trị mới vào, atomically" (không thể bị CPU khác chen ngang giữa đọc và ghi). Ở đây: đọc xem đã warned chưa, và ngay lập tức set warned = 1 trong cùng 1 thao tác. Đây chính là kỹ thuật đảm bảo chỉ đúng 1 CPU duy nhất trong số nhiều CPU có thể đang chạy tới đây cùng lúc, được phép in cảnh báo — y hệt kỹ thuật cmpxchg bạn đã học ở check_cpu_stall(), chỉ khác hàm atomic dùng.
+Nếu bất kỳ điều kiện nào đúng (kể cả việc "vừa xchg thấy warned đã là 1 từ trước, do 1 CPU khác vừa lo xong việc này") → nhả hết lock, thoát.
+
+
+WARN_ON(1);
+if (rnp_root != rnp)
+    raw_spin_unlock_rcu_node(rnp_root);
+raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+show_rcu_gp_kthreads();
+Nếu vượt qua được cả 3 lần kiểm tra, giờ mới thực sự tin chắc có bug: WARN_ON(1) — luôn đúng, mục đích chỉ để in ra 1 cảnh báo kèm stack trace nơi gọi (không phải kiểm tra điều kiện thật, chỉ là cách "ép" in warning). Nhả 2 lock theo đúng thứ tự ngược lại lúc khoá (root trước, rồi tới rnp), rồi gọi show_rcu_gp_kthreads() (hàm bạn đã thấy tên ở phần đầu tree_stall.h — in chi tiết trạng thái toàn bộ hệ thống GP kthread) để cung cấp thông tin điều tra đầy đủ.
+
+Vì sao phải kiểm tra tới 3 lần thay vì 1 lần có lock ngay từ đầu?
+Đây là câu hỏi quan trọng nhất để hiểu triết lý của mẫu này: hàm này được gọi rất thường xuyên (từ rcu_core(), tức là mỗi khi có việc RCU cần xử lý). Nếu lần nào cũng khoá lock ngay từ đầu để kiểm tra, sẽ gây tranh chấp lock không cần thiết trên 1 hệ thống nhiều CPU — làm chậm toàn bộ hệ thống chỉ để kiểm tra 1 tình huống gần như không bao giờ xảy ra (vì đây là phát hiện bug, không phải hoạt động bình thường). Nên chiến lược ở đây là: "lạc quan trước — đọc không lock, rẻ và nhanh; chỉ khi thấy nghi ngờ mới bỏ công khoá lock để xác nhận chắc chắn." Đây là 1 pattern tối ưu hiệu năng rất phổ biến khi trường hợp thường gặp (common case) cần nhanh, còn trường hợp hiếm (rare case, ở đây là có bug) chấp nhận chậm hơn 1 chút.
+
+Tóm tắt bằng 1 câu
+rcu_check_gp_start_stall() dùng mẫu "kiểm tra 3 lần, khoá dần từ không-lock → 1-lock → 2-lock" để phát hiện với chi phí thấp nhất trong trường hợp bình thường (không bug), nhưng vẫn đảm bảo chính xác tuyệt đối khi thực sự có bug: yêu cầu GP mới đã được ghi nhận nhưng rcu_gp_kthread chưa bao giờ khởi động xử lý nó — dùng atomic_xchg để đảm bảo dù nhiều CPU cùng phát hiện, chỉ đúng 1 lần cảnh báo duy nhất được in ra.
+
+Khái niệm mới, nên nắm để đọc kernel dễ hơn
+Double-checked locking — mẫu tối ưu "kiểm tra không lock trước, có lock sau" — sẽ gặp lại rất nhiều nơi trong kernel (và cả code C nói chung).
+atomic_t / atomic_xchg / atomic_read — kiểu dữ liệu đảm bảo thao tác an toàn giữa nhiều CPU mà không cần spinlock (nhẹ hơn lock, nhưng chỉ áp dụng được cho các thao tác đơn giản như đọc/ghi/so sánh 1 số nguyên).
+CONFIG_PROVE_RCU — 1 trong nhiều "chế độ chứng minh tính đúng đắn" (lockdep, KASAN cũng cùng họ triết lý) chỉ bật khi debug/test kernel, không dùng trên production vì tốn hiệu năng.

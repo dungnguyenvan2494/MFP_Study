@@ -1,0 +1,52 @@
+rcu_dump_cpu_stacks() — đi khắp cây rcu_node, dump stack của từng "nghi phạm"
+Được gọi từ print_cpu_stall() (bạn đã thấy dòng rcu_dump_cpu_stacks(); ở hàm đó). Đây là hàm thực hiện đúng việc bạn đã nghe nhắc tới: "dump stack của các CPU còn nợ QS" — giờ mình đi vào chi tiết cách nó tìm ra đúng những CPU nào cần dump, thay vì dump tất cả (dump tất cả sẽ rất lãng phí và làm log dài không cần thiết).
+
+Nhắc lại cấu trúc cây rcu_node trước khi đọc
+Đây là lần đầu bạn thấy code duyệt cây rcu_node thực sự, nên cần hình dung rõ:
+
+Thay vì 1 biến "còn CPU nào chưa báo QS" chung cho toàn hệ thống (sẽ bị hàng nghìn CPU tranh nhau ghi/đọc, cực kỳ nghẽn), RCU chia CPU thành từng nhóm nhỏ, mỗi nhóm có 1 rcu_node riêng quản lý bitmask qsmask của chính nhóm đó. Các rcu_node này xếp thành 1 cây — các node ở tầng dưới cùng, trực tiếp "sở hữu" 1 nhóm CPU thật, gọi là leaf node (nút lá). Các node cao hơn chỉ tổng hợp trạng thái từ node con, không gắn trực tiếp với CPU nào.
+
+Vì mỗi CPU thật chỉ thuộc về đúng 1 leaf node, nên muốn biết "CPU nào còn nợ QS", ta chỉ cần duyệt các leaf node, không cần đụng tới các node cấp cao hơn.
+
+Giải thích từng dòng
+
+static void rcu_dump_cpu_stacks(void)
+{
+	int cpu;
+	unsigned long flags;
+	struct rcu_node *rnp;
+
+	rcu_for_each_leaf_node(rnp) {
+rcu_for_each_leaf_node(rnp) — 1 macro giúp lặp qua tất cả leaf node trong cây rcu_node của hệ thống (số lượng leaf node phụ thuộc số CPU và cấu hình fanout của cây — hệ thống nhỏ như board của bạn có thể chỉ có 1 leaf node duy nhất chứa hết mọi CPU).
+
+
+		raw_spin_lock_irqsave_rcu_node(rnp, flags);
+Khoá spinlock của node này lại (đã giải thích khái niệm spinlock ở các hàm trước) — vì sắp đọc rnp->qsmask, dữ liệu chia sẻ mà CPU khác cũng có thể đang sửa cùng lúc (ví dụ khi 1 CPU vừa báo QS, nó sẽ gọi rcu_report_qs_rnp() để clear bit tương ứng trong qsmask — nếu đọc không có lock, có thể đọc phải giá trị "nửa cũ nửa mới").
+
+
+		for_each_leaf_node_possible_cpu(rnp, cpu)
+Duyệt qua từng CPU thuộc về node lá này (không phải mọi CPU trong hệ thống — chỉ những CPU mà node rnp hiện tại quản lý).
+
+
+			if (rnp->qsmask & leaf_node_cpu_bit(rnp, cpu))
+Đây là điều kiện lọc quan trọng nhất: leaf_node_cpu_bit(rnp, cpu) tính ra bit đại diện riêng cho CPU này trong bitmask của node (giống hệt rdp->grpmask bạn đã thấy ở check_cpu_stall, nhưng tính trực tiếp từ cpu thay vì lấy sẵn từ rdp). Phép & kiểm tra: "bit của CPU này có đang bật trong qsmask không?" — bật nghĩa là CPU đó vẫn còn nợ quiescent state, chính là "nghi phạm" cần điều tra. Nếu bit đã tắt (CPU đã báo QS rồi) → bỏ qua, không dump — đây là lý do hàm này không dump tất cả CPU, chỉ dump đúng những CPU còn treo.
+
+
+				if (!trigger_single_cpu_backtrace(cpu))
+					dump_cpu_task(cpu);
+2 cách khác nhau để lấy stack trace của 1 CPU khác với CPU đang chạy code này (nhớ lại: hàm này đang chạy trên 1 CPU, nhưng cần biết CPU khác đang làm gì — không thể tự đọc register của CPU khác trực tiếp, phải nhờ cơ chế đặc biệt):
+
+trigger_single_cpu_backtrace(cpu) — gửi 1 NMI (Non-Maskable Interrupt) tới đúng CPU đó, ép nó tạm dừng bất kể đang làm gì (NMI không thể bị chặn/trì hoãn, đúng như tên gọi) để in ra stack trace của chính nó tại đúng thời điểm bị "bắt tại trận". Đây là cách chính xác nhất — thấy đúng CPU đang chạy gì ngay lúc đó. Trả về true nếu gửi NMI thành công.
+Nếu thất bại (một số kiến trúc/cấu hình không hỗ trợ NMI backtrace — hàm trả false, nên !trigger... đúng), dùng phương án dự phòng dump_cpu_task(cpu) — cách kém chính xác hơn (dựa vào thông tin scheduler đã lưu sẵn về task đang chạy trên CPU đó, không "bắt tại trận" trực tiếp bằng NMI), nhưng vẫn cho ra thông tin hữu ích khi không còn cách nào khác.
+
+		raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+	}
+}
+Nhả lock của node này ra, rồi vòng rcu_for_each_leaf_node tiếp tục sang node lá kế tiếp (nếu có nhiều hơn 1).
+
+Tóm tắt bằng 1 câu
+Hàm này duyệt qua toàn bộ leaf node trong cây rcu_node, với mỗi CPU thuộc node đó, kiểm tra bit tương ứng trong qsmask — chỉ những CPU còn nợ quiescent state mới bị "gọi tên": ưu tiên dùng NMI để bắt stack trace chính xác ngay tại thời điểm đó, nếu không hỗ trợ thì dùng thông tin scheduler đã lưu sẵn làm phương án dự phòng.
+
+Khái niệm mới ở hàm này
+NMI (Non-Maskable Interrupt) — loại ngắt đặc biệt không thể bị local_irq_disable() chặn, dùng cho các tình huống "phải chạy bằng mọi giá" như watchdog hay lấy backtrace khẩn cấp.
+Leaf node trong cây rcu_node — bạn vừa thấy code thật duyệt cấu trúc này; nếu muốn hiểu rõ hơn hình dạng cây (bao nhiêu tầng, fanout bao nhiêu trên board cụ thể của bạn), mình có thể trace tiếp cách cây được khởi tạo trong rcu_init_one() ở tree.c — cho bạn thấy con số thật thay vì lý thuyết chung chung.

@@ -1,0 +1,59 @@
+rcu_sched_clock_irq() — hàm này chạy khi nào?
+Trước tiên, cần hiểu bối cảnh: CPU có một "đồng hồ" ngắt định kỳ gọi là scheduler tick (thường mỗi 1-10ms tuỳ cấu hình, gọi là HZ). Mỗi lần tick này xảy ra, kernel tạm dừng bất kỳ code nào đang chạy, xử lý vài việc "dọn dẹp định kỳ", rồi chạy tiếp. rcu_sched_clock_irq() chính là 1 trong những việc dọn dẹp đó — nó được gọi trên mọi CPU, mỗi lần tick.
+
+Nhiệm vụ của nó: kiểm tra xem CPU này "đã an toàn để RCU tiếp tục" hay chưa (khái niệm gọi là quiescent state — QS, đã giải thích ở các sơ đồ trước).
+
+Giải thích từng dòng
+
+void rcu_sched_clock_irq(int user)
+{
+	trace_rcu_utilization(TPS("Start scheduler-tick"));
+Chỉ là ghi log cho tracing (ftrace), không ảnh hưởng logic. user = 1 nếu tick này xảy ra khi CPU đang chạy code userspace (app bình thường), = 0 nếu đang chạy trong kernel.
+
+
+	lockdep_assert_irqs_disabled();
+Một câu "assert" — kiểm tra chắc chắn rằng ngắt (interrupt) đang bị tắt lúc gọi hàm này. Nếu không, đây là bug (vì hàm này là một phần xử lý ngắt, nên đương nhiên interrupt phải đang tắt). Không sinh code khi build release.
+
+
+	raw_cpu_inc(rcu_data.ticks_this_gp);
+Tăng biến đếm "đã qua bao nhiêu tick kể từ khi Grace Period (GP) hiện tại bắt đầu", riêng cho từng CPU (raw_cpu_inc = tăng biến per-CPU, không cần lock vì mỗi CPU có bản riêng). Dùng để phát hiện GP kéo dài bất thường.
+
+
+	if (smp_load_acquire(this_cpu_ptr(&rcu_data.rcu_urgent_qs))) {
+Đọc cờ rcu_urgent_qs của CPU này. Cờ này được set = true ở nơi khác khi RCU "đang cần gấp" một QS từ CPU này (ví dụ GP đã chạy khá lâu mà CPU này vẫn chưa báo cáo). smp_load_acquire chỉ là cách đọc an toàn về mặt đồng bộ hoá bộ nhớ giữa nhiều CPU (memory barrier) — bạn có thể tạm hiểu đơn giản là "đọc giá trị mới nhất".
+
+
+		/* Idle and userspace execution already are quiescent states. */
+		if (!rcu_is_cpu_rrupt_from_idle() && !user) {
+			set_tsk_need_resched(current);
+			set_preempt_need_resched();
+		}
+Đây là phần quan trọng nhất để hiểu, giải thích từ đầu:
+
+Vì sao "idle" và "userspace" tự động là QS? — Nguyên tắc gốc của RCU: một CPU được coi là "an toàn" (qua QS) nếu nó chắc chắn không còn giữ tham chiếu cũ nào tới dữ liệu mà RCU đang bảo vệ. Khi CPU đang idle (không chạy gì) hoặc đang chạy code người dùng (không phải kernel), nó không thể đang ở giữa một vùng rcu_read_lock()/rcu_read_unlock() — vì vùng đó chỉ tồn tại trong code kernel. Nên 2 trạng thái này tự động "qua QS", không cần làm gì thêm.
+Vậy khi nào vào nhánh if này? — Khi tick xảy ra mà CPU không đang idle (!rcu_is_cpu_rrupt_from_idle()) và không đang chạy userspace (!user) — tức là CPU đang chạy code kernel bình thường, có thể đang ở giữa 1 công việc dài không "nghỉ" (không gọi schedule()).
+set_tsk_need_resched(current) + set_preempt_need_resched() làm gì? — Nó đánh dấu "cần lập lịch lại" lên task đang chạy. Việc này giống như gắn 1 tấm biển "hãy nhường CPU sớm nhất có thể". Lần tới khi có cơ hội (ví dụ khi kernel check điều kiện được phép preempt), scheduler sẽ ép chuyển sang task khác — và việc chuyển task (context switch) chính là một quiescent state. Đây là cách RCU "ép" một CPU ích kỷ, chạy lâu trong kernel, phải nhường chỗ để tự báo QS.
+
+		__this_cpu_write(rcu_data.rcu_urgent_qs, false);
+	}
+Sau khi đã xử lý (hoặc vì đang idle/userspace nên không cần xử lý gì thêm), tắt cờ "urgent" lại — coi như đã lo xong việc này cho lần tick này.
+
+
+	rcu_flavor_sched_clock_irq(user);
+Gọi phần xử lý "theo loại RCU cụ thể" — vì Linux có nhiều biến thể RCU (preemptible RCU cho CONFIG_PREEMPT, non-preemptible cho hệ thống thường). Hàm này sẽ tự chọn code tương ứng loại nào đang được build.
+
+
+	if (rcu_pending(user))
+		invoke_rcu_core();
+Đây là chỗ nối sang mọi thứ mình đã nói ở các sơ đồ trước: rcu_pending() kiểm tra "CPU này có việc RCU nào cần làm ngay không" (bao gồm cả check_cpu_stall() — nhớ lại sơ đồ stall detection). Nếu có, gọi invoke_rcu_core() để lên lịch chạy rcu_core() (thường qua softirq) — nơi thực sự xử lý báo cáo QS và invoke callback.
+
+
+	lockdep_assert_irqs_disabled();
+	trace_rcu_utilization(TPS("End scheduler-tick"));
+}
+Assert lại lần nữa (đảm bảo hàm không lỡ tay bật interrupt ở đâu đó bên trong), rồi log kết thúc.
+
+Tóm tắt bằng 1 câu
+Mỗi tick, hàm này hỏi: "CPU này đang idle/userspace à? Vậy tự động coi là an toàn. Đang chạy kernel lâu chưa nghỉ à? Ép nó nhường CPU sớm. Xong, còn việc RCU nào cần xử lý ngay không? Nếu có thì gọi rcu_core()." — Đây chính là "trái tim" khiến RCU tự vận hành mà không cần code của bạn phải chủ động làm gì cả.
+
+Nếu bạn chưa quen khái niệm quiescent state hay grace period từ đầu, nói mình biết — mình sẽ giải thích lại từ khái niệm gốc trước khi đi vào code.

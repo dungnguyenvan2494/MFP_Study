@@ -1,0 +1,81 @@
+check_cpu_stall() — "đồng hồ báo thức" cho RCU
+Nhắc lại: hàm này được gọi mỗi tick, từ rcu_pending() — luôn chạy đầu tiên. Nhiệm vụ: "Có GP nào đang chạy quá lâu tới mức nghi ngờ có CPU bị kẹt không? Nếu có, hãy in cảnh báo."
+
+Trước khi đọc code, cần hiểu 2 khái niệm:
+
+jiffies: bộ đếm toàn cục, tăng đều đặn theo thời gian (giống "số tick đã trôi qua kể từ khi máy boot"). Dùng để đo thời gian trong kernel.
+rcu_state.jiffies_stall: một "mốc thời gian hẹn giờ" — nếu jiffies (thời gian hiện tại) vượt qua mốc này mà GP vẫn chưa xong, coi là "nghi ngờ stall".
+Giải thích từng đoạn
+
+lockdep_assert_irqs_disabled();
+if ((rcu_stall_is_suppressed() && !READ_ONCE(rcu_kick_kthreads)) ||
+    !rcu_gp_in_progress())
+    return;
+Thoát sớm nếu:
+
+Stall warning đang bị tắt (rcu_stall_is_suppressed() — ví dụ do sysctl rcupdate.rcu_cpu_stall_suppress), và không có yêu cầu "kick kthread" đặc biệt.
+Hoặc đơn giản là không có GP nào đang chạy — không có GP thì không thể có "GP chạy quá lâu", nên không cần kiểm tra gì cả.
+
+rcu_stall_kick_kthreads();
+j = jiffies;
+"Đánh thức" các kthread RCU (rcuc/rcub) nếu chúng bị treo (phòng trường hợp chính kthread đó là thủ phạm gây stall). Rồi lấy giờ hiện tại.
+
+Đoạn phức tạp nhất: 4 lần đọc để tránh báo động giả
+
+gs1 = READ_ONCE(rcu_state.gp_seq);
+smp_rmb();
+js = READ_ONCE(rcu_state.jiffies_stall);
+smp_rmb();
+gps = READ_ONCE(rcu_state.gp_start);
+smp_rmb();
+gs2 = READ_ONCE(rcu_state.gp_seq);
+Đây là chỗ dễ nản nhất với người mới, nên mình giải thích bằng ví dụ đời thường trước:
+
+Tưởng tượng bạn đang kiểm tra "chuyến tàu số 5 có đang trễ giờ không". Bạn đọc: (1) số hiệu chuyến tàu, (2) giờ dự kiến khởi hành, (3) giờ tàu thực sự khởi hành, rồi (4) đọc lại số hiệu chuyến tàu lần nữa. Nếu số hiệu ở bước (1) và (4) khác nhau — nghĩa là trong lúc bạn đang đọc, tàu số 5 đã đi mất, tàu số 6 đã vào ga thay thế! Vậy toàn bộ thông tin (2), (3) bạn đọc được là hỗn hợp giữa 2 chuyến tàu khác nhau — không đáng tin, phải bỏ qua.
+
+Đó chính xác là ý nghĩa ở đây:
+
+gs1, gs2 = đọc gp_seq (số thứ tự Grace Period hiện tại) 2 lần, đầu và cuối.
+js = mốc "hẹn giờ stall" (jiffies_stall).
+gps = thời điểm GP hiện tại bắt đầu (gp_start).
+smp_rmb() = "memory barrier" — ép CPU đọc đúng thứ tự này, không được xáo trộn (CPU/compiler có thể tự ý sắp xếp lại thứ tự đọc để tối ưu, nên phải "khoá" thứ tự lại).
+Vì sao cần cẩn thận vậy? Vì hàm này chạy không giữ lock (để nhanh, không làm chậm mọi tick). Trong lúc nó đang đọc 4 giá trị này, một GP khác hoàn toàn có thể vừa kết thúc và GP mới vừa bắt đầu ở một CPU khác (do rcu_gp_kthread cập nhật các giá trị này theo thứ tự ngược lại, có barrier tương ứng). Nếu không kiểm tra, ta có thể lấy nhầm gps (giờ bắt đầu) của GP mới, ghép với js (mốc hẹn giờ) của GP cũ → tính sai, báo động giả.
+
+
+if (gs1 != gs2 ||
+    ULONG_CMP_LT(j, js) ||
+    ULONG_CMP_GE(gps, js))
+    return; /* No stall or GP completed since entering function. */
+3 điều kiện thoát (không stall):
+
+gs1 != gs2 → đúng như ví dụ tàu ở trên: đọc bị "xen ngang" bởi 1 GP khác → dữ liệu không đáng tin, bỏ qua.
+j < js (dùng hàm so sánh riêng ULONG_CMP_LT vì jiffies có thể tràn số/wrap-around) → chưa tới giờ hẹn, chưa phải lo.
+gps >= js → dữ liệu vô lý (GP mới bắt đầu sau mốc hẹn giờ của chính nó?) → dấu hiệu của việc bị đọc chồng chéo, bỏ qua cho an toàn.
+Phần quyết định: ai là "thủ phạm"?
+
+rnp = rdp->mynode;
+jn = jiffies + 3 * rcu_jiffies_till_stall_check() + 3;
+if (rcu_gp_in_progress() &&
+    (READ_ONCE(rnp->qsmask) & rdp->grpmask) &&
+    cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+rnp->qsmask = bitmask các CPU (trong nhóm node này) vẫn còn nợ QS. rdp->grpmask = bit đại diện riêng cho CPU đang chạy hàm này. Phép & (AND) kiểm tra: "chính CPU này có đang nằm trong danh sách còn nợ QS không?"
+cmpxchg(&rcu_state.jiffies_stall, js, jn) == js — đây là kỹ thuật atomic compare-and-swap: "nếu jiffies_stall vẫn còn đúng bằng giá trị js mình vừa đọc, thì đổi nó thành mốc hẹn giờ mới jn (đẩy xa thêm), và trả về true". Mục đích: đảm bảo chỉ 1 CPU duy nhất trong số nhiều CPU cùng phát hiện stall cùng lúc được phép in cảnh báo (những CPU khác chạy cmpxchg sau sẽ thấy giá trị đã đổi, không khớp js nữa → thua, không được in). Đây là cách tránh spam log khi cả chục CPU cùng lúc phát hiện vấn đề.
+→ Nếu cả 3 điều kiện đúng: chính CPU này là thủ phạm (còn nợ QS) → gọi print_cpu_stall(gps) (hàm đã giải thích ở file stall trước — dump stack, ép resched, và trên board này còn rebootCPU()).
+
+
+} else if (rcu_gp_in_progress() &&
+           ULONG_CMP_GE(j, js + RCU_STALL_RAT_DELAY) &&
+           cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+    ...
+    print_other_cpu_stall(gs2, gps);
+Nhánh else: CPU này không phải thủ phạm (không nằm trong qsmask), nhưng đã qua thêm 1 khoảng trễ nữa (RCU_STALL_RAT_DELAY — "Really Are They Late" delay, cho các CPU khác cơ hội tự dump trước) mà vẫn còn stall → gọi print_other_cpu_stall() để dump toàn bộ các CPU còn nợ QS, không chỉ CPU hiện tại.
+
+
+if (kvm_check_and_clear_guest_paused())
+    return;
+Cả 2 nhánh đều check thêm: nếu đây là máy ảo (VM) và host vừa "tạm dừng" VM này (ví dụ do live-migration, suspend) — thời gian "trôi" khi VM bị dừng trông giống hệt 1 CPU bị stall thật, nhưng thực ra không phải bug. Nên loại trừ trường hợp này trước khi báo động.
+
+Tóm tắt bằng 1 câu
+check_cpu_stall() là "đồng hồ báo thức" chạy mỗi tick, so sánh giờ hiện tại với 1 "mốc hẹn" (jiffies_stall); nếu quá hẹn mà GP vẫn chưa xong, nó dùng cmpxchg để đảm bảo chỉ 1 CPU được quyền in cảnh báo, rồi phân biệt "chính mình là thủ phạm" hay "một CPU khác là thủ phạm" để gọi đúng hàm dump tương ứng.
+
+Phần khó nhất (4 lần đọc + smp_rmb) chỉ để giải quyết 1 vấn đề duy nhất: đọc dữ liệu không khoá lock, giữa lúc dữ liệu đó có thể đang bị thay đổi bởi CPU khác — nên phải "chốt" đủ thông tin để phát hiện nếu bị đọc hớ, rồi bỏ qua an toàn.

@@ -1,0 +1,78 @@
+rcu_pending() — hàm này để làm gì?
+Nhớ lại ở hàm trước (rcu_sched_clock_irq), có dòng:
+
+
+if (rcu_pending(user))
+    invoke_rcu_core();
+rcu_pending() chỉ trả lời 1 câu hỏi duy nhất: "CPU này có việc gì liên quan tới RCU cần xử lý ngay bây giờ không?" — trả về 1 (có) hoặc 0 (không). Nó không tự làm việc gì cả (trừ check stall), chỉ là một chuỗi kiểm tra nhanh, cái nào đúng thì trả 1 ngay lập tức để tránh phải kiểm tra tiếp (tối ưu tốc độ vì hàm này chạy mỗi tick, trên mọi CPU).
+
+Cứ hình dung nó như 1 checklist người gác cổng hỏi liên tiếp: "có việc A không? có → cho vào. Không thì hỏi tiếp có việc B không?..." Hễ gặp câu trả lời "có" là dừng ngay.
+
+Giải thích từng bước
+
+struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
+struct rcu_node *rnp = rdp->mynode;
+Lấy 2 thứ:
+
+rdp (rcu_data): dữ liệu RCU riêng của CPU đang chạy hàm này. Mỗi CPU có 1 bản rcu_data riêng — giống như mỗi nhân viên có 1 sổ tay riêng.
+rnp (rcu_node): node trong cây rcu_node mà CPU này thuộc về. Đây là cấu trúc phân cấp dùng để nhiều CPU không phải tranh nhau 1 lock global (đã nói ở sơ đồ trước).
+
+/* Check for CPU stalls, if enabled. */
+check_cpu_stall(rdp);
+Gọi luôn hàm kiểm tra stall (đã giải thích ở file rcu-stall-detection.md) — chạy trước tiên vì comment trong code nói rõ: nếu không check ngay, có thể "lỡ mất cơ hội" phát hiện stall.
+
+
+/* Does this CPU need a deferred NOCB wakeup? */
+if (rcu_nocb_need_deferred_wakeup(rdp))
+    return 1;
+NOCB = "No-Callback CPU" — 1 tính năng cho phép chỉ định 1 số CPU không tự invoke callback, mà đẩy việc đó sang 1 kthread riêng (dùng cho các CPU realtime, không muốn bị RCU làm gián đoạn). Nếu CPU này có 1 lời "đánh thức" kthread đó đang bị hoãn lại — cần xử lý ngay → trả 1.
+
+
+/* Is this a nohz_full CPU in userspace or idle?  (Ignore RCU if so.) */
+if ((user || rcu_is_cpu_rrupt_from_idle()) && rcu_nohz_full_cpu())
+    return 0;
+nohz_full là chế độ đặc biệt: 1 số CPU được cấu hình để tắt hẳn timer tick khi chỉ có 1 task chạy (dùng cho CPU realtime/HPC, tránh bị "làm phiền" bởi ngắt định kỳ). Nếu CPU này thuộc loại đó, và hiện đang ở userspace hoặc idle (tức đã tự động qua QS rồi, như giải thích ở hàm trước) → không cần làm gì cả, trả 0 ngay để tick tiếp theo (nếu có) không lãng phí thời gian.
+
+
+/* Is the RCU core waiting for a quiescent state from this CPU? */
+gp_in_progress = rcu_gp_in_progress();
+if (rdp->core_needs_qs && !rdp->cpu_no_qs.b.norm && gp_in_progress)
+    return 1;
+Đây là điều kiện "cốt lõi" nhất:
+
+rcu_gp_in_progress() — có 1 Grace Period đang chạy không?
+rdp->core_needs_qs — cờ đánh dấu "CPU này được yêu cầu phải báo cáo QS cho GP hiện tại".
+!rdp->cpu_no_qs.b.norm — cờ cpu_no_qs.b.norm = true nghĩa là "CPU này chưa qua QS". Nên thêm dấu ! phía trước = "CPU đã qua QS rồi".
+Ghép lại: "Đang có GP chạy, RCU đang cần CPU này báo cáo, và CPU này đã thực sự qua QS rồi" → cần gọi rcu_core() để thực hiện việc báo cáo đó lên cây rcu_node (tức gọi rcu_report_qs_rnp() mà bạn đã thấy ở sơ đồ callflow) → trả 1.
+
+
+/* Does this CPU have callbacks ready to invoke? */
+if (rcu_segcblist_ready_cbs(&rdp->cblist))
+    return 1;
+rdp->cblist là danh sách callback (rcu_segcblist) của CPU này — chính là cấu trúc bạn đã học ở rcu_segcblist.c. Nếu có callback nào đã ở segment RCU_DONE_TAIL (tức GP nó cần chờ đã xong) → cần gọi rcu_core() để thực sự invoke (chạy) các callback đó → trả 1.
+
+
+/* Has RCU gone idle with this CPU needing another grace period? */
+if (!gp_in_progress && rcu_segcblist_is_enabled(&rdp->cblist) &&
+    (!IS_ENABLED(CONFIG_RCU_NOCB_CPU) ||
+     !rcu_segcblist_is_offloaded(&rdp->cblist)) &&
+    !rcu_segcblist_restempty(&rdp->cblist, RCU_NEXT_READY_TAIL))
+    return 1;
+Trường hợp: hiện không có GP nào đang chạy (!gp_in_progress), nhưng CPU này vẫn còn callback đang nằm chờ ở các segment "chưa được gán vào GP nào" (RCU_NEXT_READY_TAIL chưa rỗng). Tức là: có việc cần làm (có callback đang chờ) nhưng "cỗ máy" GP đang đứng yên (idle) — cần đánh thức nó dậy, bắt đầu 1 GP mới → trả 1. Điều kiện RCU_NOCB_CPU/offloaded chỉ để loại trừ CPU nào đã giao callback cho kthread riêng xử lý (không phải việc của rcu_core() nữa).
+
+
+/* Have RCU grace period completed or started?  */
+if (rcu_seq_current(&rnp->gp_seq) != rdp->gp_seq ||
+    unlikely(READ_ONCE(rdp->gpwrap))) /* outside lock */
+    return 1;
+So sánh "số thứ tự GP" (gp_seq) mà node cha rnp đang thấy, với số mà CPU này (rdp) đang lưu. Nếu khác nhau — nghĩa là 1 GP mới đã bắt đầu hoặc kết thúc mà CPU này chưa được cập nhật thông tin (chưa chạy note_gp_changes()) → cần gọi rcu_core() để đồng bộ lại → trả 1. gpwrap xử lý trường hợp bộ đếm gp_seq bị tràn số (wrap around) — hiếm nhưng vẫn phải tính tới.
+
+
+/* nothing to do */
+return 0;
+Nếu không có điều kiện nào ở trên đúng — CPU này thực sự không có việc gì để làm với RCU lúc này. Trả 0, rcu_core() sẽ không được gọi ở lần tick này, tiết kiệm CPU.
+
+Tóm tắt bằng 1 câu
+rcu_pending() là "bảng câu hỏi nhanh" chạy mỗi tick để quyết định: có cần đánh thức phần xử lý nặng hơn (rcu_core()) ngay bây giờ không, hay là để CPU yên, không tốn thời gian? — Nó luôn ưu tiên trả lời "có" (return 1) càng sớm càng tốt ngay khi tìm được 1 lý do, để tránh kiểm tra dư thừa.
+
+Có 5 lý do khiến nó trả về 1: cần đánh thức NOCB kthread, cần báo QS, có callback sẵn sàng invoke, cần khởi động GP mới, hoặc CPU bị "lệch nhịp" GP so với hệ thống.

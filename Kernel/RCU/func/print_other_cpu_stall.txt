@@ -1,0 +1,103 @@
+print_other_cpu_stall() — "tố cáo" các CPU khác, không phải chính mình
+Đây là "cặp song sinh" của print_cpu_stall() bạn đã học: cùng mục đích (in cảnh báo stall), nhưng khác ở chỗ ai là nghi phạm. Comment trong code nói rất rõ sự khác biệt: print_cpu_stall = "rat on ourselves" (tự tố cáo bản thân), còn hàm này = "rat on our buddy" (tố cáo "đồng bọn" — tức các CPU khác). Được gọi khi CPU hiện tại phát hiện CPU khác còn nợ QS quá lâu (nhánh else if trong check_cpu_stall bạn đã học).
+
+Vì phần lớn logic giống hệt print_cpu_stall, mình sẽ tập trung giải thích những phần khác biệt, còn phần nào đã học rồi mình chỉ nhắc lại ngắn gọn.
+
+Phần giống — lướt nhanh
+
+lockdep_assert_irqs_disabled();
+rcu_stall_kick_kthreads();
+if (rcu_stall_is_suppressed())
+    return;
+Y hệt print_cpu_stall — kiểm tra interrupt tắt, kick kthread, thoát nếu cảnh báo bị tắt.
+
+
+pr_err("INFO: %s detected stalls on CPUs/tasks:\n", rcu_state.name);
+Dòng log mở đầu khác 1 chút — chú ý chữ "CPUs/tasks" (số nhiều) — vì hàm này có thể liệt kê nhiều CPU cùng lúc, chứ không chỉ 1 CPU như print_cpu_stall.
+
+Phần khác biệt cốt lõi — duyệt tất cả CPU đang nợ QS
+
+rcu_for_each_leaf_node(rnp) {
+    raw_spin_lock_irqsave_rcu_node(rnp, flags);
+    if (rnp->qsmask != 0) {
+        for_each_leaf_node_possible_cpu(rnp, cpu)
+            if (rnp->qsmask & leaf_node_cpu_bit(rnp, cpu)) {
+                print_cpu_stall_info(cpu);
+                ndetected++;
+            }
+    }
+    ndetected += rcu_print_task_stall(rnp, flags); // Releases rnp->lock.
+    lockdep_assert_irqs_disabled();
+}
+Đây chính là cấu trúc duyệt cây rcu_node y hệt rcu_dump_cpu_stacks() bạn vừa học (rcu_for_each_leaf_node → for_each_leaf_node_possible_cpu → check bit trong qsmask), nhưng khác ở chỗ thay vì dump stack, ở đây gọi print_cpu_stall_info(cpu) (hàm in dòng "chỉ số sức khoẻ" bạn đã học ở 2 câu hỏi trước) cho mỗi CPU còn nợ QS, và đếm số lượng vào ndetected.
+
+Dòng đáng chú ý nhất: ndetected += rcu_print_task_stall(rnp, flags); // Releases rnp->lock. — đây là khái niệm mới: task stall. Với RCU biến thể preemptible (CONFIG_PREEMPT_RCU), 1 rcu_read_lock()/rcu_read_unlock() có thể bị ngắt giữa chừng bởi scheduler (vì preemptible RCU cho phép preempt ngay cả khi đang ở giữa vùng đọc RCU — khác non-preemptible RCU, nơi vùng đó không được ngắt). Nếu 1 task bị preempt giữa vùng đọc RCU và không bao giờ được chạy lại để thoát khỏi rcu_read_unlock(), nó sẽ chặn GP mãi mãi — dù CPU đã "rảnh" từ lâu! rcu_print_task_stall() chuyên tìm và in ra đúng những task (không phải CPU) đang bị kẹt kiểu này. Comment // Releases rnp->lock báo cho người đọc biết hàm này tự nhả lock bên trong nó — 1 quy ước ghi chú rất phổ biến trong kernel để tránh double-unlock hoặc quên unlock.
+
+Tổng hợp số liệu — giống print_cpu_stall
+
+for_each_possible_cpu(cpu)
+    totqlen += rcu_get_n_cbs_cpu(cpu);
+pr_cont("\t(detected by %d, t=%ld jiffies, g=%ld, q=%lu)\n",
+       smp_processor_id(), (long)(jiffies - gps),
+       (long)rcu_seq_current(&rcu_state.gp_seq), totqlen);
+Giống hệt logic đếm callback ở print_cpu_stall, chỉ thêm smp_processor_id() — CPU nào phát hiện ra vấn đề này (khác CPU bị nghi ngờ) — hữu ích để biết "ai đang tố cáo ai".
+
+Rẽ nhánh: có tìm thấy thủ phạm hay không?
+
+if (ndetected) {
+    rcu_dump_cpu_stacks();
+
+    /* Complain about tasks blocking the grace period. */
+    rcu_for_each_leaf_node(rnp)
+        rcu_print_detail_task_stall_rnp(rnp);
+} else {
+Nếu ndetected > 0 (tìm thấy ít nhất 1 CPU/task thật sự đang nợ QS) → gọi rcu_dump_cpu_stacks() (hàm bạn vừa học) để dump stack trace, rồi in chi tiết hơn về các task bị kẹt (rcu_print_detail_task_stall_rnp).
+
+
+} else {
+    if (rcu_seq_current(&rcu_state.gp_seq) != gp_seq) {
+        pr_err("INFO: Stall ended before state dump start\n");
+    } else {
+        j = jiffies;
+        gpa = data_race(rcu_state.gp_activity);
+        pr_err("All QSes seen, last %s kthread activity %ld (%ld-%ld), jiffies_till_next_fqs=%ld, root ->qsmask %#lx\n", ...);
+    }
+}
+Đây là nhánh khá tinh tế: nếu không tìm thấy CPU/task nào đang nợ QS (ndetected == 0), có 2 khả năng:
+
+GP đã kết thúc đúng lúc mình đang kiểm tra (gp_seq hiện tại khác với gp_seq truyền vào lúc bắt đầu hàm) → chỉ là do "chậm chân", GP đã hết stall trước khi kịp in xong → in "Stall ended before state dump start", không phải bug.
+Nếu không phải trường hợp trên (tức mọi CPU đều đã báo QS rồi, root->qsmask = 0) mà GP vẫn chưa hoàn tất → nghi ngờ chuyển hướng sang: có thể chính rcu_gp_kthread (dù mọi CPU đã báo cáo xong) lại không được chạy để "chốt sổ" GP → in ra thời gian hoạt động cuối của kthread (gp_activity), thời điểm dự kiến force-QS tiếp theo (jiffies_till_next_fqs) để hỗ trợ chẩn đoán.
+Phần cuối — dọn dẹp và hành động khắc phục
+
+if (ULONG_CMP_GE(jiffies, READ_ONCE(rcu_state.jiffies_stall)))
+    WRITE_ONCE(rcu_state.jiffies_stall,
+               jiffies + 3 * rcu_jiffies_till_stall_check() + 3);
+
+rcu_check_gp_kthread_starvation();
+Giống hệt print_cpu_stall — đẩy mốc hẹn giờ tiếp nếu in log quá chậm, rồi kiểm tra kthread có bị đói không (hàm bạn đã học ở câu hỏi trước).
+
+
+#if defined(CONFIG_KM_BIZHUB) ... THRL_DispCpuStallTM(); ...
+#if defined(CONFIG_KM_BIZHUB) ... panic_on_rcu_stall(); ...
+Y hệt 2 nhánh đặc thù hãng đã giải thích ở print_cpu_stall.
+
+
+rcu_force_quiescent_state();  /* Kick them all. */
+Đây là dòng khác biệt quan trọng nhất so với print_cpu_stall! Vì đây là trường hợp CPU khác đang bị kẹt (không phải chính mình), CPU hiện tại không thể tự mình "ép resched chính nó" để giải quyết. Thay vào đó nó gọi rcu_force_quiescent_state() (hàm bạn đã thấy tên ở sơ đồ callflow đầu tiên) — chủ động gửi tín hiệu ép tất cả các CPU còn nợ QS phải kiểm tra lại trạng thái của mình, như 1 nỗ lực "đánh thức toàn bộ" thay vì chỉ tự cứu bản thân.
+
+
+#if !defined(FUM_LINUX)
+	rebootCPU();
+#endif
+Và cuối cùng, y hệt print_cpu_stall — trên board này, sau khi đã cố hết cách, vẫn tự động reboot.
+
+So sánh nhanh 2 hàm — bảng tóm tắt
+print_cpu_stall()	print_other_cpu_stall()
+Ai là nghi phạm	Chính CPU đang chạy hàm	1 hoặc nhiều CPU/task khác
+Cách lấy thông tin	print_cpu_stall_info() cho 1 CPU	Duyệt cây, gọi cho từng CPU đang nợ QS + rcu_print_task_stall() cho preemptible RCU
+Hành động khắc phục	Tự ép resched chính mình	rcu_force_quiescent_state() ép tất cả CPU khác
+Phần chung	Kick kthread, đẩy mốc hẹn, kiểm tra starvation, patch hãng (task monitor/panic/reboot)	(giống hệt)
+Tóm tắt bằng 1 câu
+print_other_cpu_stall() mở rộng logic của print_cpu_stall() sang trường hợp nhiều CPU/task cùng bị nghi ngờ: nó duyệt cây rcu_node để liệt kê từng CPU còn nợ QS, xử lý riêng trường hợp preemptible RCU (task bị preempt giữa vùng đọc RCU), phân biệt được "stall thật" với "vừa hết stall trước khi kịp kiểm tra", và thay vì tự resched bản thân, nó chủ động gọi rcu_force_quiescent_state() để ép toàn bộ hệ thống phản hồi.
+
+Đến đây, bạn đã đọc qua gần như toàn bộ cơ chế stall detection thật (check_cpu_stall → print_cpu_stall/print_other_cpu_stall → print_cpu_stall_info/rcu_dump_cpu_stacks/rcu_check_gp_kthread_starvation). Nếu muốn, mình có thể cập nhật lại file rcu-stall-detection.md để bổ sung nhánh print_other_cpu_stall chi tiết hơn — hiện sơ đồ đó mới chỉ tóm tắt sơ lược phần này.

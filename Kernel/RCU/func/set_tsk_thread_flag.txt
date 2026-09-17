@@ -1,0 +1,49 @@
+set_tsk_need_resched() — chỉ "gắn cờ", không tự chuyển task ngay
+Bạn đã gặp hàm này nhiều lần trong các đoạn code trước (rcu_sched_clock_irq, print_cpu_stall) — giờ mình giải thích thật kỹ bản chất của nó, vì đây là 1 khái niệm nền tảng của scheduler sẽ gặp lại liên tục trong toàn bộ kernel, không riêng RCU.
+
+Trước tiên: hiểu lầm phổ biến nhất cần tránh
+Nhiều người mới đọc code này lần đầu tưởng rằng gọi set_tsk_need_resched() sẽ ngay lập tức khiến kernel chuyển sang chạy task khác. Sai. Hàm này không tự nó gây ra context switch. Nó chỉ làm đúng 1 việc: cắm 1 lá cờ lên task đó, nói rằng "khi nào có cơ hội an toàn, hãy nhớ lập lịch lại". Việc thực sự chuyển task diễn ra ở 1 nơi hoàn toàn khác, vào 1 thời điểm sau đó (có thể là ngay lập tức sau vài dòng code, có thể là vài mili-giây sau).
+
+Giải thích code
+
+static inline void set_tsk_need_resched(struct task_struct *tsk)
+{
+	set_tsk_thread_flag(tsk, TIF_NEED_RESCHED);
+}
+struct task_struct *tsk — tham số nhận vào là con trỏ tới task_struct, cấu trúc đại diện cho 1 task (đã nhắc ở câu hỏi trước — mọi process/thread/kthread đều có 1 task_struct).
+static inline — hàm rất ngắn, được đánh dấu inline để compiler "dán" thẳng nội dung hàm vào chỗ gọi thay vì tạo 1 lệnh gọi hàm thật sự (tối ưu tốc độ, vì hàm này được gọi rất thường xuyên, ở những chỗ nhạy cảm về hiệu năng như xử lý ngắt).
+Bên trong chỉ gọi tiếp set_tsk_thread_flag(tsk, TIF_NEED_RESCHED).
+Vậy TIF_NEED_RESCHED và "thread flag" là gì?
+Mỗi task ngoài task_struct (chứa rất nhiều thông tin: PID, priority, trạng thái, danh sách file mở...) còn có 1 cấu trúc nhỏ hơn, gọn hơn gọi là thread_info, nằm sát ngay cạnh kernel stack của task đó (để CPU có thể truy cập cực nhanh, không cần tra bảng gì cả). Trong thread_info có 1 trường bitmask các cờ (flags) — mỗi bit đại diện cho 1 "yêu cầu đang chờ xử lý" đối với task này. TIF_NEED_RESCHED chính là 1 bit cụ thể trong bitmask đó — tên đầy đủ nghĩa là "Thread Info Flag: NEED RESCHEDule" — "cần lập lịch lại".
+
+set_tsk_thread_flag(tsk, TIF_NEED_RESCHED) chỉ đơn giản là: bật bit đó lên = 1, dùng phép toán bit an toàn (atomic, để tránh 2 CPU cùng sửa 1 lúc gây lỗi).
+
+Vậy ai là người thực sự đọc cờ này và chuyển task?
+Đây là phần quan trọng nhất để hiểu trọn vẹn cơ chế — cờ TIF_NEED_RESCHED được kiểm tra ở một số điểm cố định trong kernel, gọi là "preemption point" (điểm có thể bị chiếm quyền chạy). Ví dụ những điểm đó:
+
+Ngay trước khi quay về userspace sau khi xử lý xong 1 syscall hoặc 1 ngắt — kernel luôn kiểm tra "task này có cần resched không?" trước khi trả CPU về cho code người dùng.
+Ngay sau khi 1 ngắt kết thúc (return-from-interrupt path) — nếu kernel hỗ trợ preemptible kernel (CONFIG_PREEMPT), nó có thể chuyển task ngay tại đây, kể cả khi task cũ vẫn đang ở giữa code kernel (không chỉ ở userspace).
+Bất kỳ chỗ nào code kernel chủ động gọi schedule() hoặc cond_resched() — các hàm này sẽ tự kiểm tra cờ này (gián tiếp, qua việc scheduler nhìn vào trạng thái runnable) để quyết định có nên chuyển task khác hay không.
+Nói cách khác: set_tsk_need_resched() giống như bạn dán 1 tờ giấy nhớ "cần làm việc X" lên bàn làm việc của ai đó, chứ không phải tự tay đi làm việc X ngay. Người đó sẽ làm việc X vào lần tiếp theo họ nhìn vào bàn (preemption point) — có thể là ngay sau đó (vài microsecond), có thể lâu hơn nếu họ đang bận việc khác không được phép dừng giữa chừng.
+
+Liên hệ lại với RCU — vì sao dòng này xuất hiện trong stall handling?
+Giờ quay lại ngữ cảnh bạn đã học ở rcu_sched_clock_irq() và print_cpu_stall():
+
+
+set_tsk_need_resched(current);
+set_preempt_need_resched();
+current là 1 macro đặc biệt trong kernel, luôn trỏ tới task_struct của task đang chạy trên chính CPU hiện tại (mỗi CPU nhìn current ra 1 task khác nhau — nó không phải 1 biến toàn cục cố định, mà được tính dựa trên CPU đang thực thi).
+
+Ý nghĩa của 2 dòng này trong bối cảnh RCU: "Task đang chạy trên CPU này (rất có thể đang chạy 1 vòng lặp kernel dài, không tự nguyện gọi schedule()) — hãy đánh dấu để, ngay khi có preemption point gần nhất (ví dụ cuối ngắt hiện tại), nó bị ép nhường CPU." Và vì sao việc nhường CPU (context switch) lại quan trọng với RCU? — Vì 1 context switch chính là 1 quiescent state (đã giải thích ở các hàm trước: khi task bị đổi, chắc chắn không còn đang ở giữa rcu_read_lock()/rcu_read_unlock() của lần trước nữa). Nên đây là cách RCU "ép" 1 CPU cứng đầu phải tự báo cáo QS, gián tiếp thông qua cơ chế preemption có sẵn của scheduler, chứ RCU không có quyền tự tay chuyển task.
+
+set_preempt_need_resched() (dòng đi kèm) làm việc tương tự nhưng ở 1 tầng khác — nó set cờ trong per-CPU preemption count (không phải trong task_struct), dùng cho kiến trúc/cấu hình cụ thể cần kiểm tra nhanh hơn mà không phải lần theo current → thread_info. Bạn có thể coi đây là "1 cách viết khác của cùng 1 ý định", tối ưu cho đường code nhạy cảm về hiệu năng.
+
+Tóm tắt bằng 1 câu
+set_tsk_need_resched() chỉ bật 1 bit cờ (TIF_NEED_RESCHED) trong thread_info của 1 task — bản thân nó không gây chuyển task ngay lập tức; việc chuyển task thật sự xảy ra sau đó, tại các "preemption point" cố định (trước khi về userspace, sau khi xử lý ngắt, hoặc khi code chủ động gọi schedule()) — nơi kernel sẽ nhìn thấy cờ này và quyết định nhường CPU cho task khác.
+
+Khái niệm nền tảng nên học tiếp (rất quan trọng, sẽ gặp lại khắp nơi)
+thread_info vs task_struct — 2 cấu trúc khác nhau nhưng liên quan chặt, dễ nhầm lẫn khi mới học.
+Preemption point — các vị trí cụ thể trong kernel nơi context switch được phép xảy ra.
+current macro — cách kernel biết "task nào đang chạy trên CPU này" mà không cần biến toàn cục.
+CONFIG_PREEMPT (preemptible kernel) vs non-preemptible — ảnh hưởng trực tiếp tới việc code kernel có thể bị ngắt giữa chừng hay không, liên quan chặt tới cả preemptible RCU bạn đã thấy nhắc ở rcu_print_task_stall().
+Nếu muốn, mình có thể trace tiếp: schedule() thật sự làm gì, và chính xác nơi nào trong kernel kiểm tra TIF_NEED_RESCHED — đọc trực tiếp code thật trên board này thay vì lý thuyết chung.

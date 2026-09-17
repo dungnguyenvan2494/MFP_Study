@@ -1,0 +1,42 @@
+panic_on_rcu_stall() — hàm ngắn nhất nhưng hậu quả nặng nhất
+Đây là hàm đơn giản nhất trong cả loạt bạn đã học, nhưng lại là hành động triệt để nhất: thay vì chỉ in cảnh báo rồi cố "cứu chữa" (như các hàm trước — kick kthread, ép resched, force quiescent state), hàm này chủ động dừng hẳn toàn bộ kernel.
+
+Giải thích từng phần
+
+static void panic_on_rcu_stall(void)
+{
+	if (sysctl_panic_on_rcu_stall)
+		panic("RCU Stall\n");
+}
+sysctl_panic_on_rcu_stall — đây là 1 biến kiểu sysctl, nghĩa là giá trị của nó có thể được người dùng (root) chỉnh sửa lúc hệ thống đang chạy, thường qua đường dẫn /proc/sys/kernel/panic_on_rcu_stall (hoặc thiết lập sẵn qua boot param). Mặc định thường là 0 (tắt). Nếu ai đó (hoặc firmware/init script của board) set giá trị này thành 1, thì:
+
+Mọi lần RCU phát hiện stall, hệ thống sẽ panic ngay lập tức, thay vì chỉ cảnh báo rồi tiếp tục chạy.
+
+panic("RCU Stall\n") — gọi hàm panic(), 1 trong những hàm "nặng đô" nhất trong toàn bộ kernel. Cần hiểu rõ panic là gì, vì đây là khái niệm quan trọng, sẽ gặp lại ở rất nhiều nơi khác:
+
+Kernel panic là trạng thái kernel tự nhận ra rằng nó không thể tiếp tục chạy an toàn — có thể vì dữ liệu nội bộ đã hỏng, có thể vì phát hiện 1 lỗi nghiêm trọng không rõ cách khôi phục. Thay vì cố chạy tiếp trong tình trạng "không đáng tin" (rất dễ dẫn tới hỏng dữ liệu người dùng, ví dụ ghi sai vào ổ đĩa), kernel chọn cách dừng lại hoàn toàn: in ra toàn bộ thông tin debug có thể (register, stack trace, call chain dẫn tới panic), rồi treo máy hoặc tự động reboot (tuỳ cấu hình panic_timeout).
+
+Vì sao lại muốn chủ động panic khi bị RCU stall, thay vì chỉ cảnh báo?
+Câu hỏi rất hợp lý — vì rõ ràng panic có vẻ "tệ hơn" so với chỉ in warning. Nhưng trong 1 số ngữ cảnh, đây lại là lựa chọn an toàn hơn:
+
+Môi trường test/CI tự động: nếu bạn đang chạy hàng nghìn lượt test kernel tự động, 1 dòng warning trong log rất dễ bị bỏ sót giữa hàng triệu dòng log khác. Nhưng nếu máy panic và dừng hẳn, hệ thống test tự động sẽ ngay lập tức biết "có lỗi nghiêm trọng xảy ra ở đây" — dễ phát hiện và debug hơn nhiều so với việc đợi đọc lại toàn bộ log sau.
+Hệ thống production nhạy cảm: nếu tiếp tục chạy sau khi biết chắc có 1 phần bộ nhớ (bị RCU bảo vệ) đang trong trạng thái không xác định, có thể dẫn tới lỗi âm thầm khác nguy hiểm hơn (ví dụ dùng nhầm dữ liệu đã lẽ ra phải bị free). Panic ngay giúp tránh "lỗi domino" kiểu này.
+Debug lúc phát triển driver/kernel mới: khi bạn đang phát triển và muốn chắc chắn bắt được ngay tại chỗ lỗi RCU đầu tiên xảy ra, thay vì để hệ thống "gồng" chạy tiếp trong trạng thái bất thường rồi crash ở 1 chỗ khác khó truy ngược lại nguyên nhân gốc.
+Liên hệ ngược lại với các hàm bạn đã học
+Nhớ lại ở print_cpu_stall() và print_other_cpu_stall(), dòng gọi hàm này nằm trong khối:
+
+
+#if defined(CONFIG_KM_BIZHUB)
+#if defined(FUM_LINUX)
+	panic_on_rcu_stall();
+#endif
+#endif
+Tức là: trên board K-S800 này, panic_on_rcu_stall() chỉ được gọi khi build biến thể FUM_LINUX và cấu hình CONFIG_KM_BIZHUB. Với các biến thể build khác (!defined(FUM_LINUX)), thay vào đó code gọi thẳng rebootCPU() — tức là board này có 2 chiến lược xử lý stall khác nhau tuỳ vào biến thể firmware: 1 bên chọn panic có kiểm soát (dừng lại, in đủ thông tin debug), 1 bên chọn reboot ngay lập tức. Đây là ví dụ rất rõ về việc BSP (Board Support Package) tuỳ biến hành vi mainline theo yêu cầu riêng của từng dòng sản phẩm (bạn đã thấy comment tiếng Nhật về Bizhub — máy photocopy đa chức năng — nơi việc "dừng có kiểm soát để debug" so với "reboot ngay để máy hoạt động lại" là 2 lựa chọn kinh doanh khác nhau, không chỉ là kỹ thuật).
+
+Tóm tắt bằng 1 câu
+Hàm này là 1 "công tắc" đơn giản: nếu sysctl panic_on_rcu_stall được bật, mỗi khi RCU phát hiện stall, thay vì chỉ cảnh báo rồi cố cứu chữa, kernel sẽ dừng hẳn có kiểm soát (panic) — hữu ích cho môi trường test/debug muốn bắt lỗi ngay tại nguồn, đánh đổi lấy việc hệ thống production sẽ ngừng hoạt động ngay khi gặp vấn đề thay vì cố "gồng" chạy tiếp.
+
+Khái niệm mới
+panic() — bạn nên biết đây là 1 trong những hàm quan trọng nhất để hiểu khi debug crash kernel; nó khác hẳn WARN_ON/BUG_ON ở mức độ nghiêm trọng (panic dừng toàn bộ hệ thống, không chỉ báo lỗi rồi chạy tiếp).
+sysctl — cơ chế cho phép chỉnh tham số kernel lúc runtime qua /proc/sys/, sẽ gặp rất nhiều trong toàn bộ kernel, không riêng RCU.
+Nếu bạn có log crash thật từ board (dù là panic hay oops), đây chính là lúc nên dùng skill kernel-debug-toolkit để giải mã — nó biết cách đọc decode_stacktrace.sh và tra symbol từ vmlinux/System.map để biến dòng "Call Trace" khó hiểu thành tên hàm cụ thể.

@@ -1,0 +1,67 @@
+print_cpu_stall_info() — in "chỉ số sức khoẻ" chi tiết của 1 CPU
+Được gọi từ print_cpu_stall() (hàm bạn học trước đó), giữ trong 1 cặp spinlock. Nhiệm vụ: in ra 1 dòng log cực kỳ cô đọng chứa gần như mọi thông tin cần thiết để chẩn đoán "CPU này đang ở trạng thái gì". Đây là hàm khó nhất trong loạt này vì nó không có logic phức tạp, mà có rất nhiều field viết tắt cần biết ý nghĩa. Mình sẽ giải thích từng phần.
+
+Chuẩn bị dữ liệu
+
+struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
+Lấy rcu_data — "sổ tay riêng" của CPU được truyền vào tham số (per_cpu_ptr = lấy bản riêng của CPU chỉ định, khác this_cpu_ptr chỉ lấy của CPU đang chạy).
+
+
+touch_nmi_watchdog();
+NMI watchdog (Non-Maskable Interrupt watchdog) là 1 cơ chế khác, độc lập với RCU — nó theo dõi "CPU có bị treo cứng (hardlockup) không" bằng cách dùng 1 loại ngắt đặc biệt không thể bị chặn. Vì hàm này đang giữ spinlock và có thể in ra rất nhiều dòng log (chậm, đặc biệt nếu console là UART tốc độ thấp), nó chủ động "vuốt ve" (touch = báo "tôi vẫn sống") watchdog đó, để tránh việc chính hành động in log lâu lại vô tình bị chính watchdog khác nghi ngờ là hardlockup — 1 kiểu "tự bắn vào chân mình" nếu không có dòng này.
+
+Tính "CPU này chậm bao nhiêu"
+
+ticks_value = rcu_seq_ctr(rcu_state.gp_seq - rdp->gp_seq);
+if (ticks_value) {
+    ticks_title = "GPs behind";
+} else {
+    ticks_title = "ticks this GP";
+    ticks_value = rdp->ticks_this_gp;
+}
+So sánh số GP toàn hệ thống (rcu_state.gp_seq) với số GP mà CPU này biết tới (rdp->gp_seq):
+
+Nếu khác nhau → CPU này đang bị "tụt lại" — chưa cập nhật kịp so với số GP hiện tại của hệ thống → in "GPs behind" (tụt bao nhiêu GP).
+Nếu bằng nhau (CPU không tụt GP nào) → in "ticks this GP" — số tick đã trôi qua kể từ khi GP hiện tại bắt đầu (biến ticks_this_gp bạn đã thấy ở rcu_sched_clock_irq, dòng raw_cpu_inc(rcu_data.ticks_this_gp)).
+Đây là cách hàm "chọn thông tin phù hợp nhất" để in — tuỳ tình huống mà con số ý nghĩa khác nhau.
+
+
+falsepositive = rcu_is_gp_kthread_starving(NULL) &&
+        rcu_dynticks_in_eqs(rcu_dynticks_snap(rdp));
+Kiểm tra 2 điều kiện cùng lúc để đoán xem đây có phải "báo động giả" không:
+
+rcu_is_gp_kthread_starving() — kthread GP có đang bị đói CPU không (như đã học ở hàm trước).
+rcu_dynticks_in_eqs(...) — CPU này hiện có đang ở "extended quiescent state" (EQS — trạng thái idle/userspace kéo dài) không.
+Nếu cả 2 đúng: kthread bị đói và CPU này thực ra đã idle/userspace từ lâu (tức bản thân CPU không có lỗi gì) → khả năng cao đây là báo động giả do vấn đề lập lịch, không phải RCU thật sự có bug.
+
+Dòng in chính — giải mã từng ký hiệu
+
+pr_err("\t%d-%c%c%c%c: (%lu %s) idle=%03x/%ld/%#lx softirq=%u/%u fqs=%ld %s%s\n", ...)
+Đây là 1 dòng log ví dụ thực tế trông sẽ như: 12-O.NC: (5 GPs behind) idle=1a2/1/0x0 softirq=100/105 fqs=3. Giải mã từng phần:
+
+%d-%c%c%c%c — số CPU, theo sau bởi 4 ký tự trạng thái, mỗi ký tự là 1 "cờ có/không" viết dạng: nếu điều kiện đúng thì in ký tự đầu, sai thì in ký tự thứ 2 (ví dụ "O."[!!cpu_online(cpu)] — đúng thì 'O', sai thì '.'):
+
+"O."[cpu_online(cpu)] — CPU này có đang online không (O = online, . = offline).
+"o."[grpmask & qsmaskinit] — CPU này có nằm trong nhóm cần báo QS khi GP bắt đầu không.
+"N."[grpmask & qsmaskinitnext] — tương tự nhưng cho GP kế tiếp (next) — dùng để phát hiện trường hợp CPU vừa online/offline giữa chừng.
+Ký tự thứ 4 liên quan tới IRQ work (rcu_iw_pending) — nếu tính năng CONFIG_IRQ_WORK không bật thì in '?'; nếu đang có 1 "irq work" chờ xử lý thì in con số delta (bao nhiêu GP đã trôi mà irq work đó vẫn chưa chạy); nếu không, in '!'/'.' tuỳ delta có hay không.
+(Bạn chưa cần nhớ hết 4 ký tự này — điều quan trọng là biết: đây là 1 "bảng mã trạng thái" cực ngắn, khi debug thật thì tra lại Documentation/RCU/stallwarn.rst để đọc đúng nghĩa từng ký tự.)
+
+(%lu %s) — chính là ticks_value và ticks_title đã tính ở trên: hoặc "tụt bao nhiêu GP", hoặc "đã bao nhiêu tick trong GP này".
+
+idle=%03x/%ld/%#lx — 3 con số liên quan tới trạng thái "dynticks" (cơ chế tắt tick khi CPU idle để tiết kiệm điện):
+
+rcu_dynticks_snap(rdp) & 0xfff — một "snapshot" số đếm dynticks (dùng để phát hiện CPU có chuyển qua lại idle/busy hay không).
+rdp->dynticks_nesting — độ "lồng nhau" hiện tại của việc vào/ra vùng idle.
+rdp->dynticks_nmi_nesting — tương tự nhưng riêng cho ngữ cảnh NMI.
+softirq=%u/%u — 2 con số: rdp->softirq_snap (số lần RCU softirq đã chạy tính tới lần snapshot trước) so với kstat_softirqs_cpu(RCU_SOFTIRQ, cpu) (số lần thực tế đã chạy tính tới giờ). Nếu 2 số này gần bằng nhau → RCU softirq (chính là nơi rcu_core() thường được gọi) không được chạy thêm lần nào trong khoảng thời gian bị nghi ngờ stall — dấu hiệu quan trọng cho biết rcu_core() bị "đói" cơ hội chạy.
+
+fqs=%ld — số lần "force quiescent state" đã được kích hoạt kể từ khi GP này bắt đầu (n_force_qs - n_force_qs_gpstart) — nhớ lại rcu_force_quiescent_state() ở sơ đồ state machine trước, đây chính là con số đếm số lần cơ chế đó đã được gọi.
+
+%s%s cuối cùng — nối thêm chuỗi fast_no_hz (thông tin về chế độ tiết kiệm tick, từ print_cpu_stall_fast_no_hz()) và, nếu falsepositive là true, thêm hậu tố " (false positive?)" ngay trong dòng log — để người đọc log biết ngay là "có thể đây chỉ là báo động giả do kthread bị đói CPU, không phải RCU lỗi thật".
+
+Tóm tắt bằng 1 câu
+Đây là 1 hàm thuần in log, không có logic điều khiển gì phức tạp — nó gom mọi con số "sức khoẻ" của 1 CPU (đã tụt bao nhiêu GP, trạng thái idle/dynticks, softirq đã chạy bao nhiêu lần, số lần force-QS, có nghi là báo động giả không) thành đúng 1 dòng log cô đọng, để khi bạn nhìn vào 1 log RCU stall thật, chỉ cần đọc dòng này là biết gần như toàn bộ bối cảnh của CPU đó tại thời điểm bị stall.
+
+Gợi ý học tiếp
+Hàm này là ví dụ điển hình của "log ngắn nhưng chứa đầy thông tin" — kỹ năng đọc được loại log này chính là nội dung cốt lõi của skill kernel-debug-toolkit. Nếu bạn có (hoặc sẽ có) 1 log RCU stall thật từ board, mình khuyên nên dán nó vào và dùng skill đó để giải mã từng field theo đúng giá trị thực tế, thay vì học thuộc lòng ý nghĩa trừu tượng như ở đây.

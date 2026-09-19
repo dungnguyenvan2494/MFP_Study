@@ -1,0 +1,70 @@
+Phân tích CP_HDDTrans::initOSdriver()
+Mục đích
+Khởi tạo tầng lưu trữ (SSD/eMMC hoặc HDD) khi Subset khởi động. Hàm kiểm tra và dựng layout partition, tạo device file, rồi mount file system. Trả về True nếu OK, False nếu lỗi.
+
+Các bước thực hiện
+1. Kiểm tra tham số
+
+Nếu psc_DevicePath == NULL, ghi log và trả về False.
+Nếu bật DCSW_DEVELOP_SETUPTOOL, gọi THRF_DevelopSetUp().
+2. Xác định loại thiết bị
+
+Mặc định là HDD (uc_InitDevTyp = HDD).
+Nếu path trùng THRD_SSD_DEVICE:
+Gọi getPartitionInfo() để lấy ssd_part_info. Nếu NULL thì lỗi.
+Đổi loại thành SSD.
+3. Chọn cấu hình theo loại storage (THRG_GetStorageType())
+
+Storage	uc_DosFs	Mount point NVD
+MicroSD 8GB (và 16GB nếu DEF_A4_Cus)	DosFs_SD	THRD_DevName_NVDData (ata0b)
+SSD 256GB / 1TB	DosFs_SSD	THRD_DevName_ata02
+Khác	–	Log lỗi, trả về False
+4. Tính layout partition
+
+Gọi calcAndFixedPartInfo(). Nếu lỗi và thiết bị là SSD, set bl_SsdNgFlg = True rồi trả về False. Với HDD, lỗi này chỉ bị bỏ qua.
+5. Kiểm tra boot type
+
+Nếu boot type là HWCheck, bỏ qua mọi bước sau và trả về True ngay.
+6. Kiểm tra layout partition hiện tại (checkPartitionLayout())
+
+-1: lỗi bất thường, trả về False.
+!= 0: layout khác kỳ vọng, sang bước 7.
+== 0: layout OK, sang bước 8.
+7. Layout sai, cần dựng lại
+
+HDD: coi là lỗi, trả về False.
+SSD, theo thứ tự:
+Nếu đồng thời khởi động từ SSD, có isDataMoveBaseDataDevice() (đang di chuyển dữ liệu từ MicroSD) và SSD có mã hóa, thì đây là tổ hợp không hỗ trợ. Clear cờ download MSC/MSC Subset rồi trả về False.
+Nếu boot type không phải Usb_Download, trả về False. Nghĩa là chỉ download qua USB mới được dựng lại partition.
+Gọi doSedOpal() để activate TCG OPAL (SED).
+Gọi PartitionLayoutSetting() để tạo lại partition và format.
+8. Layout OK, chỉ với SSD
+
+Gọi isCrypSuspend() để xem việc mã hóa/giải mã có bị gián đoạn không.
+Có (suspend):
+doSedOpal().
+PartitionLayoutSetting() để dựng lại và format.
+reqMainStorageEnc(THRG_IsSsdEncrypt()) để cập nhật trạng thái bảo vệ từ "đang gián đoạn" sang "đã mã hóa".
+Không: gọi FormatPartitionAfterReboot() để format nếu lần trước đã dựng partition rồi reboot.
+9. Tạo device file
+
+Chỉ thực hiện khi là HDD, hoặc là SSD mà layout vừa bị dựng lại (si_PartResult != 0).
+Gọi makeDeviceFiles(). Lỗi với SSD thì set bl_SsdNgFlg và trả về False. Lỗi với HDD chỉ ghi log.
+10. Mount file system
+
+Gọi THRG_mountDevice(uc_DosFs, ata0a). Nếu thất bại thì THRG_formatFileSystem().
+Nếu khởi động từ SD, tạo file chk_ijc.data (MakeChkIjcDataFile()) làm dấu "đã format". Lỗi thì trả về False.
+Nếu khởi động từ SSD, mount thêm ata01.
+Nếu thất bại và errno khác EBUSY (EBUSY nghĩa là đã mount rồi), thì format lại ata01 và tạo chk_ijc.data.
+11. Kết thúc
+
+In initOSdriver OK và trả về True.
+Nhận xét
+Luồng chính là: kiểm tra input, xác định loại thiết bị, tính và kiểm tra layout, dựng lại nếu cần (kèm OPAL và mã hóa), tạo device node, mount.
+SSD và HDD xử lý khác nhau. SSD nhiều nhánh (OPAL, mã hóa, data-move, bl_SsdNgFlg). HDD gần như chỉ kiểm tra và báo lỗi.
+Điểm cần chú ý:
+bl_SsdNgFlg chỉ được set ở bước 4 và 9. Các lỗi SSD khác trả về False mà không set cờ này.
+Ở bước 4, lỗi của calcAndFixedPartInfo với HDD bị bỏ qua, và si_Ret bị ghi đè sau đó.
+Khối #if 0 chứa code mount HDD, giữ lại cho tính năng mã hóa sub-storage sau này.
+Comment trong file bị lỗi encoding (Shift-JIS). Nên mở bằng encoding Shift-JIS/CP932 để đọc đúng.
+Nếu cần, tôi có thể vẽ sequence/flowchart cho hàm này hoặc đào sâu vào PartitionLayoutSetting và doSedOpal.

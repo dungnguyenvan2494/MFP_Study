@@ -1,0 +1,2145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C++ OOP Deep Dive — Reference Book</title>
+<style>
+:root{
+  --bg:#fbfbfa; --bg-elevated:#ffffff; --bg-sidebar:#f4f4f3; --bg-hover:#eeeeec;
+  --text:#1c1c1e; --text-muted:#5b5f66; --text-faint:#8a8d93;
+  --border:#e2e2df; --border-strong:#c9c9c5;
+  --code-bg:#f4f4f5; --code-border:#dedede; --code-text:#1c1c1e;
+  --accent:#00599c; --accent-soft:#e7f0f8; --accent-strong:#003f6e;
+  --core-bg:#eef6fb; --core-border:#00599c;
+  --warn-bg:#fdf3e7; --warn-border:#c2803a; --warn-text:#7a4c14;
+  --danger-bg:#fdecec; --danger-border:#c0392b; --danger-text:#8e2b20;
+  --good-bg:#eaf6ee; --good-border:#1a7f37; --good-text:#155d29;
+  --kw:#a626a4; --str:#50a14f; --cmt:#8a8d93; --pre:#986801; --typ:#00599c; --num:#986801;
+  --radius:5px;
+  --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "Fira Code", Consolas, "SFMono-Regular", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --maxw: 840px;
+}
+html.dark{
+  --bg:#0d1117; --bg-elevated:#11161d; --bg-sidebar:#0a0e13; --bg-hover:#171d26;
+  --text:#dde3ea; --text-muted:#8b96a5; --text-faint:#5d6773;
+  --border:#232a34; --border-strong:#323b48;
+  --code-bg:#0a0e13; --code-border:#232a34; --code-text:#d6dde6;
+  --accent:#5fa8e0; --accent-soft:#122536; --accent-strong:#8cc4ec;
+  --core-bg:#0f2436; --core-border:#5fa8e0;
+  --warn-bg:#2a2010; --warn-border:#c98d4d; --warn-text:#e0b57c;
+  --danger-bg:#2b1414; --danger-border:#d16a5a; --danger-text:#e69488;
+  --good-bg:#0f2418; --good-border:#3fae63; --good-text:#7fd39a;
+  --kw:#d18ad1; --str:#8fd98f; --cmt:#6b7480; --pre:#e0b57c; --typ:#7ec0f0; --num:#e0b57c;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth; scroll-padding-top:64px;}
+body{margin:0; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:16px; line-height:1.65; transition:background .15s,color .15s;}
+::selection{background:var(--accent); color:#fff;}
+
+/* ---------- Topbar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:50; height:56px; display:flex; align-items:center; gap:14px;
+  padding:0 16px; background:var(--bg-elevated); border-bottom:1px solid var(--border);
+}
+.topbar .brand{display:flex; flex-direction:column; line-height:1.1; margin-right:8px;}
+.topbar .brand b{font-size:15px; letter-spacing:.2px;}
+.topbar .brand span{font-size:11px; color:var(--text-muted); font-family:var(--mono);}
+.hamburger{display:none; background:none; border:1px solid var(--border); border-radius:var(--radius); color:var(--text); width:34px; height:34px; cursor:pointer; font-size:16px;}
+.topbar .searchwrap{flex:1; max-width:420px; position:relative;}
+#searchInput{
+  width:100%; padding:7px 32px 7px 12px; border-radius:var(--radius); border:1px solid var(--border-strong);
+  background:var(--bg); color:var(--text); font-size:13.5px; font-family:var(--sans);
+}
+#searchInput:focus{outline:2px solid var(--accent); outline-offset:1px;}
+.searchwrap kbd{position:absolute; right:8px; top:50%; transform:translateY(-50%); font-family:var(--mono); font-size:10px; color:var(--text-faint); border:1px solid var(--border); border-radius:3px; padding:1px 5px; pointer-events:none;}
+#searchCount{font-size:11px; color:var(--text-muted); font-family:var(--mono); white-space:nowrap;}
+.topbar-actions{margin-left:auto; display:flex; gap:8px; align-items:center;}
+.iconbtn{background:none; border:1px solid var(--border); color:var(--text); border-radius:var(--radius); width:34px; height:34px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;}
+.iconbtn:hover{background:var(--bg-hover);}
+#progressPill{font-family:var(--mono); font-size:11px; color:var(--text-muted); border:1px solid var(--border); border-radius:20px; padding:5px 10px; white-space:nowrap;}
+
+/* ---------- Layout ---------- */
+.layout{display:flex; align-items:flex-start; min-height:calc(100vh - 56px);}
+.sidebar{
+  width:268px; flex:none; position:sticky; top:56px; height:calc(100vh - 56px); overflow-y:auto;
+  background:var(--bg-sidebar); border-right:1px solid var(--border); padding:14px 8px 40px;
+}
+.sidebar::-webkit-scrollbar{width:8px;}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:4px;}
+.sidebar .group-label{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); padding:12px 10px 4px;}
+.sidebar nav a{
+  display:flex; gap:8px; align-items:baseline; text-decoration:none; color:var(--text-muted); font-size:13.3px;
+  padding:6px 10px; border-radius:var(--radius); margin:1px 4px;
+}
+.sidebar nav a .num{font-family:var(--mono); font-size:11px; color:var(--text-faint); min-width:20px;}
+.sidebar nav a:hover{background:var(--bg-hover); color:var(--text);}
+.sidebar nav a.active{background:var(--accent-soft); color:var(--accent-strong); font-weight:600;}
+.sidebar nav a.search-hidden{display:none;}
+main{flex:1; min-width:0; display:flex; justify-content:center;}
+.content{width:100%; max-width:var(--maxw); padding:36px 24px 120px;}
+
+/* ---------- Chapters ---------- */
+.chapter{padding-top:34px; margin-top:6px; border-top:1px solid var(--border); scroll-margin-top:70px;}
+.chapter:first-of-type{border-top:none;}
+.chapter.search-hidden{display:none;}
+.chapter-head{display:flex; gap:16px; align-items:baseline; margin-bottom:6px;}
+.chapter-head .chno{font-family:var(--mono); font-size:14px; color:var(--accent); font-weight:600;}
+.chapter h2{font-size:26px; margin:0 0 4px; letter-spacing:-.01em;}
+.chapter .subtitle{color:var(--text-muted); font-size:14.5px; margin:0 0 22px;}
+.chapter h3{font-size:18px; margin:30px 0 10px; padding-top:4px;}
+.chapter h4{font-size:15px; margin:20px 0 8px; color:var(--text);}
+.chapter p{margin:10px 0;}
+.chapter ul, .chapter ol{margin:10px 0; padding-left:22px;}
+.chapter li{margin:4px 0;}
+.chapter strong{font-weight:650;}
+code:not(pre code){font-family:var(--mono); background:var(--code-bg); border:1px solid var(--code-border); border-radius:3px; padding:1px 5px; font-size:.87em;}
+
+/* ---------- Code blocks ---------- */
+.codeblock{margin:16px 0; border:1px solid var(--code-border); border-radius:var(--radius); overflow:hidden; background:var(--code-bg);}
+.code-header{display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:var(--bg-hover); border-bottom:1px solid var(--code-border); font-family:var(--mono); font-size:11.5px; color:var(--text-muted);}
+.copy-btn{background:var(--bg-elevated); border:1px solid var(--border-strong); color:var(--text-muted); font-family:var(--mono); font-size:11px; border-radius:3px; padding:3px 9px; cursor:pointer;}
+.copy-btn:hover{color:var(--text); border-color:var(--accent);}
+.copy-btn.copied{color:var(--good-text); border-color:var(--good-border);}
+pre{margin:0; padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.6; color:var(--code-text);}
+pre code{font-family:inherit; background:none; border:none; padding:0;}
+.tok-kw{color:var(--kw);} .tok-str{color:var(--str);} .tok-cmt{color:var(--cmt); font-style:italic;} .tok-pre{color:var(--pre);} .tok-typ{color:var(--typ);} .tok-num{color:var(--num);}
+.diagram{background:var(--bg-elevated);}
+.diagram pre{color:var(--text); font-size:12.6px;}
+
+/* ---------- Boxes ---------- */
+.box{border-left:3px solid var(--border-strong); background:var(--bg-elevated); border-radius:0 var(--radius) var(--radius) 0; padding:12px 16px; margin:16px 0; font-size:14.5px;}
+.box .box-label{font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:5px; display:block;}
+.box.core{border-color:var(--core-border); background:var(--core-bg);}
+.box.core .box-label{color:var(--core-border);}
+.box.warn{border-color:var(--warn-border); background:var(--warn-bg); color:var(--warn-text);}
+.box.warn .box-label{color:var(--warn-border);}
+.box.danger{border-color:var(--danger-border); background:var(--danger-bg); color:var(--danger-text);}
+.box.danger .box-label{color:var(--danger-border);}
+.box.good{border-color:var(--good-border); background:var(--good-bg); color:var(--good-text);}
+.box.good .box-label{color:var(--good-border);}
+
+/* ---------- Tables ---------- */
+.tablewrap{overflow-x:auto; margin:16px 0;}
+table{border-collapse:collapse; width:100%; font-size:13.7px;}
+th,td{border:1px solid var(--border); padding:7px 11px; text-align:left; vertical-align:top;}
+th{background:var(--bg-hover); font-weight:650;}
+tr:nth-child(even) td{background:var(--bg-elevated);}
+
+/* ---------- Q&A / Interview ---------- */
+.qa{border:1px solid var(--border); border-radius:var(--radius); margin:10px 0; overflow:hidden;}
+.qa summary{cursor:pointer; padding:10px 14px; font-weight:600; font-size:14px; background:var(--bg-elevated); list-style:none;}
+.qa summary::-webkit-details-marker{display:none;}
+.qa summary::before{content:"▸ "; color:var(--accent);}
+.qa[open] summary::before{content:"▾ "; }
+.qa .answer{padding:2px 14px 14px; font-size:14px; color:var(--text-muted); background:var(--bg-elevated);}
+
+/* ---------- Practice / checklist ---------- */
+.practice{border:1px dashed var(--border-strong); border-radius:var(--radius); padding:12px 16px; margin:14px 0; font-size:14px; background:var(--bg-elevated);}
+.practice .plabel{font-family:var(--mono); font-size:10.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em;}
+.checklist label{display:flex; gap:8px; align-items:flex-start; margin:5px 0; font-size:13.7px; cursor:pointer;}
+.checklist input[type=checkbox]{margin-top:3px;}
+
+/* ---------- Back to top ---------- */
+#backTop{position:fixed; bottom:22px; right:22px; width:40px; height:40px; border-radius:50%; background:var(--accent); color:#fff; border:none; font-size:16px; cursor:pointer; display:none; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.25); z-index:60;}
+#backTop.show{display:flex;}
+
+mark.search-hit{background:#ffe066; color:#1c1c1e; border-radius:2px; padding:0 1px;}
+html.dark mark.search-hit{background:#7a5a00; color:#fff;}
+
+/* ---------- Mobile ---------- */
+@media (max-width:900px){
+  .hamburger{display:flex; align-items:center; justify-content:center;}
+  .sidebar{position:fixed; left:0; top:56px; height:calc(100vh - 56px); z-index:40; transform:translateX(-100%); transition:transform .18s ease; box-shadow:2px 0 12px rgba(0,0,0,.2);}
+  .sidebar.open{transform:translateX(0);}
+  .topbar .searchwrap{max-width:none;}
+  #searchCount{display:none;}
+}
+
+/* ---------- Print ---------- */
+@media print{
+  .topbar, .sidebar, #backTop, .copy-btn, .code-header .copy-btn{display:none !important;}
+  .layout{display:block;}
+  main{display:block;}
+  .content{max-width:100%; padding:0;}
+  .chapter{break-inside:avoid-page; border-top:none; page-break-before:always;}
+  .chapter:first-of-type{page-break-before:avoid;}
+  pre{white-space:pre-wrap;}
+  body{background:#fff; color:#000;}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
+  <div class="brand"><b>C++ OOP · Deep Dive</b><span>Language → Object Model → Compiler → ABI → Memory → Design → Embedded</span></div>
+  <div class="searchwrap">
+    <input id="searchInput" type="text" placeholder="Search C++ OOP... (vtable, RAII, ABI...)" autocomplete="off">
+    <kbd>Ctrl K</kbd>
+  </div>
+  <span id="searchCount"></span>
+  <div class="topbar-actions">
+    <span id="progressPill">0% học xong</span>
+    <button class="iconbtn" id="themeBtn" title="Dark / Light mode">☾</button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="group-label">C++17 Focus · Nội dung</div>
+    <nav id="tocNav">
+      <a href="#overview"><span class="num">00</span> Overview</a>
+      <a href="#oop-fundamentals"><span class="num">01</span> OOP Fundamentals</a>
+      <a href="#class-object"><span class="num">02</span> Class &amp; Object</a>
+      <a href="#memory-model"><span class="num">03</span> Object Memory Model</a>
+      <a href="#encapsulation-abstraction"><span class="num">04</span> Encapsulation &amp; Abstraction</a>
+      <a href="#constructors"><span class="num">05</span> Constructor</a>
+      <a href="#destructors"><span class="num">06</span> Destructor</a>
+      <a href="#copy-move-rule"><span class="num">07</span> Copy / Move / Rule 0-3-5</a>
+      <a href="#inheritance"><span class="num">08</span> Inheritance</a>
+      <a href="#multiple-inheritance"><span class="num">09</span> Multiple Inheritance</a>
+      <a href="#virtual-inheritance"><span class="num">10</span> Virtual Inheritance</a>
+      <a href="#polymorphism"><span class="num">11</span> Polymorphism</a>
+      <a href="#virtual-functions"><span class="num">12</span> Virtual Function</a>
+      <a href="#vtable-vptr"><span class="num">13</span> VTable / VPtr</a>
+      <a href="#virtual-dispatch"><span class="num">14</span> Virtual Dispatch</a>
+      <a href="#rtti"><span class="num">15</span> RTTI</a>
+      <a href="#this-static-friend"><span class="num">16</span> this / static / friend</a>
+      <a href="#object-lifetime"><span class="num">17</span> Object Lifetime</a>
+      <a href="#const-operators-conversion"><span class="num">18</span> Const / Operator / Conversion</a>
+      <a href="#access-interface-pimpl"><span class="num">19</span> Interface / PImpl</a>
+      <a href="#raii-smart-pointers"><span class="num">20</span> RAII &amp; Smart Pointer</a>
+      <a href="#solid-patterns"><span class="num">21</span> SOLID &amp; Design Patterns</a>
+      <a href="#composition-inheritance"><span class="num">22</span> Composition vs Inheritance</a>
+      <a href="#crtp-type-erasure"><span class="num">23</span> CRTP &amp; Type Erasure</a>
+      <a href="#templates-modern-cpp"><span class="num">24</span> Templates + OOP</a>
+      <a href="#performance-ub"><span class="num">25</span> Performance / Slicing / UB</a>
+      <a href="#abi-compiler"><span class="num">26</span> ABI &amp; Compiler Internals</a>
+      <a href="#concurrency-testing"><span class="num">27</span> Concurrency &amp; Testing</a>
+      <a href="#embedded-linux"><span class="num">28</span> Embedded &amp; Linux OOP</a>
+      <a href="#c-vs-cpp"><span class="num">29</span> C vs C++ OOP</a>
+      <a href="#debugging-tools"><span class="num">30</span> Debugging Tools</a>
+      <a href="#standard-vs-implementation"><span class="num">31</span> Standard vs Implementation</a>
+      <a href="#comparison-tables"><span class="num">32</span> Comparison Tables</a>
+      <a href="#interview-questions"><span class="num">33</span> Interview Questions</a>
+      <a href="#practice-roadmap"><span class="num">34</span> Practice Roadmap</a>
+      <a href="#final-project"><span class="num">35</span> Final Project</a>
+      <a href="#learning-roadmap"><span class="num">36</span> Learning Roadmap</a>
+      <a href="#cheat-sheet"><span class="num">37</span> Cheat Sheet</a>
+    </nav>
+  </aside>
+  <main>
+    <div class="content" id="content">
+<section class="chapter" id="overview">
+<div class="chapter-head"><span class="chno">00</span></div>
+<h2>Overview</h2>
+<p class="subtitle">Cách đọc tài liệu này, và tư duy xuyên suốt: WHAT → WHY → HOW → INTERNALS → MEMORY → COMPILER → PERFORMANCE → WHEN TO USE.</p>
+
+<p>Tài liệu này không dạy "cách viết class trong C++". Nó dạy <strong>C++ thực sự làm gì phía dưới khi bạn viết OOP code</strong> — từ ngôn ngữ, xuống compiler/ABI, xuống memory và machine code. Mục tiêu là để bạn đọc, thiết kế, debug và review C++ OOP ở mức Senior.</p>
+
+<div class="box core"><span class="box-label">Nguyên tắc xuyên suốt</span>
+Mỗi cơ chế OOP trong C++ luôn được phân tích qua 3 tầng:
+<pre style="margin-top:8px">LEVEL 1 — C++ LANGUAGE   (Standard định nghĩa behavior, không định nghĩa implementation)
+        ↓
+LEVEL 2 — COMPILER / ABI (GCC/Clang dùng Itanium C++ ABI, MSVC dùng ABI riêng)
+        ↓
+LEVEL 3 — MACHINE / MEMORY (bytes, con trỏ, load/store, indirect call)</pre>
+Ví dụ xuyên suốt tài liệu: <code>base-&gt;foo();</code> sẽ luôn được lần ngược từ cú pháp C++ → object metadata → vptr/vtable → indirect call → assembly.
+</div>
+
+<div class="box warn"><span class="box-label">Về phạm vi</span>
+Bản nghiên cứu gốc yêu cầu bao phủ 68 chủ đề với cấu trúc 20 mục mỗi chủ đề (tương đương một giáo trình vài trăm trang). Tài liệu này giữ toàn bộ các chủ đề đó nhưng gộp thành 38 chương liền mạch để không bị vụn — mỗi chương đi đủ sâu: khái niệm, lý do tồn tại, syntax, ví dụ, memory layout, compiler/runtime behavior, lỗi thường gặp, UB, performance, best practice, so sánh. Những phần có thể mở rộng thêm (bài tập chi tiết từng dòng, thêm ví dụ) được đánh dấu ở chương 34 (Practice Roadmap) để bạn tự luyện tiếp.
+</div>
+
+<h3>Cách dùng sidebar &amp; search</h3>
+<ul>
+<li>Sidebar bên trái là mục lục — click để nhảy tới đúng chương, mục đang đọc sẽ tự sáng lên khi cuộn.</li>
+<li>Search box (hoặc <code>Ctrl+K</code>) lọc chương theo tiêu đề/nội dung và highlight từ khoá.</li>
+<li>Mỗi code block có nút <strong>Copy</strong>. Có nút chuyển Dark/Light ở góc trên bên phải, và nút quay lại đầu trang khi cuộn xuống dài.</li>
+<li>Bấm <code>Ctrl+P</code> để in / xuất PDF — layout in đã được tối ưu riêng.</li>
+</ul>
+</section>
+
+<section class="chapter" id="oop-fundamentals">
+<div class="chapter-head"><span class="chno">01</span></div>
+<h2>OOP Fundamentals</h2>
+<p class="subtitle">OOP giải quyết vấn đề gì, và tại sao C++ "không đơn giản chỉ là ngôn ngữ OOP".</p>
+
+<h3>Các paradigm lập trình</h3>
+<p><strong>Procedural programming</strong>: chương trình là chuỗi lệnh thao túng dữ liệu toàn cục hoặc truyền qua tham số — dữ liệu và hàm tách rời hoàn toàn (C, Pascal). <strong>Structured programming</strong> thêm kỷ luật control-flow (if/while/for thay vì goto), giúp code dễ đọc hơn nhưng chưa giải quyết vấn đề tổ chức dữ liệu lớn.</p>
+<p><strong>Object-Oriented Programming</strong> gộp dữ liệu + hành vi thao túng dữ liệu đó vào một đơn vị (object), và giấu chi tiết implementation sau một interface ổn định. <strong>Generic programming</strong> (templates) tách hành vi khỏi kiểu dữ liệu cụ thể, sinh code tại compile-time. <strong>Data-oriented programming</strong> đi ngược lại OOP cổ điển: tổ chức theo layout dữ liệu tối ưu cache (SoA — struct of arrays) thay vì theo "đối tượng nghiệp vụ". <strong>Functional programming</strong> nhấn mạnh hàm thuần (pure function), immutability, composition thay vì state + mutation.</p>
+
+<div class="tablewrap"><table>
+<tr><th>Paradigm</th><th>Đơn vị tổ chức</th><th>Trọng tâm</th><th>Trade-off</th></tr>
+<tr><td>Procedural</td><td>Hàm + dữ liệu toàn cục</td><td>Tuần tự hoá logic</td><td>Khó scale khi dữ liệu phức tạp</td></tr>
+<tr><td>OOP</td><td>Object (state+behavior)</td><td>Đóng gói, đa hình</td><td>Overhead indirection, dễ over-design</td></tr>
+<tr><td>Generic</td><td>Template/type parameter</td><td>Tái sử dụng, zero-cost</td><td>Compile-time phức tạp, error message dài</td></tr>
+<tr><td>Data-oriented</td><td>Layout dữ liệu (SoA)</td><td>Cache locality, throughput</td><td>Kém trực quan nghiệp vụ</td></tr>
+<tr><td>Functional</td><td>Hàm thuần, immutable data</td><td>Dễ suy luận, dễ test song song</td><td>Có thể tốn allocation nếu lạm dụng copy</td></tr>
+</table></div>
+
+<h3>OOP giải quyết vấn đề gì?</h3>
+<p>Khi hệ thống lớn dần, "dữ liệu nằm ở đâu, ai được sửa nó, sửa thế nào cho an toàn" trở thành vấn đề chính — không phải thuật toán. OOP xuất hiện (Simula, Smalltalk, rồi C++ những năm 1980) để: (1) nhóm state với các thao tác hợp lệ trên state đó, giữ invariant; (2) cho phép thay thế implementation mà không phá vỡ code gọi nó (abstraction/interface); (3) cho phép viết code dùng chung cho nhiều kiểu dữ liệu khác nhau miễn chúng tuân theo cùng interface (polymorphism); (4) mô hình hoá quan hệ "là một" (is-a) giữa các khái niệm nghiệp vụ (inheritance).</p>
+
+<h3>Ưu điểm / nhược điểm</h3>
+<ul>
+<li><strong>Ưu điểm:</strong> đóng gói giảm coupling; polymorphism cho phép mở rộng không sửa code cũ (Open/Closed); mô hình hoá domain trực quan; dễ chia module theo interface.</li>
+<li><strong>Nhược điểm:</strong> virtual call có chi phí indirection (khó inline, ảnh hưởng branch predictor); deep hierarchy dễ trở thành "God Object" hoặc fragile base class; lạm dụng inheritance tạo coupling ẩn giữa base/derived; object header (vptr) tốn thêm bộ nhớ mỗi object.</li>
+</ul>
+
+<h3>Khi nào OOP không phù hợp?</h3>
+<p>Khi bài toán là biến đổi dữ liệu hàng loạt hiệu năng cao (game engine ECS, xử lý tín hiệu, HFT) — lúc đó data-oriented design (SoA, cache-friendly, không virtual dispatch) thắng rõ rệt. Khi logic là thuần hàm số học không có state phức tạp — generic/functional style gọn hơn. Khi hệ thống nhỏ, một struct + free function đã đủ — OOP hoá sẽ chỉ thêm boilerplate.</p>
+
+<div class="box core"><span class="box-label">Core concept</span>
+C++ không phải "ngôn ngữ OOP thuần". C++ là <strong>multi-paradigm language</strong>: bạn có thể viết procedural (C-style), OOP (class/virtual), generic (template), functional (lambda + <code>&lt;algorithm&gt;</code>), và data-oriented — cùng lúc, trong cùng một codebase, chọn công cụ theo bài toán chứ không ép mọi thứ thành class.
+</div>
+
+<h3>C++ OOP khác Java / C# / Python thế nào?</h3>
+<div class="tablewrap"><table>
+<tr><th></th><th>C++</th><th>Java / C#</th><th>Python</th></tr>
+<tr><td>Object mặc định</td><td>Value type (stack, embedded)</td><td>Reference type (heap, GC)</td><td>Reference type (heap, GC)</td></tr>
+<tr><td>Dispatch mặc định</td><td>Non-virtual (phải khai báo <code>virtual</code>)</td><td>Virtual (mọi method ảo trừ <code>final</code>)</td><td>Luôn "virtual" (duck typing runtime)</td></tr>
+<tr><td>Đa kế thừa</td><td>Có (kể cả virtual inheritance)</td><td>Không (chỉ multiple interface)</td><td>Có (MRO — C3 linearization)</td></tr>
+<tr><td>Quản lý bộ nhớ</td><td>Thủ công / RAII / smart pointer</td><td>Garbage collector</td><td>Garbage collector + refcount</td></tr>
+<tr><td>Triết lý</td><td>"Trả tiền cho cái bạn dùng" (zero-overhead)</td><td>An toàn, đơn giản hoá cho lập trình viên</td><td>Linh hoạt, runtime duck typing</td></tr>
+</table></div>
+<p>Vì object C++ mặc định là value type nằm trên stack và không có vptr trừ khi có virtual function, một struct rỗng trong C++ có <code>sizeof</code> = 1 byte — trong khi trong Java mọi object đều có header runtime (class pointer, lock word...) nằm trên heap. Đây là khác biệt nền tảng dẫn tới toàn bộ phần <a href="#memory-model">Object Memory Model</a> phía sau.</p>
+
+<h3>4 đặc tính kinh điển</h3>
+<div class="tablewrap"><table>
+<tr><th>Đặc tính</th><th>Định nghĩa</th><th>Cơ chế C++</th></tr>
+<tr><td>Encapsulation</td><td>Giấu dữ liệu, chỉ lộ interface</td><td><code>private</code>/<code>protected</code>, access specifier</td></tr>
+<tr><td>Abstraction</td><td>Chỉ quan tâm "cái gì", giấu "làm thế nào"</td><td>Abstract class, pure virtual, PImpl</td></tr>
+<tr><td>Inheritance</td><td>Tái sử dụng &amp; mô hình hoá is-a</td><td><code>class D : public B</code></td></tr>
+<tr><td>Polymorphism</td><td>Một interface, nhiều hành vi</td><td>virtual function (runtime), template/overload (compile-time)</td></tr>
+</table></div>
+<p>Chi tiết compiler-level của từng đặc tính được triển khai đầy đủ ở các chương tương ứng phía sau (Encapsulation ở chương 04, Inheritance ở chương 08-10, Polymorphism ở chương 11-14).</p>
+
+<details class="qa"><summary>Interview: OOP giải quyết vấn đề gì mà procedural không giải quyết được?</summary>
+<div class="answer">Procedural không ràng buộc được ai được sửa dữ liệu và sửa như thế nào — invariant dễ vỡ khi codebase lớn. OOP gắn dữ liệu với hành vi hợp lệ trên nó (encapsulation) và cho phép thay thế implementation qua interface ổn định (abstraction + polymorphism) mà không phải sửa code gọi nó.</div></details>
+<details class="qa"><summary>Interview: Vì sao nói C++ là "zero-overhead abstraction"?</summary>
+<div class="answer">Triết lý Bjarne Stroustrup: "what you don't use, you don't pay for" — nếu bạn không dùng virtual function, object không có vptr, không có chi phí indirection; nếu bạn không dùng exception, không trả chi phí runtime cho unwinding ở nhánh không throw (với model zero-cost exception hiện đại). So với Java (luôn có vtable + GC dù bạn cần hay không), C++ để lập trình viên tự trả chi phí cho đúng phần mình dùng.</div></details>
+</section>
+
+<section class="chapter" id="class-object">
+<div class="chapter-head"><span class="chno">02</span></div>
+<h2>Class &amp; Object</h2>
+<p class="subtitle">Class là bản thiết kế (type); Object là instance sống trong bộ nhớ tại runtime.</p>
+
+<h3>Class</h3>
+<p><code>class</code> và <code>struct</code> trong C++ hoàn toàn giống nhau về mặt layout và semantics — khác duy nhất một điều: <strong>access specifier mặc định</strong>. <code>struct</code> mặc định <code>public</code>, <code>class</code> mặc định <code>private</code>. Đây thuần tuý là default, không phải rule của compiler; bạn có thể viết <code>struct</code> với toàn bộ member <code>private</code> và nó tương đương 100% một <code>class</code>.</p>
+
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class A {
+public:
+    int x;      // truy cập được từ mọi nơi
+private:
+    int y;      // chỉ A và friend của A truy cập được
+protected:
+    int z;      // A, friend, và class kế thừa A truy cập được
+};</code></pre></div>
+
+<h4>Compiler hiểu declaration này như thế nào?</h4>
+<p>Compiler không sinh code cho access specifier — <code>public</code>/<code>private</code>/<code>protected</code> chỉ là <strong>compile-time check</strong>, hoàn toàn biến mất sau khi compile xong (không tồn tại ở machine code, không có runtime enforcement). Compiler build một <em>symbol table</em> cho class: danh sách member variable (kèm offset), member function (kèm mangled name), static member, nested type. Với mỗi lần truy cập <code>a.y</code>, compiler kiểm tra ngữ cảnh gọi có nằm trong "phạm vi được phép" hay không (member function của A, hoặc friend) — nếu vi phạm, đây là <strong>compile error</strong>, không phải runtime error. Vì vậy <code>reinterpret_cast</code>/con trỏ thô hoàn toàn có thể "vượt rào" private ở machine level (undefined behavior về mặt ngôn ngữ, nhưng vẫn chạy được vì private không tồn tại lúc runtime).</p>
+
+<h3>Member variable, member function, static member</h3>
+<ul>
+<li><strong>Member variable (non-static)</strong>: mỗi object có bản sao riêng, nằm trong vùng nhớ của object đó.</li>
+<li><strong>Member function (non-static)</strong>: chỉ tồn tại một bản duy nhất trong code segment; nhận thêm tham số ẩn <code>this</code> (xem chương 16).</li>
+<li><strong>Static member</strong>: thuộc về class, không thuộc về object nào — chỉ một bản duy nhất tồn tại (xem chương 16).</li>
+<li><strong>Nested class</strong>: class định nghĩa bên trong class khác, chủ yếu để scope hoá tên (namespace hoá), không tự động có quan hệ đặc biệt gì với object của outer class.</li>
+<li><strong>Friend</strong>: khai báo một hàm/class khác được quyền truy cập private/protected — phá vỡ encapsulation có kiểm soát (xem chương 16).</li>
+<li><strong>Type alias / member type</strong> (<code>using value_type = T;</code>): công cụ để generic code (template) truy vấn kiểu liên quan tới class, nền tảng cho STL iterator traits.</li>
+</ul>
+
+<h3>Object</h3>
+<p>Object là một vùng nhớ đã được cấp phát và có kiểu — nó là instance cụ thể tồn tại tại runtime, có địa chỉ, có lifetime, có state. Class chỉ là <em>type</em> — không tồn tại trong bộ nhớ runtime (ngoại trừ vtable/RTTI metadata mà compiler sinh ra, xem chương 13).</p>
+
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">A a;      // automatic object — sống trên stack, lifetime gắn với scope
+A* p = new A;   // dynamic object — sống trên heap, lifetime thủ công (tới khi delete)
+A&amp; r = a;       // KHÔNG phải object mới — chỉ là một tên khác (alias) trỏ tới object 'a'</code></pre></div>
+<p><code>A a;</code> tạo một object mới, gọi constructor ngay. <code>A* p = new A;</code> cấp phát vùng nhớ trên free store rồi gọi constructor tại đó, trả về địa chỉ — bạn chịu trách nhiệm gọi <code>delete p;</code> để chạy destructor + giải phóng bộ nhớ. <code>A&amp; r = a;</code> không cấp phát gì cả — reference chỉ là một alias ở compile-time (thường compiler hiện thực reference bằng con trỏ ẩn phía dưới, nhưng về ngôn ngữ, reference không có "địa chỉ riêng" khác với object nó tham chiếu: <code>&amp;r == &amp;a</code>).</p>
+
+<h3>Storage duration (object tồn tại ở đâu)</h3>
+<div class="tablewrap"><table>
+<tr><th>Loại</th><th>Storage duration</th><th>Khi tạo</th><th>Khi huỷ</th><th>Ví dụ</th></tr>
+<tr><td>Automatic object</td><td>automatic</td><td>Vào scope (khai báo)</td><td>Ra khỏi scope</td><td><code>void f(){ A a; }</code></td></tr>
+<tr><td>Static object</td><td>static</td><td>Trước <code>main()</code> hoặc lần đầu qua statement (function-local static)</td><td>Sau <code>main()</code> kết thúc</td><td><code>static A a;</code>, global <code>A a;</code></td></tr>
+<tr><td>Dynamic object</td><td>dynamic</td><td><code>new</code></td><td><code>delete</code> (thủ công)</td><td><code>A* p = new A;</code></td></tr>
+<tr><td>Temporary object</td><td>automatic (rút gọn, thường tới hết full-expression)</td><td>Kết quả biểu thức trung gian</td><td>Cuối full-expression (trừ khi bind vào <code>const&amp;</code>/rvalue-ref kéo dài lifetime)</td><td><code>foo(A())</code></td></tr>
+<tr><td>Thread-local object</td><td>thread</td><td>Khi thread bắt đầu / lần đầu dùng</td><td>Khi thread kết thúc</td><td><code>thread_local A a;</code></td></tr>
+</table></div>
+
+<h3>Subobject</h3>
+<p>Một object có thể chứa các <strong>subobject</strong> bên trong nó: <strong>base-class subobject</strong> (phần bộ nhớ dành cho base class khi kế thừa) và <strong>member subobject</strong> (mỗi member variable kiểu class cũng là một object con, có địa chỉ nằm trong object cha). Khái niệm này là nền tảng bắt buộc phải hiểu trước khi đọc chương Memory Layout và Inheritance — địa chỉ của một subobject không nhất thiết trùng địa chỉ object cha (xem "pointer adjustment" ở chương Multiple Inheritance).</p>
+
+<div class="box good"><span class="box-label">Best practice</span>
+Luôn phân biệt rõ 3 khái niệm khi debug: <em>type</em> (class, biết lúc compile-time), <em>object</em> (vùng nhớ cụ thể, biết lúc runtime), và <em>value</em> (nội dung bytes hiện tại của object đó). Rất nhiều bug (dangling reference, use-after-free, object slicing) xuất phát từ nhầm lẫn "tôi có một object" với "tôi có một reference/pointer còn hợp lệ tới object đó".
+</div>
+</section>
+<section class="chapter" id="memory-model">
+<div class="chapter-head"><span class="chno">03</span></div>
+<h2>Object Memory Model</h2>
+<p class="subtitle">sizeof, alignment, padding, member ordering, empty base optimization — object thực sự trông như thế nào trong RAM.</p>
+
+<h3>Vì sao cần alignment?</h3>
+<p>CPU đọc/ghi bộ nhớ hiệu quả nhất khi dữ liệu nằm ở địa chỉ chia hết cho kích thước của nó (một <code>int</code> 4 byte nên nằm ở địa chỉ chia hết cho 4; một <code>double</code> 8 byte nên nằm ở địa chỉ chia hết cho 8). Trên một số kiến trúc, truy cập lệch alignment (misaligned access) gây fault cứng (SIGBUS) — trên x86 thì chỉ chậm hơn. Vì vậy compiler tự động chèn <strong>padding</strong> (byte đệm vô nghĩa) giữa các member để mọi member đều đúng alignment, và ở cuối struct để array of struct cũng giữ alignment cho phần tử tiếp theo.</p>
+
+<h3>Ví dụ layout thực tế</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class A {
+    char   a;   // 1 byte
+    int    b;   // 4 byte, cần alignment 4
+    double c;   // 8 byte, cần alignment 8
+};
+// sizeof(A) trên hầu hết compiler 64-bit: 16 (không phải 1+4+8=13)</code></pre></div>
+<div class="codeblock diagram"><div class="code-header"><span>MEMORY LAYOUT (common implementation, GCC/Clang x86-64)</span></div><pre>offset  0        1  2  3  4        8                 16
+        +--------+--+--+--+--------+-----------------+
+        |   a    |  pad  |    b    |        c        |
+        +--------+--+--+--+--------+-----------------+
+        1 byte   3 byte  4 byte     8 byte
+        pad(a)   pad     pad(b)     (double alignment=8)
+
+sizeof(A) = 16   alignof(A) = 8   (padding chiếm 3+... byte "chết")</pre></div>
+<p>Nếu bạn <strong>đổi thứ tự khai báo</strong> thành <code>double c; int b; char a;</code> (khai từ lớn xuống nhỏ), compiler chỉ cần 1 byte padding cuối cùng để tổng size chia hết cho alignof lớn nhất → <code>sizeof</code> giảm còn 16 vẫn (double 8 + int 4 + char 1 + pad 3 = 16 trong ví dụ cụ thể này, nhưng với struct nhiều field nhỏ, sắp xếp từ lớn tới nhỏ luôn tối ưu hoặc bằng cách sắp bất kỳ). Đây là kỹ thuật thực tế gọi là <strong>struct packing / member reordering</strong> để giảm memory footprint khi có hàng triệu object.</p>
+
+<div class="box core"><span class="box-label">Core concept — Standard vs Implementation</span>
+C++ Standard <strong>không quy định</strong> compiler phải sắp xếp member theo đúng thứ tự khai báo giữa các <em>access-specifier section</em> khác nhau (ví dụ nó không bắt buộc field <code>public</code> phải đứng trước field <code>private</code> trong bộ nhớ) — nhưng nó <strong>bắt buộc</strong> các member cùng một access-specifier section (giữa hai <code>public:</code>/<code>private:</code> liên tiếp) phải giữ đúng thứ tự khai báo tương đối với nhau. Việc chèn bao nhiêu padding, alignment cụ thể của từng kiểu — đó là ABI-specific (Itanium ABI với GCC/Clang, hoặc MSVC ABI).
+</div>
+
+<h3>Empty class &amp; Empty Base Optimization (EBO)</h3>
+<p>Một class không có non-static data member (<code>class Empty {};</code>) vẫn có <code>sizeof(Empty) == 1</code>, không phải 0 — vì Standard yêu cầu hai object khác nhau phải có địa chỉ khác nhau (nếu size = 0, một array <code>Empty arr[10]</code> sẽ có tất cả phần tử trùng địa chỉ, vi phạm nguyên tắc identity của object). Nhưng khi một class rỗng được dùng làm <strong>base class</strong> (không phải member), <strong>Empty Base Optimization</strong> cho phép compiler không cấp thêm byte nào cho nó — vì base subobject không cần định danh độc lập như một object đứng riêng, miễn nó không trùng địa chỉ với subobject/member liền kề cùng kiểu.</p>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Empty {};
+struct WithMember   { Empty e; int x; };   // sizeof thường = 8 (Empty chiếm 1 byte + pad)
+struct WithEBO : Empty { int x; };          // sizeof thường = 4 (Empty base "miễn phí")</code></pre></div>
+<p>EBO là lý do <code>std::unique_ptr&lt;T, EmptyDeleter&gt;</code> có cùng kích thước với con trỏ thô khi deleter không có state — thư viện chuẩn lưu deleter như một base class (hoặc dùng <code>[[no_unique_address]]</code> từ C++20) thay vì member, để tận dụng EBO.</p>
+
+<h3>Address của object và của member</h3>
+<p><code>&amp;a</code> cho ra địa chỉ byte đầu tiên của object (đúng theo Standard với standard-layout type; với non-standard-layout — ví dụ có base class không rỗng — địa chỉ object không nhất thiết trùng địa chỉ base subobject đầu tiên, sẽ nói kỹ ở chương Multiple/Virtual Inheritance). <code>&amp;a.b</code> là <code>&amp;a + offsetof(A, b)</code> — <code>offsetof</code> chỉ được Standard đảm bảo hợp lệ với <strong>standard-layout type</strong> (không có virtual function, không có nhiều access-specifier khác nhau xen kẽ theo một số điều kiện, tất cả non-static member cùng access control...).</p>
+
+<div class="qa" style="border:none; margin:0;"></div>
+<details class="qa"><summary>Interview: Vì sao <code>sizeof(EmptyClass)</code> là 1 chứ không phải 0?</summary>
+<div class="answer">Vì C++ yêu cầu mọi object độc lập phải có địa chỉ duy nhất (identity). Nếu size = 0, một mảng các object rỗng sẽ khiến tất cả phần tử "chồng" lên cùng một địa chỉ, vi phạm con trỏ số học (<code>&amp;arr[i] != &amp;arr[i+1]</code> phải luôn đúng).</div></details>
+<details class="qa"><summary>Interview: Tại sao nên sắp xếp member từ kiểu lớn (alignment cao) tới kiểu nhỏ?</summary>
+<div class="answer">Để giảm padding chèn giữa các member — mỗi member chỉ cần padding tối thiểu do member liền kề trước nó gây ra thay vì padding lặp lại nhiều lần do xen kẽ kiểu lớn/nhỏ. Với struct có hàng triệu instance (ví dụ trong game engine hay embedded), việc này giảm đáng kể memory footprint và tăng cache locality.</div></details>
+</section>
+
+<section class="chapter" id="encapsulation-abstraction">
+<div class="chapter-head"><span class="chno">04</span></div>
+<h2>Encapsulation &amp; Abstraction</h2>
+<p class="subtitle">Giấu dữ liệu để giữ invariant (encapsulation) và giấu cách làm để chỉ lộ "cái gì" (abstraction) — hai khái niệm gần nhau nhưng không phải một.</p>
+
+<h3>Encapsulation — giữ invariant</h3>
+<p><strong>Invariant</strong> là một điều kiện luôn phải đúng trong suốt vòng đời object (ví dụ: số dư tài khoản không bao giờ âm). Encapsulation nghĩa là chặn mọi đường sửa dữ liệu ngoại trừ qua các hàm mà chính class kiểm soát — nhờ đó lớp bảo đảm invariant luôn giữ đúng, bất kể ai gọi nó.</p>
+<div class="codeblock"><div class="code-header"><span>C++ — có encapsulation</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class BankAccount {
+public:
+    void withdraw(double amount) {
+        if (amount &gt; balance_) throw std::runtime_error("insufficient funds");
+        balance_ -= amount;                 // invariant: balance_ &gt;= 0 luôn đúng
+    }
+    double balance() const { return balance_; }
+private:
+    double balance_ = 0.0;
+};</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>C++ — không có encapsulation</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct BankAccount { double balance; };   // ai cũng có thể: acc.balance = -999999;
+</code></pre></div>
+<p>Khác biệt không nằm ở "tốc độ" hay "cú pháp" — nó nằm ở <strong>khả năng chứng minh tính đúng đắn của chương trình</strong>. Với <code>class BankAccount</code> ở trên, bạn chỉ cần audit các member function của nó để biết balance có thể ra sao; với <code>struct</code> trần, balance có thể bị sửa từ bất kỳ đâu trong toàn bộ codebase — invariant không thể đảm bảo cục bộ.</p>
+
+<h3>Const correctness như một phần của encapsulation</h3>
+<p><code>const</code> mở rộng encapsulation sang chiều "khả năng thay đổi": hàm <code>balance() const</code> tự cam kết (và được compiler ép buộc) không sửa state — người gọi có thể tin tưởng gọi nó trên một object <code>const BankAccount&amp;</code>. Getter/setter nếu chỉ trả về/set trực tiếp field mà không kiểm tra gì thì chỉ là "boilerplate hoá" quyền truy cập public, không thực sự tạo ra encapsulation về mặt invariant.</p>
+
+<h3>Abstraction — API boundary</h3>
+<p>Abstraction trả lời câu hỏi: <strong>người dùng class cần biết gì, không cần biết gì?</strong></p>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Device {
+public:
+    void start();   // Cần biết: gọi hàm này để khởi động thiết bị
+private:
+    void initClock();
+    void configureRegisters();
+    uint32_t reg_base_;
+};</code></pre></div>
+<p>Người dùng <code>Device</code> cần biết: "gọi <code>start()</code> thì thiết bị chạy". Họ <strong>không cần biết</strong>: thứ tự init clock/register bên trong, địa chỉ thanh ghi cụ thể, hay <code>start()</code> có gọi thêm hàm private nào. Đây chính là <em>interface vs implementation</em> — interface là hợp đồng ổn định, implementation có thể đổi hoàn toàn (đổi chip, đổi thuật toán) mà không phá code gọi nó.</p>
+
+<div class="box core"><span class="box-label">Phân biệt Encapsulation vs Abstraction</span>
+<strong>Encapsulation</strong> là cơ chế (access specifier) — trả lời "ai được truy cập gì". <strong>Abstraction</strong> là thiết kế (interface design) — trả lời "người dùng cần thấy những gì để dùng đúng, và nên giấu gì để họ không phụ thuộc nhầm vào chi tiết implementation". Một class có thể có encapsulation tốt (mọi field private) nhưng abstraction tệ (interface public lộ quá nhiều chi tiết implementation, ví dụ trả về con trỏ nội bộ).
+</div>
+
+<h3>Liên hệ thực tế: PImpl &amp; module boundary</h3>
+<p>Kỹ thuật <strong>PImpl (Pointer to Implementation)</strong> đẩy abstraction lên mức cực đoan: header chỉ khai báo interface + một con trỏ tới struct implementation ẩn hoàn toàn trong file .cpp — người dùng include header còn không nhìn thấy tên các private member, giúp giảm thời gian compile lại khi implementation đổi, và ổn định ABI giữa các version thư viện. Chi tiết đầy đủ ở chương 19.</p>
+</section>
+<section class="chapter" id="constructors">
+<div class="chapter-head"><span class="chno">05</span></div>
+<h2>Constructor</h2>
+<p class="subtitle">Toàn bộ họ constructor, initializer list, và thứ tự khởi tạo chính xác qua nhiều tầng kế thừa.</p>
+
+<h3>Các loại constructor</h3>
+<div class="tablewrap"><table>
+<tr><th>Loại</th><th>Ví dụ</th><th>Ghi chú</th></tr>
+<tr><td>Default constructor</td><td><code>A();</code></td><td>Không tham số, hoặc tất cả có default arg</td></tr>
+<tr><td>Parameterized</td><td><code>A(int x);</code></td><td>Nhận tham số để khởi tạo</td></tr>
+<tr><td>Copy constructor</td><td><code>A(const A&amp;);</code></td><td>Khởi tạo từ object cùng kiểu (lvalue)</td></tr>
+<tr><td>Move constructor</td><td><code>A(A&amp;&amp;) noexcept;</code></td><td>"Cướp" tài nguyên từ rvalue (xem chương 07)</td></tr>
+<tr><td>Converting constructor</td><td><code>A(int);</code> (1 tham số, không <code>explicit</code>)</td><td>Cho phép implicit conversion</td></tr>
+<tr><td>Explicit constructor</td><td><code>explicit A(int);</code></td><td>Chặn implicit conversion, chỉ cho phép gọi trực tiếp</td></tr>
+<tr><td>Delegating constructor</td><td><code>A() : A(0) {}</code></td><td>Gọi constructor khác của cùng class trong init list</td></tr>
+</table></div>
+
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class A {
+public:
+    A(int x) : x_(x) {}     // parameterized, dùng member-initializer-list
+private:
+    int x_;
+};
+
+A a{10};   // brace-init (list-initialization), gọi A::A(int)</code></pre></div>
+
+<h4>Compiler xử lý <code>A a{10};</code> ra sao?</h4>
+<p>Compiler overload-resolve constructor phù hợp nhất với <code>{10}</code> (ở đây chỉ có một constructor nhận <code>int</code> nên khớp trực tiếp). Sau đó nó cấp phát vùng nhớ cho <code>a</code> trên stack (kích thước đã biết tại compile-time), rồi phát sinh lệnh gọi <code>A::A(A* this, int x)</code> — constructor về bản chất là một hàm thường nhận thêm <code>this</code> ẩn, không có "return value" theo nghĩa thông thường (nó khởi tạo vùng nhớ đã cấp sẵn, không trả về object mới). <strong>Member-initializer-list</strong> (<code>: x_(x)</code>) khác hoàn toàn gán trong constructor body — initializer list khởi tạo trực tiếp (direct-initialization) member ngay khi nó được tạo; nếu bạn gán trong body (<code>x_ = x;</code>), member đã được default-construct trước đó rồi mới bị gán đè — tốn thêm một lần khởi tạo thừa, và với <code>const</code> member hay reference member thì <strong>bắt buộc</strong> phải dùng initializer list (không thể gán sau khi đã tạo).</p>
+
+<div class="box warn"><span class="box-label">Lỗi thường gặp</span>
+Member trong initializer list được khởi tạo theo <strong>thứ tự khai báo trong class</strong>, không phải thứ tự bạn viết trong initializer list. Viết <code>A(int x) : y_(x_), x_(x) {}</code> khi <code>x_</code> khai báo sau <code>y_</code> sẽ khiến <code>y_</code> được khởi tạo từ <code>x_</code> <strong>chưa được khởi tạo</strong> — undefined behavior, dù đọc code tưởng như "đúng thứ tự". GCC/Clang với <code>-Wreorder</code> sẽ cảnh báo lỗi này.
+</div>
+
+<h3>Default member initializer &amp; explicit</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Config {
+    int retries_ = 3;        // default member initializer — dùng nếu constructor không set
+    explicit Config(int r) : retries_(r) {}   // explicit chặn: Config c = 5;  (lỗi compile)
+};
+Config c1(5);       // OK — direct-init
+// Config c2 = 5;   // lỗi vì explicit — chặn implicit conversion int -&gt; Config</code></pre></div>
+<p><code>explicit</code> tồn tại vì converting constructor một tham số rất dễ gây implicit conversion không mong muốn (ví dụ <code>std::vector&lt;int&gt; v(10);</code> so với vô tình truyền nhầm literal ở nơi cần <code>vector</code>) — nguyên tắc: constructor một tham số nên <code>explicit</code> trừ khi bạn <strong>cố ý</strong> muốn cho phép implicit conversion (như <code>std::string s = "hello";</code>).</p>
+
+<h3>Constructor Order — thứ tự khởi tạo chính xác</h3>
+<div class="box core"><span class="box-label">Thứ tự bắt buộc theo Standard</span>
+<pre style="margin-top:6px">1. Virtual base class     (theo thứ tự xuất hiện trong DAG kế thừa, chỉ một lần)
+2. Direct base class      (theo thứ tự khai báo kế thừa, trái sang phải)
+3. Non-static data member (theo thứ tự khai báo trong class, KHÔNG theo initializer-list)
+4. Constructor body        (thân hàm constructor chạy sau cùng)</pre>
+</div>
+<div class="codeblock"><div class="code-header"><span>C++ — multilevel</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base   { Base()   { std::puts("Base");   } };
+struct Mid    : Base    { Mid()    { std::puts("Mid");    } };
+struct Member { Member() { std::puts("Member"); } };
+struct Derived: Mid {
+    Member m;
+    Derived() { std::puts("Derived"); }
+};
+Derived d;
+// Output: Base -&gt; Mid -&gt; Member -&gt; Derived</code></pre></div>
+<div class="codeblock diagram"><div class="code-header"><span>DIAGRAM — thứ tự chạy constructor</span></div><pre>new Derived()
+   │
+   ├─▶ Base::Base()      (base của Mid, chạy trước tiên)
+   ├─▶ Mid::Mid()        (direct base của Derived)
+   ├─▶ Member::Member()  (data member 'm', theo thứ tự khai báo)
+   └─▶ Derived::Derived() body   (thân hàm chạy sau cùng)</pre></div>
+
+<h3>Constructor Inheritance (<code>using Base::Base;</code>)</h3>
+<div class="codeblock"><div class="code-header"><span>C++11+</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base { Base(int x) {} };
+struct Derived : Base {
+    using Base::Base;   // "kế thừa" constructor của Base — sinh Derived(int) tương đương
+};
+Derived d(5);   // hợp lệ nhờ using-declaration</code></pre></div>
+<p>Đây chỉ là cú pháp sinh thêm constructor forwarding tự động, <strong>không</strong> có nghĩa là Derived "dùng chung" constructor với Base ở mức object — Derived vẫn khởi tạo đầy đủ theo thứ tự chuẩn ở trên (member của Derived vẫn được default-init nếu không có initializer riêng).</p>
+
+<details class="qa"><summary>Interview: Vì sao virtual base luôn được khởi tạo trước direct base, kể cả khi nó nằm "sâu" trong hierarchy?</summary>
+<div class="answer">Vì virtual base chỉ tồn tại đúng một bản duy nhất trong toàn bộ object dù nhiều class kế thừa nó (giải quyết diamond problem — xem chương 10). Nếu để mỗi lớp trung gian tự khởi tạo virtual base, nó sẽ bị khởi tạo lặp lại nhiều lần. Standard giải quyết bằng cách: chỉ constructor của <em>most-derived class</em> (object thực sự được tạo ra) mới chịu trách nhiệm gọi constructor của virtual base, và nó luôn chạy trước mọi direct base khác.</div></details>
+</section>
+
+<section class="chapter" id="destructors">
+<div class="chapter-head"><span class="chno">06</span></div>
+<h2>Destructor</h2>
+<p class="subtitle">Thứ tự huỷ (ngược hoàn toàn với constructor), và lý do virtual destructor gần như luôn bắt buộc khi có polymorphism.</p>
+
+<h3>Thứ tự destructor — ngược lại constructor</h3>
+<div class="box core"><span class="box-label">Thứ tự huỷ</span>
+<pre style="margin-top:6px">1. Constructor body kết thúc → chạy destructor body trước
+2. Non-static data member    (thứ tự NGƯỢC khai báo)
+3. Direct base class          (thứ tự NGƯỢC khai báo kế thừa)
+4. Virtual base class          (huỷ sau cùng, chỉ một lần)</pre>
+</div>
+<p>Dùng lại ví dụ ở chương 05: huỷ <code>Derived d;</code> sẽ in ra <code>Derived -&gt; Member -&gt; Mid -&gt; Base</code> — đúng thứ tự ngược lại constructor. Nguyên tắc này đảm bảo: khi huỷ một phần, các phần phụ thuộc vào nó (được xây dựng sau) đã được dọn trước.</p>
+
+<h3>Virtual Destructor — vì sao gần như bắt buộc</h3>
+<div class="codeblock"><div class="code-header"><span>C++ — KHÔNG có virtual destructor (nguy hiểm)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base   { ~Base()   { std::puts("~Base");   } };   // non-virtual
+struct Derived: Base { int* buf = new int[100]; ~Derived(){ delete[] buf; std::puts("~Derived"); } };
+
+Base* p = new Derived;
+delete p;   // UNDEFINED BEHAVIOR: chỉ gọi ~Base(), KHÔNG gọi ~Derived() -&gt; rò rỉ 'buf'!</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>C++ — có virtual destructor (an toàn)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base   { virtual ~Base() { std::puts("~Base"); } };
+struct Derived: Base { int* buf = new int[100]; ~Derived() override { delete[] buf; std::puts("~Derived"); } };
+
+Base* p = new Derived;
+delete p;   // đúng: gọi ~Derived() trước (qua vtable), rồi tự động gọi ~Base()
+// Output: ~Derived -&gt; ~Base</code></pre></div>
+<div class="box danger"><span class="box-label">Undefined Behavior</span>
+<code>delete</code> một object qua con trỏ base <strong>không có virtual destructor</strong> khi object thực sự là kiểu derived là <strong>undefined behavior</strong> theo Standard ([expr.delete]). Trên thực tế (common implementation), compiler chỉ phát sinh lệnh gọi trực tiếp <code>Base::~Base()</code> (vì không có gì để tra vtable) — phần <code>Derived::~Derived()</code> (và mọi resource nó lẽ ra phải giải phóng) bị bỏ qua hoàn toàn → memory leak, hoặc tệ hơn nếu Derived override thêm hành vi giải phóng handle/lock.
+</div>
+
+<div class="box good"><span class="box-label">Best practice</span>
+Quy tắc kinh điển: <strong>nếu một class có ít nhất một virtual function, nó nên có virtual destructor</strong> (kể cả khi thân hàm rỗng: <code>virtual ~Base() = default;</code>). Ngược lại, nếu class không định dùng làm polymorphic base (không có virtual function nào, không định <code>delete</code> qua con trỏ base) — không cần virtual destructor, vì nó thêm vptr vào object (tốn 8 byte trên 64-bit) và một tầng indirection không cần thiết. Đây chính là runtime cost bạn "trả tiền" khi dùng polymorphism (xem chương 25).
+</div>
+
+<h3>Pure Virtual Destructor</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct AbstractBase {
+    virtual ~AbstractBase() = 0;   // pure virtual, nhưng VẪN PHẢI có định nghĩa!
+};
+AbstractBase::~AbstractBase() {}   // bắt buộc định nghĩa ở ngoài, vì derived luôn gọi nó
+
+struct Derived : AbstractBase {};  // Derived giờ instantiate được (AbstractBase vẫn abstract)
+</code></pre></div>
+<p>Kỹ thuật này dùng để ép một class trở thành abstract (không thể <code>new AbstractBase</code>) mà không cần thêm pure virtual function nghiệp vụ nào — nhưng khác các pure virtual function khác, destructor <strong>luôn được gọi</strong> trong chuỗi huỷ đối tượng derived (base destructor luôn chạy), nên nếu không định nghĩa thân hàm, linker sẽ báo lỗi "undefined reference".</p>
+
+<h3>Destruction of members &amp; bases — exception trong destructor</h3>
+<p>Nếu destructor của một member ném exception trong lúc một exception khác đang unwind (ví dụ constructor throw giữa chừng khiến các member đã khởi tạo bị huỷ), chương trình gọi <code>std::terminate()</code> ngay lập tức — đây là lý do <strong>destructor mặc định là <code>noexcept</code></strong> kể từ C++11 (trừ khi bạn tự khai báo khác) và nguyên tắc bất di bất dịch: <strong>không bao giờ để exception thoát ra khỏi destructor</strong>.</p>
+
+<details class="qa"><summary>Interview: Điều gì xảy ra khi <code>Base* p = new Derived; delete p;</code> mà <code>~Base()</code> không virtual?</summary>
+<div class="answer">Undefined behavior theo Standard; trên thực tế, compiler chỉ sinh lệnh gọi trực tiếp <code>Base::~Base()</code> vì lời gọi được resolve tĩnh theo kiểu con trỏ (<code>Base*</code>), không tra vtable. Kết quả: phần override và các member riêng của Derived không được huỷ đúng cách — rò rỉ tài nguyên hoặc state không nhất quán.</div></details>
+</section>
+<section class="chapter" id="copy-move-rule">
+<div class="chapter-head"><span class="chno">07</span></div>
+<h2>Copy / Move Semantics &amp; Rule of 0 / 3 / 5</h2>
+<p class="subtitle">Shallow vs deep copy, std::move thực sự làm gì, và khi nào bạn cần tự viết 5 hàm đặc biệt (hoặc không viết hàm nào cả).</p>
+
+<h3>Shallow copy vs Deep copy</h3>
+<p>Compiler tự sinh copy constructor mặc định thực hiện <strong>memberwise copy</strong> — copy từng byte/member một cách "nông" (shallow): nếu member là con trỏ, chỉ địa chỉ được copy, không copy dữ liệu nó trỏ tới.</p>
+<div class="codeblock"><div class="code-header"><span>C++ — Shallow copy (nguy hiểm)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Buffer {
+    char* data;
+public:
+    Buffer(size_t n) : data(new char[n]) {}
+    ~Buffer() { delete[] data; }
+    // KHÔNG tự viết copy constructor -&gt; compiler sinh default (shallow copy)
+};
+Buffer a(10);
+Buffer b = a;      // b.data == a.data (cùng trỏ một vùng nhớ!)
+// khi a và b cùng bị huỷ -&gt; delete[] cùng một con trỏ HAI LẦN -&gt; double free (UB)</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>C++ — Deep copy (đúng)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Buffer {
+    char* data; size_t size_;
+public:
+    Buffer(size_t n) : data(new char[n]), size_(n) {}
+    Buffer(const Buffer&amp; other) : data(new char[other.size_]), size_(other.size_) {
+        std::memcpy(data, other.data, size_);   // copy NỘI DUNG, cấp phát vùng nhớ riêng
+    }
+    Buffer&amp; operator=(const Buffer&amp; other) {
+        if (this == &amp;other) return *this;          // self-assignment check
+        char* newData = new char[other.size_];      // copy-then-swap: an toàn cả khi new throw
+        std::memcpy(newData, other.data, other.size_);
+        delete[] data;
+        data = newData; size_ = other.size_;
+        return *this;
+    }
+    ~Buffer() { delete[] data; }
+};</code></pre></div>
+<div class="box warn"><span class="box-label">Self-assignment</span>
+<code>a = a;</code> tưởng vô hại nhưng nếu copy-assignment không kiểm tra <code>this == &amp;other</code> và giải phóng <code>data</code> trước khi copy nội dung nguồn, bạn sẽ <code>delete</code> chính vùng nhớ mình đang cần đọc để copy — dùng lại dữ liệu đã free (UB). Kỹ thuật <strong>copy-and-swap</strong> (cấp phát bản sao mới trước, swap, rồi để bản cũ tự huỷ) giải quyết vấn đề này tự nhiên mà không cần check tường minh.
+</div>
+
+<h3>Copy Elision</h3>
+<p>Từ C++17, một số trường hợp trả về object theo giá trị (<code>return T{...};</code> hoặc <code>T t = T(...);</code>) được Standard <strong>bắt buộc</strong> bỏ qua copy/move constructor hoàn toàn (mandatory copy elision, không chỉ là optimization/RVO tuỳ compiler như trước C++17) — object được xây dựng trực tiếp tại nơi nó sẽ được dùng, không có bản sao trung gian nào cả, kể cả khi copy constructor có side-effect (ví dụ <code>std::puts</code>) thì side-effect đó cũng không xảy ra.</p>
+
+<h3>Move Semantics</h3>
+<p>Vấn đề move semantics giải quyết: khi trả về hoặc truyền một object <strong>tạm thời</strong> (rvalue) — dữ liệu nó chứa sắp bị huỷ ngay sau đó — copy sâu (deep copy) là lãng phí. Thay vì copy nội dung, ta có thể "cướp" (steal) con trỏ nội bộ của object nguồn, để lại nguồn ở trạng thái rỗng hợp lệ.</p>
+<div class="codeblock"><div class="code-header"><span>C++11</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">Buffer(Buffer&amp;&amp; other) noexcept : data(other.data), size_(other.size_) {
+    other.data = nullptr;   // nguồn không còn sở hữu gì -&gt; destructor của nó an toàn (delete nullptr no-op)
+    other.size_ = 0;
+}
+Buffer&amp; operator=(Buffer&amp;&amp; other) noexcept {
+    if (this != &amp;other) {
+        delete[] data;               // giải phóng tài nguyên hiện tại
+        data = other.data; size_ = other.size_;
+        other.data = nullptr; other.size_ = 0;
+    }
+    return *this;
+}</code></pre></div>
+<p><code>A b = std::move(a);</code> — <code>std::move</code> <strong>không di chuyển gì cả</strong>, nó chỉ là một <code>static_cast&lt;A&amp;&amp;&gt;(a)</code>, tức "ép kiểu" lvalue <code>a</code> thành rvalue reference để overload resolution chọn move constructor thay vì copy constructor. Việc "di chuyển" thực sự (steal con trỏ) là do <em>bạn</em> viết trong thân move constructor — compiler và runtime không tự làm điều đó, <code>std::move</code> chỉ là tín hiệu ("tôi cho phép cướp tài nguyên của biến này").</p>
+<div class="box danger"><span class="box-label">Moved-from state</span>
+Sau <code>A b = std::move(a);</code>, <code>a</code> ở trạng thái "hợp lệ nhưng không xác định" (valid but unspecified state) — bạn được phép gán giá trị mới hoặc huỷ nó, nhưng <strong>không được giả định giá trị cũ còn nguyên</strong>. Đọc <code>a</code> sau khi move (ngoài gán mới/huỷ) là bug logic, dù thường không phải UB cứng ở mức ngôn ngữ (trừ khi move constructor bạn viết để lại state thực sự invalid).
+</div>
+<p><code>noexcept</code> trên move constructor cực kỳ quan trọng: <code>std::vector</code> khi realloc sẽ ưu tiên move phần tử cũ sang vùng nhớ mới <strong>chỉ khi</strong> move constructor là <code>noexcept</code> — nếu không, để đảm bảo strong exception guarantee (nếu giữa chừng lỗi thì vector cũ vẫn nguyên vẹn), nó buộc phải copy (chậm hơn) thay vì move.</p>
+
+<h3>Rule of 0 / 3 / 5</h3>
+<div class="tablewrap"><table>
+<tr><th>Rule</th><th>Ý nghĩa</th><th>Khi áp dụng</th></tr>
+<tr><td><strong>Rule of 0</strong></td><td>Không tự viết bất kỳ hàm nào trong 5 hàm đặc biệt (destructor, copy ctor, copy assign, move ctor, move assign)</td><td>Class chỉ chứa member đã tự quản lý tài nguyên đúng (RAII: <code>std::string</code>, <code>std::vector</code>, <code>std::unique_ptr</code>...) — để compiler tự sinh, mọi thứ đúng "miễn phí"</td></tr>
+<tr><td><strong>Rule of 3</strong></td><td>Nếu cần viết 1 trong 3 hàm: destructor, copy ctor, copy assign — thường phải viết cả 3</td><td>Class quản lý tài nguyên thô (con trỏ, file handle, socket) theo kiểu C++98, chưa có move</td></tr>
+<tr><td><strong>Rule of 5</strong></td><td>Thêm move ctor &amp; move assign vào Rule of 3</td><td>Từ C++11, nếu class quản lý tài nguyên thô, nên viết đủ cả 5 để tận dụng move thay vì luôn copy (tối ưu hiệu năng)</td></tr>
+</table></div>
+<div class="codeblock"><div class="code-header"><span>C++ — vì sao class này VI PHẠM Rule of 3</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Buffer {
+    char* data;
+public:
+    Buffer(size_t n) : data(new char[n]) {}
+    ~Buffer() { delete[] data; }
+    // THIẾU copy constructor &amp; copy assignment!
+    // compiler tự sinh bản shallow-copy -&gt; double free khi 2 object cùng huỷ 'data'
+};</code></pre></div>
+<p>Class này cần destructor (giải phóng <code>data</code>) → theo Rule of 3, nó <strong>phải</strong> tự viết cả copy constructor và copy assignment (deep copy), nếu không compiler-generated version sẽ shallow-copy con trỏ và gây double-free khi cả hai object bị huỷ. Nếu class <strong>không</strong> quản lý tài nguyên thô trực tiếp (dùng <code>std::vector&lt;char&gt;</code> thay <code>char*</code>), nó rơi về Rule of 0 — không cần viết gì cả, vì <code>std::vector</code> đã tự lo đủ 5 hàm đúng cách rồi.</p>
+
+<div class="box good"><span class="box-label">Best practice</span>
+Trong code hiện đại, Rule of 3/5 nên hiếm khi xuất hiện trực tiếp trong business logic — nó nên bị "chôn" vào một lớp RAII nhỏ, chuyên trách (như <code>Buffer</code> ở trên, hoặc dùng thẳng <code>std::unique_ptr</code>/<code>std::vector</code>), còn phần lớn class nghiệp vụ nên tuân theo Rule of 0. Nếu bạn thấy mình viết nhiều class business logic phải tự tay viết cả 5 hàm, đó thường là dấu hiệu thiết kế nên tách riêng resource-owner ra khỏi logic.
+</div>
+
+<details class="qa"><summary>Interview: <code>std::move(a)</code> có thực sự "di chuyển" dữ liệu của <code>a</code> ngay lập tức không?</summary>
+<div class="answer">Không. <code>std::move</code> chỉ là một cast — nó biến <code>a</code> (lvalue) thành rvalue reference để trigger overload resolution chọn move constructor/move assignment thay vì bản copy. Việc "cướp" tài nguyên (con trỏ, handle) là do logic bạn viết bên trong move constructor quyết định; nếu class không có move constructor, <code>std::move(a)</code> vẫn fallback về copy bình thường.</div></details>
+</section>
+<section class="chapter" id="inheritance">
+<div class="chapter-head"><span class="chno">08</span></div>
+<h2>Inheritance</h2>
+<p class="subtitle">Public/protected/private inheritance, các hình dạng hierarchy, và IS-A vs HAS-A.</p>
+
+<h3>public / protected / private inheritance</h3>
+<div class="tablewrap"><table>
+<tr><th>Kiểu kế thừa</th><th>public member của Base trở thành</th><th>protected member của Base trở thành</th><th>Ý nghĩa</th></tr>
+<tr><td><code>class D : public B</code></td><td>public</td><td>protected</td><td>"is-a" thật sự — interface của Base lộ ra ngoài qua D</td></tr>
+<tr><td><code>class D : protected B</code></td><td>protected</td><td>protected</td><td>D dùng B như implementation detail, nhưng class kế thừa D vẫn thấy được</td></tr>
+<tr><td><code>class D : private B</code></td><td>private</td><td>private</td><td>"implemented-in-terms-of" — chỉ D tự dùng, bên ngoài không biết D kế thừa từ B</td></tr>
+</table></div>
+<p>Trong thực tế, hơn 95% trường hợp dùng <code>public</code> inheritance vì nó là kiểu duy nhất mô hình hoá đúng quan hệ "is-a" (Liskov Substitution — mọi nơi dùng <code>Base&amp;</code> phải chấp nhận <code>Derived&amp;</code> mà không phá vỡ hành vi). <code>private</code> inheritance gần như tương đương composition nhưng cho phép truy cập <code>protected</code> member của Base và override virtual function — dùng khi bạn cần "implementation reuse" chứ không có quan hệ is-a thật (composition thường được ưu tiên hơn — xem chương 22).</p>
+
+<h3>Các hình dạng hierarchy</h3>
+<div class="codeblock diagram"><div class="code-header"><span>DIAGRAM</span></div><pre>Single:         Multilevel:        Hierarchical:        Multiple:
+   A                A                    A                A   B
+   │                │                  ┌─┴─┐               \ /
+   B                B                  B   C                C
+                    │
+                    C</pre></div>
+<ul>
+<li><strong>Single</strong>: một base, một derived.</li>
+<li><strong>Multilevel</strong>: chuỗi kế thừa A→B→C, mỗi lớp kế thừa lớp ngay trước nó.</li>
+<li><strong>Hierarchical</strong>: một base, nhiều derived độc lập (B và C đều kế thừa A, không liên quan nhau).</li>
+<li><strong>Multiple</strong>: một derived kế thừa từ nhiều base cùng lúc — xem chương 09.</li>
+<li><strong>Hybrid</strong>: kết hợp nhiều hình dạng trên, thường dẫn tới diamond problem — xem chương 10.</li>
+</ul>
+
+<h3>IS-A vs HAS-A</h3>
+<div class="codeblock"><div class="code-header"><span>IS-A — inheritance</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Animal { public: virtual void speak(); };
+class Dog : public Animal { public: void speak() override; };
+// "Dog LÀ MỘT Animal" -&gt; Dog* có thể dùng ở bất kỳ đâu cần Animal*</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>HAS-A — composition</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Engine { public: void start(); };
+class Car { Engine engine; public: void start() { engine.start(); } };
+// "Car CÓ MỘT Engine" -&gt; Car không phải là Engine, chỉ SỞ HỮU nó</code></pre></div>
+
+<div class="box core"><span class="box-label">Prefer composition over inheritance — vì sao?</span>
+Inheritance tạo <strong>coupling rất chặt</strong>: Derived phụ thuộc vào chi tiết implementation của Base (không chỉ interface) — đổi Base có thể phá Derived theo cách không rõ ràng ("fragile base class problem"). Inheritance cũng chỉ cho một trục quan hệ tĩnh (cố định lúc compile-time). Composition thì lỏng hơn: <code>Car</code> chỉ phụ thuộc <em>interface</em> của <code>Engine</code>, có thể đổi loại engine tại runtime (dependency injection), dễ test (mock Engine), và không kế thừa nhầm các hành vi không mong muốn. Quy tắc thực dụng: <strong>chỉ dùng inheritance khi thực sự có quan hệ is-a và bạn cần polymorphism (gọi qua con trỏ/reference base)</strong> — mọi trường hợp "muốn tái sử dụng code" thuần tuý nên ưu tiên composition trước.
+</div>
+</section>
+
+<section class="chapter" id="multiple-inheritance">
+<div class="chapter-head"><span class="chno">09</span></div>
+<h2>Multiple Inheritance</h2>
+<p class="subtitle">Object layout khi kế thừa nhiều base, pointer adjustment, và ambiguity.</p>
+
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct A { int a; virtual void fa(); };
+struct B { int b; virtual void fb(); };
+struct C : public A, public B { int c; };   // C kế thừa cả A và B</code></pre></div>
+
+<h3>Object layout (common implementation — Itanium ABI)</h3>
+<div class="codeblock diagram"><div class="code-header"><span>MEMORY LAYOUT của một object C</span></div><pre>Địa chỉ object C (== địa chỉ subobject A, base ĐẦU TIÊN)
+   │
+   ▼
++-------------------+   offset 0    &lt;- &amp;c  ==  &amp;(A&amp;)c
+| vptr (cho A part) |
+| int a             |
++-------------------+   offset 16   &lt;- &amp;(B&amp;)c   (KHÁC với &amp;c !)
+| vptr (cho B part) |
+| int b             |
++-------------------+   offset 32
+| int c             |
++-------------------+
+sizeof(C) = 40 (tuỳ ABI/alignment thực tế, minh hoạ khái niệm)</pre></div>
+<p>Điểm mấu chốt: <strong>địa chỉ subobject B bên trong C khác địa chỉ chính object C</strong> (nó nằm sau phần A). Đây gọi là <strong>pointer adjustment</strong> — khi bạn viết <code>B* pb = &amp;c;</code>, compiler tự động cộng thêm offset (ở đây là +16) vào con trỏ, hoàn toàn ngầm định, để <code>pb</code> trỏ đúng vào phần B bên trong C.</p>
+
+<div class="codeblock"><div class="code-header"><span>C++ — pointer adjustment ngầm định</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">C c;
+A* pa = &amp;c;   // pa == &amp;c (offset 0, không cần điều chỉnh)
+B* pb = &amp;c;   // pb == &amp;c + 16  (compiler TỰ ĐỘNG cộng offset!)
+// pa và pb là HAI giá trị con trỏ KHÁC NHAU, dù cùng trỏ vào object 'c'
+std::cout &lt;&lt; (void*)pa &lt;&lt; " vs " &lt;&lt; (void*)pb;   // in ra 2 địa chỉ khác nhau</code></pre></div>
+
+<h3>Virtual dispatch với multiple inheritance — thunk</h3>
+<p>Khi gọi virtual function qua <code>pb-&gt;fb()</code>, vtable của phần B cần trỏ đúng vào hàm — nhưng nếu C override <code>fb()</code>, hàm <code>C::fb</code> nhận <code>this</code> là con trỏ tới <em>toàn bộ</em> C (offset 0), trong khi lời gọi đến từ <code>pb</code> (offset 16). Compiler giải quyết bằng <strong>thunk</strong>: một đoạn mã máy cực nhỏ chèn vào vtable, tự động trừ lại offset trước khi nhảy vào hàm thật, đảm bảo <code>this</code> bên trong hàm luôn đúng.</p>
+
+<h3>Ambiguity</h3>
+<div class="codeblock"><div class="code-header"><span>C++ — lỗi ambiguity</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct A { void foo(); };
+struct B { void foo(); };
+struct C : public A, public B {};
+C c;
+// c.foo();          // LỖI COMPILE: ambiguous, A::foo hay B::foo?
+c.A::foo();           // OK — chỉ rõ dùng phiên bản của A</code></pre></div>
+<p>Compiler không tự đoán bạn muốn gọi hàm nào khi hai base độc lập có cùng tên hàm — bạn phải chỉ rõ bằng scope resolution (<code>c.A::foo()</code>) hoặc thêm một hàm <code>foo()</code> ở C để "che" (hide) cả hai, tự quyết định logic gọi bản nào.</p>
+
+<h3>Thứ tự constructor / destructor với multiple inheritance</h3>
+<p>Constructor chạy theo <strong>thứ tự khai báo kế thừa</strong> (trái → phải trong <code>class C : public A, public B</code> → A trước, B sau), destructor chạy ngược lại (B trước, A sau) — nhất quán với nguyên tắc ở chương 05-06, chỉ mở rộng từ "base đơn" sang "danh sách base theo thứ tự khai báo".</p>
+</section>
+
+<section class="chapter" id="virtual-inheritance">
+<div class="chapter-head"><span class="chno">10</span></div>
+<h2>Virtual Inheritance &amp; Diamond Problem</h2>
+<p class="subtitle">Diamond inheritance sinh ra hai bản sao base trùng lặp — virtual inheritance là cách C++ giải quyết.</p>
+
+<h3>Diamond không có virtual inheritance</h3>
+<div class="codeblock diagram"><div class="code-header"><span>DIAGRAM</span></div><pre>      A
+     / \
+    B   C
+     \ /
+      D
+
+class B : public A {};
+class C : public A {};
+class D : public B, public C {};   // D chứa HAI bản sao A (một qua B, một qua C)</pre></div>
+<div class="codeblock"><div class="code-header"><span>C++ — vấn đề</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct A { int x; };
+struct B : public A {};
+struct C : public A {};
+struct D : public B, public C {};
+D d;
+// d.x;          // LỖI COMPILE: ambiguous — d.x là B::A::x hay C::A::x?
+d.B::x = 1;       // phải chỉ rõ base path
+d.C::x = 2;       // đây là MỘT BIẾN 'x' KHÁC hoàn toàn với d.B::x
+</code></pre></div>
+<p><code>D</code> chứa hai bản sao độc lập của <code>A</code> — lãng phí bộ nhớ, và về mặt nghĩa nó sai: nếu <code>A</code> đại diện một khái niệm duy nhất (ví dụ <code>Animal</code> trong <code>class Dog: Animal, Pet: Animal, Guide: Dog, Pet</code>), một con Guide-dog không nên có "hai con vật" bên trong nó.</p>
+
+<h3>Diamond với virtual inheritance</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct A { int x; };
+struct B : public virtual A {};
+struct C : public virtual A {};
+struct D : public B, public C {};
+D d;
+d.x = 5;   // OK! Chỉ MỘT bản A duy nhất trong toàn bộ D -&gt; hết ambiguous</code></pre></div>
+<div class="codeblock diagram"><div class="code-header"><span>MEMORY LAYOUT (common implementation) — virtual inheritance</span></div><pre>D object:
++----------------------+
+| vtable ptr (B part)  |----+
+| B's own data         |    |    (mỗi base ảo cần một con trỏ/offset
++----------------------+    |     "vbase pointer" để tìm A ở đâu,
+| vtable ptr (C part)  |----+     vì offset của A trong D không cố định
+| C's own data         |    |     -&gt; tuỳ vào D thực tế kế thừa B,C ra sao)
++----------------------+    |
+| D's own data          |    |
++----------------------+    |
+| A (shared, MỘT bản)  |&lt;---+
+| int x                |
++----------------------+</pre></div>
+
+<h3>Compiler implementation &amp; overhead</h3>
+<p>Vì offset của virtual base <strong>không cố định</strong> tại compile-time của B/C riêng lẻ (nó phụ thuộc vào object cuối cùng nào kế thừa B, C — có thể D, có thể E khác kế thừa B,C theo cách khác), compiler không thể hard-code offset như multiple inheritance thường. Common implementation (Itanium ABI): mỗi base ảo có một entry trong vtable (hoặc một bảng riêng gọi là <em>virtual base table</em>) lưu offset tới virtual base đó — offset này được tra tại <strong>runtime</strong>, không phải compile-time. Đây là lý do virtual inheritance có <strong>overhead thực sự</strong>: mỗi object cần thêm con trỏ/offset table, mỗi lần truy cập virtual base là một indirection qua bảng đó — chậm hơn truy cập base thường (chỉ cộng offset cố định).</p>
+
+<h3>Constructor với virtual base</h3>
+<p>Như đã nói ở chương 05: chỉ constructor của <strong>most-derived class</strong> mới thực sự gọi constructor của virtual base — các lớp trung gian (B, C) dù có khai báo gọi <code>A(...)</code> trong initializer list, lời gọi đó bị <strong>bỏ qua</strong> nếu chúng không phải most-derived. Đây là điểm gây bug kinh điển: người viết B tưởng constructor của mình luôn khởi tạo A theo cách mình muốn, nhưng nếu D (kế thừa B, C) không tự gọi <code>A(...)</code> trong initializer list của D, A sẽ được khởi tạo bằng default constructor, không phải theo ý B.</p>
+
+<div class="box warn"><span class="box-label">Best practice</span>
+Virtual inheritance nên là <strong>ngoại lệ hiếm gặp</strong>, không phải công cụ mặc định. Hầu hết framework hiện đại tránh diamond inheritance hoàn toàn bằng cách dùng interface (pure abstract, không có data member — xem chương 19) làm base thay vì class có state, vì nhiều interface không data member kế thừa cùng lúc không gây diamond-with-state.
+</div>
+</section>
+<section class="chapter" id="polymorphism">
+<div class="chapter-head"><span class="chno">11</span></div>
+<h2>Polymorphism</h2>
+<p class="subtitle">Compile-time (static) vs Runtime (dynamic) polymorphism — cùng mục tiêu "một interface, nhiều hành vi", khác cơ chế và chi phí hoàn toàn.</p>
+
+<h3>Compile-time Polymorphism</h3>
+<p>Hành vi được chọn <strong>tại compile-time</strong>, dựa trên kiểu tĩnh — không cần indirection lúc runtime.</p>
+<ul>
+<li><strong>Function overloading</strong>: nhiều hàm cùng tên, khác signature — compiler chọn dựa trên kiểu argument.</li>
+<li><strong>Operator overloading</strong>: định nghĩa lại ý nghĩa toán tử cho kiểu do người dùng định nghĩa.</li>
+<li><strong>Templates</strong>: sinh code riêng cho từng kiểu cụ thể tại compile-time (monomorphization).</li>
+<li><strong>CRTP</strong> (Curiously Recurring Template Pattern): mô phỏng "virtual" nhưng resolve tại compile-time — xem chương 23.</li>
+</ul>
+
+<h3>Runtime Polymorphism</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">Base* p = new Derived;
+p-&gt;foo();   // hàm nào chạy phụ thuộc kiểu THỰC của object, quyết định LÚC RUNTIME</code></pre></div>
+<div class="codeblock diagram"><div class="code-header"><span>TỪ SOURCE CODE ĐẾN MACHINE-LEVEL</span></div><pre>source code:  p-&gt;foo();
+     │
+     ▼ compiler thấy 'foo' là virtual -&gt; KHÔNG resolve tĩnh
+class metadata / virtual function table được compiler sinh sẵn
+     │
+     ▼ tại runtime
+object (p trỏ tới)
+     │
+     ▼ object có vptr (được set bởi constructor)
+vptr ──▶ vtable (bảng con trỏ hàm, ứng với kiểu THỰC của object)
+     │
+     ▼ tra đúng slot của 'foo' trong vtable
+function pointer ──▶ Derived::foo() (được gọi gián tiếp qua con trỏ)</pre></div>
+<p>Cơ chế đầy đủ (vptr, vtable, indirect call) được mổ xẻ chi tiết ở các chương 13-14. Chương này chỉ chốt lại khái niệm: <strong>runtime polymorphism trả giá bằng một indirection</strong> (không thể inline trực tiếp tại call site vì compiler không biết chắc kiểu thực), đổi lại được sự linh hoạt "code gọi không cần biết kiểu cụ thể".</p>
+
+<h3>So sánh nhanh</h3>
+<div class="tablewrap"><table>
+<tr><th></th><th>Compile-time (template/overload)</th><th>Runtime (virtual)</th></tr>
+<tr><td>Thời điểm resolve</td><td>Compile-time</td><td>Runtime</td></tr>
+<tr><td>Chi phí gọi hàm</td><td>Không (thường inline được)</td><td>Indirect call qua vtable</td></tr>
+<tr><td>Binary size</td><td>Có thể phình to (mỗi kiểu một bản code)</td><td>Không phình (một hàm dùng chung)</td></tr>
+<tr><td>Cần biết kiểu lúc compile?</td><td>Có</td><td>Không (chỉ cần base interface)</td></tr>
+<tr><td>Heterogeneous container (<code>vector&lt;Base*&gt;</code>)</td><td>Không hỗ trợ trực tiếp</td><td>Có — đây là use-case chính</td></tr>
+</table></div>
+</section>
+
+<section class="chapter" id="virtual-functions">
+<div class="chapter-head"><span class="chno">12</span></div>
+<h2>Virtual Function</h2>
+<p class="subtitle">virtual, override, final, pure virtual, abstract class — và tại sao luôn nên viết override.</p>
+
+<h3>Các từ khoá</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base {
+    virtual void foo();          // có thể override, có implementation
+    virtual void bar() = 0;      // PURE virtual — bắt buộc override, Base thành abstract
+    virtual void baz() final;    // không class con nào được override tiếp
+};
+struct Derived : Base {
+    void foo() override;         // 'override' là compile-time check, không đổi runtime behavior
+    void bar() override;         // bắt buộc, nếu không Derived vẫn abstract
+};</code></pre></div>
+
+<h3><code>override</code> — tại sao luôn nên dùng</h3>
+<div class="codeblock"><div class="code-header"><span>C++ — bug kinh điển KHÔNG dùng override</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base { virtual void process(int x); };
+struct Derived : Base {
+    void process(int x) const;   // KHÁC signature (thêm const) -&gt; đây KHÔNG PHẢI override!
+    // Compiler âm thầm coi đây là một hàm MỚI, che (hide) Base::process, không override nó
+};
+Base* p = new Derived;
+p-&gt;process(5);   // gọi Base::process, KHÔNG gọi hàm bạn tưởng đã override trong Derived!</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>C++ — thêm 'override' bắt lỗi ngay</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Derived : Base {
+    void process(int x) const override;   // LỖI COMPILE: không hàm virtual nào của Base khớp
+};                                          // -&gt; buộc bạn phát hiện và sửa signature ngay lập tức</code></pre></div>
+<p>Đây là lý do <strong>tuyệt đối nên dùng <code>override</code> cho mọi hàm định override</strong>: nó biến một bug runtime âm thầm (hàm bị "che" thay vì override, hành vi sai nhưng compile OK) thành compile error tường minh.</p>
+
+<h3>Pure Virtual Function &amp; Abstract Class</h3>
+<p>Class có ít nhất một pure virtual function chưa được override là <strong>abstract class</strong> — không thể <code>new</code> trực tiếp (compile error), nhưng vẫn có thể có constructor/destructor riêng (được gọi khi derived class được tạo), có thể có member variable, có thể có non-pure virtual function khác. Một class chỉ toàn pure virtual function, không data member, không implementation — thường gọi là <strong>interface class</strong> (chi tiết ở chương 19).</p>
+
+<details class="qa"><summary>Interview: <code>virtual void foo() = 0;</code> có bắt buộc không được có thân hàm không?</summary>
+<div class="answer">Không — pure virtual function VẪN được phép có định nghĩa (thân hàm), chỉ là nó bắt buộc derived class phải override nếu muốn instantiate. Derived có thể gọi thân hàm base qua <code>Base::foo()</code> tường minh bên trong override của nó — kỹ thuật này dùng khi muốn ép override nhưng vẫn cung cấp hành vi mặc định dùng chung.</div></details>
+</section>
+
+<section class="chapter" id="vtable-vptr">
+<div class="chapter-head"><span class="chno">13</span></div>
+<h2>VTable / VPtr — Deep Dive</h2>
+<p class="subtitle">Đây là phần bắt buộc phải hiểu sâu nhất trong toàn bộ tài liệu.</p>
+
+<div class="box core"><span class="box-label">Standard guarantee vs Common implementation</span>
+C++ Standard <strong>không hề nhắc tới từ "vtable" hay "vptr"</strong> ở bất kỳ đâu. Standard chỉ định nghĩa <em>hành vi quan sát được</em>: gọi virtual function qua con trỏ/reference base phải dispatch tới override phù hợp nhất với kiểu thực của object. <strong>vtable/vptr là kỹ thuật implementation phổ biến nhất</strong> (GCC, Clang, MSVC đều dùng, dù chi tiết ABI khác nhau) — nhưng về lý thuyết, một compiler khác hoàn toàn có thể hiện thực virtual dispatch bằng cơ chế khác (ví dụ tra bảng theo kiểu khác, hoặc pattern-matching runtime type tag) miễn hành vi quan sát được đúng như Standard yêu cầu.
+</div>
+
+<h3>vtable là gì? vptr là gì?</h3>
+<ul>
+<li><strong>vtable (virtual table)</strong>: một bảng tĩnh (thường đặt trong read-only data segment), <strong>một bảng cho mỗi class có virtual function</strong> (không phải mỗi object) — chứa con trỏ tới implementation thực tế của từng virtual function.</li>
+<li><strong>vptr (virtual pointer)</strong>: một con trỏ ẩn nằm <strong>bên trong mỗi object</strong> (thường ở đầu object, offset 0), trỏ tới vtable của <em>kiểu thực</em> object đó. vptr được compiler tự động khởi tạo trong constructor — bắt đầu từ constructor của lớp thấp nhất trong hierarchy (Base), rồi mỗi lớp con re-set lại vptr thành vtable của chính nó khi constructor của nó chạy (đây là lý do <a href="#construc-in-dtor">gọi virtual function trong constructor/destructor không dispatch tới override của derived</a> — xem box cảnh báo bên dưới).</li>
+</ul>
+
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Base {
+public:
+    virtual void foo();
+    virtual void bar();
+};
+class Derived : public Base {
+public:
+    void foo() override;   // override foo, KHÔNG override bar
+};</code></pre></div>
+<div class="codeblock diagram"><div class="code-header"><span>DIAGRAM — vtable của Base và Derived</span></div><pre>Derived object trên bộ nhớ:            Derived's vtable (MỘT bản, static, chung cho MỌI Derived object):
++------------------+                   +-----------------------+
+| vptr  ───────────┼──────────────────▶| slot 0: &amp;Derived::foo |   &lt;- ghi đè
++------------------+                   | slot 1: &amp;Base::bar    |   &lt;- kế thừa nguyên bản (Derived không override)
+| Base's data      |                   +-----------------------+
++------------------+
+| Derived's data   |
++------------------+
+
+Base object riêng biệt (nếu có) sẽ có vptr trỏ tới MỘT vtable KHÁC — Base's vtable:
+                                        +-----------------------+
+                                        | slot 0: &amp;Base::foo    |
+                                        | slot 1: &amp;Base::bar    |
+                                        +-----------------------+</pre></div>
+
+<h3>Mỗi object có một vtable riêng không? Class có bao nhiêu vtable?</h3>
+<p><strong>Không.</strong> Mỗi <em>object</em> chỉ có một <strong>vptr</strong> (8 byte trên 64-bit) — không có bản sao vtable riêng. Mọi object cùng kiểu Derived chia sẻ <strong>chung một vtable duy nhất</strong> (một bảng static, được compiler sinh một lần khi biên dịch class Derived, đặt trong binary). Với multiple inheritance (chương 09), một class có thể có <strong>nhiều hơn một vtable</strong> — mỗi base polymorphic độc lập cần một vtable riêng (vì mỗi base part có "góc nhìn" offset khác nhau vào object, cần thunk riêng — xem lại diagram ở chương 09).</p>
+
+<h3>Ảnh hưởng của virtual inheritance lên vtable</h3>
+<p>Với virtual inheritance, vtable còn lưu thêm thông tin offset tới virtual base (virtual base table offset — vbtable/vtt tuỳ ABI), cộng thêm RTTI pointer (xem chương 15) — Itanium ABI thường đặt <code>typeinfo</code> pointer ngay trước bảng các hàm ảo trong cùng vtable object.</p>
+
+<h3>GCC / Clang vs MSVC</h3>
+<div class="tablewrap"><table>
+<tr><th></th><th>GCC / Clang (Itanium C++ ABI)</th><th>MSVC</th></tr>
+<tr><td>Tên gọi ABI</td><td>Itanium C++ ABI</td><td>Microsoft C++ ABI (không công khai đầy đủ, riêng)</td></tr>
+<tr><td>Name mangling</td><td>Bắt đầu <code>_Z...</code></td><td>Bắt đầu <code>?...@@...</code></td></tr>
+<tr><td>Multiple inheritance</td><td>Một vtable / base polymorphic, dùng thunk</td><td>Tương tự về nguyên lý, khác chi tiết layout</td></tr>
+<tr><td>Virtual base</td><td>vbase offset trong vtable</td><td>vbtable riêng biệt</td></tr>
+</table></div>
+<div class="box warn"><span class="box-label">Quan trọng</span>
+Vì ABI khác nhau giữa compiler (và đôi khi giữa version của cùng compiler), <strong>không bao giờ được trộn lẫn object file/thư viện biên dịch bởi compiler/ABI khác nhau</strong> trong cùng một binary nếu chúng truyền object polymorphic qua lại — layout vtable không tương thích sẽ dẫn tới việc gọi nhầm hàm hoặc crash. Đây là một khía cạnh thực tế của "ABI stability" khi build thư viện C++ chia sẻ.
+</div>
+
+<div class="box danger" id="construc-in-dtor"><span class="box-label">Cạm bẫy kinh điển — virtual call trong constructor/destructor</span>
+<div class="codeblock" style="margin-top:8px"><pre><code class="language-cpp">struct Base {
+    Base() { init(); }              // gọi virtual TRONG constructor
+    virtual void init() { std::puts("Base::init"); }
+};
+struct Derived : Base {
+    void init() override { std::puts("Derived::init"); }
+};
+Derived d;   // In ra "Base::init", KHÔNG PHẢI "Derived::init"!</code></pre></div>
+Lý do: khi <code>Base::Base()</code> đang chạy, vptr của object <strong>vẫn đang trỏ tới vtable của Base</strong> (vì Derived::Derived() chưa kịp chạy để "nâng cấp" vptr) — object <em>chưa hoàn thành trở thành</em> một Derived thực sự, dù bộ nhớ cho phần Derived đã được cấp phát. Virtual dispatch trong constructor/destructor luôn resolve theo kiểu <em>đang được xây dựng/huỷ tại thời điểm đó</em>, không bao giờ "nhìn thấy trước" phần derived. Đây không phải bug compiler — đó là hành vi được Standard định nghĩa rõ ràng, và là một nguồn lỗi runtime rất phổ biến với lập trình viên không hiểu cơ chế vptr.
+</div>
+</section>
+
+<section class="chapter" id="virtual-dispatch">
+<div class="chapter-head"><span class="chno">14</span></div>
+<h2>Virtual Dispatch</h2>
+<p class="subtitle">Từ CPU register tới lệnh gọi gián tiếp — so sánh với non-virtual call.</p>
+
+<div class="codeblock diagram"><div class="code-header"><span>DIAGRAM — các bước thực thi p-&gt;foo()</span></div><pre>CPU register (chứa địa chỉ 'p')
+   │
+   ▼ load object tại địa chỉ p (không cần đọc toàn bộ, chỉ cần offset 0)
+load vptr = *(p + 0)              // đọc 8 byte đầu object -&gt; địa chỉ vtable
+   │
+   ▼
+load vtable entry = *(vptr + slot_offset)   // slot_offset cố định tại compile-time (biết 'foo' là slot thứ mấy)
+   │
+   ▼
+indirect call qua function pointer vừa load được (CALL [reg])</pre></div>
+<p>Ba bước "load object → load vptr → load vtable slot → indirect call" là <strong>runtime cost thực sự</strong> của virtual dispatch: hai lần dereference bộ nhớ thêm (so với gọi hàm thường chỉ một <code>CALL địa_chỉ_cố_định</code>), và quan trọng hơn — <strong>CPU branch predictor khó dự đoán đích của indirect call</strong> nếu kiểu object thay đổi liên tục qua các lần gọi (ví dụ lặp qua <code>vector&lt;Base*&gt;</code> chứa nhiều kiểu derived khác nhau xen kẽ) → có thể gây pipeline stall.</p>
+
+<h3>So sánh 3 kiểu gọi hàm</h3>
+<div class="tablewrap"><table>
+<tr><th>Cách gọi</th><th>Resolve khi nào</th><th>Cơ chế</th><th>Có thể inline?</th></tr>
+<tr><td><code>p-&gt;foo()</code> (virtual, qua Base*)</td><td>Runtime</td><td>Load vptr → load vtable slot → indirect call</td><td>Hầu như không (trừ khi compiler chứng minh được kiểu thực qua devirtualization)</td></tr>
+<tr><td><code>p-&gt;non_virtual()</code></td><td>Compile-time</td><td>Direct call tới địa chỉ cố định</td><td>Có, dễ dàng</td></tr>
+<tr><td><code>Derived d; d.foo();</code></td><td>Compile-time (dù <code>foo</code> là virtual!)</td><td>Compiler biết kiểu tĩnh chính xác là Derived → gọi thẳng <code>Derived::foo</code>, không cần vtable</td><td>Có — đây là ví dụ "static type biết chính xác" nên compiler tối ưu bỏ qua indirection</td></tr>
+</table></div>
+<div class="box good"><span class="box-label">Devirtualization</span>
+GCC/Clang ở mức tối ưu cao (<code>-O2</code>/<code>-O3</code>) có thể phát hiện tại một call site cụ thể, kiểu thực của object luôn cố định (ví dụ object tạo bằng <code>Derived d;</code> trên stack, không polymorphic thực sự lúc đó) và <strong>devirtualize</strong> — biến virtual call thành direct call, thậm chí inline hẳn. Đây là lý do benchmark vi mô về "chi phí virtual function" đôi khi cho kết quả gây hiểu lầm nếu compiler tối ưu mất phần indirection mà benchmark định đo.
+</div>
+</section>
+<section class="chapter" id="rtti">
+<div class="chapter-head"><span class="chno">15</span></div>
+<h2>RTTI (Run-Time Type Information)</h2>
+<p class="subtitle">dynamic_cast, typeid, std::type_info — compiler/runtime thực sự làm gì khi hỏi "object này thực chất là kiểu gì?".</p>
+
+<h3><code>dynamic_cast</code></h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">Base* p = new Derived;
+Derived* d = dynamic_cast&lt;Derived*&gt;(p);   // p thực sự là Derived -&gt; d != nullptr
+Other*   o = dynamic_cast&lt;Other*&gt;(p);      // p KHÔNG phải Other -&gt; o == nullptr (con trỏ)
+Derived&amp; rd = dynamic_cast&lt;Derived&amp;&gt;(*p);  // với reference: ném std::bad_cast nếu sai kiểu</code></pre></div>
+<p><code>dynamic_cast</code> chỉ hoạt động trên <strong>polymorphic type</strong> (class có ít nhất một virtual function) — vì nó cần vptr để tìm ra RTTI metadata. Tại runtime, nó: (1) đọc vptr của object, (2) từ vtable lần ra <code>std::type_info</code> gắn với kiểu thực, (3) so sánh/duyệt cây kế thừa được mã hoá trong type_info để xem đích cast có phải base/derived hợp lệ của kiểu thực không, (4) nếu hợp lệ, tính toán offset cần điều chỉnh con trỏ (giống pointer adjustment ở chương 09) và trả về; nếu không hợp lệ, trả <code>nullptr</code> (với con trỏ) hoặc ném <code>std::bad_cast</code> (với reference).</p>
+<div class="box warn"><span class="box-label">Performance</span>
+<code>dynamic_cast</code> không phải phép toán O(1) đơn giản — nó có thể phải duyệt cây kế thừa (đặc biệt với multiple/virtual inheritance phức tạp), tốn hơn hẳn <code>static_cast</code> (chỉ cộng offset cố định, không kiểm tra gì). Dùng <code>dynamic_cast</code> dày đặc trong hot path (vòng lặp hiệu năng cao) là dấu hiệu thiết kế nên xem lại (thường nên thay bằng virtual function đúng nghĩa thay vì "hỏi kiểu rồi rẽ nhánh" — vi phạm tinh thần polymorphism).
+</div>
+
+<h3><code>typeid</code> &amp; <code>std::type_info</code> / <code>std::type_index</code></h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">Base* p = new Derived;
+if (typeid(*p) == typeid(Derived)) { /* ... */ }   // so sánh kiểu THỰC (vì *p polymorphic)
+std::cout &lt;&lt; typeid(*p).name();                     // tên kiểu (mangled, tuỳ compiler)
+
+std::type_index idx(typeid(Derived));               // wrap type_info để dùng làm key trong map/set
+std::unordered_map&lt;std::type_index, Handler&gt; table;</code></pre></div>
+<p>Lưu ý quan trọng: <code>typeid(*p)</code> (dereference con trỏ, polymorphic type) trả về kiểu <strong>thực</strong> tại runtime (đọc qua vptr, giống dynamic_cast) — nhưng <code>typeid(p)</code> (không dereference) chỉ trả về kiểu tĩnh của con trỏ (<code>Base*</code>), được resolve <strong>tại compile-time</strong>, không cần vtable.</p>
+
+<h3>Standard guarantee vs Common implementation</h3>
+<div class="box core"><span class="box-label">Phân loại</span>
+Standard chỉ đảm bảo: <code>dynamic_cast</code> và <code>typeid</code> phải cho kết quả đúng theo ngữ nghĩa (thành công/thất bại, đúng kiểu). Standard <strong>không</strong> quy định RTTI được lưu trữ dưới dạng nào. Common implementation (Itanium ABI): mỗi class polymorphic có một object <code>std::type_info</code> tĩnh, con trỏ tới nó được nhúng ngay trước bảng hàm ảo trong cùng vtable. Một số compiler cho phép tắt RTTI hoàn toàn (<code>-fno-rtti</code>) để giảm binary size trên hệ nhúng — khi đó <code>dynamic_cast</code>/<code>typeid</code> trên polymorphic type không dùng được (lỗi compile hoặc linker tuỳ cách dùng), đây là lựa chọn phổ biến trong embedded C++ (xem chương 28).
+</div>
+</section>
+
+<section class="chapter" id="this-static-friend">
+<div class="chapter-head"><span class="chno">16</span></div>
+<h2>this / Static Member / Friend</h2>
+<p class="subtitle">Ba cơ chế nhỏ nhưng nền tảng cho toàn bộ hệ thống OOP của C++.</p>
+
+<h3><code>this</code> — thực chất là gì?</h3>
+<div class="codeblock"><div class="code-header"><span>Mô hình conceptually gần đúng</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class A {
+public:
+    void foo(int x);
+};
+// conceptually tương đương (không phải cú pháp hợp lệ, chỉ để hình dung):
+void A_foo(A* this, int x);
+
+A a; a.foo(5);
+// compiler biến thành: A_foo(&amp;a, 5);   -- 'this' là tham số ẩn ĐẦU TIÊN</code></pre></div>
+<p><code>this</code> là một con trỏ hằng (<code>A* const</code> trong hàm không-const, <code>const A* const</code> trong hàm <code>const</code>) được compiler tự động truyền vào mọi non-static member function như tham số ẩn đầu tiên — đây là cách thực tế mà một member function "biết" nó đang thao tác trên object nào. <code>this</code> không tồn tại trong static member function (vì static function không gắn với object cụ thể), và trong lambda, <code>[this]</code> hoặc <code>[*this]</code> capture quyết định lambda giữ con trỏ hay bản sao object bao quanh nó.</p>
+<div class="box warn"><span class="box-label">this trong multiple inheritance</span>
+Như đã nói ở chương 09, giá trị <code>this</code> bên trong một hàm có thể <strong>khác</strong> địa chỉ object nhìn từ bên ngoài, tuỳ base part nào đang được gọi — compiler tự chèn phép cộng/trừ offset (pointer adjustment/thunk) để đảm bảo <code>this</code> bên trong hàm luôn trỏ đúng vào phần dữ liệu nó cần thao tác.
+</div>
+
+<h3>Static Data Member &amp; Static Member Function</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Counter {
+public:
+    Counter() { ++count_; }
+    static int count() { return count_; }   // không có 'this', không truy cập non-static member
+private:
+    static inline int count_ = 0;            // C++17: inline static -&gt; định nghĩa ngay trong class, một bản duy nhất
+};</code></pre></div>
+<p>Static data member <strong>không nằm trong object nào cả</strong> — nó nằm ở static storage (giống biến global, nhưng có tên được scope hoá trong class và tuân theo access control). Trước C++17, phải định nghĩa static member bên ngoài class (<code>int Counter::count_ = 0;</code> trong file .cpp) để tránh multiple-definition khi header được include nhiều nơi; C++17 <code>inline</code> giải quyết việc này gọn hơn. Static member function không nhận <code>this</code>, nên không thể truy cập non-static member trực tiếp — nó về bản chất chỉ là một hàm free function được "scope hoá" vào tên class.</p>
+<div class="box warn"><span class="box-label">Static Initialization Order Fiasco</span>
+Thứ tự khởi tạo các <strong>static object ở các translation unit (file .cpp) khác nhau</strong> là <strong>không xác định</strong> theo Standard. Nếu static object ở file A phụ thuộc static object ở file B (khởi tạo trong constructor của A dùng giá trị của B), và B chưa kịp khởi tạo trước A — bug rất khó phát hiện. Giải pháp kinh điển: "Construct On First Use" — bọc static object trong một hàm trả về reference tới một <em>function-local static</em> (được khởi tạo lười, tại lần gọi đầu tiên, thread-safe từ C++11).
+</div>
+
+<h3>Friend</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Matrix {
+    friend Matrix operator*(const Matrix&amp;, const Matrix&amp;);   // friend function
+    friend class MatrixBuilder;                                // friend class — toàn bộ class được truy cập private
+private:
+    double data_[16];
+};</code></pre></div>
+<p><code>friend</code> phá vỡ encapsulation một cách <strong>có kiểm soát và tường minh</strong> — chỉ class/hàm được khai báo tường minh mới có quyền, và quyền này <strong>không được kế thừa</strong> (friend của Base không phải friend của Derived) và <strong>không đối xứng</strong> (A khai báo B là friend không có nghĩa B cũng cho A truy cập private của nó). Use-case hợp lý: operator overloading cần truy cập private của cả hai bên (như <code>operator*</code> ở trên, thường không thể là member function nếu cần symmetric implicit conversion ở cả 2 vế), hoặc một class "builder"/"factory" cần dựng object ở trạng thái nội bộ đặc biệt.</p>
+<div class="box good"><span class="box-label">Khi nào friend hợp lý</span>
+Friend hợp lý khi hai thực thể về mặt logic <em>là một phần của cùng một khái niệm</em> (ví dụ <code>Matrix</code> và hàm <code>operator*</code> của nó, hay một class và test-fixture của chính nó) chứ không phải cách để "lách" thiết kế tồi khi hai class không liên quan cần truy cập lẫn nhau. Nếu bạn thấy dùng friend giữa hai class không liên quan về nghiệp vụ — đó là dấu hiệu nên tách lại interface public thay vì mở rộng quyền truy cập.
+</div>
+</section>
+
+<section class="chapter" id="object-lifetime">
+<div class="chapter-head"><span class="chno">17</span></div>
+<h2>Object Lifetime &amp; Placement New</h2>
+<p class="subtitle">Lifetime bắt đầu/kết thúc khi nào — và cách tạo object thủ công trên vùng nhớ có sẵn.</p>
+
+<h3>Lifetime bắt đầu/kết thúc khi nào</h3>
+<p>Theo Standard, lifetime của object <strong>bắt đầu</strong> khi: (1) storage với alignment/size đúng đã được cấp phát, VÀ (2) constructor của nó đã chạy xong (không throw). Lifetime <strong>kết thúc</strong> khi: destructor bắt đầu chạy (với kiểu có destructor không tầm thường), hoặc storage nó chiếm bị tái sử dụng/giải phóng. Quan trọng: <strong>"có vùng nhớ đúng kích thước" không có nghĩa "có object hợp lệ"</strong> — truy cập member/gọi virtual function trên vùng nhớ chưa chạy constructor (hoặc đã chạy destructor) là undefined behavior, dù về mặt bytes vùng nhớ đó "trông giống" object cũ.</p>
+
+<h3>4 loại storage duration (đã giới thiệu ở chương 02, nhắc lại đầy đủ)</h3>
+<ul>
+<li><strong>Automatic</strong>: gắn với scope khối lệnh — object trên stack, tự huỷ khi ra khỏi <code>{}</code>.</li>
+<li><strong>Static</strong>: tồn tại suốt chương trình — global, namespace-scope, hoặc <code>static</code> bên trong hàm/class.</li>
+<li><strong>Thread</strong>: mỗi thread có bản riêng — <code>thread_local</code>.</li>
+<li><strong>Dynamic</strong>: cấp phát/giải phóng thủ công qua <code>new</code>/<code>delete</code> (hoặc <code>malloc</code>/placement new, xem dưới).</li>
+</ul>
+
+<h3>Placement New</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">alignas(A) unsigned char buf[sizeof(A)];   // raw storage, CHƯA có object nào ở đây
+A* p = new (buf) A(42);                     // placement new: chỉ GỌI CONSTRUCTOR tại địa chỉ 'buf'
+                                              // KHÔNG cấp phát bộ nhớ mới (buf đã có sẵn)
+p-&gt;~A();                                     // gọi destructor TƯỜNG MINH -- vì không dùng 'delete'
+                                              // ('delete p' ở đây SẼ SAI vì buf không phải do 'new' cấp phát)</code></pre></div>
+<p>Placement new tách rời hai việc mà <code>new</code> thông thường gộp làm một: <strong>cấp phát bộ nhớ</strong> và <strong>khởi tạo object (chạy constructor)</strong>. Nó nhận một con trỏ tới vùng nhớ đã có sẵn (từ <code>malloc</code>, một buffer stack, memory pool tự viết, hay memory-mapped hardware register trong embedded) và chỉ chạy constructor tại đó. Vì không có "cấp phát" tương ứng, bạn <strong>không bao giờ gọi <code>delete</code></strong> trên con trỏ này — phải gọi destructor tường minh (<code>p-&gt;~A();</code>), rồi tự giải phóng vùng nhớ gốc theo cách nó được cấp phát ban đầu (nếu có).</p>
+<div class="codeblock"><div class="code-header"><span>C++17/20 — công cụ chuẩn hoá</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">#include &lt;memory&gt;
+std::construct_at(p, 42);   // C++20: tương đương placement-new nhưng constexpr-friendly, an toàn kiểu hơn
+std::destroy_at(p);          // C++17: gọi destructor tường minh, thay cho p-&gt;~A() viết tay</code></pre></div>
+
+<h3>Liên hệ embedded systems</h3>
+<p>Placement new cực kỳ quan trọng trong embedded: khi không có heap allocator (hoặc cấm dùng dynamic allocation vì lý do real-time/an toàn), object vẫn cần được khởi tạo đúng cách (constructor chạy) tại một địa chỉ cố định — ví dụ một memory pool tĩnh cấp phát trước, hoặc thậm chí trực tiếp tại địa chỉ thanh ghi hardware đã memory-map. Placement new cho phép dùng đầy đủ ngữ nghĩa C++ (constructor, RAII, virtual dispatch) mà không cần <code>malloc</code>/free-store.</p>
+</section>
+<section class="chapter" id="const-operators-conversion">
+<div class="chapter-head"><span class="chno">18</span></div>
+<h2>Const Correctness, Operator Overloading &amp; Conversion</h2>
+<p class="subtitle">Ba công cụ để interface của class diễn đạt đúng ý định và an toàn kiểu.</p>
+
+<h3>Const object — phân biệt 3 cách viết dễ nhầm</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">const A a;        // object 'a' là const -&gt; không gọi được non-const member function trên nó
+A* const p = &amp;a2;  // 'p' là const con trỏ (không đổi được p trỏ đi đâu khác), NHƯNG *p vẫn sửa được
+const A* p2 = &amp;a;  // p2 trỏ tới const A -&gt; KHÔNG sửa được *p2, nhưng p2 tự do đổi trỏ chỗ khác</code></pre></div>
+<p>Đọc kiểu con trỏ phức tạp theo quy tắc "từ phải sang trái, bắt đầu từ tên biến": <code>const A* p2</code> đọc là "p2 là con trỏ tới (A mà là const)"; <code>A* const p</code> đọc là "p là (const con trỏ) tới A".</p>
+
+<h3>Member function <code>const</code></h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Vector3 {
+public:
+    double length() const { return std::sqrt(x_*x_ + y_*y_ + z_*z_); }   // KHÔNG sửa state -&gt; const
+    void normalize();   // CÓ sửa state -&gt; không const
+private:
+    double x_, y_, z_;
+};
+void printLen(const Vector3&amp; v) { std::cout &lt;&lt; v.length(); }   // chỉ gọi được length(), không gọi normalize()</code></pre></div>
+<p>Về compiler-level, hàm <code>const</code> nhận <code>this</code> với kiểu <code>const A* const</code> thay vì <code>A* const</code> — compiler dùng chính cơ chế overload resolution/type-check thông thường để cấm gọi hàm non-const trên object const, hoàn toàn ở compile-time, không có runtime cost nào. <code>const</code>-correctness là công cụ giao tiếp ý định cực mạnh: một hàm nhận <code>const Vector3&amp;</code> cam kết với người gọi "tôi sẽ không sửa object của bạn" — cam kết được compiler enforce.</p>
+
+<h3>Operator Overloading</h3>
+<div class="tablewrap"><table>
+<tr><th>Nhóm</th><th>Ví dụ</th><th>Member hay non-member?</th></tr>
+<tr><td>Arithmetic</td><td><code>a + b</code></td><td>Thường non-member (đối xứng cả 2 vế, cho phép implicit conversion vế trái)</td></tr>
+<tr><td>Comparison</td><td><code>a == b</code>, <code>a &lt;=&gt; b</code> (C++20 spaceship)</td><td>Non-member (hoặc member với <code>&lt;=&gt;</code> defaulted)</td></tr>
+<tr><td>Assignment</td><td><code>a = b</code></td><td>Bắt buộc member (không thể non-member)</td></tr>
+<tr><td>Stream</td><td><code>os &lt;&lt; a</code></td><td>Bắt buộc non-member (vế trái là <code>ostream</code>, không phải kiểu của bạn)</td></tr>
+<tr><td>Subscript</td><td><code>a[i]</code></td><td>Bắt buộc member</td></tr>
+<tr><td>Call</td><td><code>a(x, y)</code></td><td>Bắt buộc member (functor)</td></tr>
+<tr><td>Conversion</td><td><code>operator double() const;</code></td><td>Bắt buộc member</td></tr>
+</table></div>
+<p><strong>Spaceship operator <code>&lt;=&gt;</code></strong> (C++20) cho phép <code>= default</code> để compiler tự sinh toàn bộ 6 phép so sánh quan hệ (<code>&lt;, &lt;=, &gt;, &gt;=, ==, !=</code>) từ một định nghĩa duy nhất, dựa trên so sánh lexicographic từng member theo thứ tự khai báo — giảm đáng kể boilerplate so với phải viết tay từng operator trước C++20.</p>
+
+<h3>Conversion — vì sao <code>A a = 10;</code> compile được</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class A { public: A(int) {} };   // converting constructor, KHÔNG explicit
+A a = 10;   // hợp lệ: compiler tìm đường "int -&gt; A" qua constructor 1-tham số không explicit
+            // đây là copy-initialization, tương đương A a = A(10); (rồi có thể bị copy-elide)</code></pre></div>
+<p>Đây gọi là <strong>user-defined implicit conversion</strong>. Compiler chỉ cho phép <strong>tối đa một</strong> user-defined conversion trong chuỗi implicit conversion cho một biểu thức (không cho phép bắc cầu hai converting constructor liên tiếp) — đây là giới hạn an toàn để tránh implicit conversion chain khó kiểm soát. <strong>Conversion operator</strong> (<code>operator T() const;</code>) làm điều ngược lại: cho phép object của bạn tự implicit-convert sang kiểu khác — cực kỳ dễ gây bug khó lường (ví dụ hai kiểu tự động convert qua lại lẫn nhau dẫn tới ambiguous overload resolution ở những nơi không ngờ tới), nên C++11 thêm <code>explicit operator T() const;</code> để chỉ cho phép conversion tường minh (như <code>static_cast&lt;T&gt;</code>) — mẫu kinh điển là <code>explicit operator bool() const;</code> trên smart pointer, cho phép <code>if (ptr)</code> nhưng chặn <code>int x = ptr;</code>.</p>
+</section>
+
+<section class="chapter" id="access-interface-pimpl">
+<div class="chapter-head"><span class="chno">19</span></div>
+<h2>Access Control, Abstract Interface &amp; PImpl</h2>
+<p class="subtitle">protected dễ hiểu nhầm nhất trong access control; interface pattern &amp; PImpl là hai công cụ abstraction thực chiến.</p>
+
+<h3>protected — trường hợp dễ nhầm</h3>
+<div class="codeblock"><div class="code-header"><span>C++ — hiểu nhầm phổ biến</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base { protected: int x; };
+struct A : Base {
+    void foo(Base&amp; b) { b.x = 5; }     // LỖI COMPILE!
+    void bar(A&amp; other) { other.x = 5; } // OK
+};</code></pre></div>
+<p>Đây là điểm gây nhầm lẫn kinh điển: <code>protected</code> không có nghĩa "mọi class kế thừa Base đều được truy cập <code>x</code> trên MỌI object Base" — nó chỉ cho phép <strong>A truy cập phần <code>x</code> nằm bên trong chính subobject Base của một object cùng kiểu A trở xuống (hoặc kiểu A chính xác)</strong>. <code>b</code> ở trên có kiểu tĩnh là <code>Base&amp;</code> (không đảm bảo đó là một A) nên A không được phép đụng vào phần private/protected của một Base "trần trụi", chỉ được đụng vào phần protected khi nó chắc chắn nằm trong một object cùng hoặc-là-con của chính A.</p>
+
+<h3>Interface trong C++</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class IDevice {
+public:
+    virtual void open()  = 0;
+    virtual void close() = 0;
+    virtual ~IDevice() = default;   // virtual destructor BẮT BUỘC (xem chương 06)
+};
+class UartDevice : public IDevice {
+public:
+    void open()  override { /* ... */ }
+    void close() override { /* ... */ }
+};</code></pre></div>
+<p>C++ không có từ khoá <code>interface</code> riêng như Java — quy ước là một class chỉ chứa pure virtual function (và virtual destructor), không data member, không implementation. Đây là công cụ chủ lực cho <strong>Dependency Inversion</strong> (module cấp cao phụ thuộc abstraction, không phụ thuộc chi tiết cụ thể) và <strong>Dependency Injection</strong> (truyền implementation cụ thể vào từ bên ngoài, thường qua constructor nhận con trỏ/reference interface) — nền tảng để test bằng mock (thay <code>UartDevice</code> thật bằng một <code>MockDevice</code> implement cùng <code>IDevice</code> khi unit test).</p>
+
+<h3>PImpl (Pointer to Implementation)</h3>
+<div class="codeblock"><div class="code-header"><span>Widget.h — header PUBLIC, không lộ chi tiết</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Widget {
+public:
+    Widget();
+    ~Widget();                       // phải khai báo (không = default) trong header
+    void doWork();
+private:
+    class Impl;                      // forward declaration, chưa cần định nghĩa đầy đủ ở đây
+    std::unique_ptr&lt;Impl&gt; pimpl_;    // con trỏ tới implementation ẩn hoàn toàn
+};</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>Widget.cpp — implementation THẬT nằm ở đây</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Widget::Impl {
+public:
+    void doWorkImpl() { /* toàn bộ chi tiết, thư viện phụ thuộc... nằm ở đây */ }
+    HeavyInternalType data_;   // người dùng Widget.h KHÔNG BAO GIỜ thấy kiểu này
+};
+Widget::Widget() : pimpl_(std::make_unique&lt;Impl&gt;()) {}
+Widget::~Widget() = default;    // ĐỊNH NGHĨA Ở ĐÂY, nơi Impl đã đầy đủ (complete type)
+void Widget::doWork() { pimpl_-&gt;doWorkImpl(); }</code></pre></div>
+<div class="box warn"><span class="box-label">Vì sao destructor không thể <code>= default</code> ngay trong header</span>
+<code>std::unique_ptr&lt;Impl&gt;</code> cần <code>Impl</code> là <strong>complete type</strong> (định nghĩa đầy đủ, không chỉ forward-declare) tại nơi destructor của nó được sinh, vì <code>unique_ptr</code>'s destructor cần biết <code>sizeof(Impl)</code> để gọi đúng <code>delete</code>. Nếu bạn viết <code>~Widget() = default;</code> ngay trong header (nơi <code>Impl</code> mới chỉ forward-declare), compiler sẽ báo lỗi "incomplete type". Giải pháp chuẩn: chỉ khai báo destructor trong header, định nghĩa (kể cả bằng <code>= default;</code>) trong .cpp — nơi <code>Impl</code> đã có định nghĩa đầy đủ.
+</div>
+<p>PImpl đánh đổi: <strong>thêm một tầng indirection + một lần cấp phát heap</strong> mỗi object, để đổi lấy: (1) đổi implementation không cần recompile code dùng header (giảm thời gian build cho codebase lớn — "compile firewall"), (2) ABI ổn định giữa các version thư viện (thêm/bớt private member không đổi <code>sizeof(Widget)</code> nhìn từ bên ngoài, quan trọng khi phân phối shared library nhị phân).</p>
+</section>
+
+<section class="chapter" id="raii-smart-pointers">
+<div class="chapter-head"><span class="chno">20</span></div>
+<h2>RAII &amp; Smart Pointer</h2>
+<p class="subtitle">Nguyên lý quản lý tài nguyên quan trọng bậc nhất trong C++ hiện đại — và các smart pointer hiện thực hoá nó.</p>
+
+<h3>RAII — Resource Acquisition Is Initialization</h3>
+<p>Ý tưởng cốt lõi: <strong>gắn vòng đời tài nguyên (memory, file handle, mutex lock, socket, GPU handle...) với vòng đời của một object</strong> — tài nguyên được lấy trong constructor, giải phóng trong destructor. Vì C++ đảm bảo destructor của object tự động (stack) <strong>luôn</strong> chạy khi ra khỏi scope — kể cả khi thoát qua exception (stack unwinding) — tài nguyên không bao giờ bị "quên giải phóng" miễn nó được bọc trong một RAII object đúng cách.</p>
+<div class="codeblock"><div class="code-header"><span>C++ — RAII với mutex</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">void criticalSection(std::mutex&amp; m) {
+    std::lock_guard&lt;std::mutex&gt; lock(m);   // constructor: m.lock()
+    doWork();                               // nếu doWork() throw...
+}   // ...lock_guard's destructor VẪN chạy khi unwind -&gt; m.unlock() LUÔN được gọi, không deadlock</code></pre></div>
+<p>Đây chính là lý do RAII được coi là kết hợp tự nhiên với exception: không cần <code>try/finally</code> (C++ không có finally) — destructor đóng vai trò "finally" tự động cho mọi resource.</p>
+
+<h3>Smart Pointer</h3>
+<div class="tablewrap"><table>
+<tr><th>Loại</th><th>Semantics</th><th>Overhead</th><th>Dùng khi</th></tr>
+<tr><td><code>std::unique_ptr&lt;T&gt;</code></td><td>Sở hữu duy nhất, không copy được, chỉ move</td><td>Bằng con trỏ thô (nếu deleter mặc định) — zero-overhead</td><td>Mặc định cho mọi ownership rõ ràng, một chủ sở hữu</td></tr>
+<tr><td><code>std::shared_ptr&lt;T&gt;</code></td><td>Sở hữu chung, đếm tham chiếu (reference counting)</td><td>Thêm control block (atomic ref count), gấp đôi kích thước con trỏ</td><td>Nhiều nơi cùng cần giữ object sống, thời điểm huỷ không rõ ràng trước</td></tr>
+<tr><td><code>std::weak_ptr&lt;T&gt;</code></td><td>Quan sát không sở hữu, không giữ object sống</td><td>Tham chiếu control block, không tăng strong ref count</td><td>Phá vỡ chu trình tham chiếu (cycle) giữa các <code>shared_ptr</code></td></tr>
+</table></div>
+<div class="codeblock"><div class="code-header"><span>C++ — unique_ptr, ownership rõ ràng</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">std::unique_ptr&lt;Widget&gt; makeWidget() {
+    return std::make_unique&lt;Widget&gt;();   // ownership CHUYỂN GIAO khi return (move, không copy)
+}
+auto w = makeWidget();                    // w SỞ HỮU duy nhất Widget này
+// auto w2 = w;                            // LỖI COMPILE: unique_ptr không copy được
+auto w2 = std::move(w);                    // OK — ownership CHUYỂN sang w2, w giờ là nullptr</code></pre></div>
+<div class="codeblock"><div class="code-header"><span>C++ — shared_ptr &amp; cycle, giải bằng weak_ptr</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Node {
+    std::shared_ptr&lt;Node&gt; next;
+    std::weak_ptr&lt;Node&gt;   prev;   // dùng weak_ptr để tránh CHU TRÌNH tham chiếu
+};
+// Nếu 'prev' cũng là shared_ptr: A giữ B sống (qua next), B giữ A sống (qua prev)
+// -&gt; ref count không bao giờ về 0 -&gt; RÒ RỈ BỘ NHỚ dù không còn ai bên ngoài giữ A hay B</code></pre></div>
+<div class="box danger"><span class="box-label">Reference cycle</span>
+<code>shared_ptr</code> dùng reference counting — khi hai (hay nhiều) object giữ <code>shared_ptr</code> trỏ vòng lại nhau, ref count của cả hai không bao giờ về 0 dù không còn con trỏ nào từ bên ngoài trỏ vào chúng nữa — đây là memory leak thực sự (không phải UB, nhưng vẫn là bug tài nguyên). <code>weak_ptr</code> giải quyết bằng cách "quan sát mà không sở hữu" — muốn dùng phải gọi <code>.lock()</code> để lấy tạm một <code>shared_ptr</code> (trả về rỗng nếu object đã bị huỷ).
+</div>
+<div class="box good"><span class="box-label">Best practice</span>
+Quy tắc thực dụng: <strong>mặc định dùng <code>unique_ptr</code></strong> — nó rẻ, rõ ràng, thể hiện đúng ownership. Chỉ chuyển sang <code>shared_ptr</code> khi thực sự có nhiều chủ sở hữu đồng thời và không biết trước ai huỷ trước. Tránh <code>shared_ptr</code> "mặc định vì tiện" — đó là dấu hiệu chưa nghĩ rõ ai thực sự sở hữu object, và mang theo overhead runtime không cần thiết (atomic increment/decrement mỗi lần copy, ảnh hưởng cache và performance đa luồng).
+</div>
+</section>
+<section class="chapter" id="solid-patterns">
+<div class="chapter-head"><span class="chno">21</span></div>
+<h2>SOLID &amp; Design Patterns</h2>
+<p class="subtitle">Nguyên tắc thiết kế hướng đối tượng cổ điển, áp dụng cụ thể vào C++.</p>
+
+<h3>SOLID</h3>
+<div class="tablewrap"><table>
+<tr><th>Nguyên tắc</th><th>Ý nghĩa</th><th>Ví dụ vi phạm / tuân thủ trong C++</th></tr>
+<tr><td><strong>S</strong>ingle Responsibility</td><td>Một class chỉ nên có một lý do để thay đổi</td><td>Vi phạm: một class <code>Report</code> vừa tính toán số liệu vừa tự format ra HTML vừa tự ghi file</td></tr>
+<tr><td><strong>O</strong>pen/Closed</td><td>Mở để mở rộng, đóng để sửa đổi</td><td>Dùng interface + polymorphism: thêm <code>NewShape : Shape</code> không cần sửa code tính diện tích cũ</td></tr>
+<tr><td><strong>L</strong>iskov Substitution</td><td>Derived phải thay thế được Base mà không phá vỡ hành vi đúng đắn</td><td>Vi phạm kinh điển: <code>Square : Rectangle</code> override <code>setWidth</code> để luôn set cả height — phá vỡ kỳ vọng của code dùng <code>Rectangle</code></td></tr>
+<tr><td><strong>I</strong>nterface Segregation</td><td>Không ép class implement method nó không cần</td><td>Tách <code>IPrintable</code>, <code>IScannable</code> riêng thay vì một <code>IMultiFunctionDevice</code> khổng lồ</td></tr>
+<tr><td><strong>D</strong>ependency Inversion</td><td>Phụ thuộc abstraction, không phụ thuộc chi tiết cụ thể</td><td><code>Logger</code> nhận <code>ISink*</code> qua constructor thay vì new cứng <code>FileSink</code> bên trong</td></tr>
+</table></div>
+<div class="box warn"><span class="box-label">Liskov Substitution — ví dụ kinh điển</span>
+<pre style="margin-top:6px">class Rectangle { virtual void setWidth(int); virtual void setHeight(int); };
+class Square : public Rectangle {
+    void setWidth(int w) override  { width_ = height_ = w; }   // side-effect KHÔNG NGỜ TỚI
+    void setHeight(int h) override { width_ = height_ = h; }
+};
+// Code viết cho Rectangle: r-&gt;setWidth(5); r-&gt;setHeight(4); assert(r-&gt;area() == 20);
+// -&gt; nếu r thực chất là Square: assert THẤT BẠI (area() == 16) dù về hình học "square is-a rectangle" đúng!</pre>
+Đây là ví dụ nổi tiếng cho thấy quan hệ is-a về mặt toán học/hình học không tự động đảm bảo is-a về mặt <em>hành vi lập trình</em> — LSP quan tâm tới hợp đồng hành vi (behavioral contract), không phải phân loại khái niệm trừu tượng.
+</div>
+
+<h3>Design Patterns — áp dụng vào C++</h3>
+<div class="tablewrap"><table>
+<tr><th>Pattern</th><th>Vấn đề giải quyết</th><th>Công cụ C++ điển hình</th></tr>
+<tr><td>Factory Method</td><td>Tạo object mà không cố định kiểu cụ thể tại nơi gọi</td><td>Hàm trả về <code>std::unique_ptr&lt;IBase&gt;</code>, chọn kiểu derived bên trong</td></tr>
+<tr><td>Strategy</td><td>Đổi thuật toán tại runtime mà không đổi code dùng nó</td><td>Interface + con trỏ/reference, hoặc template + policy class (compile-time strategy)</td></tr>
+<tr><td>Observer</td><td>Một-nhiều: nhiều đối tượng cần biết khi state đổi</td><td><code>std::vector&lt;std::weak_ptr&lt;IObserver&gt;&gt;</code> hoặc <code>std::function</code> callback list</td></tr>
+<tr><td>Singleton</td><td>Đảm bảo đúng một instance toàn cục</td><td>Function-local static (Meyer's Singleton) — thread-safe từ C++11</td></tr>
+<tr><td>Decorator</td><td>Thêm hành vi mà không sửa class gốc, không dùng kế thừa cứng</td><td>Composition: wrap một <code>IComponent*</code> khác trong một implementation mới</td></tr>
+<tr><td>Adapter</td><td>Khớp một interface cũ/khác vào interface mới hệ thống cần</td><td>Class wrapper implement interface mới, forward call sang object cũ</td></tr>
+<tr><td>PImpl</td><td>Ẩn implementation, ổn định ABI</td><td>Xem chương 19</td></tr>
+</table></div>
+<div class="codeblock"><div class="code-header"><span>C++ — Meyer's Singleton (thread-safe, C++11+)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Logger {
+public:
+    static Logger&amp; instance() {
+        static Logger inst;   // khởi tạo LƯỜI, ĐÚNG MỘT LẦN, thread-safe (Standard đảm bảo từ C++11)
+        return inst;
+    }
+private:
+    Logger() = default;
+    Logger(const Logger&amp;) = delete;              // chặn copy
+    Logger&amp; operator=(const Logger&amp;) = delete;   // chặn assign
+};</code></pre></div>
+<div class="box good"><span class="box-label">Best practice</span>
+Design pattern là <strong>giải pháp cho một vấn đề cụ thể</strong>, không phải "cứ áp dụng cho sang". Singleton đặc biệt hay bị lạm dụng làm "global variable trá hình" — nó ẩn dependency (code phụ thuộc <code>Logger::instance()</code> mà không khai báo ở đâu cả), gây khó test (không mock được dễ dàng). Ưu tiên dependency injection tường minh (truyền interface qua constructor) trước khi reach for Singleton.
+</div>
+</section>
+
+<section class="chapter" id="composition-inheritance">
+<div class="chapter-head"><span class="chno">22</span></div>
+<h2>Composition vs Aggregation vs Association vs Dependency</h2>
+<p class="subtitle">Bốn mức độ quan hệ giữa các class, từ chặt nhất tới lỏng nhất.</p>
+<div class="tablewrap"><table>
+<tr><th>Quan hệ</th><th>Vòng đời</th><th>Ví dụ C++</th></tr>
+<tr><td><strong>Composition</strong> (part-of, sở hữu chặt)</td><td>Member sống/chết cùng object cha, cha tạo và huỷ nó</td><td><code>class Car { Engine engine; };</code> — Engine là member trực tiếp</td></tr>
+<tr><td><strong>Aggregation</strong> (has-a, sở hữu lỏng)</td><td>Member có thể tồn tại độc lập với object cha, cha chỉ "giữ tham chiếu"</td><td><code>class Team { std::vector&lt;Player*&gt; players; };</code> — Player tồn tại kể cả khi Team bị huỷ</td></tr>
+<tr><td><strong>Association</strong></td><td>Hai class biết về nhau, dùng lẫn nhau, không sở hữu</td><td><code>class Teacher</code> và <code>class Student</code> tham chiếu lẫn nhau qua con trỏ, không ai "sở hữu" ai</td></tr>
+<tr><td><strong>Dependency</strong> (yếu nhất)</td><td>Chỉ dùng tạm thời (tham số hàm), không giữ tham chiếu lâu dài</td><td><code>void print(const Logger&amp; log)</code> — <code>print</code> phụ thuộc Logger chỉ trong lúc gọi</td></tr>
+</table></div>
+<p>Ba khái niệm cuối (aggregation/association/dependency) thường chỉ khác nhau ở <strong>độ mạnh của coupling và ai quản lý vòng đời</strong> — về mặt code C++ chúng đều thể hiện qua con trỏ/reference; composition là loại duy nhất object con thực sự "nằm bên trong" bộ nhớ của object cha (member trực tiếp, không phải con trỏ).</p>
+</section>
+
+<section class="chapter" id="crtp-type-erasure">
+<div class="chapter-head"><span class="chno">23</span></div>
+<h2>CRTP &amp; Type Erasure</h2>
+<p class="subtitle">Hai kỹ thuật đối lập: CRTP loại bỏ virtual dispatch bằng template; type erasure giấu kiểu cụ thể đằng sau một interface thống nhất.</p>
+
+<h3>CRTP — Curiously Recurring Template Pattern</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">template &lt;typename Derived&gt;
+class Shape {
+public:
+    double area() const {
+        return static_cast&lt;const Derived*&gt;(this)-&gt;areaImpl();   // "virtual" NHƯNG resolve tại COMPILE-TIME
+    }
+};
+class Circle : public Shape&lt;Circle&gt; {   // Derived tự truyền chính nó làm template argument -- "curiously recurring"
+public:
+    double areaImpl() const { return 3.14159 * r_ * r_; }
+private:
+    double r_ = 1.0;
+};</code></pre></div>
+<p>CRTP mô phỏng polymorphism (base gọi được hàm của derived) nhưng <code>static_cast</code> ở đây được resolve <strong>hoàn toàn tại compile-time</strong> — không có vptr, không có vtable, không có indirect call. <code>Shape&lt;Circle&gt;::area()</code> có thể được inline thẳng vào <code>Circle::areaImpl()</code>. Đánh đổi: <strong>mất khả năng heterogeneous container</strong> — bạn không thể có <code>std::vector&lt;Shape*&gt;</code> chứa cả Circle và Square, vì <code>Shape&lt;Circle&gt;</code> và <code>Shape&lt;Square&gt;</code> là hai kiểu hoàn toàn khác nhau (mỗi instantiation của template sinh ra một kiểu riêng).</p>
+<div class="box core"><span class="box-label">CRTP giải quyết vấn đề gì?</span>
+Khi bạn cần "chia sẻ code chung ở base, nhưng gọi lại hàm cụ thể của derived" (giống virtual) <strong>mà biết chắc kiểu cụ thể ngay tại compile-time</strong> (không cần heterogeneous container) — CRTP cho performance tương đương hand-written code (zero-overhead), trong khi virtual function luôn trả giá indirection dù bạn có cần polymorphism runtime hay không.
+</div>
+
+<h3>Type Erasure</h3>
+<p>Type erasure là kỹ thuật ngược lại: <strong>giấu hoàn toàn kiểu cụ thể</strong> đằng sau một interface thống nhất, nhưng không cần các kiểu đó cùng kế thừa một base chung tường minh (không cần "is-a" quan hệ tĩnh) — điển hình nhất chính là <code>std::function</code>.</p>
+<div class="codeblock"><div class="code-header"><span>C++ — cách std::function hoạt động (rút gọn concept)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">// Bên trong std::function&lt;void()&gt; (đơn giản hoá để minh hoạ nguyên lý):
+struct ICallable { virtual void call() = 0; virtual ~ICallable() = default; };
+template &lt;typename F&gt;
+struct CallableImpl : ICallable {   // wrapper TỰ ĐỘNG SINH cho MỌI kiểu F có thể gọi được
+    F f;
+    CallableImpl(F f) : f(std::move(f)) {}
+    void call() override { f(); }
+};
+class MyFunction {
+    std::unique_ptr&lt;ICallable&gt; impl_;   // KHÔNG BIẾT kiểu F cụ thể ở đây -- đã bị "xoá kiểu"
+public:
+    template &lt;typename F&gt;
+    MyFunction(F f) : impl_(std::make_unique&lt;CallableImpl&lt;F&gt;&gt;(std::move(f))) {}
+    void operator()() { impl_-&gt;call(); }
+};
+MyFunction f1 = []() { std::puts("lambda"); };   // hai kiểu HOÀN TOÀN KHÁC nhau (lambda vs function pointer)...
+MyFunction f2 = &amp;someFreeFunction;                 // ...nhưng cùng lưu được trong MyFunction!</code></pre></div>
+<p>Type erasure kết hợp <strong>template (compile-time)</strong> để sinh một wrapper polymorphic cho từng kiểu cụ thể, với <strong>virtual dispatch (runtime)</strong> để interface bên ngoài (<code>MyFunction</code>) không cần biết/không cần template hoá theo kiểu bên trong. Đây là cách C++ đạt được sự linh hoạt gần giống duck-typing của ngôn ngữ động, trong khi vẫn giữ static type-checking ở lớp ngoài.</p>
+
+<div class="tablewrap"><table>
+<tr><th>Kỹ thuật</th><th>Compile-time hay Runtime?</th><th>Heterogeneous container?</th><th>Overhead</th></tr>
+<tr><td>Virtual function</td><td>Runtime dispatch</td><td>Có (qua con trỏ base chung)</td><td>vptr + indirect call</td></tr>
+<tr><td>CRTP</td><td>Compile-time</td><td>Không</td><td>Zero (thường inline hết)</td></tr>
+<tr><td>Type erasure (std::function-style)</td><td>Runtime dispatch, nhưng interface không cần base chung tường minh</td><td>Có</td><td>Heap allocation (thường) + virtual call</td></tr>
+</table></div>
+</section>
+
+<section class="chapter" id="templates-modern-cpp">
+<div class="chapter-head"><span class="chno">24</span></div>
+<h2>Templates + OOP &amp; Modern C++</h2>
+<p class="subtitle">Kết hợp generic programming với OOP, và các công cụ C++17/20 làm gọn code OOP truyền thống.</p>
+
+<h3>Template kết hợp OOP</h3>
+<div class="codeblock"><div class="code-header"><span>C++ — template method nhận interface</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">template &lt;typename Container&gt;
+void printAll(const Container&amp; c) {   // template — hoạt động với BẤT KỲ kiểu có begin()/end()
+    for (const auto&amp; x : c) std::cout &lt;&lt; x &lt;&lt; ' ';
+}
+class Repository {
+public:
+    void save(const IEntity&amp; e);   // OOP interface — chọn hành vi cụ thể LÚC RUNTIME theo kiểu thực của e
+};</code></pre></div>
+<p>Nguyên tắc chọn: dùng <strong>template</strong> khi kiểu cụ thể biết được tại compile-time và bạn muốn zero-overhead (container generic, thuật toán số học); dùng <strong>virtual/OOP</strong> khi kiểu cụ thể chỉ biết tại runtime (plugin load động, danh sách heterogeneous, phụ thuộc input người dùng).</p>
+
+<h3>Modern C++ giảm boilerplate OOP truyền thống</h3>
+<div class="tablewrap"><table>
+<tr><th>Tính năng</th><th>Version</th><th>Giải quyết gì</th></tr>
+<tr><td><code>= default</code> / <code>= delete</code></td><td>C++11</td><td>Tường minh hoá ý định với 5 hàm đặc biệt, thay vì để trống mập mờ</td></tr>
+<tr><td><code>override</code> / <code>final</code></td><td>C++11</td><td>Compile-time check cho virtual function (chương 12)</td></tr>
+<tr><td>Default member initializer</td><td>C++11</td><td>Gộp giá trị mặc định ngay tại khai báo member, giảm lặp trong nhiều constructor</td></tr>
+<tr><td>Delegating constructor</td><td>C++11</td><td>Giảm trùng lặp logic giữa các overload constructor (chương 05)</td></tr>
+<tr><td>Inline static member</td><td>C++17</td><td>Không cần định nghĩa static member ngoài class (chương 16)</td></tr>
+<tr><td>Structured bindings</td><td>C++17</td><td>Giải nén object (kể cả struct do bạn định nghĩa) mà không cần getter thủ công</td></tr>
+<tr><td>Concepts</td><td>C++20</td><td>Ràng buộc kiểu cho template rõ ràng hơn <code>enable_if</code> — dùng để định nghĩa "interface ngầm" tại compile-time</td></tr>
+<tr><td>Spaceship <code>&lt;=&gt;</code></td><td>C++20</td><td>Tự sinh toàn bộ operator so sánh (chương 18)</td></tr>
+</table></div>
+</section>
+<section class="chapter" id="performance-ub">
+<div class="chapter-head"><span class="chno">25</span></div>
+<h2>Performance, Object Slicing &amp; Undefined Behavior</h2>
+<p class="subtitle">Chi phí thực sự của OOP trong C++, và các cạm bẫy UB kinh điển.</p>
+
+<h3>Object Slicing</h3>
+<div class="codeblock"><div class="code-header"><span>C++ — bug kinh điển</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">struct Base    { int x; virtual void foo(); };
+struct Derived : Base { int y; void foo() override; };
+
+void process(Base b) { b.foo(); }   // NHẬN THEO GIÁ TRỊ -- đây chính là nguồn gốc bug!
+Derived d;
+process(d);   // 'd' bị COPY vào 'b' kiểu Base -- phần 'y' và vptr của Derived bị "CẮT" (slice) mất!
+              // b.foo() bên trong process() luôn gọi Base::foo(), KHÔNG BAO GIỜ Derived::foo()</code></pre></div>
+<div class="codeblock diagram"><div class="code-header"><span>DIAGRAM — object slicing</span></div><pre>Derived d:                          Base b (sau khi copy 'd' vào 'b' theo giá trị):
++------------------+                +------------------+
+| vptr (Derived)   |   copy chỉ     | vptr (Base)      |  &lt;- vptr được set LẠI thành Base's vtable
+| int x            |  ─────────▶    | int x            |     bởi Base's copy constructor!
++------------------+  phần Base     +------------------+
+| int y            |  &lt;- MẤT hoàn toàn, không có chỗ chứa trong 'b'
++------------------+</pre></div>
+<p>"Slicing" xảy ra vì <code>process(Base b)</code> nhận tham số <strong>theo giá trị</strong> — compiler chỉ cấp đủ bộ nhớ cho một <code>Base</code>, copy constructor của <code>Base</code> (được gọi ngầm khi truyền tham số) chỉ biết copy đúng phần <code>Base</code>, và quan trọng: nó tự set vptr của <code>b</code> trỏ về <strong>vtable của Base</strong>, không phải vtable của Derived — object <code>b</code> giờ "quên hoàn toàn" nó từng là Derived. Đây <strong>không phải undefined behavior</strong> (hành vi được định nghĩa rõ, chỉ là không như ý), nhưng gần như luôn là bug logic.</p>
+<div class="box good"><span class="box-label">Best practice</span>
+Luôn nhận polymorphic object qua <strong>con trỏ hoặc reference</strong> (<code>void process(Base&amp; b)</code> hoặc <code>const Base&amp;</code>), không bao giờ theo giá trị, nếu bạn định dùng virtual dispatch trên nó. Một quy tắc kinh nghiệm: nếu class có virtual function, cân nhắc xoá copy constructor/assignment (hoặc để chúng <code>protected</code>) để chặn slicing ngay từ compile-time.
+</div>
+
+<h3>Performance của OOP — chi phí thực sự</h3>
+<div class="tablewrap"><table>
+<tr><th>Cơ chế</th><th>Chi phí runtime</th><th>Chi phí memory</th></tr>
+<tr><td>Non-virtual member function</td><td>Bằng free function (có thể inline)</td><td>0</td></tr>
+<tr><td>Virtual function</td><td>2 lần dereference + indirect call, khó branch-predict, khó inline</td><td>+1 vptr/object (8 byte, 64-bit) — chỉ MỘT lần dù bao nhiêu virtual function</td></tr>
+<tr><td>Multiple inheritance (polymorphic)</td><td>Có thể cần thunk (một lệnh cộng/trừ thêm trước khi nhảy)</td><td>Nhiều vptr nếu nhiều base polymorphic độc lập</td></tr>
+<tr><td>Virtual inheritance</td><td>Tra offset qua bảng runtime thay vì cộng hằng số</td><td>Thêm vbase table/offset</td></tr>
+<tr><td><code>dynamic_cast</code>/<code>typeid</code></td><td>Có thể duyệt cây kế thừa — không O(1) đảm bảo</td><td>RTTI metadata tĩnh (không theo object)</td></tr>
+<tr><td>Exception (nhánh không throw)</td><td>~0 với zero-cost model hiện đại (GCC/Clang/MSVC)</td><td>Bảng unwind tĩnh, không nằm trong object</td></tr>
+</table></div>
+<p>Cache locality cũng bị ảnh hưởng gián tiếp: khi lặp qua <code>vector&lt;Base*&gt;</code> chứa nhiều Derived khác nhau, mỗi object có thể nằm rải rác trên heap (không liền kề) — mất lợi thế prefetch tuần tự mà một mảng liền kề (SoA/AoS thuần dữ liệu, data-oriented) có được. Đây là lý do các hệ thống hiệu năng cực cao (game engine, HFT) thường tránh polymorphism runtime trong hot path, chuyển sang CRTP/template hoặc data-oriented design.</p>
+
+<h3>Undefined Behavior — tổng hợp các trường hợp OOP kinh điển</h3>
+<ul>
+<li><code>delete</code> qua base pointer không có virtual destructor khi object thực là derived (chương 06).</li>
+<li>Gọi virtual function trên object đã bị huỷ (dangling), hoặc trong constructor mong đợi hành vi của derived (chương 13).</li>
+<li>Truy cập member sau <code>std::move</code> giả định giá trị cũ còn nguyên (chương 07) — không phải UB cứng nhưng gần biên giới nếu class tự viết move constructor để lại state thực sự invalid.</li>
+<li>Dùng <code>offsetof</code>/ép kiểu byte-level trên non-standard-layout type (có virtual function, nhiều access-section...) — Standard không đảm bảo layout, dù common implementation thường "vẫn chạy đúng" một cách tình cờ.</li>
+<li>Exception thoát khỏi destructor trong lúc đang unwind một exception khác → <code>std::terminate()</code> ngay lập tức (chương 06).</li>
+<li><code>static_cast</code> xuống (downcast) sai kiểu thực (không kiểm tra bằng <code>dynamic_cast</code>) rồi truy cập member không tồn tại — không có runtime check nào cứu bạn, khác hẳn <code>dynamic_cast</code>.</li>
+</ul>
+</section>
+
+<section class="chapter" id="abi-compiler">
+<div class="chapter-head"><span class="chno">26</span></div>
+<h2>ABI &amp; Compiler Internals</h2>
+<p class="subtitle">Name mangling, calling convention, và tại sao "trộn compiler" trong C++ nguy hiểm hơn hẳn C.</p>
+
+<h3>Name Mangling</h3>
+<p>C++ cho phép overload (nhiều hàm cùng tên khác tham số), namespace, template — nhưng linker chỉ hiểu <strong>một tên duy nhất cho mỗi symbol</strong>. Compiler giải quyết bằng <strong>name mangling</strong>: mã hoá namespace, tên class, tên hàm, kiểu tham số thành một chuỗi định danh duy nhất.</p>
+<div class="codeblock"><div class="code-header"><span>Ví dụ mangling (Itanium ABI — GCC/Clang)</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">int foo(int);        // mangled: _Z3fooi
+int foo(double);      // mangled: _Z3food     -- khác 'i' vs 'd' -&gt; hai symbol RIÊNG BIỆT
+namespace ns { void bar(); }   // mangled: _ZN2ns3barEv</code></pre></div>
+<p>Đây là lý do <strong>C và C++ không link trực tiếp với nhau nếu không có <code>extern "C"</code></strong>: hàm C không mangled (tên symbol y hệt tên hàm), còn C++ mangled theo quy tắc riêng của từng compiler — <code>extern "C"</code> ép compiler dùng convention không-mangled kiểu C cho hàm đó, cho phép C++ gọi thư viện C (và ngược lại) an toàn.</p>
+
+<h3>Tại sao ABI của các compiler khác nhau</h3>
+<p>Standard C++ chỉ định nghĩa <em>ngôn ngữ</em> (cú pháp + ngữ nghĩa quan sát được), <strong>không định nghĩa ABI</strong> (cách mangling, layout object, calling convention, cách truyền tham số, cách unwind exception). Mỗi trình biên dịch/nền tảng tự chọn một ABI: GCC và Clang trên Linux/macOS cùng tuân theo <strong>Itanium C++ ABI</strong> (một đặc tả công khai, mục đích ban đầu là để nhiều compiler tương thích nhau trên kiến trúc Itanium, sau đó trở thành chuẩn thực tế cho Unix-like) — nên object file từ GCC và Clang (cùng version tương thích) thường link được với nhau. <strong>MSVC</strong> dùng ABI hoàn toàn riêng, không công khai đầy đủ, không tương thích Itanium — object file MSVC không link trực tiếp được với GCC/MinGW nếu khác ABI.</p>
+
+<div class="box danger"><span class="box-label">Hệ quả thực tế</span>
+Không bao giờ trộn lẫn thư viện C++ đã biên dịch sẵn (.lib/.a/.so) từ các compiler khác nhau (hoặc cùng compiler nhưng version chênh lệch đáng kể, đặc biệt qua các cột mốc ABI-breaking) trong cùng một binary nếu chúng trao đổi <code>std::string</code>, <code>std::vector</code>, object polymorphic, hay bất kỳ kiểu C++ nào qua ranh giới đó — layout nội bộ (kể cả của thư viện chuẩn) có thể khác nhau giữa các ABI, dẫn tới đọc sai bytes, crash, hoặc lỗi im lặng cực khó debug. Đây là lý do các thư viện C++ phân phối dạng binary thường ghi rõ "compiled with GCC x.y, libstdc++ ABI version z".
+</div>
+
+<h3>Compiler biến OOP code thành machine code — tổng hợp pipeline</h3>
+<div class="codeblock diagram"><div class="code-header"><span>PIPELINE</span></div><pre>C++ source (class, virtual, inheritance)
+   │
+   ▼ Parse + build AST, resolve overload, kiểm tra access control (compile-time only)
+   │
+   ▼ Sinh class layout: offset của từng member, vị trí vptr, số lượng &amp; nội dung vtable
+   │
+   ▼ Name mangling cho từng symbol (hàm, static member)
+   │
+   ▼ Sinh IR (ví dụ LLVM IR với Clang) -- virtual call trở thành load+load+indirect-call theo mẫu ở chương 14
+   │
+   ▼ Optimization passes: inlining, devirtualization (nếu chứng minh được kiểu tĩnh), dead code elimination
+   │
+   ▼ Sinh assembly theo ABI đích (calling convention, mangled name)
+   │
+   ▼ Assembler -&gt; object file (.o)  -- chứa symbol table với TÊN ĐÃ MANGLED
+   │
+   ▼ Linker gộp các .o + thư viện -&gt; executable/shared library, resolve mangled symbol qua nhau</pre></div>
+</section>
+<section class="chapter" id="concurrency-testing">
+<div class="chapter-head"><span class="chno">27</span></div>
+<h2>OOP + Concurrency &amp; Testing</h2>
+<p class="subtitle">Object và đa luồng; thiết kế OOP để dễ test.</p>
+
+<h3>OOP + Concurrency</h3>
+<ul>
+<li><strong>vtable là read-only, chia sẻ an toàn</strong> giữa các thread (nó tĩnh, không đổi sau khi biên dịch) — bản thân virtual dispatch không có race condition. Vấn đề race condition luôn nằm ở <strong>state (data member)</strong> của object, không phải cơ chế OOP.</li>
+<li><strong>Constructor chạy trên object chưa "public"</strong> (chưa được publish cho thread khác thấy) thường an toàn tự nhiên — nhưng nếu bạn "leak <code>this</code>" ra ngoài trong constructor (ví dụ đăng ký callback với <code>this</code> trước khi object khởi tạo xong), thread khác có thể thấy object ở trạng thái nửa vời — cực kỳ nguy hiểm kết hợp với vấn đề vptr chưa hoàn chỉnh (chương 13).</li>
+<li><strong>Function-local static (Meyer's Singleton)</strong> được Standard đảm bảo khởi tạo thread-safe từ C++11 — compiler tự chèn double-checked locking ở machine code, không cần bạn tự viết.</li>
+<li><strong><code>shared_ptr</code>'s control block dùng atomic</strong> cho ref count — an toàn copy/destroy <code>shared_ptr</code> từ nhiều thread, nhưng truy cập <em>object nó trỏ tới</em> vẫn cần đồng bộ hoá riêng nếu nhiều thread cùng sửa.</li>
+</ul>
+
+<h3>OOP + Testing</h3>
+<p>Interface (chương 19) + Dependency Injection (chương 21) là nền tảng để unit test code OOP: thay vì <code>class OrderService { Database db_; }</code> (phụ thuộc cứng một implementation cụ thể), viết <code>class OrderService { IDatabase&amp; db_; }</code> nhận qua constructor — test có thể truyền một <code>MockDatabase : IDatabase</code> giả lập kết quả mà không cần database thật. Virtual function chính là cơ chế C++ dùng để "mock" — mock framework (Google Mock...) thường tự sinh class implement interface, ghi lại lời gọi, và cho phép assert số lần gọi/tham số truyền vào.</p>
+<div class="box good"><span class="box-label">Best practice</span>
+Để dễ test, thiết kế class sao cho mọi dependency "khó test" (I/O, thời gian hệ thống, network) đều đi qua một interface có thể inject — không <code>new</code> cứng bên trong constructor. Đây chính là ứng dụng trực tiếp của Dependency Inversion Principle (chương 21).
+</div>
+</section>
+
+<section class="chapter" id="embedded-linux">
+<div class="chapter-head"><span class="chno">28</span></div>
+<h2>Embedded C++ &amp; Linux / System Programming</h2>
+<p class="subtitle">OOP vẫn hữu ích trên MCU giới hạn tài nguyên, nhưng phải chọn lọc cơ chế cẩn thận.</p>
+
+<h3>Những gì thường TRÁNH trong embedded</h3>
+<ul>
+<li><strong>Exception (<code>-fno-exceptions</code>)</strong>: bảng unwind chiếm flash, và thời gian throw không xác định (không phù hợp real-time) — thường thay bằng error code hoặc <code>std::expected</code> (C++23)/kiểu tương tự tự viết.</li>
+<li><strong>RTTI (<code>-fno-rtti</code>)</strong>: <code>dynamic_cast</code>/<code>typeid</code> cần metadata tĩnh cho mỗi class polymorphic — tắt để giảm binary size khi flash rất hạn chế.</li>
+<li><strong>Dynamic allocation (<code>new</code>/<code>malloc</code> tuỳ ý)</strong>: fragmentation trên hệ không có MMU/virtual memory là rủi ro nghiêm trọng — thường dùng static allocation, memory pool cố định kích thước, hoặc placement new (chương 17) trên buffer tĩnh.</li>
+</ul>
+<h3>Những gì VẪN dùng tốt</h3>
+<ul>
+<li><strong>Virtual function cho HAL (Hardware Abstraction Layer)</strong>: một interface <code>IGpio</code> với các implementation cụ thể theo chip — code nghiệp vụ viết một lần, chạy trên nhiều board bằng cách đổi implementation, chi phí một vptr/object và một indirect call là chấp nhận được trên hầu hết MCU hiện đại (Cortex-M trở lên).</li>
+<li><strong>RAII</strong> cực kỳ có giá trị: quản lý bật/tắt clock peripheral, lock ISR, giữ/nhả DMA channel — đảm bảo dọn dẹp đúng thứ tự kể cả khi có early-return.</li>
+<li><strong>Templates/CRTP</strong> khi cần chọn hành vi theo chip tại compile-time mà không trả phí runtime — phổ biến trong các HAL hiện đại (ví dụ nhiều thư viện Cortex-M dùng CRTP để định nghĩa register map theo kiểu, kiểm tra ở compile-time thay vì runtime).</li>
+<li><strong>Placement new</strong> để khởi tạo object đúng ngay tại địa chỉ memory-mapped register hoặc trong static buffer đã cấp phát trước.</li>
+</ul>
+
+<h3>Linux / System Programming</h3>
+<p>Trên Linux user-space, OOP C++ thường bọc quanh các resource kiểu POSIX (file descriptor, socket, mutex pthread, mmap) bằng RAII wrapper (mở trong constructor, <code>close()</code>/<code>munmap()</code> trong destructor) — cùng nguyên lý với smart pointer nhưng cho tài nguyên hệ điều hành thay vì bộ nhớ thuần. Virtual interface cũng phổ biến để trừu tượng hoá transport layer (TCP vs Unix domain socket vs serial) đằng sau một <code>ITransport</code> chung.</p>
+</section>
+
+<section class="chapter" id="c-vs-cpp">
+<div class="chapter-head"><span class="chno">29</span></div>
+<h2>C vs C++ OOP</h2>
+<p class="subtitle">C không có OOP native — nhưng kỹ sư C vẫn mô phỏng được các ý tưởng cốt lõi bằng tay, giúp hiểu rõ hơn C++ làm gì "miễn phí" cho bạn.</p>
+<div class="codeblock"><div class="code-header"><span>C — mô phỏng "class" &amp; "virtual function" thủ công</span><button class="copy-btn">Copy</button></div><pre><code class="language-c">// "vtable" tự viết bằng tay
+typedef struct { void (*speak)(void* self); } AnimalVTable;
+typedef struct { const AnimalVTable* vtable; } Animal;   // "vptr" chính là con trỏ này
+
+typedef struct { Animal base; const char* name; } Dog;
+void dog_speak(void* self) { printf("%s: Woof!\n", ((Dog*)self)-&gt;name); }
+static const AnimalVTable dog_vtable = { .speak = dog_speak };
+
+void animal_speak(Animal* a) { a-&gt;vtable-&gt;speak(a); }   // "virtual call" thủ công qua con trỏ hàm</code></pre></div>
+<p>Đoạn code C ở trên chính xác là <strong>những gì compiler C++ tự động sinh ra phía sau</strong> khi bạn viết <code>virtual void speak();</code> — struct <code>AnimalVTable</code> tương đương vtable, con trỏ <code>vtable</code> trong <code>Animal</code> tương đương vptr, và <code>animal_speak()</code> tương đương cơ chế virtual dispatch ở chương 14. Hiểu được bài tập "viết OOP bằng tay trong C" này là cách chắc chắn nhất để nội tâm hoá rằng vtable/vptr không phải "phép màu ngôn ngữ" — nó chỉ là pattern con trỏ hàm được compiler tự động hoá và tối ưu.</p>
+<div class="tablewrap"><table>
+<tr><th></th><th>C (thủ công)</th><th>C++ (tự động)</th></tr>
+<tr><td>Encapsulation</td><td>Quy ước đặt tên (<code>_private</code>), không enforce</td><td><code>private</code>/<code>protected</code>, enforce ở compile-time</td></tr>
+<tr><td>Inheritance</td><td>Struct đầu tiên là "base" (nhúng trực tiếp), tự ép kiểu con trỏ</td><td><code>class D : public B</code>, compiler tự tính offset/pointer adjustment</td></tr>
+<tr><td>Polymorphism</td><td>Struct chứa bảng con trỏ hàm, tự set thủ công</td><td>vtable/vptr tự sinh, tự set trong constructor</td></tr>
+<tr><td>RAII</td><td>Không có — phải tự gọi <code>cleanup()</code>, dễ quên hoặc leak khi có early-return/goto</td><td>Destructor tự động chạy, đảm bảo kể cả qua exception</td></tr>
+</table></div>
+</section>
+
+<section class="chapter" id="debugging-tools">
+<div class="chapter-head"><span class="chno">30</span></div>
+<h2>Debugging Tools — quan sát OOP ở machine level</h2>
+<p class="subtitle">Dùng g++/clang++, objdump, nm, readelf, gdb để tận mắt thấy vtable, mangled name, layout.</p>
+
+<div class="codeblock"><div class="code-header"><span>bash — build với debug info</span><button class="copy-btn">Copy</button></div><pre><code class="language-bash">g++ -std=c++17 -Wall -Wextra -O0 -g demo.cpp -o demo</code></pre></div>
+
+<div class="tablewrap"><table>
+<tr><th>Công cụ</th><th>Dùng để quan sát</th><th>Lệnh ví dụ</th></tr>
+<tr><td><code>nm</code></td><td>Danh sách symbol (kể cả mangled name) trong object file/binary</td><td><code>nm -C demo | grep vtable</code> (<code>-C</code> demangle tên)</td></tr>
+<tr><td><code>readelf</code></td><td>Chi tiết cấu trúc ELF: section, symbol table, relocation</td><td><code>readelf -s demo | c++filt</code></td></tr>
+<tr><td><code>objdump</code></td><td>Disassemble assembly thực tế của một hàm — thấy rõ indirect call của virtual dispatch</td><td><code>objdump -d -C demo | less</code></td></tr>
+<tr><td><code>c++filt</code></td><td>Demangle một tên mangled cụ thể sang tên C++ đọc được</td><td><code>echo _ZN4Base3fooEv | c++filt</code></td></tr>
+<tr><td><code>gdb</code></td><td>Debug tương tác: đặt breakpoint, xem giá trị vptr, gọi <code>info vtbl</code></td><td><code>gdb ./demo</code> rồi <code>break main</code>, <code>p sizeof(Derived)</code>, <code>p *(void**)&amp;obj</code> (xem vptr thô)</td></tr>
+</table></div>
+
+<div class="codeblock"><div class="code-header"><span>C++ — file để thực nghiệm</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">class Base {
+public:
+    virtual void foo();
+    int x;
+};
+class Derived : public Base {
+public:
+    void foo() override;
+    int y;
+};
+void Base::foo()    { }
+void Derived::foo() { }
+int main() { Derived d; d.foo(); }</code></pre></div>
+<p>Với file trên: <code>nm -C demo | grep -i vtable</code> sẽ cho thấy symbol <code>vtable for Base</code> và <code>vtable for Derived</code> nằm trong read-only data section; <code>objdump -d -C demo</code> tại hàm <code>main</code> cho thấy lệnh gọi <code>d.foo()</code> — vì kiểu tĩnh của <code>d</code> là <code>Derived</code> chính xác (không qua con trỏ base), trình biên dịch tối ưu (kể cả <code>-O0</code> thường vẫn) sẽ gọi thẳng <code>Derived::foo()</code> mà không tra vtable (đúng như phân tích devirtualization ở chương 14) — để thấy indirect call thực sự, hãy đổi <code>main</code> thành gọi qua <code>Base* p = &amp;d; p-&gt;foo();</code> và so sánh lại assembly.</p>
+<div class="box good"><span class="box-label">Bài tập nhỏ</span>
+Thử <code>echo _ZN4Base3fooEv | c++filt</code> để thấy nó demangle thành <code>Base::foo()</code>; thử <code>gdb</code> với <code>p sizeof(Base)</code> vs <code>p sizeof(Derived)</code> để tận mắt xác nhận chênh lệch do vptr + member mới; thử comment bỏ <code>virtual</code> ở <code>foo()</code> và so sánh lại <code>nm | grep vtable</code> — bạn sẽ thấy vtable biến mất hoàn toàn khỏi binary.
+</div>
+</section>
+<section class="chapter" id="standard-vs-implementation">
+<div class="chapter-head"><span class="chno">31</span></div>
+<h2>Standard vs Implementation — phân loại lại toàn bộ tài liệu</h2>
+<p class="subtitle">Bảng tổng hợp: cái gì Standard bắt buộc, cái gì chỉ là "cách GCC/Clang/MSVC thường làm", cái gì phụ thuộc ABI.</p>
+<div class="tablewrap"><table>
+<tr><th>Chủ đề</th><th>C++ Standard guarantees</th><th>Common implementation</th><th>ABI-specific</th></tr>
+<tr><td>Virtual dispatch</td><td>Gọi qua base ptr/ref phải resolve đúng override theo kiểu thực</td><td>vptr + vtable, một bảng/class</td><td>Vị trí vptr trong object, layout vtable, thunk</td></tr>
+<tr><td>Object layout cơ bản</td><td>Member cùng access-section giữ đúng thứ tự tương đối</td><td>Sắp liên tục theo khai báo, chèn padding theo alignment</td><td>Kích thước padding cụ thể, thứ tự các access-section khác nhau</td></tr>
+<tr><td>Empty class</td><td><code>sizeof &gt;= 1</code></td><td>Thường đúng bằng 1</td><td>—</td></tr>
+<tr><td>Empty Base Optimization</td><td>Không bắt buộc, nhưng được phép</td><td>GCC/Clang/MSVC hiện đại đều áp dụng</td><td>—</td></tr>
+<tr><td>RTTI (dynamic_cast/typeid)</td><td>Phải cho kết quả đúng ngữ nghĩa trên polymorphic type</td><td>type_info tĩnh gắn kèm vtable</td><td>Vị trí type_info pointer trong vtable</td></tr>
+<tr><td>Name mangling</td><td>Không được Standard quy định</td><td>Itanium ABI (GCC/Clang), MSVC scheme riêng</td><td>Hoàn toàn ABI-specific, không đảm bảo tương thích chéo</td></tr>
+<tr><td>Exception cost khi không throw</td><td>Không quy định cụ thể chi phí</td><td>"Zero-cost" model (bảng tra cứu tĩnh, không chi phí runtime ở nhánh bình thường)</td><td>Cách tổ chức bảng unwind khác nhau giữa nền tảng</td></tr>
+<tr><td>Static local init thread-safety</td><td>Bắt buộc thread-safe từ C++11</td><td>Compiler tự chèn double-checked locking</td><td>—</td></tr>
+</table></div>
+<div class="box core"><span class="box-label">Nguyên tắc đọc lại toàn bộ tài liệu này</span>
+Bất cứ khi nào tài liệu này mô tả "vtable nằm ở...", "vptr có kích thước...", "layout trông như..." — đó luôn là mô tả <strong>common implementation</strong> (thường là Itanium ABI, vì đây là ABI phổ biến nhất khi học/thực hành với GCC/Clang trên Linux). Standard C++ chỉ cam kết <em>hành vi quan sát được</em> đúng, không cam kết bất kỳ chi tiết bytes/offset nào trừ những trường hợp hiếm hoi Standard nói rõ (như standard-layout type + <code>offsetof</code>).
+</div>
+</section>
+
+<section class="chapter" id="comparison-tables">
+<div class="chapter-head"><span class="chno">32</span></div>
+<h2>Bảng So Sánh Toàn Diện</h2>
+
+<h3>Polymorphism techniques</h3>
+<div class="tablewrap"><table>
+<tr><th>Technique</th><th>Compile-time</th><th>Runtime</th><th>Overhead</th><th>Flexibility (heterogeneous container)</th></tr>
+<tr><td>virtual function</td><td>✗</td><td>✓</td><td>vptr + indirect call</td><td>✓</td></tr>
+<tr><td>template (function/class)</td><td>✓</td><td>✗</td><td>Không (nhưng binary size tăng — code bloat)</td><td>✗</td></tr>
+<tr><td>CRTP</td><td>✓</td><td>✗</td><td>Không (thường inline hết)</td><td>✗</td></tr>
+<tr><td>function pointer thô</td><td>✗</td><td>✓</td><td>Indirect call, không type-safe bằng virtual</td><td>✓ (hạn chế, không mang state)</td></tr>
+<tr><td>type erasure (std::function-style)</td><td>Một phần (wrapper sinh tại compile-time)</td><td>✓</td><td>Heap alloc (thường) + virtual call</td><td>✓</td></tr>
+</table></div>
+
+<h3>Ownership</h3>
+<div class="tablewrap"><table>
+<tr><th>Kiểu</th><th>Sở hữu?</th><th>Copy được?</th><th>Overhead</th><th>Dùng khi</th></tr>
+<tr><td>raw pointer <code>T*</code></td><td>Không rõ ràng (quy ước)</td><td>✓ (trivial)</td><td>0</td><td>Chỉ quan sát (non-owning), không bao giờ tự quản lý lifetime</td></tr>
+<tr><td>reference <code>T&amp;</code></td><td>Không sở hữu, không null</td><td>Không rebind được</td><td>0</td><td>Tham số hàm không-owning, đảm bảo luôn hợp lệ tại nơi gọi</td></tr>
+<tr><td><code>unique_ptr&lt;T&gt;</code></td><td>Duy nhất</td><td>✗ (chỉ move)</td><td>~0 (bằng raw pointer)</td><td>Mặc định cho ownership rõ ràng</td></tr>
+<tr><td><code>shared_ptr&lt;T&gt;</code></td><td>Chung, đếm tham chiếu</td><td>✓ (tăng ref count, atomic)</td><td>Control block + atomic ops</td><td>Nhiều chủ sở hữu, thời điểm huỷ không rõ trước</td></tr>
+<tr><td><code>weak_ptr&lt;T&gt;</code></td><td>Không sở hữu, quan sát shared_ptr</td><td>✓ (rẻ, chỉ ref control block)</td><td>Nhỏ</td><td>Phá vỡ cycle giữa các shared_ptr</td></tr>
+</table></div>
+
+<h3>Design relationships</h3>
+<div class="tablewrap"><table>
+<tr><th>Quan hệ</th><th>Coupling</th><th>Vòng đời</th><th>Ký hiệu UML</th></tr>
+<tr><td>Inheritance (is-a)</td><td>Rất chặt (kể cả implementation)</td><td>Derived chứa Base bên trong, cùng vòng đời</td><td>Mũi tên tam giác rỗng</td></tr>
+<tr><td>Composition (part-of)</td><td>Chặt (chỉ qua interface)</td><td>Member sống/chết cùng owner</td><td>Kim cương đặc</td></tr>
+<tr><td>Aggregation (has-a lỏng)</td><td>Trung bình</td><td>Độc lập với owner</td><td>Kim cương rỗng</td></tr>
+<tr><td>Association</td><td>Lỏng</td><td>Độc lập hoàn toàn</td><td>Đường thẳng</td></tr>
+<tr><td>Dependency</td><td>Rất lỏng, tạm thời</td><td>Không liên quan</td><td>Đường đứt nét, mũi tên hở</td></tr>
+</table></div>
+</section>
+
+<section class="chapter" id="interview-questions">
+<div class="chapter-head"><span class="chno">33</span></div>
+<h2>Interview Questions — tổng hợp</h2>
+<p class="subtitle">30 câu hỏi cốt lõi (đúng theo mục tiêu cuối tài liệu gốc), trả lời ngắn gọn kèm link về chương chi tiết.</p>
+
+<details class="qa"><summary>1. Class và object khác nhau thế nào?</summary><div class="answer">Class là type (bản thiết kế, biết lúc compile-time); object là instance cụ thể tồn tại trong bộ nhớ tại runtime, có địa chỉ và lifetime riêng. Xem chương 02.</div></details>
+<details class="qa"><summary>2. Object nằm trong memory như thế nào?</summary><div class="answer">Là một vùng bytes liên tục: member theo thứ tự khai báo (trong cùng access-section), có padding chèn giữa để đảm bảo alignment, cộng vptr nếu class polymorphic. Xem chương 03.</div></details>
+<details class="qa"><summary>3. sizeof(class) được quyết định ra sao?</summary><div class="answer">Tổng kích thước member + padding cần thiết để mọi member đúng alignment + padding cuối để size chia hết cho alignment lớn nhất (để array hoạt động đúng) + vptr nếu có virtual function. Xem chương 03.</div></details>
+<details class="qa"><summary>4. this thực chất là gì?</summary><div class="answer">Tham số ẩn đầu tiên compiler tự truyền vào mọi non-static member function, trỏ tới object đang được thao tác. Xem chương 16.</div></details>
+<details class="qa"><summary>5. Constructor hoạt động thế nào?</summary><div class="answer">Khởi tạo virtual base → direct base → data member (theo thứ tự khai báo) → chạy thân hàm. Xem chương 05.</div></details>
+<details class="qa"><summary>6. Destructor hoạt động thế nào?</summary><div class="answer">Ngược hoàn toàn constructor: thân hàm → data member (ngược khai báo) → direct base (ngược khai báo) → virtual base. Xem chương 06.</div></details>
+<details class="qa"><summary>7. Tại sao phải có virtual destructor?</summary><div class="answer">Để delete qua con trỏ base gọi đúng chuỗi destructor của kiểu thực; thiếu nó là undefined behavior, thường gây rò rỉ tài nguyên của phần derived. Xem chương 06.</div></details>
+<details class="qa"><summary>8. Virtual function hoạt động thế nào?</summary><div class="answer">Compiler không resolve tĩnh — object có vptr trỏ tới vtable của kiểu thực, lời gọi tra đúng slot trong vtable rồi gọi gián tiếp. Xem chương 12-14.</div></details>
+<details class="qa"><summary>9. vtable/vptr là gì?</summary><div class="answer">vtable: bảng con trỏ hàm tĩnh, một bảng/class. vptr: con trỏ trong mỗi object trỏ tới vtable đúng kiểu thực của nó. Đây là common implementation, không phải yêu cầu của Standard. Xem chương 13.</div></details>
+<details class="qa"><summary>10. Virtual dispatch hoạt động ra sao?</summary><div class="answer">Load vptr từ object → load entry tương ứng trong vtable → indirect call qua con trỏ hàm đó. Xem chương 14.</div></details>
+<details class="qa"><summary>11. Multiple inheritance làm object layout thay đổi thế nào?</summary><div class="answer">Object chứa nhiều base subobject nối tiếp nhau; địa chỉ của base thứ hai trở đi khác địa chỉ object gốc (cần pointer adjustment); nếu có polymorphic base, có thể có nhiều vtable/thunk. Xem chương 09.</div></details>
+<details class="qa"><summary>12. Diamond inheritance giải quyết thế nào?</summary><div class="answer">Dùng virtual inheritance để đảm bảo chỉ một bản base chung duy nhất; offset tới virtual base được tra tại runtime thay vì cố định. Xem chương 10.</div></details>
+<details class="qa"><summary>13. RTTI hoạt động thế nào?</summary><div class="answer">Metadata type_info tĩnh gắn với mỗi class polymorphic (thường nhúng kèm vtable); dynamic_cast/typeid đọc qua vptr để tra kiểu thực tại runtime. Xem chương 15.</div></details>
+<details class="qa"><summary>14. dynamic_cast làm gì?</summary><div class="answer">Kiểm tra tại runtime xem cast có hợp lệ theo kiểu thực của object không, trả nullptr (con trỏ) hoặc ném bad_cast (reference) nếu không hợp lệ — khác static_cast không kiểm tra gì. Xem chương 15.</div></details>
+<details class="qa"><summary>15. Object slicing là gì?</summary><div class="answer">Khi copy một object derived vào biến kiểu base theo giá trị, phần derived (và vptr đúng) bị "cắt" mất, object kết quả trở thành đúng nghĩa một Base. Xem chương 25.</div></details>
+<details class="qa"><summary>16. Copy và move khác nhau thế nào?</summary><div class="answer">Copy nhân bản dữ liệu (deep copy nếu viết đúng); move "cướp" tài nguyên từ nguồn (rvalue) và để nguồn ở trạng thái rỗng hợp lệ, tránh copy thừa. Xem chương 07.</div></details>
+<details class="qa"><summary>17. Rule of 0/3/5 là gì?</summary><div class="answer">Rule of 0: không viết hàm đặc biệt nào nếu member đã tự quản lý tài nguyên. Rule of 3: viết đủ destructor+copy ctor+copy assign nếu quản lý tài nguyên thô. Rule of 5: thêm move ctor+move assign. Xem chương 07.</div></details>
+<details class="qa"><summary>18. RAII là gì?</summary><div class="answer">Gắn vòng đời tài nguyên với vòng đời object — lấy trong constructor, giải phóng trong destructor, đảm bảo dọn dẹp kể cả khi có exception. Xem chương 20.</div></details>
+<details class="qa"><summary>19. Composition và inheritance khác nhau thế nào?</summary><div class="answer">Inheritance là is-a, coupling chặt (kể cả implementation); composition là has-a, chỉ phụ thuộc interface của thành phần, linh hoạt hơn và dễ đổi tại runtime. Xem chương 08, 22.</div></details>
+<details class="qa"><summary>20. Khi nào dùng virtual?</summary><div class="answer">Khi cần chọn hành vi theo kiểu thực tại runtime, đặc biệt khi cần heterogeneous container (một danh sách chứa nhiều kiểu con khác nhau qua con trỏ base chung). Xem chương 11-12.</div></details>
+<details class="qa"><summary>21. Khi nào dùng template?</summary><div class="answer">Khi kiểu cụ thể biết được tại compile-time và bạn muốn zero-overhead, hoặc cần viết code generic hoạt động với nhiều kiểu không cần chung base class. Xem chương 24.</div></details>
+<details class="qa"><summary>22. CRTP giải quyết vấn đề gì?</summary><div class="answer">Cho phép base "gọi lại" hàm cụ thể của derived (như virtual) nhưng resolve hoàn toàn tại compile-time, không cần vtable — đổi lại mất khả năng heterogeneous container. Xem chương 23.</div></details>
+<details class="qa"><summary>23. Type erasure hoạt động ra sao?</summary><div class="answer">Kết hợp template (sinh wrapper polymorphic cho từng kiểu cụ thể tại compile-time) với virtual dispatch (interface ngoài không cần biết kiểu bên trong) — ví dụ điển hình là std::function. Xem chương 23.</div></details>
+<details class="qa"><summary>24. OOP có overhead gì?</summary><div class="answer">vptr thêm vào mỗi object polymorphic, indirect call khó inline/khó branch-predict, có thể ảnh hưởng cache locality khi object rải rác trên heap. Xem chương 25.</div></details>
+<details class="qa"><summary>25. Compiler biến OOP code thành machine code thế nào?</summary><div class="answer">Tính layout/offset member, sinh vtable tĩnh, mangling tên symbol, sinh IR rồi assembly theo ABI đích, virtual call trở thành load+load+indirect-call. Xem chương 26.</div></details>
+<details class="qa"><summary>26. ABI ảnh hưởng OOP ra sao?</summary><div class="answer">ABI quyết định layout vtable, vị trí vptr, cách mangling, calling convention — khác nhau giữa GCC/Clang (Itanium ABI) và MSVC, nên object file biên dịch bởi ABI khác nhau không nên trộn lẫn khi trao đổi kiểu C++. Xem chương 26.</div></details>
+<details class="qa"><summary>27. OOP được áp dụng thế nào trong embedded?</summary><div class="answer">Dùng chọn lọc: virtual cho HAL interface, RAII cho quản lý peripheral, tránh exception/RTTI/dynamic allocation tuỳ ràng buộc tài nguyên/real-time. Xem chương 28.</div></details>
+<details class="qa"><summary>28. Làm thế nào để thiết kế một hệ thống C++ OOP lớn mà không biến thành "God Object"?</summary><div class="answer">Áp dụng Single Responsibility nghiêm ngặt, ưu tiên composition, chia interface nhỏ theo Interface Segregation, và dùng dependency injection thay vì để một class ôm quá nhiều trách nhiệm/dependency. Xem chương 21.</div></details>
+<details class="qa"><summary>29. Khi nào OOP là lựa chọn sai?</summary><div class="answer">Khi bài toán là xử lý dữ liệu hàng loạt hiệu năng cực cao (data-oriented design thắng rõ), khi logic thuần hàm không có state phức tạp (functional/generic gọn hơn), hoặc khi hệ thống quá nhỏ để cần trừu tượng hoá. Xem chương 01.</div></details>
+<details class="qa"><summary>30. Làm sao review một thiết kế OOP ở mức Senior?</summary><div class="answer">Kiểm tra: mỗi class có đúng một trách nhiệm không (SRP); interface có tối thiểu, không rò rỉ chi tiết implementation không (abstraction); có vi phạm Liskov ở đâu không; ownership của mọi con trỏ/resource có rõ ràng không (RAII, unique_ptr mặc định); có chỗ nào lẽ ra nên composition nhưng lại dùng inheritance không; virtual có đang được dùng đúng chỗ cần polymorphism runtime, hay chỉ vì thói quen.</div></details>
+</section>
+<section class="chapter" id="practice-roadmap">
+<div class="chapter-head"><span class="chno">34</span></div>
+<h2>Practice Roadmap — 12 cấp độ</h2>
+<p class="subtitle">Mỗi bài kèm yêu cầu, cạm bẫy ẩn và gợi ý — solution để bạn tự làm trước khi xem chương liên quan.</p>
+
+<div class="practice"><span class="plabel">Level 1 — Class / Object cơ bản</span>
+<p><strong>Yêu cầu:</strong> Viết class <code>Point2D</code> (x, y kiểu <code>double</code>) với constructor, hàm <code>distanceTo(const Point2D&amp;) const</code>.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Quên <code>const</code> trên hàm không sửa state — sẽ không gọi được trên object <code>const Point2D&amp;</code>. <strong>Gợi ý:</strong> xem chương 18 về const correctness.</p>
+</div>
+<div class="practice"><span class="plabel">Level 2 — Constructor / Destructor</span>
+<p><strong>Yêu cầu:</strong> Viết class quản lý một mảng động (<code>IntArray</code>) với constructor nhận size, destructor giải phóng.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Không viết copy constructor → double free khi copy object. <strong>Gợi ý:</strong> chương 07, Rule of 3.</p>
+</div>
+<div class="practice"><span class="plabel">Level 3 — Copy / Move</span>
+<p><strong>Yêu cầu:</strong> Thêm move constructor + move assignment cho <code>IntArray</code> ở Level 2, viết <code>noexcept</code> đúng chỗ.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Quên set con trỏ nguồn về <code>nullptr</code> sau move → double free khi cả hai object bị huỷ. <strong>Gợi ý:</strong> chương 07.</p>
+</div>
+<div class="practice"><span class="plabel">Level 4 — Inheritance</span>
+<p><strong>Yêu cầu:</strong> <code>Shape</code> base với <code>area()</code>, <code>Circle</code>/<code>Rectangle</code> kế thừa.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Viết hàm <code>printArea(Shape s)</code> nhận theo giá trị → object slicing. <strong>Gợi ý:</strong> chương 25.</p>
+</div>
+<div class="practice"><span class="plabel">Level 5 — Polymorphism</span>
+<p><strong>Yêu cầu:</strong> <code>std::vector&lt;std::unique_ptr&lt;Shape&gt;&gt;</code> chứa nhiều kiểu, lặp gọi <code>area()</code> qua con trỏ base.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Quên virtual destructor trên <code>Shape</code> → rò rỉ khi <code>unique_ptr</code> huỷ qua kiểu base. <strong>Gợi ý:</strong> chương 06.</p>
+</div>
+<div class="practice"><span class="plabel">Level 6 — RTTI</span>
+<p><strong>Yêu cầu:</strong> Viết hàm nhận <code>Shape*</code>, dùng <code>dynamic_cast</code> để xử lý riêng nếu là <code>Circle</code>.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Lạm dụng dynamic_cast thay vì thêm virtual function đúng nghĩa — vi phạm tinh thần polymorphism. <strong>Gợi ý:</strong> chương 15, cân nhắc lại thiết kế virtual.</p>
+</div>
+<div class="practice"><span class="plabel">Level 7 — RAII</span>
+<p><strong>Yêu cầu:</strong> Viết <code>FileGuard</code> RAII wrapper cho <code>FILE*</code> (fopen/fclose).</p>
+<p><strong>Cạm bẫy ẩn:</strong> Không xoá copy constructor/assignment → hai <code>FileGuard</code> cùng đóng một <code>FILE*</code> (double close). <strong>Gợi ý:</strong> chương 20, cân nhắc unique_ptr với custom deleter thay vì tự viết.</p>
+</div>
+<div class="practice"><span class="plabel">Level 8 — Design Pattern</span>
+<p><strong>Yêu cầu:</strong> Implement Observer pattern: <code>Subject</code> thông báo nhiều <code>IObserver</code> khi state đổi.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Giữ <code>IObserver*</code> thô sau khi observer đã bị huỷ → dangling pointer khi notify. <strong>Gợi ý:</strong> chương 20-21, cân nhắc weak_ptr.</p>
+</div>
+<div class="practice"><span class="plabel">Level 9 — Memory Layout</span>
+<p><strong>Yêu cầu:</strong> Dùng <code>offsetof</code>/in <code>sizeof</code> để xác nhận padding thực tế của một struct tự thiết kế, thử sắp lại member để giảm size.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Dùng <code>offsetof</code> trên non-standard-layout type (có virtual function) — undefined behavior. <strong>Gợi ý:</strong> chương 03.</p>
+</div>
+<div class="practice"><span class="plabel">Level 10 — Compiler Internals</span>
+<p><strong>Yêu cầu:</strong> Dùng <code>nm -C</code>/<code>objdump -d -C</code> để tìm vtable của một class, xác nhận số lượng entry khớp số virtual function.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Quên rằng gọi qua kiểu tĩnh chính xác (không qua con trỏ base) có thể bị devirtualize, không thấy indirect call như mong đợi. <strong>Gợi ý:</strong> chương 30.</p>
+</div>
+<div class="practice"><span class="plabel">Level 11 — Embedded OOP</span>
+<p><strong>Yêu cầu:</strong> Thiết kế interface <code>IGpio</code> (set/clear/read pin) với một implementation giả lập bằng mảng trong RAM (mô phỏng register), dùng placement new để khởi tạo tại một buffer tĩnh.</p>
+<p><strong>Cạm bẫy ẩn:</strong> Dùng <code>new</code>/<code>delete</code> thông thường thay vì static allocation — không phù hợp ràng buộc embedded thực tế. <strong>Gợi ý:</strong> chương 17, 28.</p>
+</div>
+<div class="practice"><span class="plabel">Level 12 — System Architecture</span>
+<p><strong>Yêu cầu:</strong> Thiết kế lại toàn bộ Level 1-11 thành một mini framework thống nhất (xem Final Project ở chương 35), review chính thiết kế của bạn theo SOLID.</p>
+</div>
+</section>
+
+<section class="chapter" id="final-project">
+<div class="chapter-head"><span class="chno">35</span></div>
+<h2>Final Project — Embedded Device Framework</h2>
+<p class="subtitle">Áp dụng toàn bộ kiến thức vào một kiến trúc tương đối lớn, thực tế với domain của kỹ sư firmware/embedded.</p>
+
+<div class="codeblock diagram"><div class="code-header"><span>ARCHITECTURE</span></div><pre>Device (interface trừu tượng, không data — chương 19)
+├── UART      (implementation cụ thể, RAII quản lý handle — chương 20)
+├── SPI
+├── I2C
+├── GPIO
+├── Sensor    (composition: SỞ HỮU một I2C hoặc SPI bên trong — chương 22)
+├── Storage   (PImpl để ẩn chi tiết filesystem — chương 19)
+└── Network   (Strategy pattern: chọn transport TCP/Serial tại runtime — chương 21)</pre></div>
+
+<h3>Yêu cầu thiết kế</h3>
+<div class="tablewrap"><table>
+<tr><th>Yêu cầu</th><th>Chương liên quan</th><th>Áp dụng cụ thể</th></tr>
+<tr><td>Interface</td><td>19</td><td><code>IDevice</code> pure virtual: <code>open()/close()/write()/read()</code>, virtual destructor</td></tr>
+<tr><td>Inheritance</td><td>08</td><td><code>UartDevice</code>, <code>SpiDevice</code>, <code>I2cDevice</code> đều <code>: public IDevice</code></td></tr>
+<tr><td>Composition</td><td>22</td><td><code>Sensor</code> chứa một <code>IDevice&amp;</code> (không kế thừa nó — sensor không "là một" bus)</td></tr>
+<tr><td>Polymorphism</td><td>11-14</td><td><code>std::vector&lt;std::unique_ptr&lt;IDevice&gt;&gt;</code> quản lý mọi thiết bị đồng nhất</td></tr>
+<tr><td>RAII</td><td>20</td><td>Mỗi Device constructor mở handle/init clock, destructor tự đóng/tắt clock</td></tr>
+<tr><td>Smart pointer</td><td>20</td><td><code>unique_ptr</code> cho ownership từng device, <code>weak_ptr</code> nếu Sensor cần tham chiếu ngược Storage mà không giữ nó sống</td></tr>
+<tr><td>Dependency Injection</td><td>21, 27</td><td><code>Sensor(IDevice&amp; bus)</code> nhận bus qua constructor — dễ test bằng <code>MockDevice</code></td></tr>
+<tr><td>SOLID</td><td>21</td><td>Mỗi class một trách nhiệm; thêm <code>CanBusDevice</code> mới không cần sửa code cũ (Open/Closed)</td></tr>
+<tr><td>Design Pattern</td><td>21</td><td>Strategy cho <code>Network</code> (chọn transport), Factory cho việc tạo Device theo config</td></tr>
+<tr><td>Unit Testing</td><td>27</td><td>Test <code>Sensor</code> với <code>MockDevice</code> giả lập dữ liệu I2C mà không cần hardware thật</td></tr>
+<tr><td>Thread Safety</td><td>27</td><td>Nếu nhiều task RTOS cùng truy cập một bus, bọc bằng mutex RAII (<code>lock_guard</code>) quanh access</td></tr>
+<tr><td>Memory Management</td><td>17, 28</td><td>Trên MCU giới hạn: static allocation cho danh sách Device cố định, placement new nếu cần</td></tr>
+</table></div>
+
+<h3>Quy trình đề xuất</h3>
+<ol>
+<li><strong>Thiết kế architecture</strong>: vẽ sơ đồ như trên trước khi viết dòng code nào.</li>
+<li><strong>Viết class diagram</strong>: liệt kê interface, quan hệ (kế thừa vs composition) — tự hỏi "cái này có thực sự is-a không, hay chỉ đang tiện tay kế thừa?" (chương 22).</li>
+<li><strong>Viết code</strong>: bắt đầu từ interface (<code>IDevice</code>) trước, implementation cụ thể sau.</li>
+<li><strong>Review code</strong>: check theo bộ câu hỏi ở cuối chương 33 (câu 30).</li>
+<li><strong>Phân tích memory</strong>: dùng công cụ ở chương 30 để xác nhận <code>sizeof</code> mỗi Device, có vtable thừa không cần thiết không.</li>
+<li><strong>Phân tích performance</strong>: nếu chạy trên MCU real-time, đo chi phí một virtual call qua <code>IDevice*</code> so với gọi trực tiếp — quyết định có cần CRTP thay virtual ở hot path không (chương 23, 25).</li>
+<li><strong>Refactor</strong>: tách phần nào đang vi phạm SRP, đổi phần nào đang lạm dụng inheritance sang composition.</li>
+<li><strong>Tạo test</strong>: unit test từng Device implementation độc lập với MockDevice.</li>
+</ol>
+</section>
+
+<section class="chapter" id="learning-roadmap">
+<div class="chapter-head"><span class="chno">36</span></div>
+<h2>Learning Roadmap &amp; Architecture Map</h2>
+<p class="subtitle">Thứ tự học đề xuất, và bản đồ tổng thể liên kết mọi khái niệm trong tài liệu.</p>
+
+<div class="codeblock diagram"><div class="code-header"><span>14 STAGE — thứ tự học đề xuất</span></div><pre>Stage 1   C++ Object Model (ch.02-03)
+   ↓
+Stage 2   Class / Object (ch.02)
+   ↓
+Stage 3   Encapsulation (ch.04)
+   ↓
+Stage 4   Inheritance (ch.08-10)
+   ↓
+Stage 5   Polymorphism (ch.11-12)
+   ↓
+Stage 6   Virtual Dispatch (ch.13-14)
+   ↓
+Stage 7   Memory Layout (ch.03, 09-10)
+   ↓
+Stage 8   RAII / Ownership (ch.20)
+   ↓
+Stage 9   Design Principles (ch.21)
+   ↓
+Stage 10  Patterns (ch.21-22)
+   ↓
+Stage 11  Templates / CRTP (ch.23-24)
+   ↓
+Stage 12  ABI / Compiler Internals (ch.26, 30-31)
+   ↓
+Stage 13  Embedded OOP (ch.28)
+   ↓
+Stage 14  Architecture (ch.35 — Final Project)</pre></div>
+
+<div class="codeblock diagram"><div class="code-header"><span>C++ OOP ARCHITECTURE MAP</span></div><pre>                            C++ OOP
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+         LANGUAGE         OBJECT MODEL          DESIGN
+             │                 │                 │
+   class (ch.02)        lifetime (ch.17)     SOLID (ch.21)
+   inheritance (ch.08)  layout (ch.03,09)    patterns (ch.21)
+   virtual (ch.12)      vtable (ch.13)       composition (ch.22)
+   RTTI (ch.15)         ABI (ch.26)          DI (ch.21,27)
+             │                 │                 │
+             └─────────────────┼─────────────────┘
+                               │
+                          ENGINEERING
+                               │
+                ┌──────────────┼──────────────┐
+                │              │              │
+             Embedded       Linux/System   Performance
+             (ch.28)        (ch.28)        (ch.25)</pre></div>
+</section>
+
+<section class="chapter" id="cheat-sheet">
+<div class="chapter-head"><span class="chno">37</span></div>
+<h2>Cheat Sheet</h2>
+<p class="subtitle">Tra cứu nhanh — không thay thế phần giải thích chi tiết ở các chương trên.</p>
+
+<h3>5 hàm đặc biệt</h3>
+<div class="codeblock"><div class="code-header"><span>C++</span><button class="copy-btn">Copy</button></div><pre><code class="language-cpp">~A();                       // destructor
+A(const A&amp;);                // copy constructor
+A&amp; operator=(const A&amp;);     // copy assignment
+A(A&amp;&amp;) noexcept;             // move constructor
+A&amp; operator=(A&amp;&amp;) noexcept;  // move assignment</code></pre></div>
+
+<h3>Quy tắc nhanh</h3>
+<div class="tablewrap"><table>
+<tr><th>Tình huống</th><th>Quy tắc</th></tr>
+<tr><td>Class có virtual function</td><td>→ Thêm virtual destructor (ch.06)</td></tr>
+<tr><td>Class quản lý tài nguyên thô</td><td>→ Rule of 5, hoặc bọc trong RAII riêng, ưu tiên Rule of 0 ở nơi khác (ch.07,20)</td></tr>
+<tr><td>Constructor 1 tham số</td><td>→ Mặc định thêm <code>explicit</code> trừ khi cố ý cho implicit conversion (ch.05,18)</td></tr>
+<tr><td>Truyền polymorphic object vào hàm</td><td>→ Luôn qua con trỏ/reference, không bao giờ theo giá trị (ch.25)</td></tr>
+<tr><td>Chọn smart pointer</td><td>→ Mặc định <code>unique_ptr</code>; chỉ <code>shared_ptr</code> khi thực sự nhiều chủ sở hữu (ch.20)</td></tr>
+<tr><td>Override virtual function</td><td>→ Luôn viết <code>override</code> (ch.12)</td></tr>
+<tr><td>Kế thừa hay composition?</td><td>→ Chỉ kế thừa khi có is-a thật + cần polymorphism; mặc định composition (ch.08,22)</td></tr>
+<tr><td>Cần "virtual" nhưng biết kiểu tại compile-time</td><td>→ Cân nhắc CRTP thay vì virtual thật (ch.23)</td></tr>
+</table></div>
+
+<h3>Debug nhanh</h3>
+<div class="codeblock"><div class="code-header"><span>bash</span><button class="copy-btn">Copy</button></div><pre><code class="language-bash">g++ -std=c++17 -Wall -Wextra -O0 -g demo.cpp -o demo
+nm -C demo | grep -i vtable          # tìm vtable
+objdump -d -C demo | less             # xem assembly, tìm indirect call
+echo _ZN...  | c++filt                # demangle tên</code></pre></div>
+
+<div class="box core"><span class="box-label">Tư duy cốt lõi cuối cùng</span>
+Mỗi khi gặp một cơ chế OOP mới trong C++, luôn tự hỏi theo đúng thứ tự: <strong>WHAT</strong> (nó là gì) → <strong>WHY</strong> (vấn đề nào nó giải quyết) → <strong>HOW</strong> (syntax dùng ra sao) → <strong>INTERNALS</strong> (compiler sinh code gì) → <strong>MEMORY</strong> (object trông thế nào trong RAM) → <strong>COMPILER/ABI</strong> (có phụ thuộc implementation cụ thể không) → <strong>PERFORMANCE</strong> (chi phí thực sự) → <strong>WHEN TO USE</strong> (khi nào nên/không nên dùng). Đây là khung tư duy xuyên suốt toàn bộ tài liệu này.
+</div>
+</section>
+
+</div>
+</main>
+</div>
+<button id="backTop" title="Về đầu trang">↑</button>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Theme ---------- */
+  var themeBtn = document.getElementById('themeBtn');
+  function applyTheme(t){
+    document.documentElement.classList.toggle('dark', t === 'dark');
+    themeBtn.textContent = t === 'dark' ? '☀' : '☾';
+  }
+  var savedTheme = null;
+  try { savedTheme = localStorage.getItem('cpp-oop-theme'); } catch(e){}
+  applyTheme(savedTheme === 'dark' ? 'dark' : 'light');
+  themeBtn.addEventListener('click', function(){
+    var next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('cpp-oop-theme', next); } catch(e){}
+  });
+
+  /* ---------- Mobile sidebar ---------- */
+  var sidebar = document.getElementById('sidebar');
+  var hamburger = document.getElementById('hamburgerBtn');
+  hamburger.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
+  document.querySelectorAll('#tocNav a').forEach(function(a){
+    a.addEventListener('click', function(){ sidebar.classList.remove('open'); });
+  });
+
+  /* ---------- Copy buttons ---------- */
+  document.querySelectorAll('.codeblock').forEach(function(block){
+    var btn = block.querySelector('.copy-btn');
+    var codeEl = block.querySelector('pre code') || block.querySelector('pre');
+    if (!btn || !codeEl) return;
+    btn.addEventListener('click', function(){
+      var text = codeEl.innerText;
+      var done = function(){
+        var old = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function(){ btn.textContent = old; btn.classList.remove('copied'); }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function(){ fallbackCopy(text); done(); });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+  });
+  function fallbackCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  /* ---------- Lightweight C++ / bash syntax highlighting ---------- */
+  var CPP_KEYWORDS = /\b(class|struct|public|private|protected|virtual|override|final|static|const|constexpr|explicit|friend|template|typename|using|namespace|new|delete|return|if|else|for|while|do|switch|case|break|continue|this|nullptr|true|false|void|int|double|float|char|bool|long|short|unsigned|signed|auto|noexcept|throw|try|catch|inline|typedef|enum|sizeof|alignas|alignof|default|operator|extern|thread_local|volatile|mutable|typeid|dynamic_cast|static_cast|reinterpret_cast|const_cast|decltype)\b/g;
+  var TYPE_HINT = /\b([A-Z][A-Za-z0-9_]*)\b/g;
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function highlightCpp(src){
+    var lines = src.split('\n');
+    return lines.map(function(line){
+      // preprocessor
+      if (/^\s*#/.test(line)) return '<span class="tok-pre">' + escapeHtml(line) + '</span>';
+      var out = '';
+      var i = 0;
+      while (i < line.length) {
+        var c = line[i];
+        // line comment
+        if (c === '/' && line[i+1] === '/') { out += '<span class="tok-cmt">' + escapeHtml(line.slice(i)) + '</span>'; break; }
+        // string
+        if (c === '"') {
+          var j = i+1;
+          while (j < line.length && line[j] !== '"') { if (line[j]==='\\') j++; j++; }
+          out += '<span class="tok-str">' + escapeHtml(line.slice(i, j+1)) + '</span>';
+          i = j+1; continue;
+        }
+        // char literal
+        if (c === "'" ) {
+          var j2 = i+1;
+          while (j2 < line.length && line[j2] !== "'") { if (line[j2]==='\\') j2++; j2++; }
+          out += '<span class="tok-str">' + escapeHtml(line.slice(i, j2+1)) + '</span>';
+          i = j2+1; continue;
+        }
+        // word
+        if (/[A-Za-z_]/.test(c)) {
+          var j3 = i;
+          while (j3 < line.length && /[A-Za-z0-9_]/.test(line[j3])) j3++;
+          var word = line.slice(i, j3);
+          var kwRe = new RegExp('^(' + CPP_KEYWORDS.source.replace(/^\\b\(|\)\\b$/g,'') + ')$');
+          if (new RegExp('^(class|struct|public|private|protected|virtual|override|final|static|const|constexpr|explicit|friend|template|typename|using|namespace|new|delete|return|if|else|for|while|do|switch|case|break|continue|this|nullptr|true|false|void|int|double|float|char|bool|long|short|unsigned|signed|auto|noexcept|throw|try|catch|inline|typedef|enum|sizeof|alignas|alignof|default|operator|extern|thread_local|volatile|mutable|typeid|dynamic_cast|static_cast|reinterpret_cast|const_cast|decltype)$').test(word)) {
+            out += '<span class="tok-kw">' + escapeHtml(word) + '</span>';
+          } else if (/^[A-Z]/.test(word)) {
+            out += '<span class="tok-typ">' + escapeHtml(word) + '</span>';
+          } else {
+            out += escapeHtml(word);
+          }
+          i = j3; continue;
+        }
+        // number
+        if (/[0-9]/.test(c)) {
+          var j4 = i;
+          while (j4 < line.length && /[0-9.xXa-fA-F]/.test(line[j4])) j4++;
+          out += '<span class="tok-num">' + escapeHtml(line.slice(i, j4)) + '</span>';
+          i = j4; continue;
+        }
+        out += escapeHtml(c); i++;
+      }
+      return out;
+    }).join('\n');
+  }
+  document.querySelectorAll('pre code.language-cpp').forEach(function(el){
+    el.innerHTML = highlightCpp(el.textContent);
+  });
+  document.querySelectorAll('pre code.language-bash').forEach(function(el){
+    var lines = el.textContent.split('\n').map(function(l){
+      if (/^\s*#/.test(l)) return '<span class="tok-cmt">'+escapeHtml(l)+'</span>';
+      return escapeHtml(l).replace(/^(\S+)/, '<span class="tok-kw">$1</span>');
+    });
+    el.innerHTML = lines.join('\n');
+  });
+
+  /* ---------- Scroll spy (active sidebar item) ---------- */
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('#tocNav a'));
+  var chapters = Array.prototype.slice.call(document.querySelectorAll('.chapter'));
+  var linkById = {};
+  navLinks.forEach(function(a){ linkById[a.getAttribute('href').slice(1)] = a; });
+
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      var id = entry.target.id;
+      var link = linkById[id];
+      if (!link) return;
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(l){ l.classList.remove('active'); });
+        link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-15% 0px -75% 0px', threshold: 0 });
+  chapters.forEach(function(ch){ observer.observe(ch); });
+
+  /* ---------- Progress tracking ---------- */
+  var progressPill = document.getElementById('progressPill');
+  var PROGRESS_KEY = 'cpp-oop-progress-v1';
+  function loadProgress(){
+    try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}'); } catch(e){ return {}; }
+  }
+  function saveProgress(p){
+    try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch(e){}
+  }
+  function updateProgressPill(){
+    var p = loadProgress();
+    var done = chapters.filter(function(ch){ return p[ch.id]; }).length;
+    var pct = chapters.length ? Math.round(done / chapters.length * 100) : 0;
+    progressPill.textContent = pct + '% học xong';
+  }
+  // Mark a chapter as "seen" once scrolled substantially into view
+  var progress = loadProgress();
+  var progressObserver = new IntersectionObserver(function(entries){
+    var changed = false;
+    entries.forEach(function(entry){
+      if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
+        if (!progress[entry.target.id]) { progress[entry.target.id] = true; changed = true; }
+      }
+    });
+    if (changed) { saveProgress(progress); updateProgressPill(); }
+  }, { threshold: [0.4] });
+  chapters.forEach(function(ch){ progressObserver.observe(ch); });
+  updateProgressPill();
+
+  /* ---------- Search ---------- */
+  var searchInput = document.getElementById('searchInput');
+  var searchCount = document.getElementById('searchCount');
+  var activeMarks = [];
+
+  function clearHighlights(){
+    activeMarks.forEach(function(mark){
+      var parent = mark.parentNode;
+      if (!parent) return;
+      parent.replaceChild(document.createTextNode(mark.textContent), mark);
+      parent.normalize();
+    });
+    activeMarks = [];
+  }
+
+  function highlightInNode(root, query){
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node){
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        var p = node.parentElement;
+        if (p && (p.tagName === 'SCRIPT' || p.tagName === 'STYLE' || p.tagName === 'MARK')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var textNodes = [];
+    var n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+    var count = 0;
+    var lowerQ = query.toLowerCase();
+    textNodes.forEach(function(node){
+      var text = node.nodeValue;
+      var lower = text.toLowerCase();
+      var idx = lower.indexOf(lowerQ);
+      if (idx === -1) return;
+      var frag = document.createDocumentFragment();
+      var lastIndex = 0;
+      while (idx !== -1) {
+        frag.appendChild(document.createTextNode(text.slice(lastIndex, idx)));
+        var mark = document.createElement('mark');
+        mark.className = 'search-hit';
+        mark.textContent = text.slice(idx, idx + query.length);
+        frag.appendChild(mark);
+        activeMarks.push(mark);
+        count++;
+        lastIndex = idx + query.length;
+        idx = lower.indexOf(lowerQ, lastIndex);
+      }
+      frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      node.parentNode.replaceChild(frag, node);
+    });
+    return count;
+  }
+
+  function runSearch(query){
+    clearHighlights();
+    query = query.trim();
+    if (!query) {
+      chapters.forEach(function(ch){ ch.classList.remove('search-hidden'); });
+      navLinks.forEach(function(l){ l.classList.remove('search-hidden'); });
+      searchCount.textContent = '';
+      return;
+    }
+    var totalHits = 0;
+    var lowerQ = query.toLowerCase();
+    chapters.forEach(function(ch){
+      var text = ch.textContent.toLowerCase();
+      var matches = text.indexOf(lowerQ) !== -1;
+      var link = linkById[ch.id];
+      if (matches) {
+        ch.classList.remove('search-hidden');
+        if (link) link.classList.remove('search-hidden');
+        totalHits += highlightInNode(ch, query);
+      } else {
+        ch.classList.add('search-hidden');
+        if (link) link.classList.add('search-hidden');
+      }
+    });
+    searchCount.textContent = totalHits + ' kết quả';
+    var firstMark = document.querySelector('mark.search-hit');
+    if (firstMark) firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  var searchDebounce = null;
+  searchInput.addEventListener('input', function(){
+    clearTimeout(searchDebounce);
+    var q = searchInput.value;
+    searchDebounce = setTimeout(function(){ runSearch(q); }, 150);
+  });
+  document.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+    if (e.key === 'Escape' && document.activeElement === searchInput) {
+      searchInput.value = '';
+      runSearch('');
+      searchInput.blur();
+    }
+  });
+
+  /* ---------- Back to top ---------- */
+  var backTop = document.getElementById('backTop');
+  window.addEventListener('scroll', function(){
+    backTop.classList.toggle('show', window.scrollY > 600);
+  });
+  backTop.addEventListener('click', function(){
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+})();
+</script>
+</body>
+</html>

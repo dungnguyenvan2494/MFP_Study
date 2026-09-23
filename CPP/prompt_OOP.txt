@@ -1,0 +1,2404 @@
+# PROMPT: TÌM HIỂU OOP C++ CỰC KỲ CHI TIẾT — TỪ CƠ BẢN ĐẾN INTERNALS VÀ ADVANCED
+
+Bạn là một **Senior C++ Engineer + C++ Language Expert + Compiler Engineer + Software Architect**.
+
+Tôi muốn bạn giúp tôi **tìm hiểu OOP trong C++ một cách cực kỳ toàn diện và sâu**, không chỉ học cách sử dụng syntax mà phải giúp tôi hiểu:
+
+* OOP thực sự là gì
+* C++ triển khai OOP như thế nào
+* Compiler xử lý các đặc tính OOP ra sao
+* Object tồn tại như thế nào trong memory
+* `this`, `vptr`, `vtable`, RTTI hoạt động thế nào
+* inheritance được layout trong memory ra sao
+* constructor/destructor hoạt động thế nào
+* polymorphism được compiler thực hiện thế nào
+* virtual dispatch diễn ra thế nào
+* object lifetime và object model của C++ hoạt động như thế nào
+* khi nào nên dùng / không nên dùng từng cơ chế
+* OOP kết hợp với RAII, templates, STL, smart pointer, move semantics, exceptions, concurrency như thế nào
+* các vấn đề về performance, memory, ABI, undefined behavior và design
+* cách áp dụng OOP vào project thực tế
+
+Mục tiêu cuối cùng:
+
+> Sau khi hoàn thành tài liệu này, tôi phải có khả năng đọc, thiết kế, debug và review code C++ OOP ở mức Senior/Advanced; đồng thời hiểu được những gì compiler và runtime thực hiện phía dưới.
+
+---
+
+# 0. NGUYÊN TẮC HỌC
+
+Không được chỉ đưa định nghĩa ngắn.
+
+Với mỗi chủ đề, hãy giải thích theo cấu trúc:
+
+1. Khái niệm là gì?
+2. Tại sao C++ cần nó?
+3. Vấn đề mà nó giải quyết?
+4. Syntax?
+5. Ví dụ đơn giản?
+6. Ví dụ thực tế?
+7. Compiler xử lý như thế nào?
+8. Memory layout như thế nào?
+9. Runtime behavior như thế nào?
+10. Những lỗi thường gặp?
+11. Undefined Behavior nào có thể xảy ra?
+12. Performance implications?
+13. Khi nào nên dùng?
+14. Khi nào không nên dùng?
+15. So sánh với các cơ chế khác?
+16. Best practices?
+17. Các câu hỏi interview thường gặp?
+18. Bài tập thực hành?
+19. Ví dụ code sai và phân tích tại sao sai?
+20. Ví dụ code đúng và giải thích tại sao đúng?
+
+Không được bỏ qua các chi tiết quan trọng chỉ vì chúng "advanced".
+
+Khi một cơ chế phụ thuộc vào kiến thức khác, phải giải thích dependency đó trước hoặc link logic sang phần liên quan.
+
+---
+
+# PHẦN I — NỀN TẢNG OOP
+
+## 1. OOP là gì?
+
+Giải thích thật sâu:
+
+* Procedural Programming
+* Structured Programming
+* Object-Oriented Programming
+* Data-oriented programming
+* Generic programming
+* Functional programming
+* OOP giải quyết vấn đề gì?
+* Tại sao OOP xuất hiện?
+* Ưu điểm / nhược điểm
+* Khi nào OOP không phù hợp?
+* OOP trong C++ khác OOP trong Java / C# / Python như thế nào?
+
+Giải thích 4 đặc tính kinh điển:
+
+* Encapsulation
+* Abstraction
+* Inheritance
+* Polymorphism
+
+Nhưng phải chỉ rõ:
+
+> C++ không đơn giản chỉ là "ngôn ngữ OOP".
+
+Giải thích tại sao.
+
+---
+
+# PHẦN II — CLASS VÀ OBJECT
+
+## 2. Class
+
+Phân tích:
+
+* `class`
+* `struct`
+* access specifiers:
+
+  * `public`
+  * `private`
+  * `protected`
+* member variable
+* member function
+* static member
+* nested class
+* friend
+* member type
+* type alias trong class
+
+Giải thích:
+
+```cpp
+class A {
+public:
+    int x;
+
+private:
+    int y;
+
+protected:
+    int z;
+};
+```
+
+Compiler hiểu declaration này như thế nào?
+
+---
+
+# 3. Object
+
+Phân tích:
+
+* object là gì?
+* object khác class thế nào?
+* object lifetime
+* object storage
+* automatic object
+* static object
+* dynamic object
+* temporary object
+* subobject
+* base-class subobject
+* member subobject
+
+Phân biệt:
+
+```cpp
+A a;
+A* p = new A;
+A& r = a;
+```
+
+---
+
+# 4. OBJECT MEMORY MODEL
+
+Giải thích cực kỳ sâu:
+
+* object size
+* alignment
+* padding
+* member ordering
+* empty class
+* empty base optimization
+* `sizeof(class)`
+* address của object
+* address của member
+* object layout
+
+Phải minh họa bằng memory diagram ASCII.
+
+Ví dụ:
+
+```cpp
+class A {
+    char a;
+    int b;
+    double c;
+};
+```
+
+Phân tích layout có thể như thế nào.
+
+---
+
+# PHẦN III — ENCAPSULATION
+
+## 5. Encapsulation
+
+Giải thích:
+
+* data hiding
+* invariant
+* API boundary
+* interface vs implementation
+* private implementation
+* getter/setter
+* immutable object
+* const correctness
+
+Phân tích tại sao:
+
+```cpp
+class BankAccount {
+private:
+    double balance;
+};
+```
+
+khác về mặt thiết kế so với:
+
+```cpp
+struct BankAccount {
+    double balance;
+};
+```
+
+Giải thích encapsulation trong C++ thực tế.
+
+---
+
+# PHẦN IV — ABSTRACTION
+
+## 6. Abstraction
+
+Phân biệt:
+
+* abstraction
+* encapsulation
+* interface
+* implementation
+
+Giải thích:
+
+```cpp
+class Device {
+public:
+    void start();
+};
+```
+
+Người dùng class cần biết gì?
+
+Không cần biết gì?
+
+Liên hệ:
+
+* API design
+* PImpl
+* abstract interface
+* module boundary
+
+---
+
+# PHẦN V — CONSTRUCTOR
+
+## 7. Constructor
+
+Tìm hiểu toàn bộ:
+
+* default constructor
+* parameterized constructor
+* constructor overload
+* constructor delegation
+* copy constructor
+* move constructor
+* converting constructor
+* explicit constructor
+* initializer list
+* default member initializer
+* constructor inheritance
+
+Phải giải thích:
+
+```cpp
+class A {
+public:
+    A(int x) {}
+};
+```
+
+và:
+
+```cpp
+A a{10};
+```
+
+compiler xử lý ra sao.
+
+---
+
+# 8. CONSTRUCTOR ORDER
+
+Phân tích chính xác thứ tự:
+
+1. virtual base
+2. direct base
+3. data member
+4. constructor body
+
+Ví dụ nhiều tầng inheritance.
+
+Phải có diagram.
+
+---
+
+# PHẦN VI — DESTRUCTOR
+
+## 9. Destructor
+
+Phân tích:
+
+* destructor
+* destructor order
+* virtual destructor
+* pure virtual destructor
+* deleting destructor
+* destruction of members
+* destruction of base classes
+* lifetime termination
+
+Ví dụ:
+
+```cpp
+Base* p = new Derived;
+delete p;
+```
+
+Điều gì xảy ra?
+
+Phân tích cả trường hợp:
+
+```cpp
+class Base {
+public:
+    ~Base();
+};
+```
+
+và:
+
+```cpp
+class Base {
+public:
+    virtual ~Base();
+};
+```
+
+---
+
+# PHẦN VII — COPY / MOVE SEMANTICS
+
+## 10. Copy Constructor
+
+Giải thích:
+
+* shallow copy
+* deep copy
+* copy constructor
+* copy assignment
+* self assignment
+* copy elision
+
+---
+
+# 11. Move Semantics
+
+Giải thích:
+
+* move constructor
+* move assignment
+* rvalue reference
+* `std::move`
+* moved-from state
+* noexcept move
+* copy vs move
+
+Phải giải thích:
+
+```cpp
+A a;
+A b = std::move(a);
+```
+
+Compiler/runtime làm gì?
+
+---
+
+# 12. RULE OF 0 / 3 / 5
+
+Giải thích cực kỳ rõ:
+
+* Rule of 0
+* Rule of 3
+* Rule of 5
+
+Bao gồm code:
+
+```cpp
+class Buffer {
+    char* data;
+};
+```
+
+Phân tích tại sao cần hoặc không cần:
+
+* destructor
+* copy constructor
+* copy assignment
+* move constructor
+* move assignment
+
+---
+
+# PHẦN VIII — INHERITANCE
+
+## 13. Inheritance
+
+Toàn bộ:
+
+* public inheritance
+* protected inheritance
+* private inheritance
+* single inheritance
+* multilevel inheritance
+* hierarchical inheritance
+* multiple inheritance
+* hybrid inheritance
+
+---
+
+# 14. IS-A VS HAS-A
+
+Giải thích:
+
+```cpp
+class Dog : public Animal
+```
+
+vs
+
+```cpp
+class Car {
+    Engine engine;
+};
+```
+
+Khi nào dùng inheritance?
+
+Khi nào composition?
+
+Tại sao:
+
+> Prefer composition over inheritance
+
+Giải thích bằng ví dụ thực tế.
+
+---
+
+# PHẦN IX — MULTIPLE INHERITANCE
+
+## 15. Multiple Inheritance
+
+Phải giải thích:
+
+```cpp
+class C : public A, public B
+```
+
+* layout object
+* base subobjects
+* pointer adjustment
+* ambiguity
+* method lookup
+* constructor order
+* destructor order
+
+Memory diagram bắt buộc.
+
+---
+
+# 16. DIAMOND INHERITANCE
+
+Giải thích:
+
+```text
+      A
+     / \
+    B   C
+     \ /
+      D
+```
+
+Không virtual inheritance và có virtual inheritance.
+
+---
+
+# 17. VIRTUAL INHERITANCE
+
+Phân tích:
+
+* virtual base
+* why it exists
+* object layout
+* compiler implementation
+* additional overhead
+* constructor behavior
+
+---
+
+# PHẦN X — POLYMORPHISM
+
+## 18. Compile-time Polymorphism
+
+Giải thích:
+
+* function overloading
+* operator overloading
+* templates
+* CRTP
+
+---
+
+# 19. Runtime Polymorphism
+
+Giải thích:
+
+```cpp
+Base* p = new Derived;
+p->foo();
+```
+
+Từ source code đến machine-level:
+
+```text
+source code
+    ↓
+compiler
+    ↓
+class metadata / virtual function table
+    ↓
+object
+    ↓
+vptr
+    ↓
+vtable
+    ↓
+function pointer
+    ↓
+Derived::foo()
+```
+
+Phải giải thích từng bước.
+
+---
+
+# PHẦN XI — VIRTUAL FUNCTION
+
+## 20. Virtual Function
+
+Toàn bộ:
+
+* `virtual`
+* override
+* final
+* pure virtual
+* abstract class
+* interface class
+
+So sánh:
+
+```cpp
+virtual void foo();
+```
+
+```cpp
+virtual void foo() = 0;
+```
+
+```cpp
+virtual void foo() final;
+```
+
+---
+
+# 21. OVERRIDE
+
+Giải thích tại sao luôn nên ưu tiên:
+
+```cpp
+void foo() override;
+```
+
+thay vì:
+
+```cpp
+void foo();
+```
+
+Phân tích bug khi signature không match.
+
+---
+
+# 22. PURE VIRTUAL FUNCTION
+
+Giải thích:
+
+```cpp
+virtual void run() = 0;
+```
+
+* abstract class
+* instantiate được không?
+* constructor abstract class
+* destructor abstract class
+* pure virtual destructor
+
+---
+
+# PHẦN XII — VTABLE / VPTR
+
+## 23. VTABLE
+
+Đây là phần bắt buộc cực kỳ sâu.
+
+Giải thích:
+
+* vtable là gì?
+* vptr là gì?
+* object có vptr ở đâu?
+* mỗi object có một vtable riêng không?
+* class có bao nhiêu vtable?
+* inheritance ảnh hưởng vtable như thế nào?
+* multiple inheritance?
+* virtual inheritance?
+* pure virtual?
+* RTTI?
+
+Ví dụ:
+
+```cpp
+class Base {
+public:
+    virtual void foo();
+    virtual void bar();
+};
+
+class Derived : public Base {
+public:
+    void foo() override;
+};
+```
+
+Minh họa:
+
+```text
+Derived object
++----------------+
+| vptr ----------|------> Derived vtable
++----------------+         |
+| data           |         +--> Derived::foo
++----------------+         +--> Base::bar
+```
+
+Giải thích:
+
+* ABI
+* Itanium C++ ABI nếu phù hợp
+* GCC
+* Clang
+* MSVC khác thế nào
+
+Không được nói rằng mọi compiler bắt buộc phải implement OOP bằng vtable/vptr.
+
+Phải phân biệt:
+
+> C++ standard guarantee
+
+và
+
+> common implementation technique.
+
+---
+
+# PHẦN XIII — VIRTUAL DISPATCH
+
+## 24. Virtual Dispatch
+
+Phân tích:
+
+```cpp
+Base* p = new Derived;
+p->foo();
+```
+
+Từ:
+
+```text
+CPU register
+↓
+load object
+↓
+load vptr
+↓
+load vtable entry
+↓
+indirect call
+```
+
+Giải thích chi tiết.
+
+So sánh:
+
+```cpp
+p->foo();
+```
+
+với:
+
+```cpp
+p->non_virtual();
+```
+
+và:
+
+```cpp
+Derived d;
+d.foo();
+```
+
+---
+
+# PHẦN XIV — RTTI
+
+## 25. RTTI
+
+Giải thích:
+
+* RTTI
+* `dynamic_cast`
+* `typeid`
+* `std::type_info`
+* `std::type_index`
+
+Ví dụ:
+
+```cpp
+Base* p = new Derived;
+
+Derived* d =
+    dynamic_cast<Derived*>(p);
+```
+
+Giải thích compiler/runtime làm gì.
+
+---
+
+# PHẦN XV — THIS POINTER
+
+## 26. `this`
+
+Giải thích:
+
+```cpp
+class A {
+public:
+    void foo();
+};
+```
+
+thực chất conceptually gần với:
+
+```cpp
+void foo(A* this);
+```
+
+Phân tích:
+
+* `this`
+* `const this`
+* `volatile this`
+* `this` trong static function
+* `this` trong lambda
+* `this` trong inheritance
+* `this` trong multiple inheritance
+* pointer adjustment
+
+---
+
+# PHẦN XVI — STATIC MEMBERS
+
+## 27. Static Data Member
+
+Giải thích:
+
+* static member variable
+* static member function
+* object-independent data
+* memory location
+* initialization
+* thread safety
+* static initialization order
+
+---
+
+# PHẦN XVII — FRIEND
+
+## 28. Friend
+
+Giải thích:
+
+* friend function
+* friend class
+* encapsulation trade-off
+* use cases
+* operator overloading
+
+Phải giải thích khi nào friend là hợp lý.
+
+---
+
+# PHẦN XVIII — OBJECT LIFETIME
+
+## 29. Object Lifetime
+
+Đây là phần cực kỳ quan trọng.
+
+Tìm hiểu:
+
+* lifetime bắt đầu khi nào?
+* lifetime kết thúc khi nào?
+* storage duration
+* object creation
+* initialization
+* destruction
+
+Các khái niệm:
+
+* automatic storage duration
+* static storage duration
+* thread storage duration
+* dynamic storage duration
+
+---
+
+# 30. PLACEMENT NEW
+
+Phân tích:
+
+```cpp
+void* mem = malloc(sizeof(A));
+A* p = new(mem) A();
+```
+
+Giải thích:
+
+* raw storage
+* object lifetime
+* construction
+* explicit destruction
+* placement new
+* `std::construct_at`
+* `std::destroy_at`
+
+Liên hệ embedded systems.
+
+---
+
+# PHẦN XIX — CONST CORRECTNESS
+
+## 31. Const Object
+
+Phân biệt:
+
+```cpp
+const A a;
+```
+
+```cpp
+A* const p;
+```
+
+```cpp
+const A* p;
+```
+
+Phân tích:
+
+```cpp
+void foo() const;
+```
+
+Tại sao member function có `const`?
+
+---
+
+# PHẦN XX — OPERATOR OVERLOADING
+
+## 32. Operator Overloading
+
+Toàn bộ:
+
+* arithmetic
+* comparison
+* assignment
+* stream operators
+* increment/decrement
+* subscript
+* call operator
+* conversion operator
+* spaceship operator `<=>`
+
+Phân biệt:
+
+* member operator
+* non-member operator
+* friend operator
+
+---
+
+# PHẦN XXI — CONVERSION
+
+## 33. Conversion
+
+Phân tích:
+
+* converting constructor
+* conversion operator
+* implicit conversion
+* explicit conversion
+* user-defined conversion
+
+Ví dụ:
+
+```cpp
+class A {
+public:
+    A(int);
+};
+```
+
+Tại sao:
+
+```cpp
+A a = 10;
+```
+
+có thể compile?
+
+---
+
+# PHẦN XXII — ACCESS CONTROL
+
+## 34. PRIVATE / PROTECTED
+
+Giải thích chính xác:
+
+* member access
+* derived access
+* friend access
+* protected semantics
+* public API boundary
+
+Đặc biệt giải thích các trường hợp protected dễ gây nhầm.
+
+---
+
+# PHẦN XXIII — ABSTRACT INTERFACE
+
+## 35. Interface trong C++
+
+Ví dụ:
+
+```cpp
+class IDevice {
+public:
+    virtual void open() = 0;
+    virtual void close() = 0;
+    virtual ~IDevice() = default;
+};
+```
+
+Phân tích:
+
+* interface pattern
+* dependency inversion
+* dependency injection
+* mocking
+* testability
+* virtual destructor
+
+---
+
+# PHẦN XXIV — PIMPL
+
+## 36. PImpl Idiom
+
+Giải thích:
+
+```cpp
+class Widget {
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl;
+};
+```
+
+Tại sao sử dụng?
+
+* compile time
+* ABI stability
+* information hiding
+* binary compatibility
+* header dependency
+
+---
+
+# PHẦN XXV — OOP + MEMORY MANAGEMENT
+
+## 37. Dynamic Allocation
+
+Phân tích:
+
+```cpp
+new
+delete
+new[]
+delete[]
+```
+
+và:
+
+```cpp
+std::make_unique
+std::make_shared
+```
+
+---
+
+# 38. SMART POINTER + POLYMORPHISM
+
+Phân tích:
+
+```cpp
+std::unique_ptr<Base>
+std::shared_ptr<Base>
+```
+
+với:
+
+```cpp
+std::unique_ptr<Derived>
+```
+
+Giải thích:
+
+* ownership
+* virtual destructor
+* deleter
+* control block
+* aliasing constructor
+* enable_shared_from_this
+
+---
+
+# PHẦN XXVI — OOP + RAII
+
+## 39. RAII
+
+Giải thích thật sâu:
+
+* resource ownership
+* constructor acquires
+* destructor releases
+* exception safety
+* lock guard
+* file descriptor
+* socket
+* mutex
+* device handle
+
+Liên hệ với embedded/Linux.
+
+---
+
+# PHẦN XXVII — EXCEPTION SAFETY
+
+## 40. Exception Safety
+
+Phân tích:
+
+* basic guarantee
+* strong guarantee
+* no-throw guarantee
+* constructor exception
+* destructor exception
+* virtual destructor + exception
+* RAII
+
+---
+
+# PHẦN XXVIII — SOLID
+
+## 41. SOLID
+
+Giải thích từng nguyên lý bằng C++:
+
+* Single Responsibility Principle
+* Open/Closed Principle
+* Liskov Substitution Principle
+* Interface Segregation Principle
+* Dependency Inversion Principle
+
+Mỗi nguyên tắc phải có:
+
+```text
+Bad Design
+    ↓
+Problem
+    ↓
+Refactoring
+    ↓
+Better Design
+```
+
+---
+
+# PHẦN XXIX — DESIGN PATTERNS
+
+## 42. OOP DESIGN PATTERNS
+
+Giải thích những pattern phổ biến:
+
+### Creational
+
+* Factory
+* Abstract Factory
+* Builder
+* Prototype
+* Singleton
+
+### Structural
+
+* Adapter
+* Bridge
+* Composite
+* Decorator
+* Facade
+* Proxy
+
+### Behavioral
+
+* Strategy
+* Observer
+* Command
+* State
+* Template Method
+* Chain of Responsibility
+* Visitor
+
+Không chỉ đưa định nghĩa.
+
+Phải giải thích:
+
+* problem
+* motivation
+* structure
+* implementation
+* trade-off
+* C++-specific considerations
+* modern C++ alternative
+
+---
+
+# PHẦN XXX — INHERITANCE VS COMPOSITION
+
+## 43. So sánh sâu
+
+Phân tích:
+
+```cpp
+class Dog : public Animal
+```
+
+và:
+
+```cpp
+class Dog {
+    AnimalBehavior behavior;
+};
+```
+
+So sánh:
+
+* coupling
+* extensibility
+* runtime polymorphism
+* compile-time polymorphism
+* memory
+* testability
+* maintainability
+
+---
+
+# PHẦN XXXI — CRTP
+
+## 44. CRTP
+
+Giải thích:
+
+```cpp
+template<typename Derived>
+class Base {
+};
+```
+
+Phân tích:
+
+* static polymorphism
+* compile-time dispatch
+* zero-overhead abstraction
+* CRTP vs virtual
+* performance
+
+---
+
+# PHẦN XXXII — TYPE ERASURE
+
+## 45. Type Erasure
+
+Giải thích:
+
+* type erasure là gì?
+* runtime polymorphism không cần inheritance
+* `std::function`
+* `std::any`
+* custom type erasure
+
+Thiết kế ví dụ:
+
+```cpp
+class AnyCallable;
+```
+
+và giải thích implementation phía dưới.
+
+---
+
+# PHẦN XXXIII — TEMPLATES + OOP
+
+## 46. Generic Programming + OOP
+
+Phân tích:
+
+* template polymorphism
+* static dispatch
+* dynamic dispatch
+* concepts
+* interface abstraction
+
+So sánh:
+
+```text
+Virtual Function
+vs
+Template
+vs
+CRTP
+vs
+Type Erasure
+```
+
+Làm bảng so sánh.
+
+---
+
+# PHẦN XXXIV — MODERN C++
+
+## 47. Modern OOP
+
+Tập trung vào C++11 trở lên, đặc biệt C++17.
+
+Giải thích OOP kết hợp với:
+
+* `auto`
+* `decltype`
+* lambdas
+* smart pointers
+* move semantics
+* `override`
+* `final`
+* `constexpr`
+* structured binding
+* `std::optional`
+* `std::variant`
+* `std::any`
+* `std::function`
+* concepts nếu nói đến C++20
+
+Phải chỉ ra:
+
+> OOP style trong modern C++ khác classic C++ như thế nào?
+
+---
+
+# PHẦN XXXV — PERFORMANCE
+
+## 48. OOP PERFORMANCE
+
+Phân tích overhead của:
+
+* virtual function
+* vptr
+* vtable
+* indirect call
+* cache locality
+* object size
+* inheritance
+* multiple inheritance
+* RTTI
+* dynamic allocation
+* shared_ptr
+
+So sánh:
+
+```text
+Virtual dispatch
+Direct call
+CRTP
+Template
+Function pointer
+std::function
+```
+
+---
+
+# PHẦN XXXVI — CACHE / MEMORY
+
+## 49. OBJECT LAYOUT + CPU CACHE
+
+Giải thích:
+
+* cache locality
+* AoS
+* SoA
+* pointer chasing
+* polymorphic objects
+* heap fragmentation
+
+Ví dụ tại sao:
+
+```cpp
+std::vector<Base*>
+```
+
+có thể có behavior khác:
+
+```cpp
+std::vector<Derived>
+```
+
+về cache locality.
+
+---
+
+# PHẦN XXXVII — MULTIPLE INHERITANCE INTERNALS
+
+## 50. POINTER ADJUSTMENT
+
+Giải thích sâu:
+
+```cpp
+Base2* p = derived;
+```
+
+Khi `Base2` không nằm ở offset 0 thì compiler làm gì?
+
+Minh họa:
+
+```text
+Derived object
++------------------+
+| Base1            |
++------------------+
+| Base2            |
++------------------+
+| Derived data     |
++------------------+
+```
+
+Giải thích adjustment:
+
+```text
+Derived*
+   ↓
++ offset
+   ↓
+Base2*
+```
+
+---
+
+# PHẦN XXXVIII — CONSTRUCTOR / DESTRUCTOR INTERNALS
+
+## 51. CONSTRUCTOR MACHINE-LEVEL
+
+Giải thích conceptual sequence:
+
+```text
+allocate memory
+    ↓
+construct base
+    ↓
+initialize members
+    ↓
+setup virtual dispatch state
+    ↓
+constructor body
+```
+
+Destructor tương tự.
+
+Phải nói rõ rằng chi tiết implementation phụ thuộc compiler/ABI.
+
+---
+
+# PHẦN XXXIX — ABI
+
+## 52. C++ ABI
+
+Tìm hiểu:
+
+* ABI là gì?
+* name mangling
+* vtable ABI
+* RTTI ABI
+* object layout ABI
+* calling convention
+* binary compatibility
+
+So sánh:
+
+* GCC / Clang
+* MSVC
+
+Nếu giải thích Itanium ABI, chỉ rõ phạm vi áp dụng.
+
+---
+
+# PHẦN XL — OBJECT MODEL
+
+## 53. C++ OBJECT MODEL
+
+Tìm hiểu sâu:
+
+* object
+* subobject
+* lifetime
+* identity
+* storage
+* pointer
+* reference
+* glvalue
+* prvalue
+* xvalue
+* temporary materialization
+* object representation
+* strict aliasing
+* effective type
+* pointer provenance nếu liên quan
+* `std::launder`
+
+Không được bỏ qua những khái niệm khó chỉ vì chúng không thường dùng.
+
+---
+
+# PHẦN XLI — UB LIÊN QUAN OOP
+
+## 54. COMMON UNDEFINED BEHAVIOR
+
+Phân tích:
+
+### Case 1
+
+Delete polymorphic object qua base pointer nhưng destructor không virtual.
+
+### Case 2
+
+Calling virtual function từ constructor/destructor.
+
+### Case 3
+
+Use-after-free.
+
+### Case 4
+
+Object lifetime đã kết thúc nhưng vẫn truy cập object.
+
+### Case 5
+
+Downcast sai.
+
+### Case 6
+
+Dangling reference.
+
+### Case 7
+
+Object slicing.
+
+### Case 8
+
+Data race trên member object.
+
+Mỗi case phải có:
+
+```text
+Code
+↓
+Why bug
+↓
+What standard says
+↓
+Possible manifestation
+↓
+Correct solution
+```
+
+---
+
+# PHẦN XLII — OBJECT SLICING
+
+## 55. Object Slicing
+
+Giải thích:
+
+```cpp
+Derived d;
+Base b = d;
+```
+
+Điều gì xảy ra?
+
+So sánh:
+
+```cpp
+Base b = d;
+```
+
+với:
+
+```cpp
+Base& b = d;
+```
+
+và:
+
+```cpp
+Base* b = &d;
+```
+
+---
+
+# PHẦN XLIII — VIRTUAL CALL TRONG CONSTRUCTOR / DESTRUCTOR
+
+## 56. Virtual dispatch rules
+
+Phân tích:
+
+```cpp
+Base::Base()
+Derived::Derived()
+```
+
+virtual call diễn ra thế nào?
+
+Tại sao không dispatch đến Derived constructor chưa hoàn thành?
+
+---
+
+# PHẦN XLIV — OOP + CONCURRENCY
+
+## 57. Multithreaded OOP
+
+Giải thích:
+
+* thread-safe class
+* object ownership
+* mutex member
+* recursive mutex
+* atomic member
+* immutable object
+* thread-safe singleton
+* race condition
+
+Ví dụ thiết kế:
+
+```cpp
+class Counter
+```
+
+thread-safe và non-thread-safe.
+
+---
+
+# PHẦN XLV — TESTING OOP
+
+## 58. Unit Testing
+
+Giải thích:
+
+* interface abstraction
+* dependency injection
+* mocking
+* test doubles
+* fake
+* stub
+* mock
+
+Ví dụ:
+
+```cpp
+class IDevice;
+class Controller;
+```
+
+Test `Controller` mà không cần hardware.
+
+---
+
+# PHẦN XLVI — OOP TRONG EMBEDDED C++
+
+Vì tôi làm embedded software, hãy dành riêng một phần lớn cho:
+
+* OOP trong embedded
+* dynamic allocation có nên dùng không?
+* virtual function trong embedded
+* vtable trong flash/RAM
+* code size
+* static polymorphism
+* CRTP
+* zero-cost abstraction
+* RAII cho hardware resources
+* GPIO class
+* UART class
+* SPI class
+* I2C class
+* Device Driver abstraction
+* HAL abstraction
+* interrupt-safe object design
+* ISR và C++ member function
+* singleton hardware driver
+* compile-time configuration
+* placement new
+* custom allocator
+* memory pool
+* object lifetime trong bare-metal
+* exception-disabled C++
+* RTTI disabled
+* `-fno-rtti`
+* `-fno-exceptions`
+
+Phải có ví dụ C++ cho embedded.
+
+---
+
+# PHẦN XLVII — OOP TRONG LINUX / SYSTEM SOFTWARE
+
+Giải thích cách tư duy OOP được áp dụng trong system software dù Linux kernel chủ yếu viết bằng C.
+
+So sánh:
+
+```text
+C object-oriented style
+vs
+C++ OOP
+```
+
+Ví dụ:
+
+* struct + function pointers
+* opaque structs
+* vtable bằng function pointer
+* encapsulation bằng `.c/.h`
+
+Liên hệ với driver architecture.
+
+---
+
+# PHẦN XLVIII — C VS C++ OOP
+
+## 59. Implement OOP bằng C
+
+Tự xây:
+
+```c
+struct Animal;
+struct AnimalOps;
+```
+
+và:
+
+```c
+animal->ops->speak(animal);
+```
+
+Sau đó so sánh với:
+
+```cpp
+Animal* a;
+a->speak();
+```
+
+Giải thích conceptually C++ compiler đang tự động làm những gì.
+
+---
+
+# PHẦN XLIX — PRACTICAL ARCHITECTURE
+
+## 60. Thiết kế một hệ thống OOP thực tế
+
+Hãy xây dựng từng bước một project:
+
+```text
+DeviceManager
+ ├── IDevice
+ │    ├── UARTDevice
+ │    ├── SPIFlash
+ │    └── I2CDevice
+ │
+ ├── Logger
+ ├── ConfigManager
+ └── Controller
+```
+
+Phân tích:
+
+* inheritance
+* interface
+* composition
+* dependency injection
+* ownership
+* RAII
+* smart pointer
+* polymorphism
+
+---
+
+# PHẦN L — REFACTORING
+
+## 61. BAD OOP → GOOD OOP
+
+Cho những ví dụ code tệ như:
+
+```cpp
+class GodObject
+```
+
+và refactor thành architecture tốt hơn.
+
+Tập trung:
+
+* excessive inheritance
+* huge class
+* deep inheritance tree
+* unnecessary getters/setters
+* global state
+* singleton abuse
+* excessive virtual functions
+* tight coupling
+
+---
+
+# PHẦN LI — INTERVIEW
+
+## 62. C++ OOP INTERVIEW MASTER
+
+Tạo bộ câu hỏi từ Junior → Senior → Expert.
+
+Bao gồm các câu:
+
+* What is polymorphism?
+* Why virtual destructor?
+* What is vtable?
+* What is vptr?
+* How does virtual dispatch work?
+* Why does sizeof class increase?
+* Multiple inheritance works how?
+* Diamond problem?
+* Object slicing?
+* Why use override?
+* Can constructor be virtual?
+* Can destructor be virtual?
+* Pure virtual destructor?
+* What happens when exception happens in constructor?
+* Copy vs move?
+* Rule of 5?
+* Dynamic cast?
+* RTTI?
+* ABI?
+* CRTP?
+* Type erasure?
+* Composition vs inheritance?
+* SOLID?
+
+Với mỗi câu:
+
+```text
+Question
+↓
+Short answer
+↓
+Deep answer
+↓
+Code example
+↓
+Common trap
+```
+
+---
+
+# PHẦN LII — DEBUGGING
+
+## 63. DEBUG OOP
+
+Hướng dẫn debug bằng:
+
+* gdb
+* objdump
+* nm
+* readelf
+* c++filt
+* addr2line
+
+Phân tích:
+
+```cpp
+vptr
+vtable
+RTTI
+object address
+member address
+```
+
+Tạo các bài lab để quan sát:
+
+```text
+sizeof()
+addresses
+assembly
+symbols
+vtable
+constructor/destructor
+```
+
+---
+
+# PHẦN LIII — COMPILER EXPERIMENTS
+
+## 64. COMPILER LAB
+
+Tạo các experiment nhỏ.
+
+Ví dụ:
+
+```cpp
+class Base {
+public:
+    virtual void foo();
+    int x;
+};
+
+class Derived : public Base {
+public:
+    void foo() override;
+    int y;
+};
+```
+
+Sau đó hướng dẫn tôi dùng:
+
+```bash
+g++
+clang++
+objdump
+nm
+readelf
+gdb
+```
+
+để quan sát:
+
+* symbols
+* mangled names
+* object size
+* assembly
+* vtable
+* RTTI
+* function call
+* constructor
+* destructor
+
+---
+
+# PHẦN LIV — STANDARD VS IMPLEMENTATION
+
+## 65. CỰC KỲ QUAN TRỌNG
+
+Mỗi khi giải thích internal implementation, phải phân loại rõ:
+
+### C++ Standard guarantees
+
+Những gì standard bắt buộc.
+
+### Common implementation
+
+Những gì GCC/Clang/MSVC thường làm.
+
+### ABI-specific
+
+Những gì phụ thuộc ABI.
+
+Không được trình bày implementation detail như một requirement của C++ standard.
+
+---
+
+# PHẦN LV — SO SÁNH TOÀN DIỆN
+
+## 66. Tạo các bảng so sánh
+
+Ít nhất phải có:
+
+### Polymorphism
+
+| Technique | Compile-time | Runtime | Overhead | Flexibility |
+| --------- | ------------ | ------- | -------- | ----------- |
+
+So sánh:
+
+* virtual
+* template
+* CRTP
+* function pointer
+* type erasure
+* std::function
+
+### Ownership
+
+So sánh:
+
+* raw pointer
+* reference
+* unique_ptr
+* shared_ptr
+* weak_ptr
+
+### Design
+
+So sánh:
+
+* inheritance
+* composition
+* aggregation
+* association
+* dependency
+
+---
+
+# PHẦN LVI — BÀI TẬP
+
+## 67. PRACTICE ROADMAP
+
+Tạo bài tập theo cấp độ:
+
+### Level 1
+
+Class/object cơ bản.
+
+### Level 2
+
+Constructor/destructor.
+
+### Level 3
+
+Copy/move.
+
+### Level 4
+
+Inheritance.
+
+### Level 5
+
+Polymorphism.
+
+### Level 6
+
+RTTI.
+
+### Level 7
+
+RAII.
+
+### Level 8
+
+Design pattern.
+
+### Level 9
+
+Memory layout.
+
+### Level 10
+
+Compiler internals.
+
+### Level 11
+
+Embedded OOP.
+
+### Level 12
+
+System architecture.
+
+Mỗi bài phải có:
+
+* yêu cầu
+* constraint
+* expected behavior
+* hidden pitfalls
+* hint
+* solution
+* explanation
+
+---
+
+# PHẦN LVII — PROJECT CUỐI
+
+## 68. FINAL PROJECT
+
+Thiết kế một project C++ tương đối lớn sử dụng đầy đủ OOP.
+
+Ví dụ:
+
+```text
+Embedded Device Framework
+```
+
+Bao gồm:
+
+```text
+Device
+├── UART
+├── SPI
+├── I2C
+├── GPIO
+├── Sensor
+├── Storage
+└── Network
+```
+
+Yêu cầu:
+
+* interface
+* inheritance
+* composition
+* polymorphism
+* RAII
+* smart pointers
+* dependency injection
+* SOLID
+* design patterns
+* unit testing
+* thread safety
+* memory management
+
+Sau đó:
+
+1. thiết kế architecture
+2. viết class diagram
+3. viết code
+4. review code
+5. phân tích memory
+6. phân tích performance
+7. refactor
+8. tạo test
+
+---
+
+# PHẦN LVIII — LEARNING ROADMAP
+
+Cuối tài liệu, xây dựng roadmap:
+
+```text
+Stage 1
+C++ object model
+↓
+Stage 2
+Class/Object
+↓
+Stage 3
+Encapsulation
+↓
+Stage 4
+Inheritance
+↓
+Stage 5
+Polymorphism
+↓
+Stage 6
+Virtual dispatch
+↓
+Stage 7
+Memory layout
+↓
+Stage 8
+RAII / Ownership
+↓
+Stage 9
+Design principles
+↓
+Stage 10
+Patterns
+↓
+Stage 11
+Templates / CRTP
+↓
+Stage 12
+ABI / Compiler internals
+↓
+Stage 13
+Embedded OOP
+↓
+Stage 14
+Architecture
+```
+
+---
+
+# CÁCH TRÌNH BÀY
+
+Tôi muốn tài liệu được trình bày theo kiểu **technical deep dive**, không phải tutorial hời hợt.
+
+Mỗi chương nên có:
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. CONCEPT
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. WHY
+
+3. SYNTAX
+
+4. SIMPLE EXAMPLE
+
+5. REAL-WORLD EXAMPLE
+
+6. MEMORY MODEL
+
+7. COMPILER / ABI
+
+8. RUNTIME BEHAVIOR
+
+9. COMMON MISTAKES
+
+10. UB / EDGE CASES
+
+11. PERFORMANCE
+
+12. BEST PRACTICES
+
+13. COMPARISON
+
+14. INTERVIEW QUESTIONS
+
+15. PRACTICE
+
+16. SUMMARY
+```
+
+---
+
+# YÊU CẦU VỀ CODE
+
+Tất cả ví dụ code phải:
+
+* C++ hiện đại
+* ưu tiên C++17
+* khi cần có thể chỉ ra C++20/23
+* compile được nếu không phải pseudo-code
+* giải thích từng dòng ở những phần khó
+* tránh ví dụ quá đơn giản nếu đang giải thích advanced topic
+
+Khi có thể, cung cấp:
+
+```bash
+g++ -std=c++17 -Wall -Wextra -O0
+```
+
+và các command debug tương ứng.
+
+---
+
+# YÊU CẦU VỀ DIAGRAM
+
+Với các chủ đề liên quan đến:
+
+* inheritance
+* virtual function
+* vtable
+* vptr
+* object layout
+* constructor
+* destructor
+* multiple inheritance
+* virtual inheritance
+* RTTI
+* polymorphic object
+* ownership
+
+hãy tạo **ASCII diagram**.
+
+Ví dụ:
+
+```text
+Base*
+  |
+  v
++----------------+
+|      vptr -----|------+
+|      data       |     |
++----------------+     |
+                       v
+                 +-------------+
+                 |   vtable    |
+                 +-------------+
+                 | foo()       |
+                 | bar()       |
+                 +-------------+
+```
+
+---
+
+# YÊU CẦU VỀ DEPTH
+
+Không được dừng ở mức:
+
+> "Virtual function cho phép polymorphism."
+
+Phải tiếp tục đến:
+
+```text
+Virtual function
+↓
+Virtual dispatch
+↓
+Object contains implementation-defined metadata
+↓
+vptr/vtable common implementation
+↓
+indirect call
+↓
+pointer adjustment
+↓
+ABI
+↓
+performance implication
+```
+
+Tức là phải luôn trả lời được câu hỏi:
+
+> "Cái gì thực sự xảy ra ở phía dưới?"
+
+---
+
+# YÊU CẦU QUAN TRỌNG NHẤT
+
+Trong toàn bộ tài liệu, hãy luôn phân biệt 3 tầng:
+
+```text
+LEVEL 1 — C++ LANGUAGE
+        ↓
+LEVEL 2 — COMPILER / ABI
+        ↓
+LEVEL 3 — MACHINE / MEMORY
+```
+
+Ví dụ với:
+
+```cpp
+base->foo();
+```
+
+phải giải thích được cả 3 tầng.
+
+---
+
+# OUTPUT FORMAT
+
+Tạo một tài liệu học tập có cấu trúc rõ ràng:
+
+```text
+# C++ OOP Deep Dive
+
+## 1. OOP Fundamentals
+## 2. Class & Object
+## 3. Encapsulation
+## 4. Abstraction
+## 5. Constructor
+## 6. Destructor
+## 7. Copy / Move
+## 8. Inheritance
+## 9. Multiple Inheritance
+## 10. Virtual Inheritance
+## 11. Polymorphism
+## 12. Virtual Function
+## 13. VTable / VPtr
+## 14. RTTI
+## 15. Object Lifetime
+## 16. Object Model
+## 17. RAII
+## 18. Smart Pointer
+## 19. SOLID
+## 20. Design Patterns
+## 21. CRTP
+## 22. Type Erasure
+## 23. ABI
+## 24. Compiler Internals
+## 25. Performance
+## 26. Embedded C++
+## 27. Linux/System Programming
+## 28. Debugging
+## 29. Interview
+## 30. Final Project
+```
+
+Không được bỏ qua các phần khó.
+
+Nếu một chủ đề quá lớn, hãy chia nhỏ thành subtopic thay vì rút gọn.
+
+---
+
+# MỤC TIÊU CUỐI CÙNG
+
+Sau khi hoàn thành, tôi phải có thể tự trả lời các câu hỏi như:
+
+1. Class và object khác nhau thế nào?
+2. Object nằm trong memory như thế nào?
+3. `sizeof(class)` được quyết định ra sao?
+4. `this` thực chất là gì?
+5. Constructor hoạt động thế nào?
+6. Destructor hoạt động thế nào?
+7. Tại sao phải có virtual destructor?
+8. Virtual function hoạt động thế nào?
+9. vtable/vptr là gì?
+10. Virtual dispatch hoạt động ra sao?
+11. Multiple inheritance làm object layout thay đổi thế nào?
+12. Diamond inheritance giải quyết thế nào?
+13. RTTI hoạt động thế nào?
+14. `dynamic_cast` làm gì?
+15. Object slicing là gì?
+16. Copy và move khác nhau thế nào?
+17. Rule of 0/3/5 là gì?
+18. RAII là gì?
+19. Composition và inheritance khác nhau thế nào?
+20. Khi nào dùng virtual?
+21. Khi nào dùng template?
+22. CRTP giải quyết vấn đề gì?
+23. Type erasure hoạt động ra sao?
+24. OOP có overhead gì?
+25. Compiler biến OOP code thành machine code thế nào?
+26. ABI ảnh hưởng OOP ra sao?
+27. OOP được áp dụng thế nào trong embedded?
+28. Làm thế nào để thiết kế một hệ thống C++ OOP lớn mà không biến thành "God Object"?
+29. Khi nào OOP là lựa chọn sai?
+30. Làm sao review một thiết kế OOP ở mức Senior?
+
+---
+
+# QUY TẮC CUỐI
+
+Tôi không muốn một bài viết kiểu "giải thích nhanh về OOP".
+
+Tôi muốn một **C++ OOP Deep Dive hoàn chỉnh**, có thể sử dụng như một **giáo trình / reference book**.
+
+Hãy ưu tiên:
+
+> Understanding > memorization
+
+> Mechanism > syntax
+
+> Why > What
+
+> Internal behavior > superficial explanation
+
+> Practical engineering > textbook definition
+
+Và đặc biệt:
+
+> Mỗi khi có thể, hãy trả lời câu hỏi "compiler và memory thực sự làm gì ở phía dưới?"

@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux Kernel · SoftIRQ Deep Dive · Personal Reference Book</title>
+<style>
+:root{
+  --bg:#f3f4f7; --bg-alt:#ffffff; --bg-card:#ffffff; --bg-code:#eef0f4;
+  --fg:#1b1f24; --fg-dim:#5b6673; --border:#dfe3ea;
+  --accent:#0969da; --accent-2:#7c3aed; --accent-dim:#e8f0fe;
+  --green:#1a7f37; --amber:#9a6700; --red:#cf222e; --purple:#6639ba; --gray:#6e7781;
+  --sidebar-w:280px; --header-h:60px;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+  --shadow-sm:0 1px 2px rgba(20,25,35,.05), 0 1px 1px rgba(20,25,35,.04);
+  --shadow-md:0 4px 10px rgba(20,25,35,.06), 0 1px 3px rgba(20,25,35,.05);
+  --shadow-lg:0 12px 28px rgba(20,25,35,.10), 0 3px 8px rgba(20,25,35,.06);
+  --glow:0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+:root:not([data-theme="light"]){
+  --bg:#0a0d13; --bg-alt:#0d1119; --bg-card:#121722; --bg-code:#0b0f16;
+  --fg:#dbe1e8; --fg-dim:#8b96a5; --border:#232a37;
+  --accent:#5eabff; --accent-2:#a78bfa; --accent-dim:#132845;
+  --green:#4bc766; --amber:#e0a63c; --red:#ff6b68; --purple:#c4a2ff; --gray:#8b96a5;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.35);
+  --shadow-lg:0 20px 45px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.4);
+  --glow:0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f3f4f7; --bg-alt:#ffffff; --bg-card:#ffffff; --bg-code:#eef0f4;
+    --fg:#1b1f24; --fg-dim:#5b6673; --border:#dfe3ea;
+    --accent:#0969da; --accent-2:#7c3aed; --accent-dim:#e8f0fe;
+    --green:#1a7f37; --amber:#9a6700; --red:#cf222e; --purple:#6639ba; --gray:#6e7781;
+    --shadow-sm:0 1px 2px rgba(20,25,35,.05), 0 1px 1px rgba(20,25,35,.04);
+    --shadow-md:0 4px 10px rgba(20,25,35,.06), 0 1px 3px rgba(20,25,35,.05);
+    --shadow-lg:0 12px 28px rgba(20,25,35,.10), 0 3px 8px rgba(20,25,35,.06);
+    --glow:0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0d13; --bg-alt:#0d1119; --bg-card:#121722; --bg-code:#0b0f16;
+  --fg:#dbe1e8; --fg-dim:#8b96a5; --border:#232a37;
+  --accent:#5eabff; --accent-2:#a78bfa; --accent-dim:#132845;
+  --green:#4bc766; --amber:#e0a63c; --red:#ff6b68; --purple:#c4a2ff; --gray:#8b96a5;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.35);
+  --shadow-lg:0 20px 45px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.4);
+  --glow:0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+body{
+  background:
+    radial-gradient(900px 500px at 8% -8%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%),
+    radial-gradient(700px 460px at 100% 0%, color-mix(in srgb, var(--accent-2) 6%, transparent), transparent 55%),
+    var(--bg);
+  color:var(--fg);font-family:var(--sans);font-size:14.5px;line-height:1.65;margin:0;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent}
+*::-webkit-scrollbar-thumb:hover{background:var(--fg-dim)}
+code,pre,.mono,kbd{font-family:var(--mono)}
+kbd{background:var(--bg-code);border:1px solid var(--border);border-radius:4px;padding:1px 5px;box-shadow:inset 0 -1px 0 var(--border)}
+h1,h2,h3,h4{font-family:var(--sans);font-weight:700;line-height:1.28;letter-spacing:-.015em;color:var(--fg)}
+a{color:var(--accent);text-decoration:none;transition:color .15s ease}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:none;box-shadow:var(--glow);border-radius:6px}
+::selection{background:var(--accent);color:#fff}
+
+header.top{
+  position:sticky;top:0;z-index:50;height:var(--header-h);
+  display:flex;align-items:center;gap:14px;
+  padding:0 20px;background:color-mix(in srgb, var(--bg-alt) 88%, transparent);
+  backdrop-filter:blur(10px) saturate(140%);-webkit-backdrop-filter:blur(10px) saturate(140%);
+  border-bottom:1px solid var(--border);
+  transition:box-shadow .25s ease, background .25s ease;
+}
+header.top.scrolled{box-shadow:var(--shadow-md)}
+header.top .brand{font-weight:800;font-size:14px;white-space:nowrap;letter-spacing:-.01em}
+header.top .brand:before{content:"⚙";display:inline-block;margin-right:8px;color:var(--accent)}
+header.top .brand span{color:var(--fg-dim);font-weight:500}
+header.top .spacer{flex:1}
+.hbtn{
+  background:var(--bg-card);border:1px solid var(--border);color:var(--fg);
+  padding:7px 12px;border-radius:8px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:6px;
+  box-shadow:var(--shadow-sm);transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease, color .15s ease;
+}
+.hbtn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+.hbtn:active{transform:translateY(0)}
+.menu-btn{display:none}
+#progress{
+  position:fixed;top:0;left:0;height:3px;z-index:100;width:0%;transition:width .1s;
+  background:linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow:0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.layout{display:flex;max-width:1600px;margin:0 auto}
+aside.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;position:sticky;top:var(--header-h);
+  height:calc(100vh - var(--header-h));overflow-y:auto;border-right:1px solid var(--border);
+  padding:18px 10px 60px;background:color-mix(in srgb, var(--bg-alt) 96%, transparent);
+}
+.sb-group{margin-bottom:6px}
+.sb-title{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--fg-dim);padding:14px 10px 6px;font-weight:700}
+.sb-link{
+  display:block;position:relative;padding:7px 10px 7px 16px;border-radius:8px;color:var(--fg-dim);font-size:13px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background .15s ease, color .15s ease, transform .15s ease;
+}
+.sb-link::before{
+  content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%) scaleY(0);
+  width:3px;height:60%;border-radius:3px;background:linear-gradient(180deg,var(--accent),var(--accent-2));
+  transition:transform .18s ease;
+}
+.sb-link:hover{background:var(--bg-code);color:var(--fg);text-decoration:none;transform:translateX(1px)}
+.sb-link.active{background:var(--accent-dim);color:var(--accent);font-weight:700}
+.sb-link.active::before{transform:translateY(-50%) scaleY(1)}
+.sb-num{opacity:.55;margin-right:7px;font-family:var(--mono);font-size:11px}
+
+main{flex:1;min-width:0;padding:0 0 120px}
+.wrap{max-width:1020px;margin:0 auto;padding:0 30px}
+
+.hero{position:relative;padding:64px 30px 44px;border-bottom:1px solid var(--border);overflow:hidden}
+.hero::before{
+  content:"";position:absolute;inset:-40% -10% auto auto;width:520px;height:420px;z-index:0;pointer-events:none;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--accent) 18%, transparent), transparent 72%);
+  filter:blur(10px);
+}
+.hero::after{
+  content:"";position:absolute;left:-12%;bottom:-30%;width:380px;height:340px;z-index:0;pointer-events:none;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 72%);
+  filter:blur(10px);
+}
+.hero>*{position:relative;z-index:1}
+.hero h1{
+  font-size:36px;margin:0 0 12px;letter-spacing:-.02em;
+  background:linear-gradient(105deg, var(--fg) 35%, var(--accent) 75%, var(--accent-2) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--fg);
+  animation:fadeUp .5s ease both;
+}
+.hero p.sub{color:var(--fg-dim);font-size:16px;max-width:720px;margin:0 0 22px;animation:fadeUp .5s .05s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.badge{
+  font-family:var(--mono);font-size:11px;padding:4px 11px;border-radius:20px;
+  border:1px solid var(--border);color:var(--fg-dim);background:var(--bg-card);
+  box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:6px;transition:border-color .15s ease, color .15s ease;
+}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+.badge:hover{border-color:var(--accent);color:var(--accent)}
+.callout{
+  position:relative;border:1px solid var(--amber);background:color-mix(in srgb, var(--amber) 9%, var(--bg-card));
+  border-radius:var(--radius-md);padding:13px 15px 13px 42px;font-size:13px;color:var(--fg);max-width:780px;margin-bottom:14px;
+  box-shadow:var(--shadow-sm);
+}
+.callout::before{content:"⚠";position:absolute;left:14px;top:12px;color:var(--amber);font-size:15px}
+.callout b{color:var(--amber)}
+.callout.info{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 7%, var(--bg-card))}
+.callout.info::before{content:"ℹ";color:var(--accent)}
+.callout.info b{color:var(--accent)}
+
+section.chapter{padding:52px 30px;border-bottom:1px solid var(--border);scroll-margin-top:calc(var(--header-h) + 10px)}
+section.chapter h2{font-size:25px;margin:0 0 4px;display:flex;align-items:center;gap:12px}
+section.chapter h2 .chno{
+  color:var(--accent);font-family:var(--mono);font-size:13px;font-weight:700;
+  background:var(--accent-dim);border-radius:7px;padding:3px 9px;letter-spacing:.03em;
+}
+section.chapter .lead{color:var(--fg-dim);margin:8px 0 24px;font-size:14.5px}
+h3.sub{
+  font-size:15.5px;margin:30px 0 12px;color:var(--fg);border-left:3px solid var(--accent);padding-left:11px;
+  font-weight:700;
+}
+h4.sub2{font-size:13px;margin:20px 0 9px;color:var(--fg-dim);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+
+.card{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px;margin:14px 0;
+  box-shadow:var(--shadow-sm);transition:box-shadow .2s ease, transform .2s ease;
+}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:10px 16px;font-size:13.5px;margin:12px 0}
+.kv b{color:var(--fg-dim);font-weight:600}
+.wwhh{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+@media (max-width:900px){.wwhh{grid-template-columns:repeat(2,1fr)}}
+.wwhh .box{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:13px 15px;
+  box-shadow:var(--shadow-sm);transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.wwhh .box:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:color-mix(in srgb, var(--accent) 40%, var(--border))}
+.wwhh .box .tag{font-size:10.5px;letter-spacing:.08em;color:var(--accent);font-weight:700;margin-bottom:7px;display:block}
+
+.tag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.03em;margin-left:6px;vertical-align:1px}
+.tag-modern{background:color-mix(in srgb, var(--green) 18%, transparent);color:var(--green)}
+.tag-legacy{background:color-mix(in srgb, var(--gray) 22%, transparent);color:var(--fg-dim)}
+.tag-removed{background:color-mix(in srgb, var(--red) 18%, transparent);color:var(--red)}
+.tag-replaced{background:color-mix(in srgb, var(--purple) 18%, transparent);color:var(--purple)}
+.tag-unverified{background:color-mix(in srgb, var(--amber) 18%, transparent);color:var(--amber)}
+.tag-changed{background:color-mix(in srgb, var(--accent) 18%, transparent);color:var(--accent)}
+.tag-book{background:color-mix(in srgb, var(--gray) 22%, transparent);color:var(--fg-dim)}
+.tag-kernel{background:color-mix(in srgb, var(--green) 18%, transparent);color:var(--green)}
+.tag-inference{background:color-mix(in srgb, var(--purple) 18%, transparent);color:var(--purple)}
+.tag-vendor{background:color-mix(in srgb, var(--red) 14%, transparent);color:var(--red)}
+
+.code{
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin:16px 0;background:var(--bg-code);
+  box-shadow:var(--shadow-sm);
+}
+.code .file{
+  display:flex;justify-content:space-between;align-items:center;padding:9px 14px 9px 46px;position:relative;
+  background:var(--bg-alt);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px;color:var(--fg-dim);
+}
+.code .file::before{
+  content:"";position:absolute;left:14px;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;
+  background:#ff6058;box-shadow:16px 0 0 #ffbd2e, 32px 0 0 #28c941;
+}
+.code .file .copy{cursor:pointer;background:none;border:1px solid var(--border);color:var(--fg-dim);border-radius:6px;padding:3px 9px;font-size:10.5px;font-family:var(--sans);transition:.15s}
+.code .file .copy:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-dim)}
+.code pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:12.6px;line-height:1.6;color:var(--fg);white-space:pre}
+
+.diagram{
+  background:var(--bg-code);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:22px;overflow-x:auto;margin:18px 0;font-family:var(--mono);font-size:12.8px;
+  box-shadow:var(--shadow-sm);
+}
+.flow{display:flex;flex-direction:column;align-items:center;gap:4px;font-family:var(--mono);font-size:13px}
+.flow .node{
+  border:1px solid var(--border);background:var(--bg-card);border-radius:var(--radius-sm);padding:9px 18px;
+  cursor:pointer;transition:transform .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+  text-align:center;min-width:180px;box-shadow:var(--shadow-sm);
+}
+.flow .node:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px) scale(1.015);box-shadow:var(--shadow-md)}
+.flow .arrow{color:var(--fg-dim);font-size:13.5px;padding:2px 0;opacity:.85}
+.flow .branch{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin:4px 0}
+.flow .branch .col{display:flex;flex-direction:column;align-items:center;gap:4px}
+.flow .tagline{font-size:10px;color:var(--fg-dim);margin-top:-1px;opacity:.85}
+
+.tbl-wrap{overflow-x:auto;margin:16px 0;border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:13px;border-radius:var(--radius-md);overflow:hidden}
+table caption{caption-side:top;text-align:left;color:var(--fg-dim);font-size:12px;margin-bottom:8px}
+th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--bg-code);color:var(--fg-dim);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+td code{background:var(--bg-code);padding:1px 6px;border-radius:5px;font-size:12px}
+tr td{transition:background .12s ease}
+tr:nth-child(even) td{background:color-mix(in srgb, var(--bg-code) 45%, transparent)}
+tr:hover td{background:var(--accent-dim)}
+
+.fn{border:1px solid var(--border);border-radius:var(--radius-md);margin:16px 0;overflow:hidden;background:var(--bg-card);box-shadow:var(--shadow-sm)}
+.fn .fn-head{padding:11px 15px;background:var(--bg-code);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.fn .fn-head .name{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--accent)}
+.fn .fn-head .src{font-family:var(--mono);font-size:11.5px;color:var(--fg-dim)}
+.fn .fn-body{padding:15px}
+.fn-row{margin-bottom:9px;font-size:13px}
+.fn-row b{color:var(--fg-dim);display:inline-block;min-width:110px;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;vertical-align:top}
+.fn-btns{display:flex;gap:6px;flex-wrap:wrap;padding:0 15px 15px}
+.fn-btns button{background:var(--bg-code);border:1px solid var(--border);color:var(--fg-dim);border-radius:7px;padding:6px 11px;font-size:11.5px;cursor:pointer;transition:.15s}
+.fn-btns button:hover{color:var(--accent);border-color:var(--accent);transform:translateY(-1px)}
+.fn-detail{display:none;padding:0 15px 15px;font-size:12.8px;color:var(--fg-dim);border-top:1px dashed var(--border);margin-top:4px;padding-top:10px}
+.fn-detail.open{display:block;animation:fadeUp .2s ease both}
+
+details.acc{border:1px solid var(--border);border-radius:var(--radius-md);margin:10px 0;background:var(--bg-card);overflow:hidden;box-shadow:var(--shadow-sm);transition:box-shadow .2s ease}
+details.acc:hover{box-shadow:var(--shadow-md)}
+details.acc summary{padding:13px 17px;cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center;transition:background .15s ease}
+details.acc summary:hover{background:var(--bg-code)}
+details.acc summary::-webkit-details-marker{display:none}
+details.acc summary:after{content:"+";color:var(--accent);font-size:17px;font-weight:400;transition:transform .2s ease}
+details.acc[open] summary:after{content:"−"}
+details.acc .acc-body{padding:2px 17px 17px;font-size:13.3px}
+details.acc .acc-body .kv{margin:4px 0}
+
+.gloss-item{border-bottom:1px solid var(--border);padding:13px 2px;transition:background .15s ease}
+.gloss-item:hover{background:var(--bg-code)}
+.gloss-item dt{font-family:var(--mono);font-weight:700;font-size:13.5px;margin-bottom:3px;color:var(--accent)}
+.gloss-item dd{margin:0;color:var(--fg-dim);font-size:13px}
+#searchInput,#glossFilter{
+  width:100%;padding:10px 13px;border-radius:9px;border:1px solid var(--border);background:var(--bg-code);color:var(--fg);
+  font-size:14px;margin-bottom:14px;transition:border-color .15s ease, box-shadow .15s ease;
+}
+#searchInput:focus,#glossFilter:focus{outline:none;border-color:var(--accent);box-shadow:var(--glow)}
+#searchModal{position:fixed;inset:0;background:rgba(8,10,16,.6);backdrop-filter:blur(3px);z-index:200;display:none;align-items:flex-start;justify-content:center;padding-top:10vh}
+#searchModal.open{display:flex}
+.search-box{width:min(600px,92vw);background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;max-height:70vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+#searchResults{overflow-y:auto}
+.sres{padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .12s ease}
+.sres:hover,.sres.sel{background:var(--accent-dim)}
+.sres small{display:block;color:var(--fg-dim);font-size:11px}
+
+.check-list{list-style:none;padding:0;margin:0}
+.check-list li{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);font-size:13.5px;border-radius:6px;transition:background .15s ease}
+.check-list li:hover{background:var(--bg-code)}
+.check-list input{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.check-list label{cursor:pointer}
+.check-list label.done{color:var(--fg-dim);text-decoration:line-through}
+#checkProgress{font-size:12.5px;color:var(--fg-dim);margin-bottom:10px;font-weight:600}
+.check-group-title{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin:22px 0 4px;font-weight:700}
+
+.qa{border:1px solid var(--border);border-radius:var(--radius-md);margin:10px 0;background:var(--bg-card);overflow:hidden;cursor:pointer;box-shadow:var(--shadow-sm);transition:box-shadow .2s ease, border-color .2s ease}
+.qa:hover{box-shadow:var(--shadow-md);border-color:color-mix(in srgb, var(--accent) 30%, var(--border))}
+.qa .q{display:flex;justify-content:space-between;gap:10px;padding:13px 16px;font-size:13.5px;font-weight:600}
+.qa .q .arrow{color:var(--accent);transition:.2s;flex-shrink:0}
+.qa.open .q .arrow{transform:rotate(90deg)}
+.qa .a{display:none;padding:0 16px 15px;font-size:13px;color:var(--fg-dim);border-top:1px dashed var(--border);padding-top:11px;margin:0 16px}
+.qa.open .a{display:block;animation:fadeUp .2s ease both}
+
+.note{position:relative;border-left:3px solid var(--accent);padding:9px 13px 9px 36px;background:var(--accent-dim);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:13px;margin:14px 0}
+.note::before{content:"💡";position:absolute;left:10px;top:8px;font-size:13px}
+.warn{position:relative;border-left:3px solid var(--red);padding:9px 13px 9px 36px;background:color-mix(in srgb, var(--red) 10%, var(--bg-card));border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:13px;margin:14px 0}
+.warn::before{content:"⚠";position:absolute;left:12px;top:8px;color:var(--red);font-size:13px}
+.mistake{border:1px solid var(--border);border-radius:var(--radius-md);margin:12px 0;overflow:hidden;box-shadow:var(--shadow-sm)}
+.mistake .wrong{position:relative;padding:11px 15px 11px 38px;background:color-mix(in srgb, var(--red) 9%, var(--bg-card));border-bottom:1px solid var(--border);font-size:13px}
+.mistake .wrong::before{content:"✕";position:absolute;left:14px;top:11px;color:var(--red);font-weight:700}
+.mistake .right{position:relative;padding:11px 15px 11px 38px;background:color-mix(in srgb, var(--green) 9%, var(--bg-card));font-size:13px}
+.mistake .right::before{content:"✓";position:absolute;left:14px;top:11px;color:var(--green);font-weight:700}
+.mistake b{font-family:var(--mono)}
+
+footer.master{padding:64px 30px;text-align:center;color:var(--fg-dim);font-size:12.5px;border-top:1px solid var(--border);margin-top:20px}
+@media (max-width:900px){
+  .menu-btn{display:flex}
+  aside.sidebar{position:fixed;left:-300px;top:var(--header-h);z-index:60;transition:.25s ease;width:260px;box-shadow:var(--shadow-lg)}
+  aside.sidebar.open{left:0;box-shadow:0 0 0 100vmax rgba(0,0,0,.5)}
+  .wrap{padding:0 16px}
+  section.chapter{padding:36px 16px}
+  .hero{padding:40px 16px}
+  .hero h1{font-size:28px}
+  .wwhh,.grid3{grid-template-columns:1fr}
+}
+@media print{
+  header.top,aside.sidebar,#searchModal,#progress,.fn-btns,.hbtn,.menu-btn{display:none!important}
+  .layout{display:block}
+  main{padding:0}
+  .wrap{max-width:100%;padding:0}
+  body{background:#fff}
+  section.chapter{break-inside:avoid-page;border-bottom:none;box-shadow:none}
+  .card,.code,.qa,.fn,details.acc,.tbl-wrap,.diagram{box-shadow:none}
+  .hero h1{-webkit-text-fill-color:initial;background:none;color:#000}
+  a{color:#000;text-decoration:underline}
+}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<header class="top">
+  <button class="hbtn menu-btn" id="menuBtn">☰</button>
+  <div class="brand">LINUX KERNEL <span>· SoftIRQ Deep Dive · Personal Reference Book</span></div>
+  <div class="spacer"></div>
+  <button class="hbtn" id="searchBtn">🔎 Tìm kiếm <kbd style="opacity:.6">Ctrl K</kbd></button>
+  <button class="hbtn" id="themeBtn">◐ Theme</button>
+</header>
+
+<div id="searchModal">
+  <div class="search-box">
+    <input id="searchInput" placeholder="Tìm function, vector, source path, khái niệm... (vd: __do_softirq, ksoftirqd, NAPI, RCU_SOFTIRQ, starvation)">
+    <div id="searchResults"></div>
+  </div>
+</div>
+
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="sb-group">
+    <div class="sb-title">Tổng quan</div>
+    <a class="sb-link" href="#hero"><span class="sb-num">00</span>Hero &amp; Big Picture</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Nền tảng</div>
+    <a class="sb-link" href="#ch01"><span class="sb-num">01</span>SoftIRQ là gì &amp; Vì sao</a>
+    <a class="sb-link" href="#ch02"><span class="sb-num">02</span>Learning Objectives</a>
+    <a class="sb-link" href="#ch03"><span class="sb-num">03</span>Interrupt Context &amp; preempt_count</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Kiến trúc &amp; Source</div>
+    <a class="sb-link" href="#ch04"><span class="sb-num">04</span>Vectors &amp; Data Structures</a>
+    <a class="sb-link" href="#ch05"><span class="sb-num">05</span>Function Index</a>
+    <a class="sb-link" href="#ch06"><span class="sb-num">06</span>Source Code Map</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Call Flow &amp; Core</div>
+    <a class="sb-link" href="#ch07"><span class="sb-num">07</span>Master Call Flow</a>
+    <a class="sb-link" href="#ch08"><span class="sb-num">08</span>__do_softirq() Deep Dive</a>
+    <a class="sb-link" href="#ch09"><span class="sb-num">09</span>ksoftirqd Deep Dive</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Các cơ chế cụ thể</div>
+    <a class="sb-link" href="#ch10"><span class="sb-num">10</span>Tasklet</a>
+    <a class="sb-link" href="#ch11"><span class="sb-num">11</span>Timer SoftIRQ</a>
+    <a class="sb-link" href="#ch12"><span class="sb-num">12</span>NET_RX_SOFTIRQ / NAPI</a>
+    <a class="sb-link" href="#ch13"><span class="sb-num">13</span>RCU_SOFTIRQ</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Hệ thống</div>
+    <a class="sb-link" href="#ch14"><span class="sb-num">14</span>SMP / Per-CPU / Locking</a>
+    <a class="sb-link" href="#ch15"><span class="sb-num">15</span>So sánh &amp; Starvation/RCU Stall</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Thực hành</div>
+    <a class="sb-link" href="#ch16"><span class="sb-num">16</span>Debugging Playbook</a>
+    <a class="sb-link" href="#ch17"><span class="sb-num">17</span>Scenarios &amp; Common Bugs</a>
+    <a class="sb-link" href="#ch18"><span class="sb-num">18</span>Performance, Tuning &amp; Driver</a>
+    <a class="sb-link" href="#ch19"><span class="sb-num">19</span>Exercises &amp; Common Mistakes</a>
+  </div>
+  <div class="sb-group">
+    <div class="sb-title">Tổng kết</div>
+    <a class="sb-link" href="#ch20"><span class="sb-num">20</span>Checklist, Interview, Glossary, Cheat Sheet</a>
+  </div>
+</aside>
+
+<main>
+<div class="wrap">
+
+<section class="hero" id="hero">
+  <h1>Linux Kernel SoftIRQ Deep Dive</h1>
+  <p class="sub">IRQ → SoftIRQ → Per-CPU Pending → do_softirq → ksoftirqd → Scheduler. Toàn bộ nội dung được grep/read trực tiếp từ kernel THẬT trong repo của bạn — không suy đoán, không bịa line number.</p>
+
+  <div class="badges">
+    <span class="badge">Linux 5.10.241 (verified)</span>
+    <span class="badge">arch/arm64</span>
+    <span class="badge">kernel/softirq.c</span>
+    <span class="badge">include/linux/interrupt.h</span>
+    <span class="badge">net/core/dev.c</span>
+    <span class="badge">kernel/rcu/tree.c</span>
+    <span class="badge">kernel/time/timer.c</span>
+    <span class="badge">NAPI</span>
+    <span class="badge">ksoftirqd</span>
+    <span class="badge">CONFIG_KM_BIZHUB</span>
+  </div>
+
+  <div class="callout info">
+    <b>Nguồn dữ liệu:</b> Toàn bộ function, struct, macro trong tài liệu này được đọc trực tiếp từ
+    <code>C:\Users\PC\Documents\IT6_Kernel\Kernel\K-S800\Src</code>. Xác minh qua <code>Src/Makefile</code>:
+    <code>VERSION=5 PATCHLEVEL=10 SUBLEVEL=241</code>, kiến trúc <code>arch/arm64</code> tồn tại đầy đủ trong cây source
+    → đây là <b>Linux 5.10.241, arm64</b>. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span>
+  </div>
+
+  <div class="callout">
+    <b>Phát hiện đặc thù repo:</b> Macro <code>CONFIG_KM_BIZHUB</code> xuất hiện rải khắp 20+ file kernel
+    (softirq.c, sched/core.c, rcu/tree.c, irq/manage.c, workqueue.c, cpu.c...). Đây là một patch riêng của thiết bị
+    (rất có thể là board điều khiển máy MFP — khớp với tên thư mục làm việc <code>MFP_Study</code>). Riêng trong
+    <code>kernel/softirq.c</code>, patch này chỉnh <code>run_ksoftirqd()</code> để chạy <code>ksoftirqd</code> ở
+    <b>SCHED_RR, priority 256</b> — một thay đổi có ảnh hưởng trực tiếp tới latency/starvation, được phân tích kỹ ở
+    <a href="#ch09">§09</a> và <a href="#ch15">§15</a>. <span class="tag tag-vendor">VENDOR / REPOSITORY-SPECIFIC</span>
+  </div>
+
+  <h3 class="sub" style="margin-top:32px">Trạng thái xác minh</h3>
+  <div class="kv">
+    <b>Kernel Version</b><span><code>5.10.241</code> — <code>Kernel/K-S800/Src/Makefile</code> dòng 2-4</span>
+    <b>Architecture</b><span><code>arm64</code> — <code>arch/arm64</code> tồn tại, entry path đã trace tới <code>arch/arm64/kernel/entry.S</code></span>
+    <b>Source tree</b><span><code>C:\Users\PC\Documents\IT6_Kernel\Kernel\K-S800\Src</code></span>
+    <b>File lõi</b><span><code>kernel/softirq.c</code> (771 dòng, đã đọc toàn bộ)</span>
+    <b>Status</b><span><span class="tag tag-modern">Source Verified</span> mọi function/macro; phần nào không tìm thấy trong cây source này (vd <code>raise_softirq_on()</code>) được đánh dấu <span class="tag tag-removed">KHÔNG TỒN TẠI TRONG SOURCE NÀY</span> rõ ràng.</span>
+  </div>
+
+  <h3 class="sub" style="margin-top:32px">Big Picture — click vào node để nhảy tới section liên quan</h3>
+  <div class="diagram">
+    <div class="flow">
+      <div class="node" onclick="jump('ch07')">HARDWARE — thiết bị phát tín hiệu ngắt</div>
+      <div class="arrow">↓ GIC → arch/arm64/kernel/entry.S (el1_irq)</div>
+      <div class="node" onclick="jump('ch07')">HARD IRQ HANDLER — __handle_domain_irq() → irq_enter()</div>
+      <div class="arrow">↓ ISR gọi raise_softirq()/raise_softirq_irqoff()</div>
+      <div class="node" onclick="jump('ch05')">PER-CPU PENDING BIT — irq_stat.__softirq_pending</div>
+      <div class="arrow">↓ irq_exit() → invoke_softirq()</div>
+      <div class="branch">
+        <div class="col"><div class="node" onclick="jump('ch08')">__do_softirq()<br><span class="tagline">trực tiếp trên stack hiện tại</span></div></div>
+        <div class="col"><div class="node" onclick="jump('ch09')">wakeup_softirqd()<br><span class="tagline">ksoftirqd/N chạy sau qua scheduler</span></div></div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="node">SOFTIRQ VECTOR — softirq_vec[nr].action(h)</div>
+      <div class="branch">
+        <div class="col"><div class="node" onclick="jump('ch11')">TIMER</div></div>
+        <div class="col"><div class="node" onclick="jump('ch12')">NET_RX (NAPI)</div></div>
+        <div class="col"><div class="node" onclick="jump('ch10')">TASKLET</div></div>
+        <div class="col"><div class="node" onclick="jump('ch13')">RCU</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="lead">Sơ đồ đầy đủ hơn (call graph nhánh từng hàm, kèm dòng ARM64 entry.S thật) nằm ở <a href="#ch07">§07 Master Call Flow</a>.</p>
+</section>
+
+<!-- ================= 01 SOFTIRQ LÀ GÌ & VÌ SAO ================= -->
+<section class="chapter" id="ch01">
+  <h2><span class="chno">01</span>SoftIRQ là gì &amp; Vì sao Linux cần nó</h2>
+  <p class="lead">Concept → Why → Kernel Design. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Vấn đề mà SoftIRQ giải quyết</h3>
+  <p>Khi một thiết bị phần cứng phát tín hiệu ngắt (IRQ), CPU nhảy vào <b>hard IRQ handler</b> — chạy trong <b>interrupt context</b>, với hard IRQ hiện tại bị mask trên CPU đó (tuỳ kiến trúc). Nếu handler này làm <i>toàn bộ</i> công việc thực sự (parse packet, chạy timer callback, xử lý RCU callback...) ngay tại đó, hệ quả là:</p>
+  <div class="wwhh">
+    <div class="box"><span class="tag">RỦI RO 1</span>Ngắt khác bị trễ/miss vì CPU đang bận trong ISR quá lâu.</div>
+    <div class="box"><span class="tag">RỦI RO 2</span>Interrupt context không được sleep → không thể gọi bất cứ API có thể block (mutex_lock, kmalloc GFP_KERNEL...).</div>
+    <div class="box"><span class="tag">RỦI RO 3</span>Latency toàn hệ thống tăng vì mọi tác vụ khác phải chờ ISR xong.</div>
+    <div class="box"><span class="tag">GIẢI PHÁP</span><b>Deferred (bottom-half) processing</b>: ISR chỉ làm tối thiểu (ack hardware, lưu dữ liệu), phần còn lại defer ra ngoài, chạy sau với ít ràng buộc hơn.</div>
+  </div>
+  <p><b>SoftIRQ</b> là một trong các cơ chế "bottom half" đó trong Linux — cùng với Tasklet (dựng trên SoftIRQ) và Workqueue (chạy trong process context, có thể sleep). Định nghĩa theo comment gốc trong <code>kernel/softirq.c</code> dòng 33-49:</p>
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 33-49 (comment gốc của tác giả)</span><button class="copy">Copy</button></div>
+    <pre>   - No shared variables, all the data are CPU local.
+   - If a softirq needs serialization, let it serialize itself
+     by its own spinlocks.
+   - Even if softirq is serialized, only local cpu is marked for
+     execution. Hence, we get something sort of weak cpu binding.
+     Though it is still not clear, will it result in better locality
+     or will not.
+
+   Examples:
+   - NET RX softirq. It is multithreaded and does not require
+     any global serialization.
+   - NET TX softirq. It kicks software netdevice queues, hence
+     it is logically serialized per device, but this serialization
+     is invisible to common code.
+   - Tasklets: serialized wrt itself.</pre>
+  </div>
+  <p>Điểm mấu chốt: SoftIRQ được thiết kế <b>per-CPU, không share state toàn cục</b> — mỗi CPU có bitmap pending riêng, tự quyết định chạy vector nào, không cần lock toàn cục để biết "ai đang pending". Đây là lý do hiệu năng SoftIRQ tốt hơn nhiều so với việc dùng một global queue.</p>
+
+  <h3 class="sub">SoftIRQ khác Hard IRQ và Process Context như thế nào?</h3>
+  <div class="tbl-wrap">
+    <table>
+      <caption>Nguồn: <code>include/linux/preempt.h</code> (macro <code>in_irq/in_softirq/in_interrupt</code>) + hành vi chuẩn của kernel — <span class="tag tag-kernel">VERIFIED</span></caption>
+      <thead><tr><th>Context</th><th>Sleep?</th><th>Preempt?</th><th>Typical Use</th></tr></thead>
+      <tbody>
+        <tr><td>Hard IRQ (ISR)</td><td>Không — tuyệt đối không được gọi API có thể block</td><td>Không thể bị preempt bởi task thường; chỉ bị ngắt bởi IRQ có priority cao hơn (tuỳ kiến trúc)</td><td>Ack hardware, đọc/ghi register tối thiểu, raise_softirq()</td></tr>
+        <tr><td>SoftIRQ (chạy trực tiếp qua <code>__do_softirq()</code>)</td><td>Không — đang chạy với <code>SOFTIRQ_OFFSET</code> cộng vào <code>preempt_count</code></td><td>Không bị preempt bởi task thường trên cùng CPU (softirq_count() != 0), nhưng hard IRQ vẫn có thể ngắt vào giữa</td><td>net_rx_action, run_timer_softirq, tasklet_action, rcu_core_si</td></tr>
+        <tr><td>ksoftirqd/N (kernel thread)</td><td>Có (đây <i>là</i> process context) — nhưng khi đang thực thi <code>__do_softirq()</code> bên trong <code>run_ksoftirqd()</code>, chính đoạn đó vẫn là "softirq context" theo <code>preempt_count</code></td><td>Có thể bị scheduler preempt như một task thường (SCHED_OTHER, hoặc SCHED_RR nếu patch <code>CONFIG_KM_BIZHUB</code> — xem <a href="#ch09">§09</a>)</td><td>Chạy các softirq bị defer khi <code>__do_softirq()</code> vượt time/restart limit</td></tr>
+        <tr><td>Process context (task thường)</td><td>Có</td><td>Có, đầy đủ</td><td>Syscall, kernel thread thông thường, code gọi <code>local_bh_enable()</code> để tự chạy pending softirq nếu cần</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub">Vị trí SoftIRQ trong kiến trúc kernel</h3>
+  <div class="diagram">
+    <div class="flow">
+      <div class="node">Hardware Interrupt</div>
+      <div class="arrow">↓</div>
+      <div class="node">Hard IRQ Handler (arch-specific ISR)</div>
+      <div class="arrow">↓ raise_softirq() / raise_softirq_irqoff()</div>
+      <div class="node" style="border-color:var(--accent);color:var(--accent)">SoftIRQ (kernel/softirq.c) — deferred, atomic context</div>
+      <div class="arrow">↓ nếu quá tải</div>
+      <div class="node">Tasklet (dựng trên TASKLET_SOFTIRQ/HI_SOFTIRQ)</div>
+      <div class="arrow">↓ nếu cần sleep</div>
+      <div class="node">Workqueue (kernel/workqueue.c) — process context, có thể sleep</div>
+    </div>
+  </div>
+  <p>SoftIRQ nằm <i>giữa</i> hard IRQ (nhanh nhất, hạn chế nhất) và Workqueue (chậm nhất, tự do nhất). Nó được chọn khi công việc cần <b>nhanh, không sleep, nhưng không cần chạy ngay trong ISR</b> — networking RX/TX, timer expiry, RCU callback là các ví dụ kinh điển, và chính là 3 trong 10 vector thật của kernel này (xem <a href="#ch04">§04</a>).</p>
+</section>
+
+<!-- ================= 02 LEARNING OBJECTIVES ================= -->
+<section class="chapter" id="ch02">
+  <h2><span class="chno">02</span>Learning Objectives</h2>
+  <p class="lead">Checklist lưu tiến độ vào <code>localStorage</code> của trình duyệt — tick xong sẽ không mất khi đóng file.</p>
+  <div id="checkProgress2" style="font-size:12.5px;color:var(--fg-dim);margin-bottom:10px"></div>
+  <ul class="check-list" id="objList"></ul>
+</section>
+
+<!-- ================= 03 INTERRUPT CONTEXT & PREEMPT_COUNT ================= -->
+<section class="chapter" id="ch03">
+  <h2><span class="chno">03</span>Interrupt Context &amp; <code>preempt_count</code></h2>
+  <p class="lead">Nguồn: <code>include/linux/preempt.h</code> — đọc trực tiếp, không suy đoán bit layout. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">preempt_count bit layout (thực tế trong source)</h3>
+  <div class="code">
+    <div class="file"><span>include/linux/preempt.h — dòng 32-54</span><button class="copy">Copy</button></div>
+    <pre>#define PREEMPT_BITS	8
+#define SOFTIRQ_BITS	8
+#define HARDIRQ_BITS	4
+#define NMI_BITS	4
+
+#define SOFTIRQ_SHIFT	(PREEMPT_SHIFT + PREEMPT_BITS)
+#define HARDIRQ_SHIFT	(SOFTIRQ_SHIFT + SOFTIRQ_BITS)
+#define NMI_SHIFT	(HARDIRQ_SHIFT + HARDIRQ_BITS)
+
+#define PREEMPT_MASK	(__IRQ_MASK(PREEMPT_BITS) &lt;&lt; PREEMPT_SHIFT)
+#define SOFTIRQ_MASK	(__IRQ_MASK(SOFTIRQ_BITS) &lt;&lt; SOFTIRQ_SHIFT)
+#define HARDIRQ_MASK	(__IRQ_MASK(HARDIRQ_BITS) &lt;&lt; HARDIRQ_SHIFT)
+#define NMI_MASK	(__IRQ_MASK(NMI_BITS)     &lt;&lt; NMI_SHIFT)
+
+#define SOFTIRQ_OFFSET	(1UL &lt;&lt; SOFTIRQ_SHIFT)
+#define HARDIRQ_OFFSET	(1UL &lt;&lt; HARDIRQ_SHIFT)
+
+#define SOFTIRQ_DISABLE_OFFSET	(2 * SOFTIRQ_OFFSET)</pre>
+  </div>
+  <div class="diagram">
+    <div class="flow" style="flex-direction:row;flex-wrap:wrap">
+      <div class="node" style="min-width:90px">NMI<br><span class="tagline">4 bit</span></div>
+      <div class="node" style="min-width:90px">HARDIRQ<br><span class="tagline">4 bit</span></div>
+      <div class="node" style="min-width:120px">SOFTIRQ<br><span class="tagline">8 bit — đếm được cả "disabled" (x2 offset) và "đang serving" (x1 offset)</span></div>
+      <div class="node" style="min-width:120px">PREEMPT<br><span class="tagline">8 bit — đếm số lần preempt_disable()</span></div>
+    </div>
+  </div>
+  <p><b>Chi tiết quan trọng ít người để ý:</b> SOFTIRQ dùng <code>SOFTIRQ_OFFSET</code> khi đang <i>thực sự chạy</i> một softirq handler (trong <code>__do_softirq()</code>), nhưng dùng <code>SOFTIRQ_DISABLE_OFFSET = 2×SOFTIRQ_OFFSET</code> khi chỉ <i>disable bottom-half</i> bằng <code>local_bh_disable()</code>. Nhờ vậy <code>in_serving_softirq()</code> (chỉ true khi cộng đúng 1×offset, tức đang thật sự trong handler) khác với <code>in_softirq()</code>/<code>softirq_count()</code> (true cả hai trường hợp).</p>
+
+  <h3 class="sub">Macro phát hiện context</h3>
+  <div class="code">
+    <div class="file"><span>include/linux/preempt.h — dòng 80-104</span><button class="copy">Copy</button></div>
+    <pre>#define hardirq_count()	(preempt_count() &amp; HARDIRQ_MASK)
+#define softirq_count()	(preempt_count() &amp; SOFTIRQ_MASK)
+#define irq_count()	(preempt_count() &amp; (HARDIRQ_MASK | SOFTIRQ_MASK | NMI_MASK))
+
+/*
+ * in_irq()       - We're in (hard) IRQ context
+ * in_softirq()   - We have BH disabled, or are processing softirqs
+ * in_interrupt() - We're in NMI,IRQ,SoftIRQ context or have BH disabled
+ * in_serving_softirq() - We're in softirq context
+ * in_nmi()       - We're in NMI context
+ * in_task()	  - We're in task context
+ *
+ * Note: due to the BH disabled confusion: in_softirq(),in_interrupt() really
+ *       should not be used in new code.
+ */
+#define in_irq()		(hardirq_count())
+#define in_softirq()		(softirq_count())
+#define in_interrupt()		(irq_count())
+#define in_serving_softirq()	(softirq_count() &amp; SOFTIRQ_OFFSET)
+#define in_nmi()		(preempt_count() &amp; NMI_MASK)
+#define in_task()		(!(preempt_count() &amp; \
+				   (NMI_MASK | HARDIRQ_MASK | SOFTIRQ_OFFSET)))</pre>
+  </div>
+  <div class="warn"><b>Cảnh báo trong chính source:</b> comment ghi rõ <code>in_softirq()</code> và <code>in_interrupt()</code> "really should not be used in new code" — vì chúng cũng trả true khi chỉ đơn giản đang <code>local_bh_disable()</code>, không hề chạy trong softirq handler thật. Muốn biết "đang thực thi trong một softirq handler hay không" phải dùng <code>in_serving_softirq()</code>.</div>
+
+  <h3 class="sub">Context nào được phép làm gì?</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Context</th><th>sleep / mutex_lock?</th><th>spinlock thường?</th><th>schedule()?</th></tr></thead>
+      <tbody>
+        <tr><td>Hard IRQ</td><td>Không</td><td>Có (nhưng không dùng lock cũng bị lock ở process context nếu không có <code>_irqsave</code> tương ứng → deadlock)</td><td>Không</td></tr>
+        <tr><td>SoftIRQ</td><td>Không</td><td>Có, cần cẩn thận với softirq khác cùng loại chạy song song trên CPU khác</td><td>Không (đang atomic)</td></tr>
+        <tr><td>ksoftirqd (ngoài đoạn gọi __do_softirq)</td><td>Có</td><td>Có</td><td>Có — <code>run_ksoftirqd()</code> tự gọi <code>cond_resched()</code></td></tr>
+        <tr><td>Process context</td><td>Có</td><td>Có</td><td>Có</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 04 VECTORS & DATA STRUCTURES ================= -->
+<section class="chapter" id="ch04">
+  <h2><span class="chno">04</span>SoftIRQ Vectors &amp; Data Structures</h2>
+  <p class="lead">Nguồn: <code>include/linux/interrupt.h</code>, <code>kernel/softirq.c</code>. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Enum vector — thứ tự này quyết định độ ưu tiên (số nhỏ chạy trước)</h3>
+  <div class="code">
+    <div class="file"><span>include/linux/interrupt.h — dòng 532-546</span><button class="copy">Copy</button></div>
+    <pre>enum
+{
+	HI_SOFTIRQ=0,
+	TIMER_SOFTIRQ,
+	NET_TX_SOFTIRQ,
+	NET_RX_SOFTIRQ,
+	BLOCK_SOFTIRQ,
+	IRQ_POLL_SOFTIRQ,
+	TASKLET_SOFTIRQ,
+	SCHED_SOFTIRQ,
+	HRTIMER_SOFTIRQ,
+	RCU_SOFTIRQ,    /* Preferable RCU should always be the last softirq */
+
+	NR_SOFTIRQS
+};
+
+#define SOFTIRQ_STOP_IDLE_MASK (~(1 &lt;&lt; RCU_SOFTIRQ))</pre>
+  </div>
+  <p>Comment gốc <code>"Preferable RCU should always be the last softirq"</code> — lý do: <code>rcu_softirq_qs()</code> được gọi ngay sau loop dispatch trong <code>__do_softirq()</code> (xem <a href="#ch08">§08</a>), và các softirq khác nên coi như đã hoàn thành trước khi RCU ghi nhận quiescent state cho CPU đó.</p>
+
+  <h3 class="sub">Bảng vector đầy đủ (điền từ <code>softirq_to_name[]</code> + nơi <code>open_softirq()</code> được gọi thật)</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Vector</th><th>Tên (softirq_to_name)</th><th>Handler thật</th><th>Raise bởi</th><th>File đăng ký</th></tr></thead>
+      <tbody>
+        <tr><td><code>HI_SOFTIRQ</code></td><td>HI</td><td><code>tasklet_hi_action()</code></td><td><code>__tasklet_hi_schedule()</code></td><td><code>kernel/softirq.c:638</code></td></tr>
+        <tr><td><code>TIMER_SOFTIRQ</code></td><td>TIMER</td><td><code>run_timer_softirq()</code></td><td><code>run_local_timers()</code> → <code>raise_softirq(TIMER_SOFTIRQ)</code></td><td><code>kernel/time/timer.c:2050</code></td></tr>
+        <tr><td><code>NET_TX_SOFTIRQ</code></td><td>NET_TX</td><td><code>net_tx_action()</code></td><td><code>netif_schedule_queue()</code>/qdisc</td><td><code>net/core/dev.c:11382</code></td></tr>
+        <tr><td><code>NET_RX_SOFTIRQ</code></td><td>NET_RX</td><td><code>net_rx_action()</code></td><td><code>____napi_schedule()</code>/<code>__napi_schedule()</code></td><td><code>net/core/dev.c:11383</code></td></tr>
+        <tr><td><code>BLOCK_SOFTIRQ</code></td><td>BLOCK</td><td class="tag tag-unverified">Chưa grep trong tài liệu này</td><td>Block layer completion</td><td>block/*</td></tr>
+        <tr><td><code>IRQ_POLL_SOFTIRQ</code></td><td>IRQ_POLL</td><td class="tag tag-unverified">Chưa grep trong tài liệu này</td><td>lib/irq_poll.c</td><td>lib/irq_poll.c</td></tr>
+        <tr><td><code>TASKLET_SOFTIRQ</code></td><td>TASKLET</td><td><code>tasklet_action()</code></td><td><code>__tasklet_schedule()</code></td><td><code>kernel/softirq.c:637</code></td></tr>
+        <tr><td><code>SCHED_SOFTIRQ</code></td><td>SCHED</td><td class="tag tag-unverified">Chưa grep trong tài liệu này (thường là <code>run_rebalance_domains()</code> trong <code>kernel/sched/fair.c</code>)</td><td>scheduler load-balance tick</td><td>kernel/sched/fair.c</td></tr>
+        <tr><td><code>HRTIMER_SOFTIRQ</code></td><td>HRTIMER</td><td class="tag tag-unverified">Chưa grep trong tài liệu này</td><td>high-res timer expiry (soft mode)</td><td>kernel/time/hrtimer.c</td></tr>
+        <tr><td><code>RCU_SOFTIRQ</code></td><td>RCU</td><td><code>rcu_core_si()</code> → <code>rcu_core()</code></td><td><code>invoke_rcu_core()</code> → <code>raise_softirq(RCU_SOFTIRQ)</code></td><td><code>kernel/rcu/tree.c:4640</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">4 vector <span class="tag tag-modern">grep-verified đầy đủ call chain</span> (TIMER, NET_TX, NET_RX, RCU, TASKLET, HI) là trọng tâm của tài liệu này (§10-§13). Các vector còn lại (BLOCK, IRQ_POLL, SCHED, HRTIMER) được liệt kê đúng theo enum thật nhưng <b>chưa</b> được đọc source chi tiết trong lần nghiên cứu này — đánh dấu <span class="tag tag-unverified">UNVERIFIED</span> để không bịa thông tin.</div>
+
+  <h3 class="sub">Cấu trúc lưu trữ vector — <code>softirq_vec[]</code></h3>
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 56 &amp; include/linux/interrupt.h dòng 559-562</span><button class="copy">Copy</button></div>
+    <pre>// include/linux/interrupt.h
+struct softirq_action
+{
+	void	(*action)(struct softirq_action *);
+};
+
+// kernel/softirq.c
+static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;</pre>
+  </div>
+  <p><code>softirq_vec[]</code> là <b>global, static, dùng chung cho mọi CPU</b> — nhưng nó chỉ chứa con trỏ hàm (được set 1 lần lúc init qua <code>open_softirq()</code>), không chứa state runtime. Vì handler function không đổi sau khi boot, không cần lock để đọc nó. State runtime (pending bit) mới là thứ per-CPU thật (xem mục dưới).</p>
+
+  <h3 class="sub">Per-CPU pending state — <code>irq_cpustat_t</code></h3>
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 51-53, 504-514</span><button class="copy">Copy</button></div>
+    <pre>#ifndef __ARCH_IRQ_STAT
+DEFINE_PER_CPU_ALIGNED(irq_cpustat_t, irq_stat);
+EXPORT_PER_CPU_SYMBOL(irq_stat);
+#endif
+
+// include/linux/interrupt.h
+#ifndef local_softirq_pending_ref
+#define local_softirq_pending_ref irq_stat.__softirq_pending
+#endif
+
+#define local_softirq_pending()	(__this_cpu_read(local_softirq_pending_ref))
+#define set_softirq_pending(x)	(__this_cpu_write(local_softirq_pending_ref, (x)))
+#define or_softirq_pending(x)	(__this_cpu_or(local_softirq_pending_ref, (x)))</pre>
+  </div>
+  <p><code>__softirq_pending</code> là một <b>bitmap 32-bit</b> (mỗi bit ứng với 1 vector trong enum ở trên), lưu trong <code>irq_cpustat_t</code> — biến này được khai báo <code>DEFINE_PER_CPU_ALIGNED</code>, nghĩa là <b>mỗi CPU có bản riêng</b>, truy cập qua <code>__this_cpu_*</code> (không cần atomic op liên-CPU vì luôn chỉ CPU sở hữu đọc/ghi bitmap của chính nó — kể cả khi set bit từ ISR chạy trên CPU đó).</p>
+  <div class="diagram">
+    <div class="flow" style="flex-direction:row;gap:24px">
+      <div class="node">CPU0<br><span class="tagline">irq_stat[0].__softirq_pending = 0b00000110<br>(TIMER + NET_TX)</span></div>
+      <div class="node">CPU1<br><span class="tagline">irq_stat[1].__softirq_pending = 0b00000001<br>(HI)</span></div>
+    </div>
+  </div>
+  <p><b>Vì sao per-CPU?</b> Tránh hoàn toàn lock/atomic-op liên-CPU cho việc "ai đang có softirq chờ xử lý" — mỗi CPU tự quản lý bitmap của mình. Trade-off: một SoftIRQ raise trên CPU0 sẽ luôn được CPU0 xử lý (không tự động chuyển sang CPU khác) — không có cơ chế "remote raise" trong kernel này (xem ghi chú <a href="#ch14">§14</a>).</p>
+
+  <h3 class="sub">Tasklet struct</h3>
+  <div class="code">
+    <div class="file"><span>include/linux/interrupt.h — dòng 613-624</span><button class="copy">Copy</button></div>
+    <pre>struct tasklet_struct
+{
+	struct tasklet_struct *next;
+	unsigned long state;
+	atomic_t count;
+	bool use_callback;
+	union {
+		void (*func)(unsigned long data);
+		void (*callback)(struct tasklet_struct *t);
+	};
+	unsigned long data;
+};</pre>
+  </div>
+  <p>Ghi chú version-specific: kernel này đã có <code>use_callback</code>/<code>callback(struct tasklet_struct *t)</code> — API mới (<code>tasklet_setup()</code>) song song với API cũ (<code>tasklet_init()</code> dùng <code>func(unsigned long data)</code>). Đây là quá trình chuyển đổi API tasklet đang diễn ra trong dòng 5.10.x. <span class="tag tag-changed">VERSION-SPECIFIC</span></p>
+</section>
+
+<!-- ================= 05 FUNCTION INDEX ================= -->
+<section class="chapter" id="ch05">
+  <h2><span class="chno">05</span>Function Index</h2>
+  <p class="lead">Mỗi function: File / Line / Caller / Context / Có thể sleep? / Chi tiết quan trọng — không điền nếu chưa grep. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+  <input id="fnFilter" placeholder="Lọc theo tên hàm...">
+  <div class="tbl-wrap">
+    <table id="fnTable">
+      <thead><tr><th>Function</th><th>File:Line</th><th>Caller chính</th><th>Context</th><th>Sleep?</th><th>Chi tiết</th></tr></thead>
+      <tbody>
+        <tr><td><code>raise_softirq()</code></td><td>kernel/softirq.c:474</td><td>Driver/subsystem code muốn defer work, IRQ-safe path bất kỳ</td><td>Bất kỳ (tự <code>local_irq_save</code>)</td><td>Không</td><td>Wrapper an toàn của <code>raise_softirq_irqoff()</code>, tự lo việc disable/restore IRQ.</td></tr>
+        <tr><td><code>raise_softirq_irqoff()</code></td><td>kernel/softirq.c:457</td><td><code>raise_softirq()</code>, code đã tự disable IRQ từ trước (tasklet, timer, RCU, NAPI)</td><td>IRQ phải đã disabled khi gọi</td><td>Không</td><td>Set pending bit rồi gọi <code>wakeup_softirqd()</code> <b>chỉ nếu</b> <code>!in_interrupt()</code> — nếu đang trong IRQ/softirq thì để tự xử lý khi return.</td></tr>
+        <tr><td><code>__raise_softirq_irqoff()</code></td><td>kernel/softirq.c:483</td><td><code>raise_softirq_irqoff()</code>, <code>tasklet_action_common()</code>, <code>net_rx_action()</code>, <code>____napi_schedule()</code></td><td>IRQ disabled</td><td>Không</td><td>Chỉ set bit (<code>or_softirq_pending</code>) + trace, KHÔNG gọi wakeup — dùng khi caller tự biết bối cảnh (đang trong softirq context nên không cần đánh thức).</td></tr>
+        <tr><td><code>open_softirq()</code></td><td>kernel/softirq.c:490</td><td><code>softirq_init()</code>, <code>net_dev_init()</code>, <code>rcu_init()</code>, timer init — toàn bộ tại boot-time</td><td>Init context (boot)</td><td>N/A</td><td>Chỉ gán con trỏ <code>softirq_vec[nr].action = action</code>. Không có locking vì chạy 1 lần lúc init, trước khi có CPU khác chạm vào.</td></tr>
+        <tr><td><code>do_softirq()</code></td><td>kernel/softirq.c:331</td><td><code>__local_bh_enable_ip()</code> khi phát hiện pending, code cũ dùng <code>__ARCH_HAS_DO_SOFTIRQ</code></td><td>Không được gọi khi <code>in_interrupt()</code> — hàm tự return sớm nếu đang trong interrupt</td><td>Không (bản thân không sleep, chỉ dispatch)</td><td>Guard: nếu <code>ksoftirqd_running(pending)</code> thì KHÔNG tự chạy — để ksoftirqd lo, tránh chạy trùng 2 nơi.</td></tr>
+        <tr><td><code>__do_softirq()</code></td><td>kernel/softirq.c:256</td><td><code>invoke_softirq()</code>, <code>do_softirq_own_stack()</code>, <code>run_ksoftirqd()</code></td><td>Softirq context (tự cộng <code>SOFTIRQ_OFFSET</code> vào preempt_count)</td><td>Không</td><td><b>Hàm lõi nhất của toàn subsystem</b> — phân tích chi tiết từng bước ở <a href="#ch08">§08</a>.</td></tr>
+        <tr><td><code>irq_enter()</code> / <code>irq_enter_rcu()</code></td><td>kernel/softirq.c:369 / 352</td><td>Arch-specific IRQ entry (ARM64: <code>__handle_domain_irq()</code>)</td><td>Đang chuyển từ context bị ngắt vào hard IRQ context</td><td>Không</td><td>Nếu CPU đang idle, chủ động <code>local_bh_disable()</code>/<code>local_bh_enable()</code> quanh <code>tick_irq_enter()</code> để tránh <code>raise_softirq</code> gọi nhầm <code>wakeup_softirqd()</code> lúc này.</td></tr>
+        <tr><td><code>irq_exit()</code> / <code>irq_exit_rcu()</code></td><td>kernel/softirq.c:446 / 434</td><td>Arch-specific IRQ exit (ARM64: <code>__handle_domain_irq()</code>)</td><td>Cuối hard IRQ, trước khi return</td><td>Không</td><td>Trừ <code>HARDIRQ_OFFSET</code>, rồi nếu <code>!in_interrupt() &amp;&amp; local_softirq_pending()</code> → gọi <code>invoke_softirq()</code>.</td></tr>
+        <tr><td><code>invoke_softirq()</code></td><td>kernel/softirq.c:375</td><td><code>__irq_exit_rcu()</code></td><td>Cuối hard IRQ path</td><td>Không</td><td>3 nhánh: nếu ksoftirqd đang chạy → bỏ qua (để nó tự lo); nếu không <code>force_irqthreads</code> → chạy <code>__do_softirq()</code>/<code>do_softirq_own_stack()</code> ngay; nếu <code>force_irqthreads</code> (threadirqs) → <code>wakeup_softirqd()</code>.</td></tr>
+        <tr><td><code>wakeup_softirqd()</code></td><td>kernel/softirq.c:71</td><td><code>raise_softirq_irqoff()</code>, <code>__do_softirq()</code> (khi hết time/restart limit), <code>invoke_softirq()</code></td><td>IRQ disabled</td><td>Không (chỉ <code>wake_up_process()</code>)</td><td>Chỉ đánh thức nếu <code>tsk->state != TASK_RUNNING</code> — tránh wake_up thừa.</td></tr>
+        <tr><td><code>ksoftirqd_should_run()</code></td><td>kernel/softirq.c:641</td><td><code>smpboot</code> framework (callback <code>thread_should_run</code>)</td><td>Gọi bởi smpboot loop trước khi cho <code>run_ksoftirqd()</code> chạy</td><td>N/A</td><td>Chỉ là <code>return local_softirq_pending();</code> — smpboot thread framework tự parkkhi không có gì pending.</td></tr>
+        <tr><td><code>run_ksoftirqd()</code></td><td>kernel/softirq.c:646</td><td><code>smpboot</code> framework (callback <code>thread_fn</code>) — đây chính là "thân" của <code>ksoftirqd/N</code></td><td>Process context (kernel thread), tự disable/enable IRQ quanh việc gọi <code>__do_softirq()</code></td><td>Có (gọi <code>cond_resched()</code> ở cuối)</td><td><span class="tag tag-vendor">Patch <code>CONFIG_KM_BIZHUB</code></span> chỉnh sched policy thành <code>SCHED_RR</code>, priority 256 trước khi vào loop — xem <a href="#ch09">§09</a>.</td></tr>
+        <tr><td><code>local_bh_disable()</code></td><td>include/linux/bottom_half.h:18-20 (inline) → <code>__local_bh_disable_ip()</code> kernel/softirq.c:117</td><td>Networking code, bất kỳ nơi cần tạm chặn softirq chạy trên CPU hiện tại</td><td>Bất kỳ, không disable hard IRQ</td><td>Không</td><td>Cộng <code>SOFTIRQ_DISABLE_OFFSET</code> (=2×offset) vào preempt_count — <b>không</b> chạy pending softirq ngay, chỉ ngăn chúng chạy trên CPU này.</td></tr>
+        <tr><td><code>local_bh_enable()</code> (qua <code>__local_bh_enable_ip()</code>)</td><td>kernel/softirq.c:173</td><td>Cặp với <code>local_bh_disable()</code></td><td>Bất kỳ</td><td>Có thể — nếu phát hiện <code>!in_interrupt() &amp;&amp; local_softirq_pending()</code>, nó tự gọi <code>do_softirq()</code> ngay tại đây trước khi trả preempt_count về 0.</td><td>Đây là lý do networking code hay dùng cặp <code>local_bh_disable()</code>/<code>local_bh_enable()</code> quanh spinlock: đảm bảo pending softirq không "chen ngang" giữa critical section, nhưng vẫn được xử lý ngay khi thoát ra.</td></tr>
+        <tr><td><code>__tasklet_schedule()</code> / <code>__tasklet_hi_schedule()</code></td><td>kernel/softirq.c:522 / 529</td><td><code>tasklet_schedule()</code> / <code>tasklet_hi_schedule()</code> (inline, check <code>TASKLET_STATE_SCHED</code> trước)</td><td>Bất kỳ</td><td>Không</td><td>Đẩy tasklet vào per-CPU linked list (<code>tasklet_vec</code>/<code>tasklet_hi_vec</code>) rồi <code>raise_softirq_irqoff()</code>.</td></tr>
+        <tr><td><code>tasklet_action()</code> / <code>tasklet_hi_action()</code></td><td>kernel/softirq.c:577 / 582</td><td><code>softirq_vec[TASKLET_SOFTIRQ].action</code> / <code>softirq_vec[HI_SOFTIRQ].action</code></td><td>Softirq context</td><td>Không</td><td>Gọi chung <code>tasklet_action_common()</code> — chi tiết ở <a href="#ch10">§10</a>.</td></tr>
+        <tr><td><code>net_rx_action()</code></td><td>net/core/dev.c:6938</td><td><code>softirq_vec[NET_RX_SOFTIRQ].action</code></td><td>Softirq context</td><td>Không</td><td>Vòng lặp poll NAPI với <code>netdev_budget</code>/<code>netdev_budget_usecs</code> — chi tiết <a href="#ch12">§12</a>.</td></tr>
+        <tr><td><code>____napi_schedule()</code></td><td>net/core/dev.c:4328</td><td><code>napi_schedule_prep()</code> callers, <code>netif_rx()</code></td><td>"Called with irq disabled" (comment gốc)</td><td>Không</td><td>Đẩy napi vào <code>sd-&gt;poll_list</code> rồi <code>__raise_softirq_irqoff(NET_RX_SOFTIRQ)</code>.</td></tr>
+        <tr><td><code>rcu_core_si()</code> / <code>rcu_core()</code></td><td>kernel/rcu/tree.c:2783</td><td><code>softirq_vec[RCU_SOFTIRQ].action</code></td><td>Softirq context</td><td>Không</td><td>Chỉ là wrapper: <code>rcu_core_si()</code> gọi <code>rcu_core()</code>. Chi tiết GP vs callback ở <a href="#ch13">§13</a>.</td></tr>
+        <tr><td><code>invoke_rcu_core()</code></td><td>kernel/rcu/tree.c:2814</td><td><code>rcu_sched_clock_irq()</code> và các điểm RCU khác cần đảm bảo callback được xử lý</td><td>Bất kỳ</td><td>Không</td><td>Rẽ nhánh: nếu <code>use_softirq</code> → <code>raise_softirq(RCU_SOFTIRQ)</code>; nếu không (RCU threaded mode) → <code>invoke_rcu_core_kthread()</code>.</td></tr>
+        <tr><td><code>run_local_timers()</code></td><td>kernel/time/timer.c:1804</td><td><code>update_process_times()</code> (tick handler)</td><td>Tick/timer interrupt context</td><td>Không</td><td>Gọi <code>hrtimer_run_queues()</code> rồi <code>raise_softirq(TIMER_SOFTIRQ)</code> — không tự chạy timer callback tại đây.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 06 SOURCE CODE MAP ================= -->
+<section class="chapter" id="ch06">
+  <h2><span class="chno">06</span>Source Code Map</h2>
+  <p class="lead">Cây file thật trong <code>Kernel/K-S800/Src</code> liên quan tới SoftIRQ, kèm vai trò. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+  <div class="code">
+    <div class="file"><span>Linux Kernel Source Map — Kernel/K-S800/Src</span><button class="copy">Copy</button></div>
+    <pre>kernel/
+├── softirq.c            core: raise/pending/dispatch/__do_softirq/irq_enter/irq_exit/ksoftirqd/tasklet
+├── irq/
+│   └── irqdesc.c         __handle_domain_irq() — nơi thật sự gọi irq_enter()/irq_exit() (dòng 678, 696)
+├── sched/
+│   └── core.c            scheduler_tick(), wake_up_process() (ksoftirqd được đánh thức qua đây)
+├── time/
+│   └── timer.c           update_process_times(), run_local_timers(), run_timer_softirq()
+└── rcu/
+    ├── tree.c             rcu_core(), rcu_core_si(), invoke_rcu_core(), rcu_sched_clock_irq()
+    └── tree_plugin.h       RCU-preempt / nocb helper (2617 dòng, liên quan callback offload)
+
+include/linux/
+├── interrupt.h           enum vector, struct softirq_action, struct tasklet_struct, open_softirq()...
+├── preempt.h              preempt_count bit layout, in_irq/in_softirq/in_interrupt macro
+├── bottom_half.h          local_bh_disable()/local_bh_enable() inline wrapper
+└── percpu.h               DEFINE_PER_CPU, __this_cpu_* (nền tảng của per-CPU pending bitmap)
+
+net/core/
+└── dev.c (11393 dòng)     ____napi_schedule(), __napi_schedule(), napi_poll(), net_rx_action(),
+                            netdev_budget/netdev_budget_usecs, net_dev_init() (open_softirq NET_TX/NET_RX)
+
+fs/proc/
+└── softirqs.c (33 dòng)   show_softirqs() — nguồn thật của /proc/softirqs
+
+include/trace/events/
+└── irq.h                  TRACE_EVENT softirq_entry/softirq_exit/softirq_raise (DEFINE_EVENT(softirq,...))
+
+arch/arm64/kernel/
+├── entry.S                el1_irq/el0_irq vector, macro irq_handler → blr handle_arch_irq
+└── entry-common.c         enter_el1_irq_or_nmi(), rcu_irq_enter/exit, lockdep_hardirq_enter/exit</pre>
+  </div>
+  <p>Điểm khác với sách/tài liệu tổng quát: <b>không có</b> file <code>kernel/irq/handle.c</code> chứa <code>irq_exit()</code> — hàm này thực chất nằm ngay trong <code>kernel/softirq.c</code> (dòng 434-452) của kernel 5.10, không tách riêng theo module hard-IRQ/soft-IRQ như một số bản kernel cũ.</p>
+</section>
+
+<!-- ================= 07 MASTER CALL FLOW ================= -->
+<section class="chapter" id="ch07">
+  <h2><span class="chno">07</span>Master Call Flow</h2>
+  <p class="lead">5 flow chính + đường đi ARM64 thật từ exception vector tới <code>softirq_vec[]</code>. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">ARM64 entry path thật — từ vector table tới irq_enter()/irq_exit()</h3>
+  <div class="code">
+    <div class="file"><span>arch/arm64/kernel/entry.S — dòng 481-534</span><button class="copy">Copy</button></div>
+    <pre>.macro	irq_handler, handler:req
+	ldr_l	x1, \handler
+	mov	x0, sp
+	irq_stack_entry
+	blr	x1                 // gọi handle_arch_irq (thường = gic_handle_irq)
+	irq_stack_exit
+.endm
+
+.macro el1_interrupt_handler, handler:req
+	enable_da_f
+	mov	x0, sp
+	bl	enter_el1_irq_or_nmi
+	irq_handler	\handler
+#ifdef CONFIG_PREEMPTION
+	... cbnz preempt_count, skip
+	bl	arm64_preempt_schedule_irq   // preempt sau khi return từ irq nếu preempt_count==0
+#endif
+.endm</pre>
+  </div>
+  <div class="code">
+    <div class="file"><span>kernel/irq/irqdesc.c — dòng 671-699 (__handle_domain_irq, nơi handle_arch_irq trỏ tới qua GIC driver)</span><button class="copy">Copy</button></div>
+    <pre>int __handle_domain_irq(struct irq_domain *domain, unsigned int hwirq,
+			bool lookup, struct pt_regs *regs)
+{
+	struct pt_regs *old_regs = set_irq_regs(regs);
+	unsigned int irq = hwirq;
+	int ret = 0;
+
+	irq_enter();
+	...
+	if (unlikely(!irq || irq >= nr_irqs)) {
+		ack_bad_irq(irq);
+		ret = -EINVAL;
+	} else {
+		generic_handle_irq(irq);   // chạy ISR thật của driver — nơi raise_softirq() có thể được gọi
+	}
+
+	irq_exit();
+	set_irq_regs(old_regs);
+	return ret;
+}</pre>
+  </div>
+  <div class="note">Đây là bằng chứng source trực tiếp cho câu hỏi "irq_exit() được gọi từ đâu trên ARM64": <b>không phải</b> từ assembly entry.S, mà từ C code generic <code>__handle_domain_irq()</code> — assembly chỉ nhảy tới <code>handle_arch_irq</code> (con trỏ hàm, GIC driver set), và chính GIC driver gọi <code>handle_domain_irq()</code> → <code>__handle_domain_irq()</code>.</div>
+
+  <h3 class="sub">Flow 1 — Generic SoftIRQ (chạy trực tiếp)</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node" onclick="jump('ch05')">driver ISR gọi raise_softirq_irqoff(nr)</div>
+    <div class="arrow">↓ or_softirq_pending(1&lt;&lt;nr)</div>
+    <div class="node">per-CPU pending bit set</div>
+    <div class="arrow">↓ ISR return → __handle_domain_irq()</div>
+    <div class="node" onclick="jump('ch05')">irq_exit() → __irq_exit_rcu()</div>
+    <div class="arrow">↓ !in_interrupt() && local_softirq_pending()</div>
+    <div class="node" onclick="jump('ch05')">invoke_softirq()</div>
+    <div class="arrow">↓ !ksoftirqd_running && !force_irqthreads</div>
+    <div class="node" onclick="jump('ch08')">__do_softirq()</div>
+    <div class="arrow">↓ h->action(h)</div>
+    <div class="node">handler thật (net_rx_action/run_timer_softirq/tasklet_action/rcu_core_si...)</div>
+  </div></div>
+
+  <h3 class="sub">Flow 2 — Defer sang ksoftirqd</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">__do_softirq() đang restart loop</div>
+    <div class="arrow">↓ pending vẫn còn SAU khi time_before(jiffies,end) sai HOẶC need_resched() HOẶC hết max_restart</div>
+    <div class="node" onclick="jump('ch09')">wakeup_softirqd()</div>
+    <div class="arrow">↓ wake_up_process(tsk) — nếu tsk->state != TASK_RUNNING</div>
+    <div class="node">ksoftirqd/N trở thành runnable</div>
+    <div class="arrow">↓ scheduler chọn chạy</div>
+    <div class="node" onclick="jump('ch09')">run_ksoftirqd() → __do_softirq()</div>
+  </div></div>
+
+  <h3 class="sub">Flow 3 — Network RX (NIC → stack)</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">NIC IRQ → driver ISR</div>
+    <div class="arrow">↓ napi_schedule()/napi_schedule_prep()</div>
+    <div class="node" onclick="jump('ch12')">__napi_schedule() → ____napi_schedule()</div>
+    <div class="arrow">↓ list_add_tail(&napi->poll_list, &sd->poll_list); __raise_softirq_irqoff(NET_RX_SOFTIRQ)</div>
+    <div class="node">irq_exit() → invoke_softirq() → __do_softirq()</div>
+    <div class="arrow">↓</div>
+    <div class="node" onclick="jump('ch12')">net_rx_action()</div>
+    <div class="arrow">↓ napi_poll(n, &repoll) trong vòng lặp budget</div>
+    <div class="node">n->poll(n, weight) — driver poll callback, tạo skb, đẩy lên network stack</div>
+  </div></div>
+
+  <h3 class="sub">Flow 4 — Tasklet</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">tasklet_schedule(t)</div>
+    <div class="arrow">↓ nếu chưa TASKLET_STATE_SCHED → __tasklet_schedule(t)</div>
+    <div class="node" onclick="jump('ch10')">__tasklet_schedule_common() — đẩy vào tasklet_vec, raise_softirq_irqoff(TASKLET_SOFTIRQ)</div>
+    <div class="arrow">↓</div>
+    <div class="node">TASKLET_SOFTIRQ pending → __do_softirq() → tasklet_action()</div>
+    <div class="arrow">↓ tasklet_trylock + !atomic_read(&t->count)</div>
+    <div class="node">t->callback(t) hoặc t->func(t->data)</div>
+  </div></div>
+
+  <h3 class="sub">Flow 5 — RCU callback</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">rcu_sched_clock_irq() (mỗi tick) — kernel/rcu/tree.c:2600-2631</div>
+    <div class="arrow">↓ có callback ready hoặc cần force-QS scan</div>
+    <div class="node" onclick="jump('ch13')">invoke_rcu_core()</div>
+    <div class="arrow">↓ use_softirq == true (mặc định)</div>
+    <div class="node">raise_softirq(RCU_SOFTIRQ)</div>
+    <div class="arrow">↓ __do_softirq() dispatch</div>
+    <div class="node" onclick="jump('ch13')">rcu_core_si() → rcu_core()</div>
+    <div class="arrow">↓</div>
+    <div class="node">Callback thật thi hành (vd dẫn tới kfree, wakeup...)</div>
+  </div></div>
+</section>
+
+<!-- ================= 08 __DO_SOFTIRQ() DEEP DIVE ================= -->
+<section class="chapter" id="ch08">
+  <h2><span class="chno">08</span><code>__do_softirq()</code> Deep Dive</h2>
+  <p class="lead">Hàm quan trọng nhất của toàn bộ subsystem — phân tích từng dòng thật. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 256-329 (toàn văn, không cắt)</span><button class="copy">Copy</button></div>
+    <pre>#define MAX_SOFTIRQ_TIME  msecs_to_jiffies(2)
+#define MAX_SOFTIRQ_RESTART 10
+
+asmlinkage __visible void __softirq_entry __do_softirq(void)
+{
+	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
+	unsigned long old_flags = current->flags;
+	int max_restart = MAX_SOFTIRQ_RESTART;
+	struct softirq_action *h;
+	bool in_hardirq;
+	__u32 pending;
+	int softirq_bit;
+
+	/*
+	 * Mask out PF_MEMALLOC as the current task context is borrowed for the
+	 * softirq. A softirq handled, such as network RX, might set PF_MEMALLOC
+	 * again if the socket is related to swapping.
+	 */
+	current->flags &amp;= ~PF_MEMALLOC;
+
+	pending = local_softirq_pending();
+	account_irq_enter_time(current);
+
+	__local_bh_disable_ip(_RET_IP_, SOFTIRQ_OFFSET);
+	in_hardirq = lockdep_softirq_start();
+
+restart:
+	/* Reset the pending bitmask before enabling irqs */
+	set_softirq_pending(0);
+
+	local_irq_enable();
+
+	h = softirq_vec;
+
+	while ((softirq_bit = ffs(pending))) {
+		unsigned int vec_nr;
+		int prev_count;
+
+		h += softirq_bit - 1;
+		vec_nr = h - softirq_vec;
+		prev_count = preempt_count();
+
+		kstat_incr_softirqs_this_cpu(vec_nr);
+
+		trace_softirq_entry(vec_nr);
+		h->action(h);
+		trace_softirq_exit(vec_nr);
+		if (unlikely(prev_count != preempt_count())) {
+			pr_err("huh, entered softirq %u %s %p with preempt_count %08x, exited with %08x?\n",
+			       vec_nr, softirq_to_name[vec_nr], h->action,
+			       prev_count, preempt_count());
+			preempt_count_set(prev_count);
+		}
+		h++;
+		pending &gt;&gt;= softirq_bit;
+	}
+
+	if (__this_cpu_read(ksoftirqd) == current)
+		rcu_softirq_qs();
+	local_irq_disable();
+
+	pending = local_softirq_pending();
+	if (pending) {
+		if (time_before(jiffies, end) &amp;&amp; !need_resched() &amp;&amp;
+		    --max_restart)
+			goto restart;
+
+		wakeup_softirqd();
+	}
+
+	lockdep_softirq_end(in_hardirq);
+	account_irq_exit_time(current);
+	__local_bh_enable(SOFTIRQ_OFFSET);
+	WARN_ON_ONCE(in_interrupt());
+	current_restore_flags(old_flags, PF_MEMALLOC);
+}</pre>
+  </div>
+
+  <h3 class="sub">Bước-đi từng bước (map 1:1 với code thật)</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">1. Lưu <code>end = jiffies + 2ms</code>, <code>max_restart = 10</code>, xoá cờ <code>PF_MEMALLOC</code></div>
+    <div class="arrow">↓</div>
+    <div class="node">2. Đọc pending hiện tại, <code>__local_bh_disable_ip(SOFTIRQ_OFFSET)</code> — cộng đúng 1× offset (khác với local_bh_disable dùng 2×)</div>
+    <div class="arrow">↓</div>
+    <div class="node" style="border-color:var(--accent);color:var(--accent)">restart: <code>set_softirq_pending(0)</code> — XOÁ bitmap TRƯỚC khi bật lại IRQ</div>
+    <div class="arrow">↓ local_irq_enable() — hard IRQ có thể ngắt vào giữa loop dispatch!</div>
+    <div class="node">3. Loop <code>ffs(pending)</code> — chạy từng vector theo thứ tự bit thấp → cao (HI trước, RCU sau)</div>
+    <div class="arrow">↓ h->action(h) — gọi handler thật, có tracepoint trước/sau</div>
+    <div class="node">4. Guard preempt_count: nếu handler làm lệch preempt_count → pr_err + tự sửa lại (không panic)</div>
+    <div class="arrow">↓ hết vector trong bitmap ban đầu</div>
+    <div class="node">5. Nếu current == ksoftirqd → <code>rcu_softirq_qs()</code> (báo quiescent state cho RCU)</div>
+    <div class="arrow">↓ local_irq_disable(), đọc lại pending (có thể có bit MỚI set trong lúc IRQ đang bật ở bước 3!)</div>
+    <div class="node" style="border-color:var(--red);color:var(--red)">6. Nếu còn pending: còn thời gian (&lt;2ms) &amp; !need_resched() &amp; còn restart quota → goto restart; ngược lại → wakeup_softirqd()</div>
+    <div class="arrow">↓</div>
+    <div class="node">7. lockdep/account_irq_exit_time, __local_bh_enable(SOFTIRQ_OFFSET) — trả preempt_count về trước khi vào hàm</div>
+  </div></div>
+
+  <h3 class="sub">Cơ chế chống starvation — vì sao 3 điều kiện restart lại quan trọng</h3>
+  <p>Đoạn code chống SoftIRQ chạy vô hạn (nếu handler tự raise chính nó — vd network flood liên tục gọi <code>napi_schedule</code>) nằm hoàn toàn ở bước 6:</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Điều kiện</th><th>Giá trị</th><th>Ý nghĩa</th></tr></thead>
+      <tbody>
+        <tr><td><code>time_before(jiffies, end)</code></td><td><code>end = jiffies_lúc_vào + msecs_to_jiffies(2)</code></td><td>Giới hạn <b>thời gian tuyệt đối 2ms</b> — comment gốc: "established via experimentation", cân bằng latency vs fairness.</td></tr>
+        <tr><td><code>!need_resched()</code></td><td>cờ scheduler</td><td>Nếu có task khác đang chờ CPU với priority cao hơn, dừng ngay dù chưa hết 2ms — ưu tiên fairness cho user/kernel task khác.</td></tr>
+        <tr><td><code>--max_restart</code> (khởi tạo 10)</td><td><code>MAX_SOFTIRQ_RESTART = 10</code></td><td>Giới hạn <b>số lần lặp</b>, độc lập với jiffies — comment gốc nêu rõ lý do: trong <code>stop_machine()</code>, jiffies có thể ngừng tăng, nên cần một giới hạn không phụ thuộc thời gian.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Chỉ cần <b>một trong ba</b> điều kiện thất bại → thoát loop restart và <code>wakeup_softirqd()</code>, đẩy phần còn lại (softirq liên tục tự raise chính nó, ví dụ network flood) sang chạy trong context <code>ksoftirqd/N</code> — nơi scheduler có thể xen task khác vào giữa các lần chạy, thay vì giữ CPU 100% trong hard-IRQ-return path.</p>
+
+  <div class="warn"><b>Chi tiết dễ hiểu nhầm:</b> <code>set_softirq_pending(0)</code> chạy <b>trước khi</b> <code>local_irq_enable()</code>, nghĩa là handler nào raise lại chính vector đang chạy (rất phổ biến — NAPI tự raise NET_RX_SOFTIRQ nếu còn packet) sẽ set một bit MỚI vào bitmap đã bị xoá, và bitmap này chỉ được đọc lại ở bước 6 (sau khi <code>local_irq_disable()</code>) — không lẫn với biến <code>pending</code> cục bộ đang được loop ở bước 3 (biến này đã được copy ra local trước khi xoá).</div>
+</section>
+
+<!-- ================= 09 KSOFTIRQD DEEP DIVE ================= -->
+<section class="chapter" id="ch09">
+  <h2><span class="chno">09</span>ksoftirqd Deep Dive</h2>
+  <p class="lead">Thread per-CPU xử lý SoftIRQ khi không thể/không nên chạy ngay trong IRQ-return path. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Khai báo &amp; đăng ký thread — <code>smpboot_register_percpu_thread</code></h3>
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 641-746 (toàn văn)</span><button class="copy">Copy</button></div>
+    <pre>static int ksoftirqd_should_run(unsigned int cpu)
+{
+	return local_softirq_pending();
+}
+
+static void run_ksoftirqd(unsigned int cpu)
+{
+#if defined(CONFIG_KM_BIZHUB)
+	struct sched_param sp;
+
+	/* Set real-time priority. */
+	sp.sched_priority = 256;
+	sched_setscheduler(current, SCHED_RR, &amp;sp);
+#endif
+	local_irq_disable();
+	if (local_softirq_pending()) {
+		/*
+		 * We can safely run softirq on inline stack, as we are not deep
+		 * in the task stack here.
+		 */
+		__do_softirq();
+		local_irq_enable();
+		cond_resched();
+		return;
+	}
+	local_irq_enable();
+}
+...
+static struct smp_hotplug_thread softirq_threads = {
+	.store			= &amp;ksoftirqd,
+	.thread_should_run	= ksoftirqd_should_run,
+	.thread_fn		= run_ksoftirqd,
+	.thread_comm		= "ksoftirqd/%u",
+};
+
+static __init int spawn_ksoftirqd(void)
+{
+	cpuhp_setup_state_nocalls(CPUHP_SOFTIRQ_DEAD, "softirq:dead", NULL,
+				  takeover_tasklets);
+	BUG_ON(smpboot_register_percpu_thread(&amp;softirq_threads));
+	return 0;
+}
+early_initcall(spawn_ksoftirqd);</pre>
+  </div>
+  <p><code>ksoftirqd/N</code> <b>không</b> tự viết vòng <code>while(1)</code> — nó dùng chung framework <code>smp_hotplug_thread</code> (giống nhiều kernel thread khác: <code>migration/N</code>, <code>watchdog/N</code>...). Framework này tự lo vòng lặp: gọi <code>thread_should_run()</code> để quyết định có nên chạy tiếp hay <code>park</code> thread lại (không tốn CPU khi không có gì pending), rồi gọi <code>thread_fn()</code> khi có việc. <code>early_initcall(spawn_ksoftirqd)</code> chạy rất sớm lúc boot, trước khi driver init — nghĩa là ksoftirqd tồn tại từ rất sớm trong quá trình boot.</p>
+
+  <div class="callout">
+    <b>Patch <code>CONFIG_KM_BIZHUB</code> — chi tiết đặc thù repo này:</b> Bản mainline Linux <b>không có</b> đoạn set <code>SCHED_RR</code> priority 256 này — <code>run_ksoftirqd()</code> gốc chỉ có phần <code>local_irq_disable(); if (local_softirq_pending()) {...}</code>. Patch của board MFP này nâng <code>ksoftirqd</code> từ chính sách mặc định (<code>SCHED_OTHER</code>, hoàn toàn "best effort", có thể bị mọi RT task khác chèn) lên <b>SCHED_RR real-time, priority 256</b> — <b>trên mỗi lần <code>run_ksoftirqd()</code> được gọi</b> (không phải một lần ở init). <span class="tag tag-vendor">VENDOR / REPOSITORY-SPECIFIC — không áp dụng cho upstream Linux</span>
+  </div>
+  <div class="warn"><b>Hệ quả cần lưu ý:</b> Đặt priority RT cho <code>ksoftirqd</code> làm giảm latency xử lý SoftIRQ khi bị defer (tốt cho các softirq nhạy thời gian như xử lý cảm biến/engine control của máy in), nhưng đổi lại <code>ksoftirqd</code> có thể <b>chiếm CPU trước cả các RT task khác có priority thấp hơn 256</b> nếu SoftIRQ workload cao — cần đối chiếu với các RT task khác trên board khi debug latency (liên hệ trực tiếp tới <a href="#ch15">§15 Starvation</a>).</div>
+
+  <h3 class="sub">Khi nào chuyển từ "chạy trực tiếp" sang ksoftirqd?</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">__do_softirq() đang trong restart loop</div>
+    <div class="branch">
+      <div class="col"><div class="node">time_before(jiffies,end) sai<br><span class="tagline">quá 2ms</span></div></div>
+      <div class="col"><div class="node">need_resched() đúng<br><span class="tagline">có task ưu tiên cao hơn chờ</span></div></div>
+      <div class="col"><div class="node">max_restart chạm 0<br><span class="tagline">đã lặp 10 lần</span></div></div>
+    </div>
+    <div class="arrow">↓ CHỈ CẦN 1 trong 3 đúng, VÀ pending còn bit</div>
+    <div class="node" style="border-color:var(--red);color:var(--red)">wakeup_softirqd()</div>
+    <div class="arrow">↓</div>
+    <div class="node">__do_softirq() trong ngữ cảnh gọi (hard-IRQ-return path) KẾT THÚC ngay — không đợi ksoftirqd xong</div>
+  </div></div>
+  <p>Đường thứ hai dẫn tới ksoftirqd: <code>invoke_softirq()</code> gọi trực tiếp <code>wakeup_softirqd()</code> nếu kernel được boot với <code>force_irqthreads</code> (tham số <code>threadirqs</code>) — khi đó SoftIRQ <b>không bao giờ</b> chạy trực tiếp trong IRQ-return path, luôn qua ksoftirqd. Đường thứ ba: <code>raise_softirq_irqoff()</code> tự gọi <code>wakeup_softirqd()</code> nếu code raise nó <b>không</b> đang ở trong interrupt/softirq context (<code>!in_interrupt()</code>) — vì trường hợp này không có "IRQ return path" nào sẽ tự động xử lý pending bit sau đó.</p>
+
+  <h3 class="sub">ksoftirqd và Scheduler</h3>
+  <p><code>wakeup_softirqd()</code> chỉ gọi <code>wake_up_process(tsk)</code> — đây là API scheduler chuẩn, đưa <code>task_struct</code> của <code>ksoftirqd/N</code> (lưu trong <code>DEFINE_PER_CPU(struct task_struct *, ksoftirqd)</code>) vào runqueue của CPU đó. Từ đây, việc CPU có chạy <code>ksoftirqd/N</code> ngay hay không hoàn toàn do scheduler quyết định theo policy/priority hiện tại của nó — <b>không có ưu tiên đặc biệt nào trong mainline</b> (SCHED_OTHER, nice 0), <b>trừ khi</b> patch <code>CONFIG_KM_BIZHUB</code> ở trên có hiệu lực.</p>
+  <div class="kv">
+    <b>task_struct lưu ở đâu</b><span><code>DEFINE_PER_CPU(struct task_struct *, ksoftirqd)</code> — kernel/softirq.c:58, được <code>smp_hotplug_thread.store</code> tự động gán khi thread được tạo cho từng CPU.</span>
+    <b>CPU affinity</b><span>Mỗi <code>ksoftirqd/N</code> pin cứng vào CPU N (đặc điểm chuẩn của <code>smp_hotplug_thread</code>/percpu kthread) — không di chuyển sang CPU khác.</span>
+    <b>Runnable state</b><span>Idle/parked khi không có gì pending (<code>ksoftirqd_should_run()</code> trả false) → runnable ngay khi <code>wakeup_softirqd()</code> gọi <code>wake_up_process()</code>.</span>
+  </div>
+
+  <h3 class="sub">Phân biệt rõ hai kiểu thực thi SoftIRQ (Rule 3 của bộ nghiên cứu)</h3>
+  <div class="mistake">
+    <div class="wrong"><b>KHÔNG nói:</b> "SoftIRQ chạy trong kernel thread."</div>
+    <div class="right"><b>Phải nói:</b> Có <b>hai đường thực thi khác nhau</b> cho cùng một hàm <code>__do_softirq()</code> — (1) chạy <b>trực tiếp</b> ngay trong hard-IRQ-return path (không có kernel thread nào cả, chạy trên stack hiện tại/irq stack), hoặc (2) chạy <b>bên trong</b> kernel thread <code>ksoftirqd/N</code> khi bị defer. Cùng một hàm, hai bối cảnh gọi khác nhau.</div>
+  </div>
+</section>
+
+<!-- ================= 10 TASKLET ================= -->
+<section class="chapter" id="ch10">
+  <h2><span class="chno">10</span>Tasklet</h2>
+  <p class="lead">Nguồn: <code>kernel/softirq.c</code> dòng 495-724. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Schedule &amp; Action — code thật</h3>
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 498-585</span><button class="copy">Copy</button></div>
+    <pre>struct tasklet_head {
+	struct tasklet_struct *head;
+	struct tasklet_struct **tail;
+};
+static DEFINE_PER_CPU(struct tasklet_head, tasklet_vec);
+static DEFINE_PER_CPU(struct tasklet_head, tasklet_hi_vec);
+
+static void __tasklet_schedule_common(struct tasklet_struct *t,
+				      struct tasklet_head __percpu *headp,
+				      unsigned int softirq_nr)
+{
+	struct tasklet_head *head;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	head = this_cpu_ptr(headp);
+	t->next = NULL;
+	*head->tail = t;
+	head->tail = &amp;(t->next);
+	raise_softirq_irqoff(softirq_nr);
+	local_irq_restore(flags);
+}
+
+static void tasklet_action_common(struct softirq_action *a,
+				  struct tasklet_head *tl_head,
+				  unsigned int softirq_nr)
+{
+	struct tasklet_struct *list;
+
+	local_irq_disable();
+	list = tl_head->head;
+	tl_head->head = NULL;
+	tl_head->tail = &amp;tl_head->head;
+	local_irq_enable();
+
+	while (list) {
+		struct tasklet_struct *t = list;
+		list = list->next;
+
+		if (tasklet_trylock(t)) {
+			if (!atomic_read(&amp;t->count)) {
+				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &amp;t->state))
+					BUG();
+				if (t->use_callback)
+					t->callback(t);
+				else
+					t->func(t->data);
+				tasklet_unlock(t);
+				continue;
+			}
+			tasklet_unlock(t);
+		}
+		/* bận (count>0) hoặc trylock thất bại → đẩy lại vào cuối list */
+		local_irq_disable();
+		t->next = NULL;
+		*tl_head->tail = t;
+		tl_head->tail = &amp;t->next;
+		__raise_softirq_irqoff(softirq_nr);
+		local_irq_enable();
+	}
+}</pre>
+  </div>
+  <p><b>Per-CPU linked-list, không phải bitmap:</b> khác với vector nói chung (chỉ 1 bit "có/không pending"), tasklet dùng <b>per-CPU singly-linked list</b> (<code>tasklet_vec</code>/<code>tasklet_hi_vec</code>) — cho phép nhiều tasklet cùng chờ trên một CPU, tất cả được raise chung qua đúng 1 bit <code>TASKLET_SOFTIRQ</code>/<code>HI_SOFTIRQ</code>.</p>
+  <p><b>Serialization "tự thân":</b> <code>tasklet_trylock()</code>/<code>tasklet_unlock()</code> dùng bit <code>TASKLET_STATE_RUN</code> trong <code>t->state</code> để đảm bảo <b>cùng một tasklet instance không chạy song song trên 2 CPU khác nhau</b> — nhưng hai tasklet <i>khác</i> instance vẫn chạy song song bình thường trên các CPU khác nhau. Nếu tasklet đang bị disable (<code>atomic_read(&t->count) != 0</code>, qua <code>tasklet_disable()</code>) hoặc đang chạy ở CPU khác, nó được đẩy lại vào cuối danh sách và <code>TASKLET_SOFTIRQ</code> được raise lại — vòng lặp <code>__do_softirq()</code> sẽ thấy pending bit này ở lượt sau.</p>
+
+  <h3 class="sub">Tasklet vs SoftIRQ</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Property</th><th>SoftIRQ (vector gốc)</th><th>Tasklet</th></tr></thead>
+      <tbody>
+        <tr><td>Parallel execution (cùng loại, 2 CPU)</td><td>Có — cùng vector NET_RX có thể chạy song song trên nhiều CPU (mỗi CPU tự có instance riêng, softnet_data riêng)</td><td>Không cho <i>cùng một</i> tasklet instance (<code>TASKLET_STATE_RUN</code> chặn); nhưng 2 tasklet instance khác nhau thì chạy song song được</td></tr>
+        <tr><td>Per-CPU?</td><td>Có — pending bitmap + handler dispatch hoàn toàn per-CPU</td><td>Có — <code>tasklet_vec</code>/<code>tasklet_hi_vec</code> là per-CPU list, nhưng một tasklet có thể được schedule từ CPU này rồi chạy ở CPU khác nếu bản thân code raise nó chạy trên CPU khác lúc <code>tasklet_schedule()</code></td></tr>
+        <tr><td>API đăng ký</td><td><code>open_softirq(nr, action)</code> — chỉ tại boot, cố định 10 vector</td><td><code>tasklet_init()</code>/<code>tasklet_setup()</code> — runtime, số lượng tasklet không giới hạn</td></tr>
+        <tr><td>Serialization</td><td>Tự lo bằng spinlock riêng nếu cần (comment gốc §01)</td><td>Tự động serialize <i>với chính nó</i> qua <code>TASKLET_STATE_RUN</code> — đây là lý do sách/tài liệu gọi "tasklet serialized wrt itself"</td></tr>
+        <tr><td>Typical use</td><td>Networking (đa luồng, hiệu năng cao), Timer, RCU — core kernel</td><td>Driver bottom-half đơn giản, không cần đa luồng thật, muốn API dễ dùng hơn softirq_vec cố định</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Tasklet <b>dựa hoàn toàn</b> trên SoftIRQ: nó chỉ là một lớp trừu tượng phía trên đúng 2 vector <code>TASKLET_SOFTIRQ</code>/<code>HI_SOFTIRQ</code>, cho phép đăng ký handler tại runtime (không cần đụng tới <code>softirq_vec[]</code> cố định) và tự thêm cơ chế serialize-với-chính-nó mà SoftIRQ gốc không có sẵn.</p>
+</section>
+
+<!-- ================= 11 TIMER SOFTIRQ ================= -->
+<section class="chapter" id="ch11">
+  <h2><span class="chno">11</span>TIMER_SOFTIRQ</h2>
+  <p class="lead">Nguồn: <code>kernel/time/timer.c</code>. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <div class="code">
+    <div class="file"><span>kernel/time/timer.c — dòng 1733-1819, 2050</span><button class="copy">Copy</button></div>
+    <pre>void update_process_times(int user_tick)
+{
+	struct task_struct *p = current;
+
+	PRANDOM_ADD_NOISE(jiffies, user_tick, p, 0);
+
+	/* Note: this timer irq context must be accounted for as well. */
+	account_process_tick(p, user_tick);
+	run_local_timers();
+	rcu_sched_clock_irq(user_tick);
+#ifdef CONFIG_IRQ_WORK
+	if (in_irq())
+		irq_work_tick();
+#endif
+	scheduler_tick();
+	...
+}
+
+void run_local_timers(void)
+{
+	struct timer_base *base = this_cpu_ptr(&amp;timer_bases[BASE_STD]);
+
+	hrtimer_run_queues();
+	/* Raise the softirq only if required. */
+	if (time_before(jiffies, base->next_expiry)) {
+		...
+		return;
+	}
+	raise_softirq(TIMER_SOFTIRQ);
+}
+...
+open_softirq(TIMER_SOFTIRQ, run_timer_softirq);</pre>
+  </div>
+  <p><b>Phân biệt rõ 4 khái niệm hay bị nhập nhằng (đúng theo Rule của prompt nghiên cứu):</b></p>
+  <div class="wwhh">
+    <div class="box"><span class="tag">Timer interrupt</span>Tick hardware (arch timer trên ARM64) → hard IRQ → gọi <code>update_process_times()</code>.</div>
+    <div class="box"><span class="tag">update_process_times()</span>Chạy trong hard-IRQ context của tick — gọi <code>run_local_timers()</code> VÀ <code>scheduler_tick()</code> VÀ <code>rcu_sched_clock_irq()</code> — ba việc độc lập, chỉ tình cờ được gọi cùng một chỗ.</div>
+    <div class="box"><span class="tag">run_local_timers()</span>Chỉ raise <code>TIMER_SOFTIRQ</code> <b>nếu</b> <code>base->next_expiry</code> đã tới hạn — không phải mọi tick đều raise softirq.</div>
+    <div class="box"><span class="tag">TIMER_SOFTIRQ processing</span>Chạy sau, trong softirq context (<code>run_timer_softirq()</code>) — đây mới là nơi timer callback thật (<code>timer->function()</code>) được gọi.</div>
+  </div>
+  <div class="note"><b>scheduler_tick() KHÔNG phải TIMER_SOFTIRQ:</b> cả hai được gọi từ cùng <code>update_process_times()</code> nhưng là hai cơ chế độc lập hoàn toàn — <code>scheduler_tick()</code> chạy ngay trong hard-IRQ context của tick (không qua softirq), trong khi timer callback thật sự bị defer qua <code>TIMER_SOFTIRQ</code>. Không được nhầm hai luồng này thành một.</div>
+</section>
+
+<!-- ================= 12 NET_RX_SOFTIRQ / NAPI ================= -->
+<section class="chapter" id="ch12">
+  <h2><span class="chno">12</span>NET_RX_SOFTIRQ / NAPI</h2>
+  <p class="lead">Nguồn: <code>net/core/dev.c</code> (11393 dòng) — một trong những phần sâu nhất. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Trace từ ISR tới net_rx_action()</h3>
+  <div class="code">
+    <div class="file"><span>net/core/dev.c — dòng 4327-4333, 6479-6537</span><button class="copy">Copy</button></div>
+    <pre>/* Called with irq disabled */
+static inline void ____napi_schedule(struct softnet_data *sd,
+				     struct napi_struct *napi)
+{
+	list_add_tail(&amp;napi->poll_list, &amp;sd->poll_list);
+	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
+}
+
+void __napi_schedule(struct napi_struct *n)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	____napi_schedule(this_cpu_ptr(&amp;softnet_data), n);
+	local_irq_restore(flags);
+}
+
+/*
+ * Variant of __napi_schedule() assuming hard irqs are masked.
+ * On PREEMPT_RT enabled kernels this maps to __napi_schedule()
+ */
+void __napi_schedule_irqoff(struct napi_struct *n)
+{
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		____napi_schedule(this_cpu_ptr(&amp;softnet_data), n);
+	else
+		__napi_schedule(n);
+}</pre>
+  </div>
+  <p>Driver NIC gọi <code>napi_schedule()</code> (inline, kiểm tra <code>NAPI_STATE_SCHED</code> trước khi gọi <code>__napi_schedule()</code>) ngay trong ISR — hàm này <b>chỉ</b> đẩy napi instance vào <code>sd->poll_list</code> (per-CPU <code>softnet_data</code>) và raise bit <code>NET_RX_SOFTIRQ</code>. Không có packet nào được xử lý ở đây — toàn bộ việc đọc/parse packet xảy ra sau, trong <code>net_rx_action()</code>.</p>
+
+  <h3 class="sub"><code>net_rx_action()</code> — budget loop thật</h3>
+  <div class="code">
+    <div class="file"><span>net/core/dev.c — dòng 6938-6982</span><button class="copy">Copy</button></div>
+    <pre>int netdev_budget __read_mostly = 300;
+unsigned int __read_mostly netdev_budget_usecs = 2 * USEC_PER_SEC / HZ;
+
+static __latent_entropy void net_rx_action(struct softirq_action *h)
+{
+	struct softnet_data *sd = this_cpu_ptr(&amp;softnet_data);
+	unsigned long time_limit = jiffies +
+		usecs_to_jiffies(READ_ONCE(netdev_budget_usecs));
+	int budget = READ_ONCE(netdev_budget);
+	LIST_HEAD(list);
+	LIST_HEAD(repoll);
+
+	local_irq_disable();
+	list_splice_init(&amp;sd->poll_list, &amp;list);
+	local_irq_enable();
+
+	for (;;) {
+		struct napi_struct *n;
+		if (list_empty(&amp;list)) {
+			if (!sd_has_rps_ipi_waiting(sd) &amp;&amp; list_empty(&amp;repoll))
+				goto out;
+			break;
+		}
+		n = list_first_entry(&amp;list, struct napi_struct, poll_list);
+		budget -= napi_poll(n, &amp;repoll);
+
+		/* If softirq window is exhausted then punt. */
+		if (unlikely(budget &lt;= 0 ||
+			     time_after_eq(jiffies, time_limit))) {
+			sd->time_squeeze++;
+			break;
+		}
+	}
+
+	local_irq_disable();
+	list_splice_tail_init(&amp;sd->poll_list, &amp;list);
+	list_splice_tail(&amp;repoll, &amp;list);
+	list_splice(&amp;list, &amp;sd->poll_list);
+	if (!list_empty(&amp;sd->poll_list))
+		__raise_softirq_irqoff(NET_RX_SOFTIRQ);   // TỰ RAISE LẠI nếu còn napi chưa xử lý xong
+	net_rps_action_and_irq_enable(sd);
+out: ;
+}</pre>
+  </div>
+  <p><b>Hai lớp budget riêng biệt — dễ nhầm:</b></p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Biến</th><th>Phạm vi</th><th>Ý nghĩa</th></tr></thead>
+      <tbody>
+        <tr><td><code>netdev_budget</code> (mặc định 300) &amp; <code>netdev_budget_usecs</code></td><td>Toàn bộ <code>net_rx_action()</code> — tổng cho tất cả napi instance trong 1 lượt</td><td>Giới hạn <b>work units</b> (không hẳn là số packet — do <code>napi_poll()</code> trả về giá trị driver tự định nghĩa) và <b>thời gian tuyệt đối</b> cho toàn bộ vòng lặp softirq này.</td></tr>
+        <tr><td><code>n->weight</code> (napi struct, thường gán từ <code>dev_rx_weight</code>/<code>weight_p</code> = 64)</td><td>Một lần gọi <code>napi_poll()</code> cho MỘT napi instance</td><td>Số work tối đa driver <code>->poll()</code> được làm trong một lần gọi — nếu dùng hết weight mà còn việc, napi tự đẩy lại vào <code>repoll</code> để lượt sau tiếp tục.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><code>napi_poll()</code> (net/core/dev.c:6872) gọi <code>n->poll(n, weight)</code> — đây là con trỏ hàm driver cung cấp (vd trong NIC driver thật). Nếu <code>work == weight</code> (dùng hết quota) và napi chưa <code>napi_complete()</code>, nó bị đẩy vào <code>repoll</code> list để vòng lặp <code>net_rx_action()</code> xử lý tiếp trong CÙNG lượt gọi (nếu còn budget) hoặc lượt SAU (nếu hết budget/time).</p>
+
+  <div class="warn"><b>Vì sao Linux không xử lý vô hạn packet trong một lần SoftIRQ?</b> Nếu không có <code>netdev_budget</code>/<code>time_limit</code>, một NIC bị flood packet liên tục sẽ giữ CPU trong <code>net_rx_action()</code> vô thời hạn (vì packet mới luôn tới nhanh hơn tốc độ xử lý) — CPU 100% softirq, không còn thời gian cho user task, kernel task khác, thậm chí không kịp trả lời ping hay SSH. Đây chính là "packet flood" / "receive livelock" kinh điển — 2 lớp budget trên là cơ chế chống nó, cộng với chống-starvation ở tầng <code>__do_softirq()</code> (§08) khi <code>net_rx_action()</code> tự raise lại NET_RX_SOFTIRQ liên tục.</div>
+</section>
+
+<!-- ================= 13 RCU_SOFTIRQ ================= -->
+<section class="chapter" id="ch13">
+  <h2><span class="chno">13</span>RCU_SOFTIRQ Deep Dive</h2>
+  <p class="lead">Nguồn: <code>kernel/rcu/tree.c</code> (4671 dòng). <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <div class="code">
+    <div class="file"><span>kernel/rcu/tree.c — dòng 2783-2822, 4640</span><button class="copy">Copy</button></div>
+    <pre>static void rcu_core_si(struct softirq_action *h)
+{
+	rcu_core();
+}
+
+static void invoke_rcu_core_kthread(void)
+{
+	struct task_struct *t;
+	unsigned long flags;
+	...
+}
+
+static void invoke_rcu_core(void)
+{
+	if (!cpu_online(smp_processor_id()))
+		return;
+	if (use_softirq)
+		raise_softirq(RCU_SOFTIRQ);
+	else
+		invoke_rcu_core_kthread();
+}
+...
+	if (use_softirq)
+		open_softirq(RCU_SOFTIRQ, rcu_core_si);</pre>
+  </div>
+  <p><b>RCU có 2 chế độ vận hành — kernel này build với chế độ softirq (<code>use_softirq</code> mặc định true):</b> khi <code>use_softirq</code> false (RCU threaded/nocb mode được cấu hình), callback processing chuyển hoàn toàn sang kernel thread riêng (<code>invoke_rcu_core_kthread()</code>), <b>không đi qua SoftIRQ nữa</b>. Đây là điểm quan trọng: <b>không phải mọi hệ thống RCU đều dùng RCU_SOFTIRQ</b> — nó phụ thuộc cấu hình boot/Kconfig. <span class="tag tag-changed">CONFIG-SPECIFIC</span></p>
+
+  <h3 class="sub">Grace Period progress KHÔNG phải là Callback execution</h3>
+  <div class="mistake">
+    <div class="wrong"><b>Nhầm lẫn phổ biến:</b> "RCU_SOFTIRQ hoàn thành grace period."</div>
+    <div class="right"><b>Thực tế (theo rcu_sched_clock_irq — kernel/rcu/tree.c:2600-2631):</b> Grace period progress được kiểm tra/đẩy tiến trong tick handler (<code>rcu_sched_clock_irq()</code>), độc lập với việc <code>RCU_SOFTIRQ</code> có chạy hay không. <code>invoke_rcu_core()</code> chỉ được gọi <b>sau khi</b> đã xác định có callback cần xử lý hoặc cần force-quiescent-state scan — <code>RCU_SOFTIRQ</code>/<code>rcu_core()</code> là nơi <b>callback thật sự được invoke</b> (chạy hàm <code>->func</code> mà <code>call_rcu()</code> đã đăng ký), KHÔNG phải nơi grace period được "hoàn thành".</div>
+  </div>
+  <div class="diagram"><div class="flow">
+    <div class="node">call_rcu(head, func) — đăng ký callback vào per-CPU list</div>
+    <div class="arrow">↓</div>
+    <div class="node">Grace Period tiến triển — theo dõi qua rcu_sched_clock_irq() mỗi tick, mọi CPU phải đi qua quiescent state</div>
+    <div class="arrow">↓ GP kết thúc → callback được đánh dấu "ready to invoke"</div>
+    <div class="node" onclick="jump('ch05')">invoke_rcu_core() — raise_softirq(RCU_SOFTIRQ) (nếu use_softirq)</div>
+    <div class="arrow">↓</div>
+    <div class="node">rcu_core_si() → rcu_core() — TẠI ĐÂY callback->func() mới thật sự được gọi</div>
+  </div></div>
+  <p><b>Liên hệ với <code>rcu_softirq_qs()</code> trong <code>__do_softirq()</code> (§08):</b> mỗi lần <code>ksoftirqd</code> chạy xong một lượt dispatch toàn bộ vector trong <code>__do_softirq()</code>, nó tự báo quiescent state cho RCU (<code>rcu_softirq_qs()</code>) — đây là lý do enum vector đặt <code>RCU_SOFTIRQ</code> cuối cùng: coi như "đã xử lý xong mọi softirq khác của lượt này" là một dấu hiệu hợp lý để tính CPU đã "đi qua" một điểm an toàn cho RCU.</p>
+</section>
+
+<!-- ================= 14 SMP / PER-CPU / LOCKING ================= -->
+<section class="chapter" id="ch14">
+  <h2><span class="chno">14</span>SMP / Per-CPU / Locking</h2>
+  <p class="lead"><span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Không có "remote raise" trong kernel này</h3>
+  <div class="warn"><b>Đã grep toàn bộ <code>kernel/softirq.c</code>:</b> không tìm thấy hàm <code>raise_softirq_on()</code>, không có lời gọi <code>smp_call_function</code>/IPI nào trong file này để raise softirq trên CPU khác. Mọi <code>raise_softirq*()</code> trong kernel 5.10.241 này chỉ tác động lên <b>CPU hiện tại</b> (qua <code>__this_cpu_*</code>/<code>this_cpu_ptr</code>). <span class="tag tag-removed">KHÔNG TỒN TẠI TRONG SOURCE NÀY</span> — nếu bạn đọc tài liệu cũ nói về "remote CPU softirq raise", đó là API đã bị loại bỏ khỏi mainline Linux trước phiên bản 5.10.</div>
+  <p>Hệ quả thiết kế: một SoftIRQ được raise trên CPU nào sẽ <b>luôn</b> được xử lý (trực tiếp hoặc qua ksoftirqd) bởi <b>đúng CPU đó</b> — không có cơ chế nào trong file này chuyển việc sang CPU khác. Với networking, việc "phân tải" NAPI ra nhiều CPU được làm ở tầng cao hơn (RPS/RSS — driver/IRQ affinity chọn CPU nào nhận IRQ ngay từ đầu), không phải bằng cách raise-remote softirq sau đó.</p>
+
+  <h3 class="sub">CPU Hotplug — takeover_tasklets()</h3>
+  <div class="code">
+    <div class="file"><span>kernel/softirq.c — dòng 702-726</span><button class="copy">Copy</button></div>
+    <pre>static int takeover_tasklets(unsigned int cpu)
+{
+	/* CPU is dead, so no lock needed. */
+	local_irq_disable();
+
+	if (&amp;per_cpu(tasklet_vec, cpu).head != per_cpu(tasklet_vec, cpu).tail) {
+		*__this_cpu_read(tasklet_vec.tail) = per_cpu(tasklet_vec, cpu).head;
+		__this_cpu_write(tasklet_vec.tail, per_cpu(tasklet_vec, cpu).tail);
+		per_cpu(tasklet_vec, cpu).head = NULL;
+		per_cpu(tasklet_vec, cpu).tail = &amp;per_cpu(tasklet_vec, cpu).head;
+	}
+	raise_softirq_irqoff(TASKLET_SOFTIRQ);
+	/* ... tương tự cho tasklet_hi_vec ... */
+	local_irq_enable();
+	return 0;
+}
+// đăng ký qua: cpuhp_setup_state_nocalls(CPUHP_SOFTIRQ_DEAD, "softirq:dead", NULL, takeover_tasklets);</pre>
+  </div>
+  <p>Đây là <b>ngoại lệ duy nhất</b> trong file này nơi state của một CPU được "chuyển" sang CPU khác — nhưng chỉ xảy ra khi CPU đó <b>đã chết hẳn</b> (offline, <code>CPUHP_SOFTIRQ_DEAD</code>), không phải remote-raise trong lúc CPU vẫn chạy. Comment gốc nhấn mạnh "CPU is dead, so no lock needed" — vì không còn ai khác động vào list của CPU đó nữa. Chỉ tasklet list được "cứu" theo cách này — SoftIRQ pending bit thông thường của CPU chết <b>không được chuyển đi</b>.</p>
+
+  <h3 class="sub">Locking: 3 API dễ nhầm</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Primitive</th><th>Cộng vào preempt_count</th><th>Chặn gì</th><th>Quan hệ với SoftIRQ</th></tr></thead>
+      <tbody>
+        <tr><td><code>local_irq_disable()</code>/<code>_save()</code></td><td>Không đổi preempt_count (đây là cờ CPU riêng, không phải preempt_count)</td><td>Mọi hard IRQ trên CPU hiện tại</td><td>Chặn LUÔN cả SoftIRQ gián tiếp — vì SoftIRQ chỉ được dispatch từ <code>irq_exit()</code>/<code>do_softirq()</code>, và cả hai đều cần chạy được hard IRQ path.</td></tr>
+        <tr><td><code>local_bh_disable()</code></td><td><code>+= SOFTIRQ_DISABLE_OFFSET</code> (2×offset)</td><td>SoftIRQ chạy trên CPU hiện tại (không đụng tới hard IRQ)</td><td>Đây là API "đúng mục đích" nhất khi code (thường networking) muốn chắc chắn không bị SoftIRQ khác chen vào giữa critical section, nhưng vẫn cho phép hard IRQ xảy ra bình thường.</td></tr>
+        <tr><td><code>preempt_disable()</code></td><td><code>+= 1</code> (PREEMPT field)</td><td>Task scheduler preempt task hiện tại</td><td>KHÔNG chặn SoftIRQ hay hard IRQ — một softirq hoàn toàn có thể chạy (bị hard-IRQ-return path invoke) ngay giữa một đoạn <code>preempt_disable()</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note"><b>Vì sao networking code hay dùng <code>local_bh_disable()</code>?</b> Rất nhiều state networking (qdisc, socket lock kiểu "lock_sock_bh") được share giữa process context (syscall send/recv) và SoftIRQ context (net_rx_action/net_tx_action) trên <b>cùng một CPU</b>. Dùng spinlock thường không đủ — nếu process context giữ lock rồi bị SoftIRQ (trên CÙNG CPU) ngắt vào và cũng cố lấy lock đó → deadlock cứng (SoftIRQ không sleep được, không nhường CPU). <code>local_bh_disable()</code> loại bỏ khả năng này bằng cách đảm bảo SoftIRQ không thể chạy trên CPU đó trong lúc giữ lock — mà vẫn rẻ hơn <code>local_irq_disable()</code> (không cần chặn hard IRQ, vốn tốn kém hơn để tái enable với latency thấp).</div>
+
+  <h3 class="sub">PREEMPT_RT — additional context, chưa verify trong source này</h3>
+  <div class="callout info">
+    <b>Ghi chú minh bạch:</b> Cây source <code>Kernel/K-S800/Src</code> <b>không</b> có patch-set PREEMPT_RT (không tìm thấy <code>CONFIG_PREEMPT_RT</code> được định nghĩa thật, chỉ có vài chỗ <code>IS_ENABLED(CONFIG_PREEMPT_RT)</code> kiểm tra phòng hờ trong code upstream, ví dụ <code>__napi_schedule_irqoff()</code> ở §12). Phần dưới đây là <b>kiến thức chung về PREEMPT_RT</b> (không lấy từ source cụ thể của repo này) — đưa vào để tham khảo, không phải để mô tả hành vi thật của board này. <span class="tag tag-unverified">ADDITIONAL CONTEXT — KHÔNG PHẢI TỪ SOURCE NÀY</span>
+  </div>
+  <p>Trên các kernel có patch PREEMPT_RT áp dụng đầy đủ, phần lớn SoftIRQ được chuyển thành các kernel thread riêng theo từng CPU/vector (tương tự triết lý <code>force_irqthreads</code> nhưng chi tiết hơn), và <code>spinlock_t</code> thường trở thành "sleeping lock" — thay đổi hoàn toàn các giả định về "SoftIRQ không thể sleep" ở một số đường code. Vì repo này không bật RT, các phân tích ở §08-§13 (dựa trên non-RT __do_softirq) áp dụng đúng cho board thật.</p>
+</section>
+
+<!-- ================= 15 SO SÁNH & STARVATION / RCU STALL ================= -->
+<section class="chapter" id="ch15">
+  <h2><span class="chno">15</span>So sánh cơ chế &amp; Starvation / RCU Stall</h2>
+  <p class="lead"><span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span> + <span class="tag tag-inference">phân tích logic từ code đã verify</span></p>
+
+  <h3 class="sub">SoftIRQ vs Tasklet vs Workqueue vs Kernel Thread</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Feature</th><th>SoftIRQ</th><th>Tasklet</th><th>Workqueue</th></tr></thead>
+      <tbody>
+        <tr><td>Context</td><td>Atomic (softirq)</td><td>Atomic (softirq, dựng trên TASKLET_SOFTIRQ/HI_SOFTIRQ)</td><td>Process context (worker thread)</td></tr>
+        <tr><td>Can sleep</td><td>Không</td><td>Không</td><td>Có</td></tr>
+        <tr><td>Dedicated thread</td><td>Không trực tiếp (chỉ ksoftirqd khi bị defer)</td><td>Không trực tiếp (cùng cơ chế với SoftIRQ)</td><td>Có (worker pool, <code>kworker/N</code>)</td></tr>
+        <tr><td>CPU affinity</td><td>Chạy trên CPU raise nó (không remote — §14)</td><td>Có thể "trôi" CPU nếu raise từ CPU khác lúc <code>tasklet_schedule()</code></td><td>Tuỳ loại workqueue (bound/unbound)</td></tr>
+        <tr><td>Đăng ký handler</td><td>Cố định 10 vector, tại boot (<code>open_softirq</code>)</td><td>Runtime, không giới hạn số lượng</td><td>Runtime, không giới hạn</td></tr>
+        <tr><td>Typical usage</td><td>Networking, Timer, RCU — core kernel, cần hiệu năng cao nhất</td><td>Driver bottom-half đơn giản</td><td>Việc có thể chờ lâu hơn, cần sleep (I/O, alloc lớn, mutex)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Thứ tự "độ tự do tăng dần" đúng theo kiến trúc: <b>Hard IRQ → SoftIRQ → Tasklet → Workqueue → Kernel Thread thường</b>. Đi từ trái sang phải: latency thấp hơn dần được đánh đổi lấy nhiều ràng buộc hơn (không sleep, không schedule), và ngược lại.</p>
+
+  <h3 class="sub">SoftIRQ Starvation</h3>
+  <p>Dựa trên cơ chế chống-starvation đã đọc ở §08 (2ms / need_resched / 10 restart) và budget NAPI ở §12 (netdev_budget), starvation xảy ra khi:</p>
+  <div class="diagram"><div class="flow">
+    <div class="node">Workload liên tục tự raise lại chính vector đang chạy (network flood, RCU callback flood, timer dồn cục)</div>
+    <div class="arrow">↓ __do_softirq() liên tục hit giới hạn restart → wakeup_softirqd() lặp lại</div>
+    <div class="node">ksoftirqd/N gần như luôn runnable, chiếm phần lớn CPU time của CPU đó</div>
+    <div class="arrow">↓</div>
+    <div class="node" style="border-color:var(--red);color:var(--red)">User task &amp; kernel task khác trên CÙNG CPU bị trễ đáng kể (scheduler vẫn phải cho ksoftirqd chạy theo priority của nó)</div>
+  </div></div>
+  <div class="warn"><b>Cụ thể trên board này:</b> vì patch <code>CONFIG_KM_BIZHUB</code> (§09) đặt <code>ksoftirqd</code> ở <code>SCHED_RR</code> priority 256, một khi rơi vào tình trạng starvation, <code>ksoftirqd</code> sẽ giữ CPU <b>trước cả</b> mọi task SCHED_OTHER và mọi RT task priority &lt;256 — mức độ ảnh hưởng tới hệ thống cao hơn hẳn so với mainline (nơi ksoftirqd chỉ là SCHED_OTHER, dễ bị các task khác chen vào hơn).</div>
+
+  <h3 class="sub">SoftIRQ ↔ RCU Stall — quan hệ CÓ ĐIỀU KIỆN, không phải nhân-quả tuyệt đối</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Mức độ</th><th>Nhận định</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tag tag-modern">Confirmed (từ source)</span></td><td>RCU callback thật sự chỉ được invoke trong <code>rcu_core()</code>, chạy qua <code>RCU_SOFTIRQ</code> khi <code>use_softirq=true</code> (§13). Nếu <code>RCU_SOFTIRQ</code> không được CPU chạy trong thời gian dài, callback backlog trên CPU đó tồn đọng.</td></tr>
+        <tr><td><span class="tag tag-inference">Possible / logic suy ra từ code, không phải log thật</span></td><td>Nếu một CPU bị starvation SoftIRQ nặng (theo mục trên), <code>RCU_SOFTIRQ</code> — đứng cuối bitmap, luôn được dispatch <b>sau</b> mọi vector khác trong cùng lượt <code>__do_softirq()</code> — có thể chậm được chạy hơn các vector khác nếu <code>__do_softirq()</code> hit giới hạn thời gian/restart trước khi tới bit RCU. CPU đó có thể chậm ghi nhận quiescent state → góp phần trễ grace period → nguy cơ "RCU CPU stall warning" tăng.</td></tr>
+        <tr><td><span class="tag tag-unverified">Chưa có log thực tế</span></td><td>Tài liệu này KHÔNG có log <code>rcu: INFO: rcu_sched detected stalls</code> thật từ board để đối chiếu — nhận định trên là suy luận logic từ đúng thứ tự dispatch trong <code>__do_softirq()</code> và vị trí <code>RCU_SOFTIRQ</code> trong enum, không phải bằng chứng runtime.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Nói đúng theo yêu cầu của prompt nghiên cứu: <b>SoftIRQ không phải là Grace Period, và starvation SoftIRQ không "gây" RCU stall một cách tất định</b> — nó tạo ra một <i>con đường hợp lý</i> để RCU chậm tiến triển trên CPU bị ảnh hưởng, cần xác nhận bằng <code>/proc/softirqs</code> (bit RCU tăng chậm) + dmesg RCU stall warning thật khi debug case cụ thể (xem §16).</p>
+</section>
+
+<!-- ================= 16 DEBUGGING PLAYBOOK ================= -->
+<section class="chapter" id="ch16">
+  <h2><span class="chno">16</span>SoftIRQ Debugging Playbook</h2>
+  <p class="lead"><span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span> cho phần code, lệnh shell là thao tác chuẩn của Linux.</p>
+
+  <div class="diagram"><div class="flow">
+    <div class="node">Symptom (CPU cao bất thường, latency tăng, network chậm...)</div>
+    <div class="arrow">↓</div>
+    <div class="node" onclick="jump('ch16')">cat /proc/softirqs</div>
+    <div class="arrow">↓</div>
+    <div class="node">cat /proc/interrupts + top/htop -H (tìm ksoftirqd/N)</div>
+    <div class="arrow">↓</div>
+    <div class="node">ps -ef | grep ksoftirqd; cat /proc/&lt;pid&gt;/status (state, policy)</div>
+    <div class="arrow">↓</div>
+    <div class="node">trace-cmd/ftrace: softirq_entry/softirq_exit/softirq_raise</div>
+    <div class="arrow">↓</div>
+    <div class="node">perf top / perf record — tìm __do_softirq, net_rx_action, rcu_core</div>
+    <div class="arrow">↓</div>
+    <div class="node">Đối chiếu với source (kernel/softirq.c, net/core/dev.c...) đã phân tích ở §05-§13</div>
+    <div class="arrow">↓</div>
+    <div class="node" style="border-color:var(--accent);color:var(--accent)">Root cause</div>
+  </div></div>
+
+  <h3 class="sub"><code>/proc/softirqs</code> — nguồn thật, giải thích từng phần</h3>
+  <div class="code">
+    <div class="file"><span>fs/proc/softirqs.c — toàn văn (33 dòng)</span><button class="copy">Copy</button></div>
+    <pre>static int show_softirqs(struct seq_file *p, void *v)
+{
+	int i, j;
+	seq_puts(p, "                    ");
+	for_each_possible_cpu(i)
+		seq_printf(p, "CPU%-8d", i);
+	seq_putc(p, '\n');
+
+	for (i = 0; i &lt; NR_SOFTIRQS; i++) {
+		seq_printf(p, "%12s:", softirq_to_name[i]);
+		for_each_possible_cpu(j)
+			seq_put_decimal_ull_width(p, " ", kstat_softirqs_cpu(i, j), 10);
+		seq_putc(p, '\n');
+	}
+	return 0;
+}
+proc_create_single("softirqs", 0, NULL, show_softirqs);   // registered via fs_initcall</pre>
+  </div>
+  <div class="code">
+    <div class="file"><span>Ví dụ output (định dạng thật theo code trên)</span><button class="copy">Copy</button></div>
+    <pre>                    CPU0       CPU1
+          HI:          3          0
+       TIMER:      88452      75103
+      NET_TX:        421        398
+      NET_RX:     102934      98211
+       BLOCK:          0          0
+    IRQ_POLL:          0          0
+     TASKLET:       1204        890
+       SCHED:      45231      44982
+     HRTIMER:          0          0
+         RCU:      33221      32877</pre>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Câu hỏi</th><th>Trả lời (từ code trên)</th></tr></thead>
+      <tbody>
+        <tr><td>Counter là gì?</td><td><code>kstat_softirqs_cpu(i, j)</code> — tổng số lần vector <code>i</code> đã <b>chạy handler</b> (được <code>kstat_incr_softirqs_this_cpu()</code> tăng ngay trong loop dispatch của <code>__do_softirq()</code>, §08) trên CPU <code>j</code>, tính từ lúc boot.</td></tr>
+        <tr><td>Per-CPU?</td><td>Có — mỗi cột là một CPU riêng, đúng với thiết kế per-CPU pending đã phân tích ở §04.</td></tr>
+        <tr><td>Nhìn counter tăng nhanh thì suy luận được gì?</td><td>Vector đó đang được dispatch nhiều lần — CPU đang bận xử lý loại việc này. NET_RX tăng nhanh bất thường → gợi ý traffic cao hoặc packet nhỏ dồn dập.</td></tr>
+        <tr><td>KHÔNG thể suy luận được gì?</td><td>Số lần dispatch <b>không phải</b> số packet/timer/callback thực tế đã xử lý (một lần dispatch <code>net_rx_action()</code> có thể xử lý tới hàng trăm packet nhờ budget). Cũng không cho biết CPU đang chạy softirq <i>trực tiếp</i> hay qua <i>ksoftirqd</i> — muốn biết phải xem thêm ftrace/ps.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub">Debug ksoftirqd</h3>
+  <div class="code">
+    <div class="file"><span>shell — chuẩn Linux</span><button class="copy">Copy</button></div>
+    <pre>ps -ef | grep ksoftirqd
+top -H                       # xem từng thread riêng, tìm ksoftirqd/N đang %CPU cao
+cat /proc/&lt;pid&gt;/status | grep -E "State|Cpus_allowed|Policy"</pre>
+  </div>
+  <p>Nếu board đang chạy patch <code>CONFIG_KM_BIZHUB</code> (§09), kiểm tra thêm chính sách lập lịch thật của tiến trình bằng <code>chrt -p &lt;pid&gt;</code> — kỳ vọng thấy <code>SCHED_RR</code>, priority tương ứng 256 (thang giá trị RT thật hiển thị qua <code>chrt</code> có thể khác do cách map priority nội bộ — cần đối chiếu trên board thật, không suy đoán số hiển thị).</p>
+
+  <h3 class="sub">Tracepoints — nguồn thật</h3>
+  <div class="code">
+    <div class="file"><span>include/trace/events/irq.h — dòng 122-156</span><button class="copy">Copy</button></div>
+    <pre>/*
+ * softirq_entry - called immediately before the softirq handler
+ * ...
+ */
+DEFINE_EVENT(softirq, softirq_entry, TP_PROTO(unsigned int vec_nr), TP_ARGS(vec_nr));
+
+/*
+ * softirq_exit - called immediately after the softirq handler returns
+ * ...
+ */
+DEFINE_EVENT(softirq, softirq_exit, TP_PROTO(unsigned int vec_nr), TP_ARGS(vec_nr));
+
+/*
+ * softirq_raise - called immediately when a softirq is raised
+ * ...
+ */
+DEFINE_EVENT(softirq, softirq_raise, TP_PROTO(unsigned int vec_nr), TP_ARGS(vec_nr));</pre>
+  </div>
+  <p><code>trace_softirq_entry()</code>/<code>trace_softirq_exit()</code> được gọi ngay trong loop dispatch <code>__do_softirq()</code> (§08, dòng 298/300); <code>trace_softirq_raise()</code> được gọi trong <code>__raise_softirq_irqoff()</code> (§05). Ba tracepoint này cho phép đo chính xác thời gian một vector chạy (entry→exit) và khoảng cách từ lúc raise tới lúc thật sự chạy (raise→entry) — chỉ số then chốt để phát hiện SoftIRQ bị defer quá lâu.</p>
+
+  <h3 class="sub">ftrace — function_graph cho đường đi thật</h3>
+  <div class="code">
+    <div class="file"><span>shell — ftrace / trace-cmd</span><button class="copy">Copy</button></div>
+    <pre># Bật event softirq qua tracefs
+echo 1 &gt; /sys/kernel/debug/tracing/events/irq/softirq_entry/enable
+echo 1 &gt; /sys/kernel/debug/tracing/events/irq/softirq_exit/enable
+echo 1 &gt; /sys/kernel/debug/tracing/events/irq/softirq_raise/enable
+cat /sys/kernel/debug/tracing/trace_pipe
+
+# Hoặc dùng trace-cmd, trace đúng call chain đã xác nhận ở §07:
+trace-cmd record -p function_graph \
+  -g irq_exit -g invoke_softirq -g do_softirq -g __do_softirq
+trace-cmd report</pre>
+  </div>
+  <p><b>Kỳ vọng đúng theo source đã đọc:</b> mỗi lần một vector chạy sẽ thấy cặp <code>softirq_raise</code> (thời điểm ISR raise) → khoảng trễ (có thể do đang trong restart loop khác, hoặc chờ ksoftirqd được scheduler chọn chạy) → <code>softirq_entry</code> (bắt đầu <code>h->action(h)</code>) → <code>softirq_exit</code>.</p>
+
+  <h3 class="sub">perf — tìm hotspot đúng function đã verify</h3>
+  <div class="code">
+    <div class="file"><span>shell — perf</span><button class="copy">Copy</button></div>
+    <pre>perf top                              # xem live, tìm __do_softirq/net_rx_action/rcu_core nổi bật
+perf record -a -g -- sleep 10
+perf report                           # xem call graph — xác nhận có đi qua đúng chain
+                                       # irq_exit -> invoke_softirq -> __do_softirq -> <vector action></pre>
+  </div>
+  <p>Nếu <code>perf report</code> cho thấy phần lớn thời gian nằm trong <code>run_ksoftirqd</code> (thay vì <code>__do_softirq</code> gọi trực tiếp từ <code>invoke_softirq</code>), đó là bằng chứng runtime cho thấy hệ thống đang <b>defer</b> softirq sang ksoftirqd thường xuyên — đối chiếu ngay với §09/§15 để xác định có phải do chạm giới hạn restart/time hay do <code>force_irqthreads</code>.</p>
+</section>
+
+<!-- ================= 17 REAL SCENARIOS & COMMON BUGS ================= -->
+<section class="chapter" id="ch17">
+  <h2><span class="chno">17</span>Real Scenarios &amp; Common Bugs</h2>
+  <p class="lead">Trace lại đúng bằng code đã đọc, không thêm chi tiết chưa xác nhận. <span class="tag tag-inference">Kịch bản dựng từ logic code thật</span></p>
+
+  <h3 class="sub">Scenario 1 — Network Flood</h3>
+  <div class="kv">
+    <b>Symptom</b><span>CPU softirq (NET_RX) cao, throughput không tăng thêm, latency ping/SSH tăng.</span>
+    <b>Expected flow</b><span>NIC IRQ → napi_schedule → NET_RX_SOFTIRQ → net_rx_action → napi_poll trong budget.</span>
+    <b>What happens</b><span>Packet tới nhanh hơn tốc độ <code>napi_poll()</code> xử lý → <code>budget &lt;= 0</code> hoặc <code>time_after_eq(jiffies,time_limit)</code> → <code>net_rx_action()</code> tự <code>__raise_softirq_irqoff(NET_RX_SOFTIRQ)</code> lại (§12) → <code>__do_softirq()</code> restart loop chạm giới hạn (§08) → <code>wakeup_softirqd()</code>.</span>
+    <b>What to inspect</b><span><code>/proc/softirqs</code> cột NET_RX tăng rất nhanh; <code>sd->time_squeeze</code> (không có API /proc chuẩn trong bản này để đọc trực tiếp — cần ftrace/kprobe nếu muốn theo dõi runtime) tăng mỗi lần budget hết.</span>
+    <b>How to verify</b><span>ftrace <code>softirq_raise</code> dồn dập cho NET_RX, <code>perf top</code> thấy <code>net_rx_action</code>/driver poll function chiếm phần lớn CPU.</span>
+  </div>
+
+  <h3 class="sub">Scenario 2 — RCU Callback Flood</h3>
+  <div class="kv">
+    <b>Symptom</b><span>RCU_SOFTIRQ tăng nhanh trong /proc/softirqs, có thể kèm cảnh báo RCU trong dmesg.</span>
+    <b>Expected flow</b><span>call_rcu() liên tục (vd giải phóng object với tốc độ cao) → grace period hoàn thành → invoke_rcu_core() → RCU_SOFTIRQ → rcu_core() dispatch callback.</span>
+    <b>What happens</b><span>Callback backlog lớn khiến <code>rcu_core()</code> tốn nhiều CPU time trong mỗi lượt dispatch — vì RCU_SOFTIRQ là bit cuối trong enum (§04), nếu các vector khác cũng bận, RCU có thể bị dispatch muộn trong cùng lượt <code>__do_softirq()</code>.</span>
+    <b>What to inspect</b><span>Cột RCU trong <code>/proc/softirqs</code>; liên hệ §15 (RCU Stall connection) để đánh giá nguy cơ.</span>
+    <b>How to verify</b><span>ftrace <code>softirq_entry</code>/<code>softirq_exit</code> cho vec RCU đo thời gian mỗi lượt <code>rcu_core()</code> chạy; dmesg tìm "rcu_sched detected stalls" nếu tình trạng kéo dài.</span>
+  </div>
+
+  <h3 class="sub">Scenario 3 — Timer Flood</h3>
+  <div class="kv">
+    <b>Symptom</b><span>TIMER_SOFTIRQ tăng cao, nhiều timer expire cùng lúc (vd nhiều driver dùng timer polling ngắn).</span>
+    <b>Expected flow</b><span>Tick → update_process_times() → run_local_timers() → (nếu next_expiry đã tới) raise_softirq(TIMER_SOFTIRQ) → run_timer_softirq() chạy callback thật.</span>
+    <b>What happens</b><span>Nếu rất nhiều timer cùng expire trong 1 tick, toàn bộ callback đó chạy dồn trong 1 lần <code>run_timer_softirq()</code> — không có "budget" riêng cho timer như NAPI (§12), nên timer callback chậm/nhiều có thể kéo dài đúng 1 lượt softirq này, chịu chung giới hạn 2ms/10-restart của <code>__do_softirq()</code>.</span>
+    <b>What to inspect</b><span>Cột TIMER trong /proc/softirqs; danh sách timer đang active trên hệ thống nếu có debugfs tương ứng.</span>
+    <b>How to verify</b><span>ftrace function_graph quanh <code>run_timer_softirq()</code> đo tổng thời gian 1 lượt.</span>
+  </div>
+
+  <h3 class="sub">Scenario 4 — Tasklet Flood</h3>
+  <div class="kv">
+    <b>Symptom</b><span>TASKLET_SOFTIRQ cao, một tasklet cụ thể tự schedule lại chính nó liên tục.</span>
+    <b>Expected flow</b><span>tasklet_schedule() → TASKLET_SOFTIRQ → tasklet_action_common() chạy callback → callback tự gọi tasklet_schedule() lại.</span>
+    <b>What happens</b><span>Vì <code>tasklet_action_common()</code> (§10) xử lý hết list hiện tại trong 1 lượt (không có budget riêng), nếu callback liên tục tự re-schedule, TASKLET_SOFTIRQ pending bit liên tục được set lại → góp phần trigger giới hạn restart của <code>__do_softirq()</code>.</span>
+    <b>What to inspect</b><span>Cột TASKLET trong /proc/softirqs; xác định driver/module nào đang dùng tasklet đó (không có API kernel chuẩn để liệt kê owner của từng tasklet instance — cần biết trước từ driver code).</span>
+    <b>How to verify</b><span>ftrace + kprobe trên hàm callback cụ thể nếu biết địa chỉ/tên hàm.</span>
+  </div>
+
+  <h3 class="sub">Scenario 5 — SoftIRQ CPU Hog tổng quát</h3>
+  <div class="kv">
+    <b>Symptom</b><span><code>top</code> cho thấy %si (softirq) rất cao trên 1 hoặc nhiều CPU, %us/%sy thấp bất thường.</span>
+    <b>Expected flow</b><span>Bất kỳ scenario 1-4 kéo dài, hoặc kết hợp nhiều vector cùng lúc.</span>
+    <b>What happens</b><span>CPU liên tục ở trong <code>__do_softirq()</code> (trực tiếp hoặc qua <code>ksoftirqd</code>), user/kernel task khác trên CPU đó bị trễ — nếu patch <code>CONFIG_KM_BIZHUB</code> có hiệu lực, <code>ksoftirqd</code> SCHED_RR priority 256 làm tình trạng "chiếm CPU trước RT task khác" rõ rệt hơn (§09, §15).</span>
+    <b>What to inspect</b><span>Toàn bộ <code>/proc/softirqs</code> theo cột CPU để xác định vector nào và CPU nào bị ảnh hưởng.</span>
+    <b>How to verify</b><span><code>perf record -a -g</code> + <code>perf report</code> xem call graph tổng thể, xác nhận đúng hàm đã liệt kê trong §05 Function Index.</span>
+  </div>
+
+  <h3 class="sub">Common Bugs</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Bug</th><th>Root cause</th><th>Symptom</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Sleep trong softirq handler</td><td>Gọi <code>mutex_lock()</code>/<code>kmalloc(GFP_KERNEL)</code>/bất kỳ API có thể block bên trong handler đăng ký qua <code>open_softirq()</code></td><td>"scheduling while atomic" BUG, hoặc treo hệ thống</td><td>Chuyển phần cần sleep ra workqueue; handler softirq chỉ làm việc atomic.</td></tr>
+        <tr><td>Thiếu <code>local_bh_disable()</code> khi share state với softirq</td><td>Process context sửa state (vd socket queue) mà không disable BH, bị SoftIRQ trên cùng CPU chen ngang giữa critical section</td><td>Race condition, data corruption khó reproduce (chỉ xảy ra khi đúng lúc SoftIRQ được raise)</td><td>Bọc bằng <code>local_bh_disable()</code>/<code>local_bh_enable()</code> (hoặc spinlock kèm <code>_bh</code> variant) đúng như §14 giải thích.</td></tr>
+        <tr><td>Giả định sai về CPU chạy softirq</td><td>Code cho rằng có thể "chuyển" một softirq pending sang CPU khác (dùng API không tồn tại như <code>raise_softirq_on</code> — §14)</td><td>Lỗi build/link nếu cố gọi API không có trong bản kernel này</td><td>Thiết kế lại theo per-CPU model thật; nếu cần cân bằng tải, dùng IRQ affinity/RPS ở tầng driver, không phải remote-raise softirq.</td></tr>
+        <tr><td>Tasklet callback lifetime</td><td>Free struct chứa <code>tasklet_struct</code> khi tasklet vẫn đang <code>TASKLET_STATE_SCHED</code>/<code>TASKLET_STATE_RUN</code> (đang hoặc sắp chạy trên CPU khác)</td><td>Use-after-free, thường crash không ổn định</td><td>Gọi <code>tasklet_kill()</code> (chờ tasklet chạy xong, xoá STATE_SCHED — §05 function index) trước khi free.</td></tr>
+        <tr><td>Nhầm <code>in_softirq()</code> với "đang thật sự chạy softirq handler"</td><td>Dùng <code>in_softirq()</code>/<code>in_interrupt()</code> để quyết định logic, quên rằng nó cũng true khi chỉ <code>local_bh_disable()</code> (§03, comment gốc kernel đã cảnh báo điều này)</td><td>Logic sai trong code chỉ nên chạy khi đang thực thi handler thật</td><td>Dùng <code>in_serving_softirq()</code> thay thế.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 18 PERFORMANCE, TUNING & DRIVER ================= -->
+<section class="chapter" id="ch18">
+  <h2><span class="chno">18</span>Performance, Tuning &amp; Driver Integration</h2>
+  <p class="lead"><span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Tham số tuning — chỉ liệt kê tham số grep-verify được trong repo này</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Parameter</th><th>Meaning</th><th>Subsystem</th><th>Giá trị mặc định (source)</th></tr></thead>
+      <tbody>
+        <tr><td><code>netdev_budget</code></td><td>Tổng số "work unit" tối đa <code>net_rx_action()</code> xử lý trong 1 lượt softirq</td><td>net/core/dev.c:4316</td><td><code>300</code></td></tr>
+        <tr><td><code>netdev_budget_usecs</code></td><td>Giới hạn thời gian tuyệt đối (µs) cho 1 lượt <code>net_rx_action()</code></td><td>net/core/dev.c:4318</td><td><code>2 * USEC_PER_SEC / HZ</code></td></tr>
+        <tr><td><code>weight_p</code> (old backlog weight)</td><td>Weight cho backlog NAPI cũ</td><td>net/core/dev.c:4319</td><td><code>64</code></td></tr>
+        <tr><td><code>dev_rx_weight</code> / <code>dev_tx_weight</code></td><td>Weight mặc định gán cho napi instance khi không do driver tự set riêng</td><td>net/core/dev.c:4322-4323</td><td><code>64</code></td></tr>
+        <tr><td><code>MAX_SOFTIRQ_TIME</code></td><td>Giới hạn thời gian tuyệt đối cho restart loop trong <code>__do_softirq()</code></td><td>kernel/softirq.c:220</td><td><code>msecs_to_jiffies(2)</code> — không phải sysctl, là compile-time macro</td></tr>
+        <tr><td><code>MAX_SOFTIRQ_RESTART</code></td><td>Số lần restart tối đa trong <code>__do_softirq()</code></td><td>kernel/softirq.c:221</td><td><code>10</code> — compile-time macro, không chỉnh runtime được</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">Hai tham số đầu (<code>netdev_budget</code>, <code>netdev_budget_usecs</code>) khai báo <code>__read_mostly</code> và không phải <code>static</code> — thường được export ra <code>sysctl</code> (<code>/proc/sys/net/core/netdev_budget*</code>) ở tầng khác của net/core; file <code>dev.c</code> chỉ chứa nơi khai báo/dùng giá trị, không chứa registration sysctl trong đoạn đã đọc.</div>
+
+  <h3 class="sub">Performance cost — Measured vs Conceptual</h3>
+  <div class="wwhh">
+    <div class="box"><span class="tag">Conceptual</span>Indirect dispatch qua <code>h->action(h)</code> (con trỏ hàm) trong loop <code>__do_softirq()</code> tốn hơn direct call — nhưng đây là chi phí kiến trúc cố định, không đo được cụ thể trong phạm vi tài liệu này.</div>
+    <div class="box"><span class="tag">Conceptual</span>Per-CPU (§04) loại bỏ hoàn toàn lock/atomic liên-CPU cho pending bitmap — lợi ích cache locality rõ ràng về mặt thiết kế, chưa có benchmark số trong tài liệu này.</div>
+    <div class="box"><span class="tag">Conceptual</span>Chuyển sang <code>ksoftirqd</code> (§09) đổi latency-thấp lấy fairness — có context-switch cost (đánh thức + scheduler chọn chạy) so với chạy thẳng trong IRQ-return path.</div>
+    <div class="box"><span class="tag tag-unverified">Chưa có Measured</span>Tài liệu này không có số đo benchmark thật (không chạy `perf stat`/tracing thật trên board) — mọi nhận định performance ở đây là <b>conceptual</b>, dựa trên đọc code, không phải số liệu đo runtime.</div>
+  </div>
+
+  <h3 class="sub">SoftIRQ trong Driver — nguyên tắc chung, không suy đoán riêng cho USB</h3>
+  <p>Mẫu chung quan sát được từ 3 subsystem đã trace đầy đủ (Timer, Network, RCU): <b>ISR chỉ raise pending bit rồi return ngay</b> — không có driver nào trong phạm vi đã đọc tự ý "chạy nốt" công việc nặng trong ISR.</p>
+  <div class="diagram"><div class="flow">
+    <div class="node">ISR (arch-specific, driver-specific)</div>
+    <div class="arrow">↓ raise_softirq() / raise_softirq_irqoff() / __raise_softirq_irqoff() / tasklet_schedule()</div>
+    <div class="node">Deferred processing — SoftIRQ vector CÓ SẴN (TIMER/NET_RX/NET_TX/RCU) hoặc Tasklet tự đăng ký runtime</div>
+  </div></div>
+  <div class="warn"><b>Về USB (yêu cầu của prompt gốc):</b> Repo này <b>không</b> chứa phần đọc sâu USB/EHCI trong lần nghiên cứu này (chưa grep <code>drivers/usb/</code>). Theo đúng nguyên tắc "không suy đoán" của tài liệu: <b>không khẳng định</b> USB completion trong repo này chạy qua SoftIRQ hay Tasklet hay Workqueue — cần đọc trực tiếp driver USB tương ứng của board (thường nằm dưới <code>drivers/usb/host/</code> hoặc <code>drivers/usb/gadget/</code>) trong một phiên nghiên cứu riêng trước khi kết luận. <span class="tag tag-unverified">UNVERIFIED — CẦN NGHIÊN CỨU RIÊNG</span></div>
+</section>
+
+<!-- ================= 19 EXERCISES & COMMON MISTAKES ================= -->
+<section class="chapter" id="ch19">
+  <h2><span class="chno">19</span>Source Code Exercises &amp; Common Mistakes</h2>
+  <p class="lead">Mỗi exercise cho đúng file/function thật đã verify ở các section trước. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <details class="acc"><summary>Exercise 1 — Tìm raise_softirq() và raise_softirq_irqoff()<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/softirq.c</code> dòng 457, 474</span>
+        <b>Câu hỏi</b><span>Vì sao <code>raise_softirq_irqoff()</code> chỉ gọi <code>wakeup_softirqd()</code> khi <code>!in_interrupt()</code>?</span>
+        <b>Đáp án</b><span>Vì nếu đang ở trong interrupt/softirq context, sẽ có một <code>irq_exit()</code>/<code>__do_softirq()</code> return path tự động kiểm tra pending bit và xử lý — gọi wakeup thêm ở đây là dư (có thể còn phản tác dụng, đánh thức ksoftirqd trong khi CPU đang chuẩn bị tự chạy nó ngay).</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 2 — Tìm pending bit storage<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/softirq.c</code> dòng 51-53 (khai báo <code>irq_stat</code>) + <code>include/linux/interrupt.h</code> dòng 504-514 (macro truy cập)</span>
+        <b>Câu hỏi</b><span><code>local_softirq_pending()</code> thật ra đọc field nào, của struct nào?</span>
+        <b>Đáp án</b><span><code>irq_stat.__softirq_pending</code>, trong <code>irq_cpustat_t</code>, qua <code>__this_cpu_read()</code> — hoàn toàn per-CPU.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 3 — Tìm caller thật của do_softirq()<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/softirq.c</code> dòng 191-197 (<code>__local_bh_enable_ip()</code>)</span>
+        <b>Câu hỏi</b><span><code>do_softirq()</code> được gọi từ đâu trong file này, và điều kiện gì phải đúng trước đó?</span>
+        <b>Đáp án</b><span>Từ <code>__local_bh_enable_ip()</code>, chỉ khi <code>unlikely(!in_interrupt() && local_softirq_pending())</code> — nghĩa là code vừa <code>local_bh_enable()</code>, không còn trong interrupt, và có pending thật.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 4 — Trace __do_softirq() restart logic<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/softirq.c</code> dòng 279 (label <code>restart:</code>) tới dòng 322</span>
+        <b>Câu hỏi</b><span>Điều gì xảy ra với biến <code>pending</code> cục bộ ngay sau <code>goto restart</code>?</span>
+        <b>Đáp án</b><span>Nó KHÔNG được reset thủ công trong code Việt — thực ra dòng 273 <code>pending = local_softirq_pending()</code> chỉ chạy 1 lần TRƯỚC label <code>restart:</code>; sau <code>goto restart</code>, <code>set_softirq_pending(0)</code> chạy nhưng biến <code>pending</code> local vẫn giữ giá trị đọc gần nhất — cần đọc kỹ: giá trị pending dùng cho vòng lặp <code>while(ffs(pending))</code> mới (sau restart) được gán lại ở dòng 315 <code>pending = local_softirq_pending()</code> trước khi kiểm tra restart, RỒI mới goto — do đó khi tới lại label <code>restart:</code>, biến pending đã có giá trị mới nhất tại thời điểm đó.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 5 — Tìm wakeup_softirqd() và điều kiện gọi nó<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/softirq.c</code> dòng 71-78; gọi tại dòng 321 (trong __do_softirq), 397 (invoke_softirq), 471 (raise_softirq_irqoff)</span>
+        <b>Câu hỏi</b><span>Có bao nhiêu nơi trong <code>kernel/softirq.c</code> gọi <code>wakeup_softirqd()</code>?</span>
+        <b>Đáp án</b><span>3 nơi — xem §05 Function Index để đối chiếu chi tiết từng caller.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 6 — Trace NET_RX_SOFTIRQ từ napi_schedule tới packet<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>net/core/dev.c</code> dòng 4328 (____napi_schedule) → 6938 (net_rx_action) → 6872 (napi_poll)</span>
+        <b>Câu hỏi</b><span><code>napi_poll()</code> gọi driver poll callback qua field nào của <code>napi_struct</code>?</span>
+        <b>Đáp án</b><span><code>n->poll(n, weight)</code> — con trỏ hàm driver gán khi gọi <code>netif_napi_add()</code> (ngoài phạm vi file dev.c đã đọc trong tài liệu này).</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 7 — Trace TASKLET_SOFTIRQ<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/softirq.c</code> dòng 522 (__tasklet_schedule) → 577 (tasklet_action) → 536 (tasklet_action_common)</span>
+        <b>Câu hỏi</b><span>Vì sao tasklet bị disable (<code>atomic_read(&t->count) != 0</code>) không bị BUG() khi gặp trong <code>tasklet_action_common()</code>?</span>
+        <b>Đáp án</b><span>Vì nó chỉ bị đẩy lại vào cuối list và raise lại softirq (dòng 568-573) — không xoá <code>TASKLET_STATE_SCHED</code>, để lượt sau thử lại; <code>BUG()</code> chỉ xảy ra nếu <code>TASKLET_STATE_SCHED</code> không được set đúng khi tới lượt chạy thật (dòng 555-557), tức là lỗi logic nghiêm trọng, không phải trạng thái "đang bận" bình thường.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 8 — Trace RCU_SOFTIRQ<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span><code>kernel/rcu/tree.c</code> dòng 2814 (invoke_rcu_core) → 2783 (rcu_core_si) → 4640 (open_softirq registration)</span>
+        <b>Câu hỏi</b><span>Điều kiện nào khiến <code>invoke_rcu_core()</code> KHÔNG raise RCU_SOFTIRQ?</span>
+        <b>Đáp án</b><span>Hai trường hợp: (1) <code>!cpu_online(smp_processor_id())</code> — CPU không online, return ngay; (2) <code>use_softirq == false</code> — RCU đang ở chế độ threaded, đi qua <code>invoke_rcu_core_kthread()</code> thay vì softirq.</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 9 — Remote CPU SoftIRQ — bài tập "chứng minh sự vắng mặt"<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span>Toàn bộ <code>kernel/softirq.c</code> — kết quả grep <code>raise_softirq_on|smp_call_function|IPI</code> = 0 match</span>
+        <b>Câu hỏi</b><span>Làm sao chứng minh một API không tồn tại trong source, thay vì chỉ "không thấy"?</span>
+        <b>Đáp án</b><span>Grep toàn file (không chỉ đọc lướt) với đúng tên hàm/pattern nghi ngờ — nếu 0 match trên toàn bộ file nguồn duy nhất định nghĩa các hàm <code>raise_softirq*</code>, đủ để kết luận API đó không tồn tại trong bản kernel này (§14).</span>
+      </div>
+    </div>
+  </details>
+
+  <details class="acc"><summary>Exercise 10 — Trace một packet thật từ NIC tới network stack<span></span></summary>
+    <div class="acc-body">
+      <div class="kv">
+        <b>File</b><span>Kết hợp §07 Flow 3 + §12 toàn bộ</span>
+        <b>Câu hỏi</b><span>Điểm nào trong chain là nơi packet THẬT SỰ được đọc từ hardware (không chỉ là "lên lịch xử lý")?</span>
+        <b>Đáp án</b><span>Bên trong <code>n->poll(n, weight)</code> gọi từ <code>napi_poll()</code> — đây là driver-specific code (không nằm trong <code>dev.c</code> đã đọc), nơi thật sự đọc DMA ring buffer / tạo <code>skb</code>. Mọi bước trước đó (napi_schedule, NET_RX_SOFTIRQ, net_rx_action) chỉ là cơ chế lên lịch, chưa đụng tới dữ liệu packet.</span>
+      </div>
+    </div>
+  </details>
+
+  <h3 class="sub">Common Mistakes khi đọc/nói về SoftIRQ</h3>
+  <div class="mistake">
+    <div class="wrong"><b>Sai:</b> "SoftIRQ chạy sau interrupt."</div>
+    <div class="right"><b>Đúng:</b> SoftIRQ chạy sau interrupt <b>CỦA CHÍNH CPU ĐÓ</b>, được dispatch bởi <code>invoke_softirq()</code> gọi từ <code>irq_exit()</code> (kernel/softirq.c), có thể chạy trực tiếp trên stack hiện tại HOẶC bị defer sang <code>ksoftirqd/N</code> — tuỳ 3 điều kiện restart ở §08.</div>
+  </div>
+  <div class="mistake">
+    <div class="wrong"><b>Sai:</b> "ksoftirqd xử lý SoftIRQ" (nói như thể luôn luôn đúng).</div>
+    <div class="right"><b>Đúng:</b> Phần lớn SoftIRQ chạy trực tiếp trong hard-IRQ-return path, KHÔNG qua ksoftirqd. ksoftirqd chỉ vào cuộc khi <code>__do_softirq()</code> chạm giới hạn 2ms/10-restart, hoặc khi <code>force_irqthreads</code> được bật, hoặc khi code raise softirq từ ngoài interrupt context (§09).</div>
+  </div>
+  <div class="mistake">
+    <div class="wrong"><b>Sai:</b> "preempt_count chỉ đếm số lần preempt_disable()."</div>
+    <div class="right"><b>Đúng:</b> Cùng một biến <code>preempt_count</code> được chia thành 4 field (NMI/HARDIRQ/SOFTIRQ/PREEMPT — §03), và field SOFTIRQ tự nó có 2 ý nghĩa (đang serving vs chỉ đang disabled) tuỳ offset 1× hay 2×.</div>
+  </div>
+</section>
+
+<!-- ================= 20 CHECKLIST, INTERVIEW, GLOSSARY, CHEAT SHEET ================= -->
+<section class="chapter" id="ch20">
+  <h2><span class="chno">20</span>Knowledge Checklist, Interview, Glossary &amp; Cheat Sheet</h2>
+  <p class="lead">Phần tổng kết cuối sách — không thay thế các phần phân tích chi tiết ở trên. <span class="tag tag-kernel">SOURCE: KERNEL SOURCE</span></p>
+
+  <h3 class="sub">Content Completeness Checklist</h3>
+  <p>Checklist lưu tiến độ vào <code>localStorage</code>.</p>
+  <div id="checkProgress"></div>
+  <ul class="check-list" id="finalCheckList"></ul>
+
+  <h3 class="sub">Interview Questions — Junior → Expert</h3>
+
+  <h4 class="sub2">Junior</h4>
+  <div class="qa"><div class="q"><span>SoftIRQ là gì?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Cơ chế "bottom half" chạy trong atomic context, defer công việc từ hard IRQ.<br><b>Deep:</b> Được implement trong <code>kernel/softirq.c</code> — 10 vector cố định (<code>enum</code> §04), dispatch qua <code>softirq_vec[]</code>, pending state per-CPU trong <code>irq_stat.__softirq_pending</code>.<br><b>Source:</b> kernel/softirq.c toàn file.<br><b>Common trap:</b> Nhầm SoftIRQ với Tasklet — Tasklet chỉ là lớp trên của 2 trong 10 vector đó (§10).</div></div>
+  <div class="qa"><div class="q"><span>Tại sao cần SoftIRQ?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Tránh giữ CPU quá lâu trong hard IRQ, giảm latency ngắt khác, cho phép công việc "nặng hơn ISR" nhưng vẫn không cần sleep.<br><b>Deep:</b> §01 — 3 rủi ro của việc làm hết việc trong ISR (miss ngắt, không sleep được, latency toàn hệ thống).<br><b>Source:</b> Comment gốc kernel/softirq.c dòng 33-49.<br><b>Common trap:</b> Nghĩ SoftIRQ "nhanh hơn" ISR — thực ra nó chỉ ít ràng buộc hơn về thời điểm chạy, không nhanh hơn về bản chất.</div></div>
+  <div class="qa"><div class="q"><span>SoftIRQ khác Hard IRQ thế nào?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Hard IRQ là phản hồi trực tiếp phần cứng, không thể bị defer thêm; SoftIRQ là cơ chế defer, có thể bị trì hoãn tới tận ksoftirqd.<br><b>Deep:</b> Bảng so sánh context §01.<br><b>Source:</b> preempt.h HARDIRQ_MASK vs SOFTIRQ_MASK — 2 field riêng trong preempt_count (§03).<br><b>Common trap:</b> Tưởng cả hai đều "không thể preempt" theo cùng nghĩa — SoftIRQ vẫn có thể bị hard IRQ khác ngắt vào giữa.</div></div>
+
+  <h4 class="sub2">Intermediate</h4>
+  <div class="qa"><div class="q"><span>SoftIRQ chạy ở context nào, có sleep được không?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Softirq context (SOFTIRQ_OFFSET cộng vào preempt_count), không sleep được.<br><b>Deep:</b> §03 — <code>in_serving_softirq()</code> true trong lúc handler chạy; §08 <code>__local_bh_disable_ip(SOFTIRQ_OFFSET)</code> trước loop dispatch.<br><b>Source:</b> kernel/softirq.c dòng 276.<br><b>Common trap:</b> Tưởng chạy trong ksoftirqd nghĩa là "sleep được luôn" — chỉ đúng ở NGOÀI đoạn gọi <code>__do_softirq()</code>; bên trong nó vẫn là softirq context.</div></div>
+  <div class="qa"><div class="q"><span>ksoftirqd là gì?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Kernel thread per-CPU, dùng framework smp_hotplug_thread, chạy softirq bị defer.<br><b>Deep:</b> §09 toàn bộ, gồm cả patch CONFIG_KM_BIZHUB đặc thù repo.<br><b>Source:</b> kernel/softirq.c dòng 641-746.<br><b>Common trap:</b> Tưởng nó tự viết loop riêng — thực ra dùng chung framework <code>smp_hotplug_thread</code> như <code>migration/N</code>.</div></div>
+  <div class="qa"><div class="q"><span>Tasklet dựa trên gì?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Dựa hoàn toàn trên 2 vector TASKLET_SOFTIRQ/HI_SOFTIRQ.<br><b>Deep:</b> §10 — per-CPU linked list + serialize-với-chính-nó qua TASKLET_STATE_RUN.<br><b>Source:</b> kernel/softirq.c dòng 498-724.<br><b>Common trap:</b> Tưởng 2 tasklet khác nhau không thể chạy song song — thực ra chúng CÓ THỂ, chỉ cùng 1 instance mới bị chặn.</div></div>
+
+  <h4 class="sub2">Senior</h4>
+  <div class="qa"><div class="q"><span>__do_softirq() hoạt động thế nào?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> 7 bước: mask PF_MEMALLOC → disable BH → clear pending → enable IRQ → loop dispatch → check restart limit → wakeup ksoftirqd nếu cần.<br><b>Deep:</b> §08 toàn bộ, map từng dòng code thật.<br><b>Source:</b> kernel/softirq.c dòng 256-329.<br><b>Common trap:</b> Quên rằng <code>local_irq_enable()</code> xảy ra GIỮA hàm — hard IRQ có thể ngắt vào ngay trong loop dispatch.</div></div>
+  <div class="qa"><div class="q"><span>Vì sao pending state là per-CPU?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Tránh lock/atomic liên-CPU, tăng cache locality, "weak CPU binding".<br><b>Deep:</b> §04 + comment gốc "No shared variables, all the data are CPU local".<br><b>Source:</b> kernel/softirq.c dòng 33-49, 51-53.<br><b>Common trap:</b> Tưởng điều này có nghĩa softirq luôn chạy song song trên nhiều CPU — chỉ đúng cho các vector KHÔNG cần serialize global (như NET_RX, theo đúng comment gốc).</div></div>
+  <div class="qa"><div class="q"><span>Khi nào ksoftirqd được wake?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> 3 đường: hết restart quota trong __do_softirq, force_irqthreads bật, hoặc raise từ ngoài interrupt context.<br><b>Deep:</b> §09 "Khi nào chuyển từ chạy trực tiếp sang ksoftirqd".<br><b>Source:</b> kernel/softirq.c dòng 321, 397, 471.<br><b>Common trap:</b> Nghĩ chỉ có 1 điều kiện (time limit) — thực ra có 3 nơi gọi độc lập.</div></div>
+  <div class="qa"><div class="q"><span>NAPI liên hệ với NET_RX_SOFTIRQ thế nào?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> NAPI là cơ chế poll-based, dùng NET_RX_SOFTIRQ làm "cơ chế lên lịch" — napi_schedule chỉ raise bit, net_rx_action mới thật sự poll.<br><b>Deep:</b> §12 toàn bộ, kèm 2 lớp budget riêng (netdev_budget vs n->weight).<br><b>Source:</b> net/core/dev.c dòng 4328, 6938, 6872.<br><b>Common trap:</b> Tưởng napi_schedule() xử lý packet ngay — nó chỉ đẩy vào poll_list.</div></div>
+
+  <h4 class="sub2">Expert</h4>
+  <div class="qa"><div class="q"><span>preempt_count biểu diễn softirq context thế nào?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> SOFTIRQ field 8-bit dùng chung cho 2 mục đích qua hệ số offset khác nhau (1× = serving, 2× = disabled).<br><b>Deep:</b> §03 — SOFTIRQ_OFFSET vs SOFTIRQ_DISABLE_OFFSET, in_serving_softirq() vs in_softirq().<br><b>Source:</b> include/linux/preempt.h dòng 32-104.<br><b>Common trap:</b> Dùng in_softirq() để kiểm tra "đang chạy handler" — sai, nó cũng true khi chỉ local_bh_disable().</div></div>
+  <div class="qa"><div class="q"><span>softirq starvation có thể dẫn tới RCU stall thế nào?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Có đường logic hợp lý (RCU_SOFTIRQ luôn dispatch sau cùng, có thể bị cắt bởi giới hạn restart trước khi tới), nhưng KHÔNG tất định.<br><b>Deep:</b> §15 — bảng Confirmed/Possible/Unverified.<br><b>Source:</b> kernel/rcu/tree.c + kernel/softirq.c (thứ tự enum, restart limit).<br><b>Common trap:</b> Khẳng định chắc chắn "SoftIRQ starvation GÂY RCU stall" — đây là suy luận logic, cần log runtime thật để xác nhận từng case.</div></div>
+  <div class="qa"><div class="q"><span>local_bh_disable() thực sự bảo vệ điều gì?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Chặn SoftIRQ chạy trên CPU hiện tại — không chặn hard IRQ, không chặn preemption.<br><b>Deep:</b> §14 bảng 3 API dễ nhầm.<br><b>Source:</b> kernel/softirq.c dòng 117-205, include/linux/bottom_half.h.<br><b>Common trap:</b> Tưởng nó cũng chặn preempt — nó cộng SOFTIRQ_DISABLE_OFFSET, không phải PREEMPT field, nhưng do preempt_count() != 0 nên gián tiếp cũng ngăn được preempt (hiệu ứng phụ, không phải mục đích chính).</div></div>
+  <div class="qa"><div class="q"><span>Remote CPU softirq raise hoạt động ra sao?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> KHÔNG tồn tại trong kernel 5.10.241 này.<br><b>Deep:</b> §14 — grep xác nhận 0 match cho raise_softirq_on/IPI trong kernel/softirq.c.<br><b>Source:</b> Phủ định bằng grep toàn file.<br><b>Common trap:</b> Trả lời câu này bằng kiến thức kernel cũ (có <code>raise_softirq_on()</code> ở một số bản trước) mà không kiểm tra lại — đây chính xác là loại sai lầm tài liệu này cố tránh.</div></div>
+  <div class="qa"><div class="q"><span>PREEMPT_RT thay đổi SoftIRQ semantics thế nào?</span><span class="arrow">›</span></div>
+    <div class="a"><b>Short:</b> Không verify được trong repo này — chỉ là additional context.<br><b>Deep:</b> §14 — repo không bật CONFIG_PREEMPT_RT, chỉ có vài <code>IS_ENABLED()</code> guard phòng hờ trong code upstream.<br><b>Source:</b> Không có patch RT thật trong Kernel/K-S800/Src.<br><b>Common trap:</b> Trả lời như thể board này chạy RT — cần luôn kiểm tra Kconfig thật trước khi khẳng định.</div></div>
+
+  <h3 class="sub">Glossary</h3>
+  <input id="glossFilter" placeholder="Lọc thuật ngữ...">
+  <dl>
+    <div class="gloss-item"><dt>SoftIRQ</dt><dd>Cơ chế bottom-half atomic, 10 vector cố định, dispatch qua softirq_vec[] trong kernel/softirq.c.</dd></div>
+    <div class="gloss-item"><dt>Hard IRQ</dt><dd>Interrupt handler chạy trực tiếp khi phần cứng phát ngắt, atomic context nghiêm ngặt nhất.</dd></div>
+    <div class="gloss-item"><dt>ksoftirqd/N</dt><dd>Kernel thread per-CPU (N = chỉ số CPU), chạy softirq bị defer, dùng framework smp_hotplug_thread.</dd></div>
+    <div class="gloss-item"><dt>Tasklet</dt><dd>Cơ chế bottom-half dựng trên TASKLET_SOFTIRQ/HI_SOFTIRQ, tự serialize với chính nó qua TASKLET_STATE_RUN.</dd></div>
+    <div class="gloss-item"><dt>NAPI</dt><dd>New API — cơ chế poll-based cho network RX, dùng NET_RX_SOFTIRQ để lên lịch, có budget chống livelock.</dd></div>
+    <div class="gloss-item"><dt>RCU_SOFTIRQ</dt><dd>Vector cuối trong enum, dispatch callback RCU thật sự (rcu_core()), không phải nơi grace period hoàn thành.</dd></div>
+    <div class="gloss-item"><dt>preempt_count</dt><dd>Biến bitfield 4 phần (NMI/HARDIRQ/SOFTIRQ/PREEMPT) biểu diễn execution context hiện tại.</dd></div>
+    <div class="gloss-item"><dt>local_bh_disable()</dt><dd>Chặn SoftIRQ chạy trên CPU hiện tại bằng cách cộng SOFTIRQ_DISABLE_OFFSET vào preempt_count.</dd></div>
+    <div class="gloss-item"><dt>irq_stat.__softirq_pending</dt><dd>Bitmap 32-bit per-CPU lưu vector nào đang chờ xử lý trên CPU đó.</dd></div>
+    <div class="gloss-item"><dt>invoke_softirq()</dt><dd>Hàm quyết định chạy __do_softirq() trực tiếp hay wakeup_softirqd(), gọi từ irq_exit().</dd></div>
+    <div class="gloss-item"><dt>netdev_budget</dt><dd>Số work unit tối đa net_rx_action() xử lý trong 1 lượt softirq, mặc định 300.</dd></div>
+    <div class="gloss-item"><dt>MAX_SOFTIRQ_RESTART</dt><dd>Giới hạn 10 lần restart loop trong __do_softirq(), cơ chế chống starvation không phụ thuộc jiffies.</dd></div>
+    <div class="gloss-item"><dt>CONFIG_KM_BIZHUB</dt><dd>Patch vendor riêng của repo này, đặt ksoftirqd chạy SCHED_RR priority 256 — không có trong mainline.</dd></div>
+  </dl>
+
+  <h3 class="sub">Cheat Sheet</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4 class="sub2">Core Functions</h4>
+      <code>raise_softirq · raise_softirq_irqoff · __raise_softirq_irqoff · open_softirq · do_softirq · __do_softirq · invoke_softirq · irq_enter · irq_exit · wakeup_softirqd · run_ksoftirqd · local_bh_disable · local_bh_enable</code>
+    </div>
+    <div class="card">
+      <h4 class="sub2">Vectors (thứ tự enum thật)</h4>
+      <code>HI_SOFTIRQ(0) · TIMER_SOFTIRQ(1) · NET_TX_SOFTIRQ(2) · NET_RX_SOFTIRQ(3) · BLOCK_SOFTIRQ(4) · IRQ_POLL_SOFTIRQ(5) · TASKLET_SOFTIRQ(6) · SCHED_SOFTIRQ(7) · HRTIMER_SOFTIRQ(8) · RCU_SOFTIRQ(9)</code>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h4 class="sub2">Context rules</h4>
+      <div class="kv" style="grid-template-columns:110px 1fr">
+        <b>Hard IRQ</b><span>Không sleep, không schedule</span>
+        <b>SoftIRQ</b><span>Không sleep, không schedule, hard IRQ vẫn ngắt vào được</span>
+        <b>ksoftirqd</b><span>Process context, nhưng bên trong __do_softirq() vẫn là softirq context</span>
+        <b>Process context</b><span>Sleep/schedule đầy đủ</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4 class="sub2">Limits (compile-time, kernel/softirq.c)</h4>
+      <div class="kv" style="grid-template-columns:150px 1fr">
+        <b>MAX_SOFTIRQ_TIME</b><span>msecs_to_jiffies(2)</span>
+        <b>MAX_SOFTIRQ_RESTART</b><span>10</span>
+        <b>netdev_budget</b><span>300 (net/core/dev.c, có thể chỉnh qua sysctl)</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="sub">Master Diagram — toàn bộ lifecycle</h3>
+  <div class="diagram"><div class="flow">
+    <div class="node">HARDWARE</div>
+    <div class="arrow">↓ GIC → arch/arm64/kernel/entry.S</div>
+    <div class="node">IRQ ENTRY (el1_irq → irq_handler macro → handle_arch_irq)</div>
+    <div class="arrow">↓</div>
+    <div class="node">__handle_domain_irq() — irq_enter() → generic_handle_irq() (ISR thật)</div>
+    <div class="arrow">↓ raise_softirq()/raise_softirq_irqoff()/__raise_softirq_irqoff()</div>
+    <div class="node">PER-CPU PENDING — irq_stat.__softirq_pending</div>
+    <div class="arrow">↓ irq_exit() → __irq_exit_rcu()</div>
+    <div class="branch">
+      <div class="col"><div class="node" onclick="jump('ch08')">__do_softirq()<br><span class="tagline">trực tiếp</span></div></div>
+      <div class="col"><div class="node" onclick="jump('ch09')">wakeup_softirqd() → ksoftirqd/N<br><span class="tagline">deferred</span></div></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node">SOFTIRQ VECTOR — h->action(h)</div>
+    <div class="branch">
+      <div class="col"><div class="node" onclick="jump('ch11')">TIMER<br><span class="tagline">run_timer_softirq</span></div></div>
+      <div class="col"><div class="node" onclick="jump('ch12')">NET_RX<br><span class="tagline">net_rx_action → NAPI</span></div></div>
+      <div class="col"><div class="node" onclick="jump('ch10')">TASKLET<br><span class="tagline">tasklet_action</span></div></div>
+      <div class="col"><div class="node" onclick="jump('ch13')">RCU<br><span class="tagline">rcu_core_si → rcu_core</span></div></div>
+    </div>
+  </div></div>
+</section>
+
+<footer class="master">
+  <p>Linux Kernel SoftIRQ Deep Dive — Personal Reference Book · Nguồn: <code>Kernel/K-S800/Src</code> (Linux 5.10.241, arm64) · Mọi function/macro/struct đã grep-verify trực tiếp, không suy đoán.</p>
+</footer>
+
+<script>
+window.__softirqChecklist = [
+  {title:"Nền tảng", items:[
+    "SoftIRQ fundamentals (§01)",
+    "Interrupt context / atomic context (§03)",
+    "SoftIRQ vectors — đủ 10 vector theo enum thật (§04)"
+  ]},
+  {title:"Core mechanism", items:[
+    "raise_softirq / raise_softirq_irqoff / __raise_softirq_irqoff (§05)",
+    "pending bitmap per-CPU (§04)",
+    "open_softirq (§05)",
+    "do_softirq (§05)",
+    "__do_softirq — 7 bước chi tiết (§08)",
+    "restart / time limit chống starvation (§08)",
+    "ksoftirqd — lifecycle + patch CONFIG_KM_BIZHUB (§09)",
+    "irq_exit — cả generic và ARM64 entry path thật (§07)",
+    "interrupt return path ARM64 (entry.S, irqdesc.c) (§07)",
+    "scheduler tương tác qua wake_up_process (§09)"
+  ]},
+  {title:"Cơ chế cụ thể", items:[
+    "Tasklet — schedule/action/serialization (§10)",
+    "Timer — update_process_times/run_local_timers (§11)",
+    "NET_RX/NAPI — napi_schedule/net_rx_action/budget (§12)",
+    "RCU_SOFTIRQ — invoke_rcu_core/rcu_core, GP vs callback (§13)"
+  ]},
+  {title:"Hệ thống", items:[
+    "SMP — xác nhận KHÔNG có remote raise (§14)",
+    "per-CPU — irq_stat, tasklet_vec (§04, §14)",
+    "CPU hotplug — takeover_tasklets (§14)",
+    "Locking — local_bh_disable vs local_irq_disable vs preempt_disable (§14)",
+    "preemption / nesting (§03, §14)",
+    "PREEMPT_RT — additional context, chưa verify trong repo (§14)",
+    "starvation / latency (§15)",
+    "RCU stall connection — Confirmed/Possible/Unverified (§15)"
+  ]},
+  {title:"Thực hành", items:[
+    "source map (§06)",
+    "function index đầy đủ (§05)",
+    "driver integration — nguyên tắc chung + USB chưa verify (§18)",
+    "debugging — /proc/softirqs, ftrace, perf, tracepoints (§16)",
+    "real scenarios — 5 kịch bản (§17)",
+    "common bugs (§17)",
+    "performance — conceptual vs measured (§18)",
+    "tuning — netdev_budget và các tham số verify được (§18)",
+    "interview Junior→Expert (§20)",
+    "exercises 1-10 (§19)",
+    "cheat sheet (§20)"
+  ]}
+];
+
+window.__softirqSearchIndex = [
+  {id:"ch01", title:"SoftIRQ là gì &amp; Vì sao", sub:"§01 · Định nghĩa, so sánh context, vị trí kiến trúc", text:"softirq là gì vì sao hard irq process context bottom half"},
+  {id:"ch03", title:"Interrupt Context & preempt_count", sub:"§03 · bit layout, in_irq, in_softirq, in_serving_softirq", text:"preempt_count in_interrupt in_irq in_softirq in_serving_softirq hardirq_count softirq_count preempt.h"},
+  {id:"ch04", title:"Vectors & Data Structures", sub:"§04 · enum, softirq_action, tasklet_struct, irq_stat", text:"HI_SOFTIRQ TIMER_SOFTIRQ NET_TX_SOFTIRQ NET_RX_SOFTIRQ TASKLET_SOFTIRQ RCU_SOFTIRQ softirq_vec irq_cpustat_t local_softirq_pending"},
+  {id:"ch05", title:"Function Index", sub:"§05 · raise_softirq, do_softirq, ksoftirqd, local_bh_disable...", text:"raise_softirq raise_softirq_irqoff open_softirq do_softirq __do_softirq irq_enter irq_exit invoke_softirq wakeup_softirqd ksoftirqd_should_run run_ksoftirqd local_bh_disable local_bh_enable net_rx_action rcu_core"},
+  {id:"ch06", title:"Source Code Map", sub:"§06 · kernel/softirq.c, net/core/dev.c, arch/arm64...", text:"source map kernel softirq.c interrupt.h dev.c tree.c timer.c entry.S entry-common.c"},
+  {id:"ch07", title:"Master Call Flow", sub:"§07 · ARM64 entry.S → irqdesc.c → __do_softirq, 5 flow", text:"entry.S irq_handler el1_interrupt_handler handle_domain_irq irqdesc call flow napi tasklet rcu timer"},
+  {id:"ch08", title:"__do_softirq() Deep Dive", sub:"§08 · 7 bước, restart limit, MAX_SOFTIRQ_TIME/RESTART", text:"__do_softirq restart max_softirq_time max_softirq_restart ffs pending rcu_softirq_qs"},
+  {id:"ch09", title:"ksoftirqd Deep Dive", sub:"§09 · smp_hotplug_thread, CONFIG_KM_BIZHUB SCHED_RR 256", text:"ksoftirqd run_ksoftirqd ksoftirqd_should_run smp_hotplug_thread CONFIG_KM_BIZHUB SCHED_RR wakeup_softirqd wake_up_process"},
+  {id:"ch10", title:"Tasklet", sub:"§10 · tasklet_schedule, tasklet_action, TASKLET_STATE_RUN", text:"tasklet tasklet_schedule tasklet_action tasklet_vec tasklet_hi_vec TASKLET_STATE_RUN TASKLET_STATE_SCHED"},
+  {id:"ch11", title:"TIMER_SOFTIRQ", sub:"§11 · update_process_times, run_local_timers", text:"timer_softirq update_process_times run_local_timers run_timer_softirq scheduler_tick"},
+  {id:"ch12", title:"NET_RX_SOFTIRQ / NAPI", sub:"§12 · napi_schedule, net_rx_action, netdev_budget", text:"napi net_rx_action napi_schedule napi_poll netdev_budget netdev_budget_usecs weight_p ____napi_schedule"},
+  {id:"ch13", title:"RCU_SOFTIRQ", sub:"§13 · rcu_core, invoke_rcu_core, grace period vs callback", text:"rcu_softirq rcu_core rcu_core_si invoke_rcu_core call_rcu grace period use_softirq"},
+  {id:"ch14", title:"SMP / Per-CPU / Locking", sub:"§14 · không có remote raise, local_bh_disable vs preempt_disable", text:"smp per-cpu raise_softirq_on takeover_tasklets local_bh_disable local_irq_disable preempt_disable PREEMPT_RT"},
+  {id:"ch15", title:"So sánh & Starvation/RCU Stall", sub:"§15 · SoftIRQ vs Tasklet vs Workqueue, RCU stall connection", text:"starvation latency rcu stall workqueue tasklet comparison ksoftirqd priority"},
+  {id:"ch16", title:"Debugging Playbook", sub:"§16 · /proc/softirqs, ftrace, perf, tracepoints", text:"proc softirqs debugging ftrace perf tracepoint softirq_entry softirq_exit softirq_raise show_softirqs"},
+  {id:"ch17", title:"Real Scenarios & Common Bugs", sub:"§17 · network/RCU/timer/tasklet flood, common bugs", text:"scenario network flood rcu flood timer flood tasklet flood cpu hog common bugs sleep in atomic"},
+  {id:"ch18", title:"Performance, Tuning & Driver", sub:"§18 · netdev_budget, MAX_SOFTIRQ_TIME, USB unverified", text:"performance tuning netdev_budget driver usb unverified"},
+  {id:"ch19", title:"Exercises & Common Mistakes", sub:"§19 · 10 exercise, 3 mistake phổ biến", text:"exercise mistake common trap"},
+  {id:"ch20", title:"Checklist, Interview, Glossary, Cheat Sheet", sub:"§20 · Junior→Expert Q&A, glossary, master diagram", text:"interview junior senior expert glossary cheat sheet master diagram"}
+];
+</script>
+
+</div>
+</main>
+</div>
+
+<script>
+// ---------- theme ----------
+(function(){
+  var saved = null;
+  try{ saved = localStorage.getItem('softirq-theme'); }catch(e){}
+  if(saved) document.documentElement.setAttribute('data-theme', saved);
+  document.getElementById('themeBtn').addEventListener('click', function(){
+    var cur = document.documentElement.getAttribute('data-theme');
+    var isDark = cur ? cur==='dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try{ localStorage.setItem('softirq-theme', next); }catch(e){}
+  });
+})();
+
+// ---------- mobile sidebar ----------
+var sidebar = document.getElementById('sidebar');
+document.getElementById('menuBtn').addEventListener('click', function(){
+  sidebar.classList.toggle('open');
+});
+sidebar.addEventListener('click', function(e){
+  if(e.target.classList.contains('sb-link')) sidebar.classList.remove('open');
+});
+
+// ---------- scroll progress + active link ----------
+var headerEl = document.querySelector('header.top');
+window.addEventListener('scroll', function(){
+  var h = document.documentElement;
+  var pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+  if(headerEl) headerEl.classList.toggle('scrolled', h.scrollTop > 4);
+}, {passive:true});
+
+var sections = Array.prototype.slice.call(document.querySelectorAll('section[id]'));
+var links = Array.prototype.slice.call(document.querySelectorAll('.sb-link'));
+function onScroll(){
+  var top = window.scrollY + 90;
+  var current = sections[0];
+  for(var i=0;i<sections.length;i++){
+    if(sections[i].offsetTop <= top) current = sections[i];
+  }
+  links.forEach(function(l){
+    l.classList.toggle('active', l.getAttribute('href') === '#'+current.id);
+  });
+}
+window.addEventListener('scroll', onScroll, {passive:true});
+onScroll();
+
+function jump(id){
+  var el = document.getElementById(id);
+  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ---------- copy buttons ----------
+document.querySelectorAll('.code .copy').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pre = btn.closest('.code').querySelector('pre');
+    navigator.clipboard.writeText(pre.textContent).then(function(){
+      var old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(function(){ btn.textContent = old; }, 1200);
+    });
+  });
+});
+
+// ---------- function card toggles ----------
+function toggleFn(btn){
+  var detail = btn.closest('.fn').querySelector('.fn-detail');
+  detail.classList.toggle('open');
+}
+
+// ---------- qa accordion ----------
+document.querySelectorAll('.qa').forEach(function(box){
+  box.addEventListener('click', function(){ box.classList.toggle('open'); });
+});
+
+// ---------- glossary filter ----------
+(function(){
+  var f = document.getElementById('glossFilter');
+  if(!f) return;
+  f.addEventListener('input', function(){
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('.gloss-item').forEach(function(it){
+      it.style.display = it.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+    });
+  });
+})();
+
+// ---------- function index filter ----------
+(function(){
+  var f = document.getElementById('fnFilter');
+  if(!f) return;
+  f.addEventListener('input', function(){
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#fnTable tbody tr').forEach(function(tr){
+      tr.style.display = tr.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+    });
+  });
+})();
+
+// ---------- objectives checklist ----------
+(function(){
+  var list = document.getElementById('objList');
+  if(!list) return;
+  var items = [
+    'Phân biệt được Hard IRQ / SoftIRQ / ksoftirqd / process context',
+    'Đọc và giải thích được từng bước trong __do_softirq()',
+    'Biết chính xác pending bit của SoftIRQ nằm ở đâu (per-CPU)',
+    'Hiểu khi nào kernel chuyển từ chạy trực tiếp sang wakeup_softirqd()',
+    'Trace được irq_exit() → invoke_softirq() → do_softirq()/__do_softirq()',
+    'Hiểu Tasklet dựa trên TASKLET_SOFTIRQ như thế nào',
+    'Trace được đường đi NIC → NAPI → NET_RX_SOFTIRQ → net_rx_action()',
+    'Phân biệt RCU grace period với RCU callback execution qua RCU_SOFTIRQ',
+    'Giải thích local_bh_disable() khác local_irq_disable()/preempt_disable() ra sao',
+    'Đọc được /proc/softirqs và biết giới hạn của số liệu đó',
+    'Nhận diện được SoftIRQ starvation và liên hệ với RCU stall',
+    'Biết patch CONFIG_KM_BIZHUB thay đổi gì trong run_ksoftirqd()'
+  ];
+  var state = {};
+  try{ state = JSON.parse(localStorage.getItem('softirq-objectives')||'{}'); }catch(e){}
+  items.forEach(function(txt, i){
+    var li = document.createElement('li');
+    var id = 'obj'+i;
+    li.innerHTML = '<input type="checkbox" id="'+id+'"><label for="'+id+'">'+txt+'</label>';
+    var cb = li.querySelector('input');
+    var lb = li.querySelector('label');
+    cb.checked = !!state[id];
+    if(cb.checked) lb.classList.add('done');
+    cb.addEventListener('change', function(){
+      state[id] = cb.checked;
+      lb.classList.toggle('done', cb.checked);
+      try{ localStorage.setItem('softirq-objectives', JSON.stringify(state)); }catch(e){}
+      update();
+    });
+    list.appendChild(li);
+  });
+  function update(){
+    var done = Object.keys(state).filter(function(k){return state[k];}).length;
+    var el = document.getElementById('checkProgress2');
+    if(el) el.textContent = 'Tiến độ: '+done+'/'+items.length+' mục';
+  }
+  update();
+})();
+
+// ---------- knowledge checklist (ch20) ----------
+(function(){
+  var list = document.getElementById('finalCheckList');
+  if(!list) return;
+  var groups = window.__softirqChecklist || [];
+  var state = {};
+  try{ state = JSON.parse(localStorage.getItem('softirq-checklist')||'{}'); }catch(e){}
+  var counter = 0;
+  groups.forEach(function(g){
+    var h = document.createElement('div');
+    h.className = 'check-group-title';
+    h.textContent = g.title;
+    list.appendChild(h);
+    g.items.forEach(function(txt){
+      var li = document.createElement('li');
+      var id = 'fc'+(counter++);
+      li.innerHTML = '<input type="checkbox" id="'+id+'"><label for="'+id+'">'+txt+'</label>';
+      var cb = li.querySelector('input');
+      var lb = li.querySelector('label');
+      cb.checked = !!state[id];
+      if(cb.checked) lb.classList.add('done');
+      cb.addEventListener('change', function(){
+        state[id] = cb.checked;
+        lb.classList.toggle('done', cb.checked);
+        try{ localStorage.setItem('softirq-checklist', JSON.stringify(state)); }catch(e){}
+        updateProgress();
+      });
+      list.appendChild(li);
+    });
+  });
+  function updateProgress(){
+    var total = Object.keys(state).length ? counter : counter;
+    var done = Object.keys(state).filter(function(k){return state[k];}).length;
+    var el = document.getElementById('checkProgress');
+    if(el) el.textContent = 'SoftIRQ Study Progress: '+done+'/'+counter+' ('+Math.round(done/counter*100||0)+'%)';
+  }
+  updateProgress();
+})();
+
+// ---------- search ----------
+var modal = document.getElementById('searchModal');
+var input = document.getElementById('searchInput');
+function openSearch(){ modal.classList.add('open'); input.value=''; renderResults(''); setTimeout(function(){input.focus();},30); }
+function closeSearch(){ modal.classList.remove('open'); }
+document.getElementById('searchBtn').addEventListener('click', openSearch);
+modal.addEventListener('click', function(e){ if(e.target===modal) closeSearch(); });
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openSearch(); }
+  if(e.key==='Escape') closeSearch();
+});
+var searchIndex = window.__softirqSearchIndex || [];
+function renderResults(q){
+  q = q.toLowerCase();
+  var res = document.getElementById('searchResults');
+  res.innerHTML = '';
+  var matches = searchIndex.filter(function(it){
+    return !q || it.text.toLowerCase().indexOf(q) > -1;
+  }).slice(0, 40);
+  matches.forEach(function(it){
+    var div = document.createElement('div');
+    div.className = 'sres';
+    div.innerHTML = it.title + '<small>' + it.sub + '</small>';
+    div.addEventListener('click', function(){ closeSearch(); jump(it.id); });
+    res.appendChild(div);
+  });
+  if(!matches.length){
+    res.innerHTML = '<div class="sres" style="cursor:default">Không có kết quả.</div>';
+  }
+}
+input.addEventListener('input', function(){ renderResults(this.value); });
+</script>
+</body>
+</html>

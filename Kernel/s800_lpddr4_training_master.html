@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S800 LPDDR4 Training FW — From Zero → Expert</title>
+<style>
+:root{
+  --bg:#0f172a; --panel:#111827; --panel2:#0b1220; --border:#1f2937;
+  --primary:#38bdf8; --secondary:#818cf8; --success:#22c55e; --warning:#f59e0b; --error:#ef4444;
+  --text:#e5e7eb; --text-dim:#94a3b8; --code-bg:#0b1220; --hover:#1e293b;
+  --radius:8px; --mono:'Consolas','SFMono-Regular','Menlo',monospace;
+}
+html[data-theme="light"]{
+  --bg:#f8fafc; --panel:#ffffff; --panel2:#f1f5f9; --border:#e2e8f0;
+  --primary:#0284c7; --secondary:#4f46e5; --success:#16a34a; --warning:#b45309; --error:#dc2626;
+  --text:#0f172a; --text-dim:#475569; --code-bg:#f1f5f9; --hover:#e2e8f0;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.65;font-size:15px;}
+a{color:var(--primary);text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3,h4{font-weight:600;line-height:1.3;}
+h2{font-size:1.6em;border-bottom:2px solid var(--border);padding-bottom:.4em;margin-top:0;color:var(--primary);}
+h3{font-size:1.15em;color:var(--secondary);margin-bottom:.4em;}
+code{font-family:var(--mono);background:var(--code-bg);padding:.15em .4em;border-radius:4px;font-size:.9em;border:1px solid var(--border);}
+p{margin:.6em 0;}
+table{width:100%;border-collapse:collapse;margin:1em 0;font-size:.92em;}
+th,td{border:1px solid var(--border);padding:.5em .7em;text-align:left;vertical-align:top;}
+th{background:var(--panel2);color:var(--primary);}
+tr:nth-child(even) td{background:rgba(255,255,255,0.02);}
+ul,ol{padding-left:1.4em;}
+li{margin:.3em 0;}
+
+/* progress bar */
+#progressbar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--secondary));z-index:999;width:0%;transition:width .1s;}
+
+/* header */
+header.top{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 20px;position:sticky;top:3px;z-index:90;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+header.top .brand{display:flex;flex-direction:column;}
+header.top .brand .t1{font-weight:700;font-size:1.25em;color:var(--primary);letter-spacing:.5px;}
+header.top .brand .t2{font-size:.8em;color:var(--text-dim);}
+header.top .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:.78em;color:var(--text-dim);}
+header.top .meta b{color:var(--text);}
+#hamburger{display:none;background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:1.1em;}
+.spacer{flex:1;}
+#searchbox{background:var(--code-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 12px;font-size:.85em;width:220px;}
+#themeToggle{background:var(--code-bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;cursor:pointer;font-size:.9em;}
+#searchResults{position:absolute;top:60px;right:20px;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-width:420px;max-height:60vh;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:200;display:none;}
+#searchResults .sr-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
+#searchResults .sr-item:hover{background:var(--hover);}
+#searchResults .sr-item .sr-title{color:var(--primary);font-weight:600;font-size:.9em;}
+#searchResults .sr-item .sr-snippet{font-size:.8em;color:var(--text-dim);}
+#searchResults .sr-count{padding:8px 14px;font-size:.78em;color:var(--text-dim);border-bottom:1px solid var(--border);}
+mark{background:var(--warning);color:#000;padding:0 2px;border-radius:2px;}
+
+/* layout */
+.layout{display:flex;max-width:1500px;margin:0 auto;}
+#sidebar{width:290px;flex-shrink:0;height:calc(100vh - 60px);overflow-y:auto;position:sticky;top:60px;border-right:1px solid var(--border);padding:16px 10px;background:var(--panel);}
+#sidebar .grp-title{font-size:.72em;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin:16px 8px 4px;}
+#sidebar a{display:block;padding:6px 10px;border-radius:6px;color:var(--text);font-size:.87em;}
+#sidebar a:hover{background:var(--hover);text-decoration:none;}
+#sidebar a.active{background:rgba(56,189,248,.15);color:var(--primary);font-weight:600;border-left:3px solid var(--primary);}
+#sidebar .num{color:var(--text-dim);margin-right:6px;font-family:var(--mono);font-size:.85em;}
+main{flex:1;min-width:0;padding:28px 40px 80px;max-width:1100px;}
+@media (max-width:900px){
+  #hamburger{display:inline-block;}
+  #sidebar{position:fixed;left:-300px;top:0;height:100vh;z-index:150;transition:left .25s;box-shadow:4px 0 20px rgba(0,0,0,.5);}
+  #sidebar.open{left:0;}
+  main{padding:20px 16px 60px;}
+  #searchbox{width:130px;}
+  header.top .meta{display:none;}
+}
+
+/* badges */
+.badge{display:inline-block;font-size:.68em;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:20px;margin:0 4px 4px 0;vertical-align:middle;text-transform:uppercase;}
+.badge.spec{background:rgba(34,197,94,.18);color:var(--success);border:1px solid var(--success);}
+.badge.source{background:rgba(56,189,248,.18);color:var(--primary);border:1px solid var(--primary);}
+.badge.inference{background:rgba(129,140,248,.18);color:var(--secondary);border:1px solid var(--secondary);}
+.badge.unknown{background:rgba(148,163,184,.18);color:var(--text-dim);border:1px solid var(--text-dim);}
+.badge.general{background:rgba(56,189,248,.10);color:var(--primary);border:1px dashed var(--primary);}
+.badge.mismatch{background:rgba(239,68,68,.18);color:var(--error);border:1px solid var(--error);}
+.badge.match{background:rgba(34,197,94,.18);color:var(--success);border:1px solid var(--success);}
+.badge.warn{background:rgba(245,158,11,.18);color:var(--warning);border:1px solid var(--warning);}
+
+/* section blocks */
+section.chapter{margin-bottom:56px;padding-bottom:20px;border-bottom:1px dashed var(--border);}
+.chapter-kicker{color:var(--text-dim);font-size:.85em;margin-bottom:2px;}
+.block{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin:14px 0;overflow:hidden;}
+.block > .block-head{padding:10px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:var(--panel2);user-select:none;}
+.block > .block-head h3{margin:0;font-size:1em;}
+.block > .block-body{padding:14px 18px;}
+.block.collapsed > .block-body{display:none;}
+.block-head .chev{transition:transform .2s;color:var(--text-dim);}
+.block.collapsed .chev{transform:rotate(-90deg);}
+.block.concept > .block-head h3{color:var(--primary);}
+.block.why > .block-head h3{color:var(--warning);}
+.block.analogy > .block-head h3{color:#c084fc;}
+.block.hardware > .block-head h3{color:#fb923c;}
+.block.firmware > .block-head h3{color:var(--secondary);}
+.block.source-code > .block-head h3{color:var(--primary);}
+.block.register > .block-head h3{color:#f472b6;}
+.block.debug > .block-head h3{color:var(--error);}
+.block.summary > .block-head h3{color:var(--success);}
+
+/* code */
+.codewrap{position:relative;margin:10px 0;}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:14px 14px 14px 50px;overflow-x:auto;font-family:var(--mono);font-size:.83em;line-height:1.5;counter-reset:line;position:relative;}
+pre code{background:none;border:none;padding:0;}
+pre .ln{position:absolute;left:0;top:14px;width:38px;text-align:right;padding-right:8px;color:var(--text-dim);font-size:.83em;line-height:1.5;user-select:none;border-right:1px solid var(--border);}
+.copybtn{position:absolute;top:8px;right:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text-dim);border-radius:5px;padding:3px 9px;font-size:.72em;cursor:pointer;}
+.copybtn:hover{color:var(--primary);border-color:var(--primary);}
+.copybtn.copied{color:var(--success);border-color:var(--success);}
+
+/* diagrams */
+.diagram{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin:14px 0;overflow-x:auto;}
+.flow{display:flex;flex-direction:column;align-items:center;gap:0;}
+.flowbox{background:var(--panel);border:1.5px solid var(--primary);border-radius:6px;padding:9px 20px;font-size:.86em;text-align:center;min-width:180px;color:var(--text);}
+.flowbox.alt{border-color:var(--secondary);}
+.flowbox.warn{border-color:var(--warning);}
+.flowarrow{color:var(--text-dim);font-size:1.1em;line-height:1.8em;}
+.flowrow{display:flex;gap:30px;justify-content:center;flex-wrap:wrap;margin:6px 0;}
+.archlayer{width:100%;max-width:420px;margin:0 auto 0;text-align:center;padding:12px;border-radius:6px;font-weight:600;font-size:.92em;}
+.archline{width:2px;height:22px;background:var(--text-dim);margin:0 auto;}
+.diagram .cap{text-align:center;font-size:.78em;color:var(--text-dim);margin-top:10px;}
+
+/* cards */
+.cardgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin:14px 0;}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+.card h4{margin:0 0 8px;color:var(--primary);font-size:1em;}
+.card .kv{font-size:.85em;margin:3px 0;}
+.card .kv b{color:var(--text-dim);font-weight:600;}
+
+.bugcard{background:var(--panel);border:1px solid var(--error);border-left:5px solid var(--error);border-radius:var(--radius);padding:16px 18px;margin:16px 0;}
+.bugcard h4{margin:0 0 4px;color:var(--error);}
+.bugcard .bugdate{font-size:.78em;color:var(--text-dim);margin-bottom:10px;}
+.bugcard .sect{margin-top:10px;}
+.bugcard .sect b{color:var(--warning);display:block;font-size:.85em;margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px;}
+
+.remember5{background:linear-gradient(135deg,rgba(56,189,248,.08),rgba(129,140,248,.08));border:1.5px solid var(--primary);border-radius:var(--radius);padding:16px 20px;margin:18px 0;}
+.remember5 h4{margin:0 0 10px;color:var(--primary);}
+.remember5 ol{margin:0;}
+
+.verifybox{background:var(--panel2);border:1px dashed var(--secondary);border-radius:var(--radius);padding:14px 18px;margin:14px 0;}
+.verifybox h4{margin:0 0 8px;color:var(--secondary);font-size:.95em;}
+
+details.qa{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin:8px 0;padding:0;}
+details.qa summary{padding:10px 14px;cursor:pointer;font-size:.9em;}
+details.qa summary:hover{color:var(--primary);}
+details.qa .qa-answer{padding:0 14px 14px;font-size:.88em;color:var(--text-dim);border-top:1px solid var(--border);margin-top:0;padding-top:10px;}
+
+.difficulty{font-size:.65em;padding:2px 8px;border-radius:10px;margin-left:8px;text-transform:uppercase;}
+.difficulty.beginner{background:rgba(34,197,94,.2);color:var(--success);}
+.difficulty.intermediate{background:rgba(56,189,248,.2);color:var(--primary);}
+.difficulty.advanced{background:rgba(245,158,11,.2);color:var(--warning);}
+.difficulty.expert{background:rgba(239,68,68,.2);color:var(--error);}
+
+.checklist{list-style:none;padding:0;}
+.checklist li{padding:6px 0 6px 30px;position:relative;font-size:.92em;}
+.checklist li:before{content:"✓";position:absolute;left:0;color:var(--success);font-weight:700;background:rgba(34,197,94,.15);width:20px;height:20px;border-radius:50%;text-align:center;line-height:20px;}
+
+.tocbox{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin:16px 0;}
+.tocbox ol{columns:2;font-size:.85em;}
+@media(max-width:700px){.tocbox ol{columns:1;}}
+
+#backtotop{position:fixed;bottom:24px;right:24px;background:var(--primary);color:#0b1220;border:none;border-radius:50%;width:44px;height:44px;font-size:1.2em;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:80;display:none;}
+
+.notebox{border-radius:var(--radius);padding:12px 16px;margin:12px 0;font-size:.9em;border:1px solid;}
+.notebox.security{background:rgba(245,158,11,.08);border-color:var(--warning);}
+.notebox.research{background:rgba(239,68,68,.08);border-color:var(--error);}
+
+footer.site{border-top:1px solid var(--border);padding:30px;text-align:center;color:var(--text-dim);font-size:.82em;}
+
+hr.sep{border:none;border-top:1px dashed var(--border);margin:24px 0;}
+.imp{color:var(--warning);font-weight:600;}
+.tag-inline{font-family:var(--mono);font-size:.85em;padding:1px 5px;border-radius:3px;}
+</style>
+</head>
+<body>
+
+<div id="progressbar"></div>
+
+<header class="top">
+  <button id="hamburger" aria-label="Menu">☰</button>
+  <div class="brand">
+    <div class="t1">S800 LPDDR4 TRAINING FW</div>
+    <div class="t2">From Zero → Expert · Technical Knowledge Base</div>
+  </div>
+  <div class="meta">
+    <span><b>Platform:</b> S800 (Marvell AP806/Armada)</span>
+    <span><b>Memory:</b> LPDDR4-2100/2400</span>
+    <span><b>Nguồn:</b> Spec (11/27 PDF) + Source (13778 dòng)</span>
+  </div>
+  <div class="spacer"></div>
+  <input type="text" id="searchbox" placeholder="🔍 Tìm section / hàm / register / bug...">
+  <button id="themeToggle">🌙 Dark</button>
+</header>
+<div id="searchResults"></div>
+
+<div class="layout">
+<nav id="sidebar">
+  <div class="grp-title">Bắt đầu</div>
+  <a href="#overview"><span class="num">00</span>Master Overview</a>
+
+  <div class="grp-title">01 · Nền tảng (Fundamentals)</div>
+  <a href="#fundamentals"><span class="num">01</span>LPDDR4 From Zero</a>
+  <a href="#mc-phy"><span class="num">02</span>Memory Controller & PHY</a>
+  <a href="#training-concept"><span class="num">03</span>Training Concept: Window/Eye/Margin</a>
+
+  <div class="grp-title">02 · Training Algorithms</div>
+  <a href="#pad-cal"><span class="num">04</span>Pad Calibration</a>
+  <a href="#ca-training"><span class="num">05</span>CA Training / CBT / FSP</a>
+  <a href="#write-leveling"><span class="num">06</span>Write Leveling</a>
+  <a href="#dqs-gate"><span class="num">07</span>DQS Gate Training</a>
+  <a href="#read-centering"><span class="num">08</span>Read Centering</a>
+  <a href="#read-deskew"><span class="num">09</span>Read Deskew</a>
+  <a href="#write-centering"><span class="num">10</span>Write Centering</a>
+  <a href="#write-deskew"><span class="num">11</span>Write Deskew</a>
+  <a href="#memory-test"><span class="num">12</span>Common Memfill / Memory Test</a>
+
+  <div class="grp-title">03 · S800 Firmware & Boot</div>
+  <a href="#qspi-gpio"><span class="num">13</span>Chip Detection: GPIO/QSPI/Swizzle</a>
+  <a href="#cold-boot"><span class="num">14</span>Cold Boot / Entry Point</a>
+  <a href="#warm-boot"><span class="num">15</span>Warm Boot / Sleep Resume</a>
+  <a href="#training-result"><span class="num">16</span>Training Result Storage</a>
+  <a href="#error-retry"><span class="num">17</span>Error Handling / Retry</a>
+
+  <div class="grp-title">04 · Reference</div>
+  <a href="#register-map"><span class="num">18</span>Register Map</a>
+  <a href="#call-graph"><span class="num">19</span>Call Graph</a>
+  <a href="#spec-vs-source"><span class="num">20</span>SPEC vs SOURCE</a>
+
+  <div class="grp-title">05 · Debug & Bugs</div>
+  <a href="#debug-guide"><span class="num">21</span>Debugging Guide</a>
+  <a href="#bug-analysis"><span class="num">22</span>Bug History (Appendix B)</a>
+
+  <div class="grp-title">06 · Expert View</div>
+  <a href="#final-master-map"><span class="num">23</span>Final Master Map</a>
+  <a href="#glossary"><span class="num">24</span>Glossary</a>
+  <a href="#self-check"><span class="num">25</span>Self-Check Quiz</a>
+  <a href="#completion"><span class="num">26</span>Completion Checklist</a>
+</nav>
+
+<main id="content">
+
+<section class="chapter" id="overview">
+<h2>00 · Master Overview</h2>
+
+<div class="block concept"><div class="block-head"><h3>Tài liệu này là gì?</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Đây là knowledge base kỹ thuật đầy đủ về <b>S800 LPDDR4 Training Firmware</b> — firmware chạy lúc khởi động để "huấn luyện" (train) đường truyền điện giữa CPU và chip nhớ LPDDR4, trước khi RAM có thể dùng được. Tài liệu này dựng từ 2 nguồn:</p>
+<ul>
+<li><span class="badge spec">SPEC</span> 11/27 file PDF gốc của specification <code>S800_LPDDR4_トレーニングFW仕様_報告書_第2版</code> (KONICA MINOLTA, 社外秘/管理外) — đã đọc trực tiếp 4 chương chính + toàn bộ Appendix B (7 bug report).</li>
+<li><span class="badge source">SOURCE</span> Source code thật trong repository: <code>mv_lpddr4_apn806.c</code> (13778 dòng, ATF/ble), <code>mv_lpddr4_sleep.c</code> (791 dòng, LPPP), cùng các header register/struct liên quan.</li>
+</ul>
+<div class="notebox security"><b>⚠️ Bảo mật:</b> Spec gốc đóng dấu <i>社外秘 / 管理外</i> (Konica Minolta confidential), source có header <i>Marvell Confidential</i>. Tài liệu này chỉ diễn giải/trích ngắn — không copy nguyên văn nội dung nhạy cảm. File HTML này chỉ dùng nội bộ, không public.</div>
+<p><b>Dành cho ai?</b> Người gần như không biết gì về LPDDR4/DDR training, muốn đi từ "LPDDR4 là gì?" tới "tôi có thể đọc source code, trace function, hiểu register, và debug DDR training failure".</p>
+</div></div>
+
+<div class="block why"><div class="block-head"><h3>Học theo thứ tự nào?</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<div class="flow">
+<div class="flowbox">01 · Fundamentals (LPDDR4 là gì, CK/CA/DQ/DQS...)</div><div class="flowarrow">↓</div>
+<div class="flowbox">02 · Architecture (Memory Controller, PHY)</div><div class="flowarrow">↓</div>
+<div class="flowbox">03 · Training Concepts (Window/Eye/Margin/Center)</div><div class="flowarrow">↓</div>
+<div class="flowbox">04 · Training Algorithms (Pad Cal → CA → WL → DQS Gate → Centering/Deskew)</div><div class="flowarrow">↓</div>
+<div class="flowbox">05 · S800 Firmware (QSPI/GPIO, Cold/Warm Boot)</div><div class="flowarrow">↓</div>
+<div class="flowbox">06 · Registers &amp; Call Graph</div><div class="flowarrow">↓</div>
+<div class="flowbox">07 · Error Handling / Retry</div><div class="flowarrow">↓</div>
+<div class="flowbox">08 · Debugging &amp; Bug History</div><div class="flowarrow">↓</div>
+<div class="flowbox alt">09 · Expert Mental Model</div>
+</div>
+</div>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>Cách đọc nhãn (badges)</h3><span class="chev">▾</span></div><div class="block-body">
+<table>
+<tr><th>Badge</th><th>Ý nghĩa</th></tr>
+<tr><td><span class="badge spec">SPEC</span></td><td>Đọc trực tiếp từ 1 trong 27 file PDF spec (có ghi rõ tên file)</td></tr>
+<tr><td><span class="badge source">SOURCE</span></td><td>Đọc trực tiếp từ source code (có <code>file:line</code>)</td></tr>
+<tr><td><span class="badge inference">INFERENCE</span></td><td>Suy luận từ spec + source, chưa có câu xác nhận trực tiếp</td></tr>
+<tr><td><span class="badge general">GENERAL</span></td><td>Kiến thức nền DDR/LPDDR4 chuẩn công nghiệp (JEDEC), không riêng gì S800</td></tr>
+<tr><td><span class="badge unknown">UNKNOWN</span></td><td>Chưa tìm được bằng chứng — không đoán</td></tr>
+<tr><td><span class="badge mismatch">MISMATCH</span></td><td>Spec nói một đằng, source làm một nẻo — không tự sửa cái nào</td></tr>
+<tr><td><span class="badge match">MATCH</span></td><td>Spec và source đã đối chiếu và khớp nhau</td></tr>
+</table>
+<p>Không có badge = diễn giải/liên kết ý, không phải fact mới.</p>
+</div></div>
+
+<div class="block hardware"><div class="block-head"><h3>Mental Model: 4 lớp trước khi đọc code</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Bật nguồn máy in Konica Minolta dòng S800. CPU (SoC nền <b>Marvell AP806/Armada</b> <span class="badge source">SOURCE</span>) cần RAM (LPDDR4) để chạy phần mềm tiếp theo (U-Boot, Linux) — nhưng RAM lúc đó <b>chưa hoạt động được</b>. Cần 1 firmware riêng "huấn luyện" đường truyền trước.</p>
+<div class="diagram">
+<div class="flow">
+<div class="archlayer" style="background:rgba(56,189,248,.15);border:1.5px solid var(--primary);">CPU / Firmware<br><small>(ATF "ble" — chạy code training)</small></div>
+<div class="archline"></div>
+<div class="archlayer" style="background:rgba(129,140,248,.15);border:1.5px solid var(--secondary);">Memory Controller (MC6)<br><small>ra lệnh READ/WRITE/REFRESH</small></div>
+<div class="archline"></div>
+<div class="archlayer" style="background:rgba(251,146,60,.15);border:1.5px solid #fb923c;">PHY<br><small>chuyển lệnh số → tín hiệu điện thật</small></div>
+<div class="archline"></div>
+<div class="archlayer" style="background:rgba(34,197,94,.15);border:1.5px solid var(--success);">LPDDR4<br><small>chuẩn giao tiếp (JEDEC) — không phải chip</small></div>
+<div class="archline"></div>
+<div class="archlayer" style="background:rgba(245,158,11,.15);border:1.5px solid var(--warning);">DRAM<br><small>chip nhớ vật lý — bit lưu bằng điện tích tụ</small></div>
+</div>
+</div>
+<h3>Tại sao KHÔNG THỂ chỉ "ghi vài register → RAM chạy"?</h3>
+<p><span class="badge general">GENERAL</span> Khi CPU/Memory Controller gửi tín hiệu ra chân CK (clock) và CA (command/address), và DRAM trả tín hiệu về qua DQ/DQS, <b>mỗi tín hiệu đi qua 1 đường dây PCB khác nhau</b>, độ dài/tải điện khác nhau. Ở LPDDR4-2400 (~0.4ns/bit), lệch vài trăm <b>picosecond</b> đã đủ đọc sai bit. Độ lệch này:</p>
+<ul>
+<li>Không cố định theo thiết kế lý thuyết — phụ thuộc PCB thực tế, process variation của silicon, điện áp, nhiệt độ lúc bật máy.</li>
+<li>Không thể tính trước — phải <b>đo thực tế lúc chạy (runtime)</b>, rồi chỉnh delay trong PHY. Đó là <b>Training</b>.</li>
+</ul>
+</div></div>
+
+<div class="block analogy"><div class="block-head"><h3>Real-World Analogy</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Bạn và 1 người bạn đứng 2 đầu sân vận động ồn ào, hô "1! 2! 3!... bắt!" để ném bóng cho người kia bắt đúng lúc. Hô sớm/muộn → bắt hụt.</p>
+<ul>
+<li>Tiếng hô "bắt" = <b>DQS</b> (data strobe — báo hiệu đọc dữ liệu)</li>
+<li>Quả bóng = <b>DQ</b> (data thật)</li>
+<li>Khoảng cách + tiếng ồn = <b>skew</b> + <b>signal integrity</b></li>
+</ul>
+<p><b>Training</b> = trước trận đấu thật (boot), 2 người tập dượt vài lần, đo "hô trước bao lâu bóng vừa tới tay" — ghi nhớ số delay tối ưu cho riêng cặp người/sân/hôm nay. Đây là lý do <b>không dùng 1 delay cố định chung cho mọi máy</b> — mỗi máy in thật phải tự train khi khởi động.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>FW cấu trúc: Spec nói gì, source thật có gì</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge spec">SPEC</span> <code>3_0_FW構成_20180807a.pdf</code> tr.1: liệt kê 3 vùng <code>atf/ble</code>, <code>lppp/Hal/quartz/asic/build</code>, <code>u-boot/drivers/spi</code>.</p>
+<table>
+<tr><th>Vùng</th><th>File (spec)</th><th>Path thật trong repo</th><th>Vai trò</th><th>Match?</th></tr>
+<tr><td>ATF/ble</td><td>ddr_phy_regstructs.h</td><td><code>atf/atf_s800/ble/ddr_phy_regstructs.h</code> (305 dòng)</td><td>Định nghĩa register PHY</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>ATF/ble</td><td>MC_regstructs.h</td><td><code>atf/atf_s800/ble/MC_regstructs.h</code> (định nghĩa <code>MC6_REGS_t</code>) + <code>MC_regmasks.h</code> (9929 dòng)</td><td>Register Memory Controller</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>ATF/ble</td><td>flex_shim.h</td><td><code>atf/atf_s800/ble/flex_shim.h</code></td><td>Log level GPIO chip-detect</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>ATF/ble</td><td>KM_LPDDR4_config.h</td><td><code>atf/atf_s800/ble/KM_LPDDR4_config.h</code> (244 dòng)</td><td>Define/global do KM thêm</td><td><span class="badge match">MATCH</span> — đọc toàn bộ</td></tr>
+<tr><td>ATF/ble</td><td>KM_LPDDR4_prot.h</td><td><code>atf/atf_s800/ble/KM_LPDDR4_prot.h</code> (98 dòng)</td><td>Function prototype do KM thêm</td><td><span class="badge match">MATCH</span> — đọc toàn bộ</td></tr>
+<tr><td>ATF/ble</td><td>DDR_trn_result_regstructs.c/.h</td><td><code>atf/atf_s800/ble/DDR_trn_result_regstructs.*</code> (633 dòng)</td><td>Vùng register backup/restore lúc resume</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>ATF/ble</td><td>DDR_chip_detect_regstructs.h</td><td><code>atf/atf_s800/ble/DDR_chip_detect_regstructs.h</code> (534 dòng)</td><td>Tham số chip-detect qua QSPI</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>ATF/ble</td><td>mv_lpddr4_apn806.c</td><td><code>atf/atf_s800/ble/mv_lpddr4_apn806.c</code> (<b>13778 dòng</b>)</td><td>Chương trình training chính</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>LPPP</td><td>power_api.h</td><td><code>lppp_s800/Hal/quartz/asic/build/power_api.h</code></td><td>Định nghĩa 2100/2400 Mbps</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>LPPP</td><td>mv_lpddr4_sleep.c</td><td><code>lppp_s800/Hal/quartz/asic/build/mv_lpddr4_sleep.c</code> (791 dòng)</td><td>Điều khiển LPDDR4 lúc Sleep/Resume</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>LPPP</td><td>ddr_init.c / hal_main.c</td><td><code>lppp_s800/Hal/quartz/asic/build/*.c</code></td><td>Khởi tạo, đọc GPIO</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>U-Boot</td><td>drivers/spi/qspi_winbond.c</td><td><code>BootROM/BootROM/Emu800/Src/drivers/spi/qspi_winbond.c</code></td><td>Ghi training value vào QSPI</td><td><span class="badge inference">INFERENCE</span> khớp nội dung, tên thư mục gốc khác (<code>Emu800</code> có cấu trúc U-Boot kinh điển: <code>board/</code>, <code>common/</code>, <code>tools/patman</code>)</td></tr>
+</table>
+<p><span class="badge inference">INFERENCE</span> File chính <code>mv_lpddr4_apn806*</code> + thư mục riêng <code>atf/atf_s800/drivers/marvell/mv_ddr/apn806/mv_ddr_apn806.c</code> → S800 <b>fork driver mv_ddr gốc của Marvell</b>, KM thêm lớp tùy biến <code>KM_*</code> đè lên (khớp comment header <i>"For setting of KM algo"</i>). <span class="badge unknown">UNKNOWN</span> chưa xác minh 2 file này có phải bản gốc/bản sửa của nhau không.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>SPEC FACT quan trọng (chương 1, <code>1_0_LPDDR4_FW仕様_20181015a.pdf</code>)</h3><span class="chev">▾</span></div><div class="block-body">
+<table>
+<tr><th>Mục</th><th>Giá trị</th></tr>
+<tr><td>Chip hỗ trợ (GPIO)</td><td>Micron 1/2/3/4GB (+shrink), Samsung 2/3/4GB (chỉ FUM); <b>không hỗ trợ trộn Micron+Samsung</b></td></tr>
+<tr><td>Tốc độ</td><td>LPDDR4-2400 (clock 1200MHz), LPDDR4-2100 (clock 1050MHz) — 2400/2100 là <b>data rate</b>, không phải clock thật</td></tr>
+<tr><td>Thời gian training (cold)</td><td>Mục tiêu ~<b>650ms</b></td></tr>
+<tr><td>Workaround chip A1</td><td>Bug DDR controller ghi register PHY trên cả CH0+CH1 dù chỉ định 1 channel → dùng power-down + giả DDR3-mode, tốn thêm ~19ms (532×~18µs)</td></tr>
+<tr><td>Retry</td><td>FAIL → retry tối đa <b>10 lần mặc định</b>, QSPI set tới <b>255 lần</b>; vượt → Error Flag = ON</td></tr>
+<tr><td>Sleep resume</td><td>Mục tiêu ~<b>150ms</b> — không train lại, đọc tham số từ QSPI</td></tr>
+<tr><td>Nhiệt độ</td><td>0°C–60°C, <b>không retrain theo nhiệt độ</b> (margin đủ theo JEDEC mask, đã test)</td></tr>
+<tr><td>Endurance</td><td>100 lần boot liên tục không lỗi; LPDDR4-2400 8GB tốn ~15h test hết</td></tr>
+</table>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều (Phần 0)</h4><ol>
+<li>LPDDR4 <b>không phải chip</b> — là chuẩn giao tiếp JEDEC; DRAM là chip tuân theo chuẩn đó.</li>
+<li>PCB trace mỗi máy khác nhau chút ít → không thể tính sẵn delay lý thuyết → phải <b>train lúc chạy thật</b>.</li>
+<li>4 lớp: CPU (FW) → Memory Controller (lệnh số) → PHY (số↔điện) → DRAM (chip vật lý).</li>
+<li>Source S800 = fork <b>mv_ddr của Marvell</b> + lớp <code>KM_*</code> của Konica Minolta.</li>
+<li>"U-Boot" trong spec ≈ thư mục <code>BootROM/BootROM/Emu800</code> trong repo — tên khác, cùng codebase.</li>
+</ol></div>
+
+<div class="notebox research"><b>📌 Trạng thái nghiên cứu (minh bạch):</b> Đã đọc trực tiếp 11/27 file PDF spec: mục lục (<code>0_1</code>), chương 1 (<code>1_0</code>), chương 3 (<code>3_0</code>), chương 5.1 GPIO (<code>5_1</code>), và toàn bộ 7 báo cáo Appendix B (bug history). <b>Chưa đọc trực tiếp:</b> chương 2, 4.x (thuật toán chi tiết), 6.0 (tần số), 7 (mode), 8.x (cold/warm boot theo spec), 9.0 (swizzle), 10.0 (error), Appendix A (đo đạc), Appendix C (register bổ sung). Mọi nội dung về các chương này trong tài liệu là suy luận từ source, không phải trích spec trực tiếp.</div>
+</section>
+
+
+<section class="chapter" id="fundamentals">
+<h2>01 · LPDDR4 From Zero</h2>
+<p class="chapter-kicker">Xây khái niệm CK/CA/CS/CKE/DQ/DQS/DM từ số 0 — nền cho mọi chương sau.</p>
+
+<div class="block concept"><div class="block-head"><h3>DRAM, DDR, LPDDR, LPDDR4 là gì?</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge general">GENERAL</span> <b>DRAM</b> (Dynamic RAM) lưu 1 bit bằng 1 tụ điện nhỏ: có điện tích = 1, rỗng = 0. "Dynamic" vì tụ tự rò điện tích → phải <b>refresh</b> liên tục, khác SRAM (transistor, không cần refresh, đắt hơn) và Flash/ROM (giữ dữ liệu không cần điện).</p>
+<p><span class="badge general">GENERAL</span> <b>DDR</b> = Double Data Rate — bus truyền <b>2 bit/chu kỳ clock</b> (rising + falling edge), thay vì 1 bit/chu kỳ (SDR). Do đó tốc độ dữ liệu (Mbps) luôn <b>gấp đôi</b> tần số clock thật (MHz).</p>
+<p><span class="badge general">GENERAL</span> <b>LPDDR</b> = Low Power DDR — dòng chuẩn cho thiết bị tiết kiệm điện (điện thoại, nhúng, máy in): điện áp lõi thấp hơn, gói chip khác (BGA/PoP gần CPU), tập lệnh quản lý năng lượng riêng.</p>
+<p><span class="badge spec">SPEC</span> <code>1_0</code> §1: S800 dùng <b>LPDDR4-2100</b> (clock 1050MHz) và <b>LPDDR4-2400</b> (clock 1200MHz).</p>
+<div class="diagram">
+<pre style="padding:14px;">Data rate (Mbps/pin) = Clock frequency (MHz) × 2   (DDR truyền 2 bit/chu kỳ)
+
+2400 Mbps  =  1200 MHz × 2
+2100 Mbps  =  1050 MHz × 2</pre>
+<div class="cap">"2400"/"2100" là <b>tốc độ dữ liệu</b>, không phải tần số clock thật trên chân CK.</div>
+</div>
+</div></div>
+
+<div class="block concept"><div class="block-head"><h3>Bus dữ liệu, Clock, Timing, Delay, Skew, Signal Integrity</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge general">GENERAL</span> <b>Bus dữ liệu</b>: tập đường dây song song (16-32 DQ/channel) truyền nhiều bit cùng lúc. <span class="badge inference">INFERENCE</span> dựa trên mảng <code>[2][2][4]</code> lặp lại trong <code>mv_lpddr4_apn806.c:3696-3713</code> và <code>KM_LPDDR4_config.h:67-115</code>: S800 tổ chức bus theo 3 chiều <b>2 channel (CH0/CH1) × 2 CS × 4 pup</b> (PHY Unit Pad — mỗi pup quản lý 1 byte-lane 8-bit).</p>
+<p><span class="badge general">GENERAL</span> <b>Clock (CK)</b>: nhịp đếm thời gian chung cho Controller và DRAM. <b>Timing</b>: các mốc <code>tXXX</code> JEDEC quy định (tMRD, tRCD...). <b>Delay</b>: khoảng trễ 1 tín hiệu qua mạch — PHY có <i>delay line</i> chỉnh được bằng số. <b>Skew</b>: lệch thời gian không mong muốn giữa 2 tín hiệu lẽ ra đồng thời (do PCB, capacitance, process variation). <b>Signal integrity</b>: độ "sạch" dạng sóng — phản xạ (ODT/drive strength), crosstalk, suy hao → co hẹp "eye/window".</p>
+</div></div>
+
+<div class="block hardware"><div class="block-head"><h3>Sơ đồ tín hiệu thật</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<div class="flow">
+<div class="flowbox alt">Memory Controller (MC6)</div>
+<div class="flowrow" style="margin-top:6px;">
+<div class="flowbox">Clock/Command<br>CK / CA / CS / CKE</div>
+<div class="flowbox">Data<br>DQ / DQS / DM</div>
+</div>
+</div>
+</div>
+<table>
+<tr><th>Tín hiệu</th><th>Tên đầy đủ</th><th>Vai trò</th><th>Bằng chứng S800</th></tr>
+<tr><td><b>CK</b></td><td>Clock</td><td>Nhịp chung, mọi tín hiệu lấy mẫu theo cạnh CK</td><td><span class="badge unknown">UNKNOWN</span> chưa xác định register CK delay riêng</td></tr>
+<tr><td><b>CA</b></td><td>Command/Address</td><td>Lệnh (Activate/Read/Write/Refresh/MRW) + địa chỉ, đồng bộ theo CK</td><td><span class="badge spec">SPEC</span> chương 4.3 gọi "CAトレーニング"</td></tr>
+<tr><td><b>CS</b></td><td>Chip Select</td><td>Chọn chip/rank nhận lệnh — S800 có 2 CS/channel</td><td><span class="badge source">SOURCE</span> <code>KM_LPDDR4_config.h:157-173</code>: <code>CH0_MC_CONFIG_CS0/CS1</code>, <code>CH1_MC_CONFIG_CS0/CS1</code></td></tr>
+<tr><td><b>CKE</b></td><td>Clock Enable</td><td>Cho phép DRAM nhận nhịp CK — dùng cho Power-Down/Self-Refresh</td><td><span class="badge unknown">UNKNOWN</span> chưa tìm register CKE cụ thể</td></tr>
+<tr><td><b>DQ</b></td><td>Data</td><td>Bus dữ liệu thật, tổ chức theo byte-lane (pup)</td><td><span class="badge source">SOURCE</span> <code>lpddr4_read_centering()</code> xử lý theo <code>[ch][cs][pup]</code></td></tr>
+<tr><td><b>DQS</b></td><td>Data Strobe</td><td>Báo hiệu thời điểm DQ hợp lệ — bên gửi dữ liệu tạo ra</td><td><span class="badge source">SOURCE</span> <code>ddr_phy_regstructs.h:142</code> — <code>wl_dqs_pattern // 0x6dc</code></td></tr>
+<tr><td><b>DM</b></td><td>Data Mask</td><td>1 bit/byte DQ báo "bỏ qua khi Write"</td><td><span class="badge spec">SPEC</span> mục 4.7.2/4.9.2 "read/write dm deskew"</td></tr>
+</table>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều (Phần 1)</h4><ol>
+<li><b>2400/2100 = tốc độ dữ liệu (Mbps)</b>, clock thật là 1200/1050MHz (DDR truyền 2 bit/chu kỳ).</li>
+<li>DRAM lưu bit bằng tụ điện → tự mất điện tích → phải refresh liên tục.</li>
+<li>CA=lệnh+địa chỉ, CS=chọn chip, CKE=cho phép clock (power mode), DQ=dữ liệu, DQS="còi báo giờ đọc", DM=mặt nạ che byte.</li>
+<li>Skew + Signal integrity là 2 lý do vật lý khiến delay không tính sẵn được trên giấy.</li>
+<li>S800 tổ chức bus theo 3 chiều thật trong code: 2 channel × 2 CS × 4 pup — là hình dạng mảng thật, không trừu tượng.</li>
+</ol></div>
+
+<div class="verifybox"><h4>❓ Verify yourself</h4><ol>
+<li>Nếu clock thật là 1050MHz, tốc độ dữ liệu Mbps là bao nhiêu?</li>
+<li>DM và DQS khác nhau ở điểm nào? Nếu DM lệch skew so với DQ, chuyện gì xảy ra khi ghi?</li>
+<li>Vì sao CKE (không phải CK) dùng để đưa DRAM vào Self-Refresh?</li>
+<li>Mảng <code>[2][2][4]</code> = [CH][CS][PUP] — mỗi pup quản lý bao nhiêu bit DQ nếu channel có 32-bit DQ?</li>
+<li>Vì sao signal integrity kém làm window "co lại" chứ không làm sai hoàn toàn mọi lúc?</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="mc-phy">
+<h2>02 · Memory Controller &amp; PHY</h2>
+<p class="chapter-kicker">MC6 và DDR_PHY là 2 khối silicon thật — 2 struct C khác nhau, 2 địa chỉ MMIO khác nhau.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Ở chương 00, "Memory Controller" và "PHY" là 2 lớp trừu tượng. Ở đây xác nhận: <b>2 khối phần cứng thật</b>, 2 struct C khác nhau, ánh xạ 2 vùng địa chỉ vật lý khác nhau trong SoC AP806. Phân biệt đúng giúp biết hàm nào "ra lệnh nghiệp vụ" (MC) hay "chỉnh mạch analog/delay" (PHY).</p>
+</div></div>
+
+<div class="block hardware"><div class="block-head"><h3>Hardware View — 2 struct thật</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> <code>MC_regstructs.h:35-46</code> (Marvell, GPL/Commercial — <b>không phải KM confidential</b>):</p>
+<div class="codewrap"><pre><code>// Register File: Mckinley 6c (MC6)
+typedef struct MC6_REGS_s
+{
+   volatile uint32_t MC_ID;          // 0x0  [R] : ID and Revision
+   volatile uint32_t MC_STATUS_CH0;  // 0x4  [R] : MC Status CH0
+   volatile uint32_t DRAM_STATUS;    // 0x8  [R] : DRAM Status
+   volatile uint32_t USER_COMMAND_0; // 0x20 [W] : User Initiated Command
+   volatile uint32_t PC0..PC7;       // 0x110-0x12c : Performance Counters
+   volatile uint32_t ISR;            // 0x140 [R/W] : Interrupt Status</code></pre></div>
+<p><span class="badge source">SOURCE</span> <code>ddr_phy_regstructs.h:41-46</code>:</p>
+<div class="codewrap"><pre><code>// Register File: MISL DDR PHY (DDR_PHY)
+typedef struct DDR_PHY_REGS_s
+{
+   volatile uint32_t sdram_cfg;       // 0x400 : SDRAM Configuration
+   volatile uint32_t sdram_operation; // 0x418 : SDRAM Operation
+   volatile uint32_t dram_vert_cal;   // 0x4c8 : Vertical Calibration
+   volatile uint32_t dram_main_pads_cal_mach_ctrl; // 0x4cc
+   volatile uint32_t dram_dll_timing; // 0x4e0 : DRAM DLL Timing
+   volatile uint32_t phy_lock_mask;   // 0x670
+   volatile uint32_t dram_phy_lock_status; // 0x674 [R]
+   volatile uint32_t prfa;            // 0x6a0 : PHY Register File Access ★
+   volatile uint32_t training_wl;     // 0x6ac : Training Write Leveling</code></pre></div>
+<p><span class="badge inference">INFERENCE</span> Nghịch lý kiến trúc quan trọng: <code>MC6_REGS_t</code> chỉ chứa những gì MC "đúng nghĩa" nên có (status/command/counter) — dùng khi <b>vận hành bình thường sau khi train xong</b>. Ngược lại <code>sdram_cfg/timing/operation/odt</code> lại nằm trong <code>DDR_PHY_REGS_t</code> — nghĩa là <b>PHY có sequencer lệnh JEDEC riêng</b>, tự phát Activate/Read/Write/Refresh/MRW trực tiếp khi đang training, không cần qua MC6.</p>
+<p><span class="badge source">SOURCE</span> <code>flex_shim.h:91-95</code> + <code>mv_lpddr4_apn806.c:124-127</code>: <code>MC6_EXT_BASE = 0xf0020000</code>, <code>MC6_EXT_PHY0_BASE = 0xf0011000</code> — 2 vùng MMIO hoàn toàn khác nhau.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View — cơ chế PRFA</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Hầu hết sub-register per-pin/per-pup (delay, drive strength, Vref offset) <b>không có địa chỉ MMIO riêng</b> — truy cập gián tiếp qua <b>1 register duy nhất</b> <code>prfa</code> (offset <code>0x6a0</code>).</p>
+<div class="codewrap"><pre><code>void nova_ddrphy_write(uint8_t reg_num, uint8_t CnD, uint8_t pup_num, uint16_t data)
+{
+    uint32_t regval = 0xC0000000;   // bit31=busy/go, bit30=write
+    DDR_PHY_REGS_t *phy_reg = (DDR_PHY_REGS_t*)g_ddr_ap806_platform_config.phy_base_addr;
+
+    regval |= ((reg_num & 0xC0) << 22) | (CnD << 26) | (pup_num << 22)
+             | ((reg_num & 0x3F) << 16) | data;
+    mrvl_regwrite32((addr_p) &amp;phy_reg-&gt;prfa, regval);   // ghi lệnh vào prfa
+
+    regval = mrvl_regread32((addr_p) &amp;phy_reg-&gt;prfa);
+    while ( (regval &amp; 0x80000000) &amp;&amp; (count &lt; 100) ) {   // poll bit31 busy
+        regval = mrvl_regread32((addr_p) &amp;phy_reg-&gt;prfa);
+        count++;
+    }
+    if ( count &gt;= 100 )
+        mrvl_msg(MSG_ERROR, RAW_DATA, "!!!Error Failed to write DDR PHY!!!");
+}</code></pre></div>
+<p>Từng bước: (1) đóng gói <code>reg_num</code>+<code>CnD</code>+<code>pup_num</code>+<code>data</code> vào 1 số 32-bit; (2) ghi 1 lần vào <code>prfa</code>; (3) poll bit 31 tới khi hardware tự xoá (tối đa 100 lần); (4) timeout → log lỗi. <code>nova_ddrphy_read()</code> làm ngược lại. <b>Đây là cơ chế nền cho MỌI thao tác training cấp thấp</b> ở các chương 04-11.</p>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View</h3><span class="chev">▾</span></div><div class="block-body">
+<table>
+<tr><th>Struct</th><th>File</th><th>Header gốc</th><th>Vai trò</th></tr>
+<tr><td><code>MC6_REGS_t</code></td><td>MC_regstructs.h</td><td>"Mckinley 6c (MC6)"</td><td>Giao thông dữ liệu bình thường</td></tr>
+<tr><td><code>DDR_PHY_REGS_t</code></td><td>ddr_phy_regstructs.h</td><td>"MISL DDR PHY"</td><td>Sequencer JEDEC + calibration machine + cổng <code>prfa</code></td></tr>
+<tr><td><code>CHIP_DETECT_REGS_t</code></td><td>DDR_chip_detect_regstructs.h</td><td>—</td><td><b>Không phải register sống</b> — bản sao tham số QSPI (KM định nghĩa)</td></tr>
+</table>
+<table>
+<tr><th>Register</th><th>Offset</th><th>Ý nghĩa</th></tr>
+<tr><td><code>prfa</code></td><td>PHY +0x6a0</td><td>Cổng duy nhất tới mọi sub-register per-pup</td></tr>
+<tr><td><code>phy_lock_mask</code>/<code>dram_phy_lock_status</code></td><td>+0x670/+0x674</td><td>DLL/calibration lock — đủ = <code>0x3ffffff</code></td></tr>
+<tr><td><code>sdram_init_ctrl</code></td><td>PHY +0x480</td><td>Init SDRAM, poll tới 100000 lần (<span class="badge source">SOURCE</span> <code>:1342</code>)</td></tr>
+<tr><td><code>wl_dqs_pattern</code></td><td>PHY +0x6dc</td><td>Pattern DQS dùng khi Write Leveling</td></tr>
+</table>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>K-S800 Customization</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> <code>:473-475, 519-521</code>: Marvell gốc có <code>delay_us(1)</code> cố định sau mỗi PRFA transaction. KM bọc trong <code>#ifndef KM_TRAINING_REFINE</code> — khi cờ này định nghĩa (nó được định nghĩa), delay bị loại bỏ hoàn toàn. <span class="badge inference">INFERENCE</span> Có thể là 1 phần "起動時間短縮アルゴリズム" (rút ngắn thời gian boot) — <code>nova_ddrphy_write/read</code> gọi hàng ngàn lần suốt training, bớt 1µs/lần tiết kiệm đáng kể trên tổng 650ms. <span class="badge unknown">UNKNOWN</span> chưa định lượng chính xác mức tiết kiệm.</p>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Log <code>"!!!Error Failed to write/read DDR PHY!!!"</code> → lỗi <b>tầng thấp nhất</b> (PRFA transaction không được PHY xác nhận trong 100 lần poll), không phải lỗi thuật toán. Khả năng: (a) <code>phy_base_addr</code> sai/PHY chưa cấp clock đúng; (b) PHY bận vì thiếu <code>delay_us(1)</code> đã bị KM bỏ; (c) reset PHY chưa hoàn tất.</p>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>MC6 và DDR_PHY là 2 khối phần cứng thật, 2 địa chỉ MMIO khác nhau (<code>0xf0020000</code> vs <code>0xf0011000</code>).</li>
+<li>Register "nghiệp vụ" (sdram timing/ODT/operation) nằm trong PHY, không nằm trong MC — vì PHY có sequencer riêng.</li>
+<li>Sub-register per-pup không có địa chỉ MMIO riêng — phải qua 1 cổng <code>prfa</code> duy nhất bằng đóng gói lệnh + polling.</li>
+<li>KM tối ưu bỏ <code>delay_us(1)</code> trong đường PRFA — lặp lại hàng nghìn lần, liên quan mục tiêu rút ngắn boot.</li>
+<li>Lỗi "Failed to write/read DDR PHY" là lỗi tầng PHY-transaction, khác lỗi thuật toán training.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="training-concept">
+<h2>03 · Training Concept: Valid Window / Eye / Center / Margin</h2>
+<p class="chapter-kicker">Khái niệm nền cho MỌI thuật toán training cụ thể (04-11) — đọc kỹ trước khi qua chương sau.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Khi firmware thử 1 giá trị delay/Vref, kết quả chỉ có PASS/FAIL. Quét toàn dải (ví dụ delay 0-63) sẽ ra 1 dãy PASS/FAIL liên tục:</p>
+<div class="diagram">
+<pre style="padding:14px;">delay:   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+result:  F  F  F  F  P  P  P  P  P  P  P  P  F  F  F  F
+                     ^                    ^
+                left edge             right edge
+                (delay=4)             (delay=11)</pre>
+</div>
+<ul>
+<li><b>Valid Window</b>: đoạn PASS liên tục (delay 4→11).</li>
+<li><b>Eye</b>: Window nhìn theo 2 trục (thời gian + Vref) cùng lúc — hình quả trứng/mắt.</li>
+<li><b>Left/Right edge</b>: biên PASS đầu tiên/cuối cùng.</li>
+<li><b>Center</b>: <code>center = left_edge + (right_edge - left_edge) / 2</code>.</li>
+<li><b>Margin</b>: khoảng cách từ điểm dùng tới biên gần nhất.</li>
+</ul>
+</div></div>
+
+<div class="block why"><div class="block-head"><h3>Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge general">GENERAL</span> Chỉ tìm 1 điểm PASS rồi dừng (ví dụ delay=4) → chạy được lúc train nhưng mong manh: nhiệt độ/điện áp dao động nhẹ, Window dịch → FAIL lúc chạy thật. Chọn <b>center</b> cho đệm đều 2 phía, chịu được dịch chuyển 2 hướng. Đây là lý do spec có mục Window Margin riêng (Appendix A.1), và tại sao spec khẳng định không cần retrain theo nhiệt độ 0-60°C.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View — 3 ví dụ thật, cùng 1 công thức</h3><span class="chev">▾</span></div><div class="block-body">
+<h4>Ví dụ 1 — DQS Gate: center theo trục delay <span class="badge source">SOURCE</span> <code>:5806-5828</code></h4>
+<div class="codewrap"><pre><code>if ( ( nova_ddrphy_read(0x9A, 0, pup + 4*ch) == 0x100 ) &amp;&amp;
+     ( nova_ddrphy_read(0x9B, 0, pup + 4*ch) == 0x3F7F ) )      // PASS thật
+{
+    if ( passing[ch][cs][pup] == 0 ) {                          // lần đầu PASS
+        first_valid_phy_dly[ch][cs][pup] = phy_dly;             // LEFT EDGE
+        last_valid_phy_dly[ch][cs][pup]  = phy_dly;
+        window[ch][cs][pup] = 1;
+    } else {
+        last_valid_phy_dly[ch][cs][pup] = phy_dly;              // cập nhật RIGHT EDGE
+        window[ch][cs][pup]++;
+        if (window[ch][cs][pup] &gt; 63)
+            PHYDelay[ch][cs][pup] = first_valid_phy_dly[ch][cs][pup]
+                + (last_valid_phy_dly[ch][cs][pup] - first_valid_phy_dly[ch][cs][pup]) / 2;  // CENTER
+    }
+}</code></pre></div>
+<p>PASS được định nghĩa bằng <b>2 giá trị register thật</b>: <code>0x9A==0x100</code> VÀ <code>0x9B==0x3F7F</code> — không phải diễn giải trừu tượng.</p>
+<h4>Ví dụ 2 — Read Centering: center theo delay tại Vref tốt nhất <span class="badge source">SOURCE</span> <code>:4991-5014</code></h4>
+<div class="codewrap"><pre><code>selectedVref[ch] = selectedVref[ch] / (4 * num_cs);
+selectedCenter[ch][cs][pup] = fpDly[selectedVref[ch]][ch][cs][pup][0]
+    + (lpDly[selectedVref[ch]][ch][cs][pup][0] - fpDly[selectedVref[ch]][ch][cs][pup][0]) / 2;
+if (selectedCenter[ch][cs][pup] &lt; 0)
+    selectedCenter[ch][cs][pup] += maxDly;    // wrap-around: delay là VÒNG, không phải đường thẳng</code></pre></div>
+<p>⚠️ Không gian delay có thể "vòng lại" (như mặt đồng hồ) vì delay = lệch pha trong 1 chu kỳ clock. Biến thể bo lên: <code>(lpDly - fpDly + 1) / 2</code>.</p>
+<h4>Ví dụ 3 — CA training (CBT): center theo trục Vref <span class="badge source">SOURCE</span> <code>:7101-7132</code></h4>
+<div class="codewrap"><pre><code>startVref[ch][cs] = vrefSetting;        // LEFT EDGE
+endVref[ch][cs]   = startVref[ch][cs];  // → RIGHT EDGE
+vref = startVref[ch][cs] + (endVref[ch][cs] - startVref[ch][cs]) / 2;   // CENTER, cùng công thức</code></pre></div>
+<p><b>Kết luận:</b> <code>center = left + (right-left)/2</code> lặp lại ở ≥3 thuật toán khác nhau — không phải trùng hợp, là <b>nguyên lý thiết kế chung</b>.</p>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Diagram</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;">Trục delay — DQS Gate / Read Centering:
+   FAIL FAIL [PASS PASS PASS PASS PASS PASS] FAIL FAIL
+              ^first_valid                ^last_valid
+                        \___________________/
+                          center = trung điểm → PHYDelay[ch][cs][pup]
+
+Trục Vref — CA training CBT:
+   FAIL [PASS PASS PASS PASS] FAIL
+        ^startVref          ^endVref
+                  \___________/
+                 vref = trung điểm</pre>
+</div>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View &amp; Source View</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register</th><th>Ý nghĩa</th></tr>
+<tr><td><code>0x9A</code> (PRFA)</td><td>Phải = <code>0x100</code> để PASS</td></tr>
+<tr><td><code>0x9B</code> (PRFA)</td><td>Phải = <code>0x3F7F</code> để PASS</td></tr>
+</table>
+<p><span class="badge unknown">UNKNOWN</span> ý nghĩa bit-field chi tiết của <code>0x9A</code>/<code>0x9B</code> chưa xác nhận từ <code>MC_regmasks.h</code>/Appendix C.</p>
+<p><b>Hàm liên quan:</b> <code>findMinWindow()</code> (<code>:11092</code>) tìm window nhỏ nhất giữa 2 CS; <code>calculate_window_margin()</code> (<code>:13163</code>) là hàm <b>đo/báo cáo</b> (thống kê qua nhiều lần retry), <b>không phải</b> hàm tìm center — 2 vai trò khác nhau.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>K-S800 Customization — bug-fix chưa xác nhận liên quan</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> comment tại <code>:7101</code>: tên người + ngày <code>2025/03/07</code>, nội dung "sửa lỗi tính sai khi đổi đơn vị Vref" (<code>vref換算ミスの修正</code>), ngay dòng <code>startVref[ch][cs] = vrefSetting</code>. ⚠️ Comment có thể lỗi thời — chỉ là manh mối, không kết luận nội dung bug chỉ từ 1 dòng comment.</p>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Valid Window = đoạn PASS liên tục; Eye = Window theo 2 trục; Center = trung điểm; Margin = đệm còn lại.</li>
+<li><code>center = left + (right-left)/2</code> lặp lại ở DQS Gate, Read Centering, CA training/CBT — nguyên lý chung thật.</li>
+<li>Không gian delay có thể "vòng" (wrap-around) — không luôn là đường thẳng 0→max.</li>
+<li><code>calculate_window_margin()</code> là hàm đo lại/báo cáo, KHÔNG phải hàm tìm center.</li>
+<li>PASS được định nghĩa bằng con số register cụ thể (ví dụ <code>0x9A==0x100</code>), không phải khái niệm trừu tượng.</li>
+</ol></div>
+
+<div class="verifybox"><h4>❓ Verify yourself</h4><ol>
+<li>PASS ở delay 10-20 → center theo công thức là bao nhiêu? Margin mỗi phía?</li>
+<li>Vì sao <code>+1</code> trước khi chia 2 tạo bo-lên (round up)?</li>
+<li>Vì sao DQS Gate cần PASS-test bằng register cố định, còn Read Centering cần FIFO/DMA test đọc dữ liệu thật?</li>
+<li><code>selectedCenter</code> âm phải <code>+= maxDly</code> — gợi ý gì về ý nghĩa "delay âm" trong hệ pha clock?</li>
+<li>Theo nguyên tắc source-grounding, bạn được phép kết luận gì từ 1 dòng comment bug-fix, và không được phép kết luận gì?</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="pad-cal">
+<h2>04 · Pad Calibration</h2>
+<p class="chapter-kicker"><code>pad_cal()</code> thật — cơ chế "auto-measure-then-freeze", KHÔNG dùng công thức center.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge general">GENERAL</span> Mỗi chân (pin) đi qua 1 <b>I/O pad</b> gồm: <b>Output driver</b> (cặp PMOS/NMOS đẩy điện áp ra) và <b>Receiver</b> (so sánh điện áp với <b>Vref</b> để quyết định bit 0/1). Driver/receiver có <b>trở kháng (impedance)</b> phải khớp trở kháng đường dây PCB (40Ω, 48Ω...), nếu không tín hiệu <b>phản xạ</b> ngược, méo dạng sóng.</p>
+<p>Trở kháng transistor PMOS/NMOS <b>không cố định</b> — phụ thuộc nhiệt độ, điện áp, process variation của từng chip. Không thể khắc cứng vào ROM → phải đo runtime rồi <b>calibrate</b>: chỉnh <b>bao nhiêu nhánh transistor song song được bật</b>. <b>Dynamic calibration</b> = 1 hardware state machine trong PHY tự làm việc này, CPU chỉ bật/đợi/đọc kết quả.</p>
+</div></div>
+
+<div class="block hardware"><div class="block-head"><h3>Hardware View — 3 máy trạng thái calibration</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register</th><th>Trục calibrate</th></tr>
+<tr><td><code>dram_main_pads_cal_mach_ctrl</code> (+0x4cc)</td><td>Máy chính — bật/tắt + trạng thái xong/chưa</td></tr>
+<tr><td><code>dram_vert_cal</code> (+0x4c8)</td><td>Calibration "vertical" <span class="badge unknown">UNKNOWN</span> ý nghĩa vật lý chính xác</td></tr>
+<tr><td><code>dram_hz_cal_mach_ctrl</code> (+0x7c8)</td><td>Calibration "horizontal"</td></tr>
+<tr><td><code>dram_ctrl_cal_mach_ctrl</code> (+0xdc8)</td><td>Máy calibration DRAM Controller — ghi pcal/ncal cuối</td></tr>
+</table>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View — trace pad_cal() 7 bước</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> <code>mv_lpddr4_apn806.c:1065-1196</code>, comment gốc: "Calibrates the pads for LPDDR4 prior to running training algorithms".</p>
+<p><b>Bước 0 (caller, trước pad_cal):</b></p>
+<div class="codewrap"><pre><code>mrvl_regwrite32((addr_p)(CSS_ADDR + 0x4360), 0xFFFF0000); // ref range select
+mrvl_regwrite32((addr_p)(CSS_ADDR + 0x8d38), 0x66660000); // Vref calibration values
+delay_us(10);
+mrvl_regwrite32((addr_p)&amp;phy_reg-&gt;sdram_cfg, 0x0b104c30);
+mrvl_regwrite32((addr_p)&amp;phy_reg-&gt;sdram_cfg, 0x7b104c30);  // reset PHY (2 lần ghi = xung reset)
+display_measure_time(km_measure_time_flag, TRN_B0);
+pad_cal();</code></pre></div>
+<p><b>Bước 1 — set Vref nội bộ PHY + tắt comparator:</b></p>
+<div class="codewrap"><pre><code>regval = nova_ddrphy_read(0xA8,0,0); regval &amp;= 0xffffff00; regval |= 0x4a;
+nova_ddrphy_write(0xA8,0,ALL_PUPS,regval);
+nova_ddrphy_write(0xa2,0,ALL_PUPS,0x0);   // disable cmos receiver enable comparator
+nova_ddrphy_write(0xa1,0,ALL_PUPS,0x7ff);</code></pre></div>
+<p><b>Bước 2 — Enable máy calibration tự động:</b> <code>DYNPADCALEN=1</code>, <code>CALUPCTRL=2</code> ("external").</p>
+<p><b>Bước 3 — Wait + Poll:</b> <code>poll_cal_init_status()</code> đợi bit <code>CALMACHSTATUS</code>; <code>poll_cal_lock_status()</code> đợi <code>dram_phy_lock_status == 0x3ffffff</code> (26 bit — <b>DLL lock</b>, giá trị đã "propagate" tận I/O pad, khác việc "máy tính xong" nội bộ).</p>
+<p><b>Bước 4 — Disable dynamic + đọc kết quả tự động:</b> <code>ncal = AUTONGCALVAL</code>, <code>pcal = AUTOPGCALVAL</code> — số nhánh NMOS/PMOS tối ưu hardware tự đo.</p>
+<p><b>Bước 5 — Manually apply (đóng băng):</b></p>
+<div class="codewrap"><pre><code>CALVALMANOVRD = 1;              // ép chế độ MANUAL
+MANNGCALVAL = ncal; MANPGCALVAL = pcal;   // ghi lại đúng giá trị vừa đo
+nova_ddrphy_write(0xBF,0,ALL_PUPS,0x1);
+nova_ddrphy_write(0xBF,1,ALL_PUPS,0x1);</code></pre></div>
+<p><span class="badge inference">INFERENCE</span> Bước quan trọng nhất: firmware <b>không</b> để hardware tiếp tục tự chỉnh calibration động trong lúc training (dù có khả năng) — đo 1 lần rồi ép cố định, để CA training/deskew phía sau có baseline điện ổn định.</p>
+<p><b>Bước 6-7 — Enable lại (đọc thêm vertical/horizontal chỉ log) → Disable hẳn.</b> ⚠️ 2 lệnh <code>DYNPADCALEN=1</code> liên tiếp giống nhau tuyệt đối (<code>:1151</code>, <code>:1163</code>) — <span class="badge inference">INFERENCE</span> nghi dead-code/duplicate từ fork Marvell, không tự sửa source.</p>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register</th><th>Field</th><th>Ý nghĩa</th></tr>
+<tr><td><code>dram_main_pads_cal_mach_ctrl</code></td><td><code>DYNPADCALEN</code></td><td>1=bật calibrate động</td></tr>
+<tr><td><code>dram_main_pads_cal_mach_ctrl</code></td><td><code>CALUPCTRL</code></td><td>external(2)/internal(1)/off(0)</td></tr>
+<tr><td><code>dram_phy_lock_status</code></td><td>26-bit</td><td>Đủ <code>0x3ffffff</code> = lock hoàn tất tới I/O pad</td></tr>
+<tr><td><code>dram_ctrl_cal_mach_ctrl</code></td><td><code>AUTONGCALVAL</code>/<code>AUTOPGCALVAL</code></td><td>Giá trị NMOS/PMOS hardware tự đo</td></tr>
+<tr><td><code>dram_ctrl_cal_mach_ctrl</code></td><td><code>CALVALMANOVRD</code>, <code>MANNGCALVAL</code>/<code>MANPGCALVAL</code></td><td>Override thủ công cố định</td></tr>
+</table>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Diagram</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;">   PMOS (kéo lên VDD)              NMOS (kéo xuống GND)
+        |                                |
+        +---------- I/O PAD -------------+
+                       |
+                    chân vật lý (pin)
+                       |
+              đường dây PCB (impedance cố định)
+
+Calibration = chỉnh "bao nhiêu nhánh PMOS/NMOS song song bật"
+              để trở kháng driver khớp trở kháng PCB.
+              ncal/pcal = số đo được → ghi cố định (manual override) → dùng suốt training.</pre>
+</div>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging</h3><span class="chev">▾</span></div><div class="block-body">
+<ul>
+<li><code>"!!!Failed Calibration init!!!"</code> → máy trạng thái nội bộ không xong 100 lần poll — nghi PHY chưa cấp clock/reset.</li>
+<li><code>"!!!Failed Calibration propogation to IO!!!"</code> → tính xong nhưng chưa "tới" pad — nghi hardware tầng pad/board.</li>
+<li>Cả 2 lỗi xảy ra <b>sớm nhất</b> trong chuỗi — nếu gặp, mọi bước sau (05-12) hầu như chắc chắn fail theo.</li>
+</ul>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Pad calibration chỉnh trở kháng driver/receiver (số nhánh PMOS/NMOS) — bù runtime, không sửa thiết kế.</li>
+<li>Quy trình: enable auto → poll 2 tầng (nội bộ + I/O pad thật) → đọc ncal/pcal → ép cố định (manual override) → tắt hẳn.</li>
+<li>2 loại "lock" khác nhau: <code>CALMACHSTATUS</code> (máy tính xong) vs <code>dram_phy_lock_status</code> (đã propagate).</li>
+<li>Firmware chủ động KHÔNG để calibration chạy tự do suốt training — chốt 1 lần cho ổn định.</li>
+<li><code>pad_cal()</code> dùng cơ chế auto-measure-then-freeze, khác hẳn sweep-and-center của CA training/deskew.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="ca-training">
+<h2>05 · CA Training / CBT / FSP</h2>
+<p class="chapter-kicker"><code>lpddr4_ca_training()</code> thật — Command/Address bus, nguy hiểm hơn lệch DQ vì có thể làm sai lệnh.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept, Why (CBT &amp; FSP)</h3><span class="chev">▾</span></div><div class="block-body">
+<p>CA mang <b>lệnh</b>, không mang dữ liệu. Lệch CA có thể làm DRAM hiểu sai lệnh (Activate↔Read) — nguy hiểm hơn lệch DQ (chỉ sai 1 bit dữ liệu), vì cả lệnh "bắt đầu training" cũng đi qua CA.</p>
+<p><span class="badge general">GENERAL</span> <b>CBT (Command Bus Training)</b>: JEDEC đưa DRAM vào 1 mode đặc biệt (qua MRW) — CA không mang lệnh thật nữa, DRAM <b>phản hồi lại chính giá trị CA nhận được</b> qua DQ, firmware so khớp. <b>FSP (Frequency Set Point)</b>: LPDDR4 lưu 2 bộ tham số (FSP0/FSP1) cho 2 mức tần số, chuyển nhanh bằng 1 bit MR — cho phép S800 "train ở 100MHz rồi nhảy 1050/1200MHz".</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View — 6 bước</h3><span class="chev">▾</span></div><div class="block-body">
+<p><b>1 — Enter CBT</b> <span class="badge source">SOURCE</span> <code>enter_cbt(), :6523-6542</code>:</p>
+<div class="codewrap"><pre><code>rdModWr(&amp;mc_reg-&gt;CH0_DRAM_Config_3, CBT_MASK, CBT_MASK, VERIFY);  // set CBT cả CH0,CH1
+send_mrx(WR, 13, ALL, cs);      // MR13 → DRAM vào CBT
+nova_ddrphy_write(0x91, 0, ALL_PUPS, 0x3);   // báo PHY
+rdModWr(&amp;mc_reg-&gt;CH0_DRAM_Config_2, 1&lt;&lt;FSP_OP_SHIFT, FSP_OP_MASK, VERIFY);  // FSP_OP=1
+rdModWr(&amp;mc_reg-&gt;MC_Control_0, TEST_MODE_MASK, TEST_MODE_MASK, VERIFY);     // Mute Refresh</code></pre></div>
+<p><b>2 — Đổi tần số lên cao + DLL lock</b> (mốc <code>TRN_C1</code>): <code>change_clk_freq(ddr_top_freq); wait_for_dll_lock();</code> — chạy ở <b>tần số đích thật</b>, không ở 100MHz, vì skew phụ thuộc tần số.</p>
+<p><b>3 — Set Vref khởi điểm + dải quét ±8</b> quanh giá trị cũ (không quét mù 0-80).</p>
+<p><b>4 — Sweep tap-delay, tìm Window rộng nhất</b> (index [0-5]=CA bit, [6]=CS):</p>
+<div class="codewrap"><pre><code>for ( taps=0; taps &lt;= maxTaps[ch]; taps += tapStep ) {
+    applyCsDlys(taps, ch); resetPHY(PHYRSTMSK);
+    retVal = ca_test_pattern(mc_reg, TRAIN_CS, ch, cs, 0x3f);
+    result = retVal &amp; 0x3f;
+    if ( result != 0x3f ) { if (!passing[ch][6]) { passing[ch][6]=1; lpass[ch][6]=taps; } }
+    else {
+        if ( passing[ch][6] ) {
+            passing[ch][6]=0;
+            window[ch][6] = taps - lpass[ch][6];
+            if ( window[ch][6] &gt; lwindow[ch][6] ) {         // giữ WINDOW LỚN NHẤT
+                lwindow[ch][6] = window[ch][6];
+                ltaps[ch][6] = lpass[ch][6] + lwindow[ch][6]/2;   // CENTER
+            }
+        }
+    }
+}</code></pre></div>
+<p><span class="badge inference">INFERENCE</span> Khác DQS Gate (dừng ở Window đủ ngưỡng đầu tiên): CA training quét <b>hết toàn dải</b>, cho phép nhiều Window rời rạc, chọn Window <b>rộng nhất</b>.</p>
+<p><b>5 — Áp Center + set lại maxTaps.</b> <b>6 — Exit CBT</b> (<code>exit_cbt()</code>): bật lại Refresh, hạ 100MHz, thoát CBT MC+DRAM, FSP_OP=0.</p>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register/Field</th><th>Ý nghĩa</th></tr>
+<tr><td><code>CH0/1_DRAM_Config_3</code> bit <code>CBT</code></td><td>Bật/tắt CBT trên MC</td></tr>
+<tr><td><code>CH0/1_DRAM_Config_2</code> field <code>FSP_OP</code></td><td>Chọn FSP0/FSP1</td></tr>
+<tr><td><code>MC_Control_0</code> bit <code>TEST_MODE</code></td><td>Mute Refresh tự động</td></tr>
+<tr><td>MR13 (<code>send_mrx</code>)</td><td>Lệnh JEDEC bật/tắt CBT trên DRAM</td></tr>
+<tr><td>PHY sub-reg <code>0x91</code></td><td>Vào/ra CA training mode (<code>0x3</code>/<code>0x2</code>)</td></tr>
+</table>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>K-S800 Customization — 2 bug-fix cùng ngày, cùng ticket</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> comment tại <code>:6951</code> và <code>:7101</code>: cùng tên người (帆足), cùng ngày <code>2025/03/07</code>, cùng ticket <code>OP_BTS-xxxx</code>. Fix 1: <code>setDelay_ClkCsCa()</code> thay 2 lời gọi <code>nova_ddrphy_write()</code> cũ (nay dead code trong <code>#else</code>) — "CA/CS training không set đúng delay". Fix 2: sửa lỗi tính Vref. <span class="badge inference">INFERENCE</span> có thể 2 phần của 1 bug report, chưa xác nhận trực tiếp.</p>
+<p>Cờ QSPI <code>FORCE_CA_TRAIN_IGNORE</code> — cho phép <b>bỏ qua hoàn toàn</b> CA training (<code>chip_info_reg-&gt;FORCE_CA_TRAIN_IGNORE</code>).</p>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging</h3><span class="chev">▾</span></div><div class="block-body">
+<ol><li>Kiểm tra Pad Calibration đã PASS trước.</li><li>Kiểm tra <code>wait_for_dll_lock()</code> timeout.</li><li>Chỉ vài CA bit fail (không phải CS) → nghi PCB layout/skew riêng đường đó.</li><li>Kiểm tra cờ <code>FORCE_CA_TRAIN_IGNORE</code> vô tình bật.</li></ol>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>CA training dùng CBT (JEDEC): DRAM phản hồi lại CA nhận được để so khớp.</li>
+<li>Chạy ở tần số đích thật (1050/1200MHz), không 100MHz.</li>
+<li>Cùng công thức Center, nhưng cho phép nhiều Window rời rạc, chọn RỘNG NHẤT (khác DQS Gate).</li>
+<li>FSP_OP chuyển giữa 2 bộ tham số JEDEC khi vào/ra CBT.</li>
+<li>2 bug-fix thật cùng ngày/ticket trong vùng này — nghi liên quan, chưa xác nhận 100%.</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="write-leveling">
+<h2>06 · Write Leveling</h2>
+<p class="chapter-kicker"><code>lpddr4_write_leveling()</code> — Edge-finding, KHÔNG dùng công thức center. Phát hiện quan trọng: nửa thuật toán bị tắt.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Khi Controller <b>ghi</b>, chính Controller tạo DQS — nhưng không tự biết đường dây tới DRAM dài bao nhiêu. Write Leveling chỉnh DQS sao cho cạnh lên khớp cạnh lên CK <b>tại chân DRAM</b>, không phải tại chân Controller.</p>
+<p><span class="badge general">GENERAL</span> JEDEC: mỗi lần DQS toggle, DRAM lấy mẫu mức CK lúc đó, phản hồi qua DQ. Controller dò delay DQS, tìm <b>đúng điểm chuyển 0→1</b>. <b>Khác chương 03</b>: đây tìm 1 điểm lật (edge), không tìm window rồi lấy trung điểm.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>for ( j=1; j&lt;32; j++ ) {
+    for (k=0;k&lt;4;k++) nova_ddrphy_write(0,0,dqsPupAddr[ch][k], 0x4000|j|(phase[ch]&lt;&lt;6));  // dịch DQS +j
+    resetPHY(PHYRSTMSK);
+    rdModWr(&amp;phy_reg-&gt;training_wl, 0x1&lt;&lt;TRN_WL_DQS_SHIFT, TRN_WL_DQS_MASK, SKIP_VERIFY);  // toggle DQS
+    result = (read(&amp;phy_reg-&gt;training_wl) &amp; 0x00f00000) &gt;&gt; 20;    // 4-bit phản hồi
+    for (k=0;k&lt;4;k++) {
+        if ( dqsShift[k]==0 ) {
+            if ( zero[k]==0 &amp;&amp; !(result&amp;(1&lt;&lt;k)) ) zero[k]=1;         // đã thấy 0
+            if ( zero[k]==1 &amp;&amp; (result&amp;(1&lt;&lt;k)) )
+                dqsShift[k] = j|0x4000|(phase[ch]&lt;&lt;6);              // LẦN ĐẦU lật 0→1 = EDGE
+        }
+    }
+    if ( result == 0xf ) break;   // cả 4 pup đã lật
+}</code></pre></div>
+<p><code>dqsShift[k]</code> gán <b>đúng 1 lần</b>, ngay khi lật — không có "quét tiếp tìm PASS cuối rồi lấy trung điểm".</p>
+<div class="notebox security"><b>⚠️ Phát hiện quan trọng:</b> Nửa "CLK-shift" của thuật toán (JEDEC cho phép chỉnh cả CK-delay và DQS-delay) nằm nguyên trong comment block <code>/* ... */</code> — <b>không được compile</b>. Biến <code>i=0</code> không bao giờ đổi trong code thực thi → <code>wlClockDly[ch][cs] = i</code> luôn ghi 0. <span class="badge inference">INFERENCE</span> S800 chỉ thực sự chạy nửa "DQS-shift", không chạy "CLK-shift" — chưa rõ chủ đích hay sơ suất. Ứng viên MISMATCH nếu spec 4.4 mô tả đủ 2 bước.</div>
+<p><b>Bug-fix thứ 3 cùng ngày/ticket</b> (帆足, 2025/03/07): dòng khôi phục CLK delay đổi từ biến <code>clockDly[ch][cs]</code> thành <b>hằng số 0</b> — nhưng comment bên cạnh vẫn nói "về giá trị CA training". Ví dụ cụ thể: <i>"comment có thể sai/lỗi thời"</i>.</p>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register/Field</th><th>Ý nghĩa</th></tr>
+<tr><td><code>training_wl</code> bit <code>TRN_WL_CS_UPD</code>/field <code>TRN_WL_CS</code></td><td>Chọn CS, báo "đang cập nhật"</td></tr>
+<tr><td><code>training_wl</code> bit <code>TRN_WL_DQS</code></td><td>Toggle 1 lần yêu cầu xung DQS thử</td></tr>
+<tr><td><code>training_wl</code> bits [23:20]</td><td>4-bit phản hồi CK từ DRAM</td></tr>
+</table>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging</h3><span class="chev">▾</span></div><div class="block-body">
+<ul><li><code>"Failed waiting for Write Leveling update mask"</code> → hardware không xác nhận chọn CS — nghi pad cal chưa ổn.</li>
+<li><code>"WL on CH %d CS %d failed. Mask: 0x%x"</code> — bit KHÔNG lên 1 = pup có vấn đề.</li>
+<li>⚠️ Nếu nghi CLK delay (không phải DQS): CLK-shift search đã bị tắt — delay CLK còn sót lại từ CA training.</li></ul>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Write Leveling canh cạnh CK-DQS bằng phản hồi ngược DRAM (JEDEC) — khác Centering.</li>
+<li>Tìm 1 điểm lật (edge), không tìm window+center.</li>
+<li><b>Nửa "CLK-shift" bị comment-out hoàn toàn</b> trong source hiện tại — chỉ DQS-shift chạy.</li>
+<li>1 bug-fix thật ghi hằng số 0, mâu thuẫn với comment mô tả ý định gốc.</li>
+<li>Lỗi Write Leveling set <code>train_err_flg</code> — liên kết trực tiếp cơ chế retry (chương 17).</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="dqs-gate">
+<h2>07 · DQS Gate Training</h2>
+<p class="chapter-kicker">2 hàm thật, chọn bằng 1 cờ QSPI — trực tiếp liên quan bug B.3 (đã xác nhận, xem chương 22).</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Khi Read, DQS không "luôn tồn tại" — DRAM chỉ tạo DQS ngay khi trả dữ liệu. Trước đó DQS có thể ở trạng thái lửng/nhiễu. <b>DQS Gate</b> = 1 "cổng" trong PHY, mặc định đóng, chỉ mở đúng lúc sau <b>Preamble</b> (khoảng tín hiệu ngắn biết trước, kiểu "hắng giọng"). Mở sớm → bắt nhiễu; mở muộn → mất bit đầu. Vì thời điểm preamble tới PHY phụ thuộc độ dài đường dây, firmware phải quét delay.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View — 2 phương pháp, 1 cờ QSPI</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>if ( dqs_gate_preamble_en == 1 )
+    lpddr4_dqs_gate_training_preamble( mc_reg, warmboot, train_reg );   // PREAMBLE (mặc định=1)
+else
+    lpddr4_dqs_gate_training( mc_reg, warmboot, train_reg );            // DATA TEST</code></pre></div>
+<p><b>Delay 2 tầng</b> (giống nhau ở cả 2 hàm): <code>cycle_dly = 8*(phy_dly&gt;&gt;8) + offset</code> (thô, theo chu kỳ clock) + <code>adj_phy_dly</code> (mịn, trong 1 chu kỳ) — vì delay cần tìm có thể vượt quá 1 chu kỳ.</p>
+<p><b>PASS test (Preamble method):</b> <code>nova_ddrphy_read(0x9A,0,pup)==0x100 && nova_ddrphy_read(0x9B,0,pup)==0x3F7F</code>.</p>
+<p><b>Đóng Window bằng 2 ngưỡng khác nhau</b> (chi tiết dễ bị bỏ sót):</p>
+<div class="codewrap"><pre><code>// A — vẫn PASS, window quá lớn:
+if (window[ch][cs][pup] &gt; 63) { /* chốt center ngay, dừng */ }
+// B — VỪA FAIL, window vừa đóng đủ lớn (ngưỡng THẤP HƠN):
+if ( passing[ch][cs][pup]==1 &amp;&amp; window[ch][cs][pup] &gt; 40 ) { /* chốt center */ }
+// nếu FAIL mà window &lt;= 40 → reset, TIẾP TỤC quét tìm Window khác</code></pre></div>
+<p>→ Đây chính là cơ chế cho phép <b>nhiều Window rời rạc</b> xuất hiện — cơ sở của bug B.3.</p>
+<p><b>Gộp CS0/CS1, chọn cycle delay chung:</b> trung bình 2 CS, rồi lấy <code>min</code> trong 4 pup làm baseline chung (hardware chỉ có 1 thanh ghi cycle-delay/channel), bù phần dư riêng từng pup.</p>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Diagram — vì sao có "2 Valid Window"</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;">phy_dly:  0 ......... 100 ............... 300 ......... 400 ......... 511
+result:   FAIL       [PASS window~50]      FAIL        [PASS window~45]   FAIL
+                       ^ &gt;40, ĐÓNG NGAY, CHỌN (không biết Window ~400 tồn tại)</pre>
+</div>
+<div class="notebox research"><b>✅ Đã xác nhận ở chương 22 (Appendix B.3, 2018/6/1):</b> Nguyên nhân thật là nhiễu ở <b>Hi-Z SAU postamble</b> (không phải "aliasing qua nhiều chu kỳ" như suy đoán ban đầu). Window ĐẦU luôn là Window thật (preamble luôn dài hơn 1 chu kỳ). Cả 2 giải pháp trong bug report đã được hiện thực: (1) chọn Window đầu tiên đủ ngưỡng — đúng logic 2-ngưỡng trên; (2) dùng Preamble mode — chính là <code>dqs_gate_preamble_en</code>.</div>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register/Flag</th><th>Ý nghĩa</th></tr>
+<tr><td>MR13 (<code>send_mrx</code>)</td><td>Bật/tắt "read-leveling mode" trên DRAM</td></tr>
+<tr><td><code>CH0/1_DRAM_Config_3</code> bit <code>RD_PRE_TRAINING</code></td><td>Controller sẵn sàng nhận phản hồi preamble</td></tr>
+<tr><td><code>CH0_PHY_RL_Control_CS0/1_B0</code></td><td>Cycle-delay thô, chung channel</td></tr>
+<tr><td><code>0x9A</code>/<code>0x9B</code> (PRFA)</td><td>Cờ trạng thái Preamble — PASS=<code>0x100</code>/<code>0x3F7F</code></td></tr>
+<tr><td><code>DQS_GATE_PREAMBLE_EN</code> (QSPI)</td><td>Chọn Preamble(1,mặc định)/Data-Test(0)</td></tr>
+<tr><td><code>KM_DQS_GATE_SHMOO</code> (QSPI)</td><td>Bật log Shmoo toàn bản đồ pass/fail — khớp SPEC FACT chương 1</td></tr>
+</table>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging</h3><span class="chev">▾</span></div><div class="block-body">
+<ul><li><code>"!!! DQS Gate Training Error PHYDelay=0"</code> → 1 CS không tìm được Window — nghi board/chip hoặc bước trước sai.</li>
+<li><code>"DQS gate training failed for CH %d"</code> → không pup hợp lệ cho cả channel.</li>
+<li>Nghi chọn nhầm Window → kiểm tra <code>DQS_GATE_PREAMBLE_EN</code>, bật <code>KM_DQS_GATE_SHMOO</code> để soi toàn bản đồ.</li></ul>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>DQS Gate mở "cổng nghe DQS" đúng lúc sau Preamble — tránh nhầm nhiễu thành dữ liệu.</li>
+<li>2 phương pháp thật (Preamble-status vs Data-test) song song, chọn qua QSPI, mặc định Preamble.</li>
+<li>Delay chia 2 tầng: cycle (thô) + phy_dly (mịn).</li>
+<li>Ngưỡng đóng Window KHÁC 2 số (63 khi PASS liên tục, 40 khi vừa FAIL) — chọn Window ĐẦU TIÊN, không phải rộng nhất → nguồn gốc bug B.3 (đã xác nhận).</li>
+<li>Khi warm boot, toàn bộ bước này skip — đọc lại từ training result.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="read-centering">
+<h2>08 · Read Centering</h2>
+<p class="chapter-kicker"><code>lpddr4_read_centering()</code> — 1 hàm được gọi 4 lần khác nhau, dùng "Center of Mass" thật, không phải bisection đơn giản.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Đọc = <code>DRAM → Controller</code>. Sau DQS Gate mở đúng lúc, câu hỏi còn lại: điểm nào trong lúc "cổng mở" an toàn nhất để lấy mẫu? Read Centering quét <b>2 trục cùng lúc</b> (delay + Vref) — vì hình Eye thường méo (không phải hình chữ nhật đều), tìm theo 1 trục cố định có thể lấy nhầm điểm gần biên.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Firmware View — Center of Mass</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> <code>KM_LPDDR4_config.h:65</code>: <code>use_read_com_flag = 1</code> (mặc định) — S800 <b>không</b> dùng "left+right/2" đơn giản, mà dùng trọng tâm (Center of Mass):</p>
+<div class="codewrap"><pre><code>for (i = 0; i &lt; maxY; i++) {           // i = mỗi mức Vref quét
+    if (fpDly[i][ch][cs][pup][0] != -128) {
+        mx = 1 + (lpDly[i][...] - fpDly[i][...]);          // "mass" = độ rộng Window tại Vref i
+        mxSum[...] += mx;
+        xmx = mx * (fpDly[i][...]*10 + (mx-1)*5);           // mass × midpoint × 10
+        xmxSum[...] += xmx;
+    }
+}
+comResults[ch][cs][pup][0] = (xmxSum[...]/10) / mxSum[...];  // Σ(mass·midpoint)/Σ(mass)</code></pre></div>
+<p>Lát Vref rộng hơn <b>kéo trọng tâm về gần nó hơn</b> — công thức trọng tâm vật lý thật, không phải trung bình đơn giản. Có bước lượng tử hoá về bước nhảy firmware set được (<code>modx = comResults % dlyStep</code>).</p>
+<p>⚠️ Sửa chương 03: trục Vref dùng trọng tâm thật (<code>calculate_com()</code>), trục delay tại dòng 5010 lại dùng bisection <code>(left+right)/2</code> <b>tại đúng Vref trọng tâm đó</b> — 1 phép <b>lai (hybrid)</b>, không hoàn toàn 1 kiểu thuần túy.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>4 lần gọi thật, không phải 1 lần</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Call site</th><th>fixVref</th><th>test_dma</th><th>use_pbs</th><th>Mốc</th></tr>
+<tr><td><code>:8354</code></td><td>read_fifo_vref_fix_en</td><td>FIFO_TEST</td><td>ADD_PBS_TEST</td><td>TRN_GX — lần 1</td></tr>
+<tr><td><code>:8395</code></td><td>read_fifo_vref_fix_en</td><td>FIFO_TEST</td><td>NO_PBS_TEST</td><td>TRN_H5 — sau Deskew</td></tr>
+<tr><td><code>:8536</code></td><td>VREF_NOT_FIX</td><td>DMA_TEST</td><td>ADD_PBS_TEST</td><td>TRN_L1</td></tr>
+<tr><td><code>:8546</code></td><td>VREF_NOT_FIX</td><td>DMA_TEST</td><td>NO_PBS_TEST</td><td>TRN_L2</td></tr>
+</table>
+<p>Read Centering (FIFO) chạy <b>2 lần bao quanh</b> Read Deskew — lần 1 cho điểm khởi đầu hợp lý, lần 2 tinh chỉnh sau khi từng DQ đã deskew — rồi lặp lại cả cặp bằng DMA test (thực tế hơn, sau <code>common_memfill</code>).</p>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>FIFO vs DMA test</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge inference">INFERENCE</span> — <span class="badge unknown">UNKNOWN</span> cơ chế nội bộ chính xác chưa đọc thân hàm: <b>FIFO test</b> dùng bộ đệm nhỏ trong PHY/Controller — nhanh, coarse. <b>DMA test</b> dùng đường DMA thật, đọc/ghi <code>train_base_*</code> — gần điều kiện vận hành thật, chạy sau khi FIFO ổn định.</p>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>2 chiến lược thật (Center of Mass mặc định, Widest Window thay thế), chọn bằng cờ toàn cục.</li>
+<li><code>calculate_com()</code> tính trọng tâm thật (weighted centroid) — lát PASS rộng ảnh hưởng nhiều hơn.</li>
+<li>Lai giữa 2 kỹ thuật: trọng tâm cho Vref, bisection cho delay tại Vref trọng tâm đó.</li>
+<li>1 hàm gọi 4 lần thật (FIFO/DMA × PBS/no-PBS), bao quanh Read Deskew.</li>
+<li>FIFO và DMA là 2 cách đo PASS/FAIL vật lý khác nhau — DMA chạy sau, thực tế hơn.</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="read-deskew">
+<h2>09 · Read Deskew</h2>
+<p class="chapter-kicker">5 hàm thật (TRN_H0→H4) — chương "khó" nhất theo yêu cầu ban đầu. 2/5 hàm chỉ đọc header.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Chương 07-08 coi cả 1 pup (8 bit DQ) là 1 khối, 1 delay DQS chung. Thực tế mỗi đường DQ riêng lẻ có skew riêng (khác vài % bit-time) dù chung 1 DQS. <b>Read Deskew</b> chỉnh delay <b>riêng từng bit DQ + DM</b> để tất cả "về đúng nhịp" cùng lúc.</p>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Diagram — vì sao cần Deskew</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;">DQ0 ------&gt;|PASS PASS PASS|-----   left0=5   right0=15  center0=10
+DQ1 -------------&gt;|PASS PASS PASS|-  left1=9   right1=17  center1=13
+DQ2 --->|PASS PASS PASS PASS|------   left2=3   right2=13  center2=8
+DM  ---------->|PASS PASS PASS|----   leftDM=7  rightDM=15 centerDM=11
+                ^
+        mỗi đường có delay RIÊNG, ghi vào register RIÊNG (dqRegAddr[ch][i+pup*8])
+        để tất cả "nhìn" đúng cùng 1 thời điểm DQS dù đường dây vật lý khác nhau</pre>
+</div>
+</div></div>
+
+<div class="block hardware"><div class="block-head"><h3>Hardware View — "DM to DQ swap"</h3><span class="chev">▾</span></div><div class="block-body">
+<p>DM không có mạch deskew riêng độc lập. Firmware ghi <code>CSS_ADDR+0x0100</code> (mask <code>0xff0</code>) để <b>tạm hoán đổi</b> đường DM vào 1 vị trí bit DQ, deskew như DQ bình thường, rồi hoán đổi lại.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>5 hàm theo thứ tự thật (TRN_H0→H4)</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>#</th><th>Hàm</th><th>Mốc</th><th>Trạng thái đọc</th></tr>
+<tr><td>1</td><td><code>lpddr4_read_find_deskew_start()</code></td><td>TRN_H0</td><td><span class="badge source">SOURCE</span> đọc toàn bộ. LEFT EDGE thô mức pup, dùng vị trí bit DM để dò</td></tr>
+<tr><td>2</td><td><code>lpddr4_read_dm_deskew()</code></td><td>TRN_H1</td><td><span class="badge source">SOURCE</span> đọc toàn bộ. Output <code>pbsMinDly</code> — LEFT EDGE riêng của DM (nguồn gốc tên "PBS" nghi = Per-Bit Skew)</td></tr>
+<tr><td>3</td><td><code>lpddr4_read_deskew()</code></td><td>TRN_H2</td><td><span class="badge unknown">UNKNOWN</span> chỉ header — <span class="badge inference">INFERENCE</span> tương tự bước 2 nhưng cho cả 8 bit DQ, output <code>dqDly[ch][cs][pup][i]</code></td></tr>
+<tr><td>4</td><td><code>lpddr4_read_find_deskew_end()</code></td><td>TRN_H3</td><td><span class="badge unknown">UNKNOWN</span> chỉ header. Comment gốc: "...all DQs and DM <b>fail</b>" — RIGHT EDGE</td></tr>
+<tr><td>5</td><td><code>lpddr4_read_deskew_center_align()</code></td><td>TRN_H4</td><td><span class="badge source">SOURCE</span> đọc phần chính. Center thật, xem code dưới</td></tr>
+</table>
+<div class="codewrap"><pre><code>dqDly[ch][cs][pup][i] = nova_ddrphy_read(dqRegAddr[ch][i+pup*8]+0x10*cs, 0, pup+4*ch);  // đọc LEFT EDGE
+nova_ddrphy_write(0x3+cs*0x4, 0, pup+4*ch, DQSEnd[ch][cs][pup]);                          // DQS=RIGHT EDGE
+for ( dly = 0; dly &lt; MAX_DESKEW+1; dly++ ) {
+    nova_ddrphy_write(dqRegAddr[...], 0, pup+4*ch, dqDly[ch][cs][pup][i] + dly);   // tăng TỪ left
+    if ( (regval bit i)==0 || dqDly[...]+dly==MAX_DESKEW )
+        finalDqDly[ch][cs][pup][i] = dly/2;    // dly khi VỪA FAIL, /2 = CENTER
+}</code></pre></div>
+<p>Cùng công thức center (chương 03), viết dạng "quét dần từ left, chia 2 khi FAIL".</p>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging &amp; K-S800 Customization</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Log <code>"All DM are failed. find the deskew values!!"</code>/<code>"All DQs are passed at right side of window"</code> = bình thường. Nếu vòng lặp chạy hết <code>MAX_DESKEW</code> không dừng sớm — nghi 1 bit DQ/DM luôn FAIL (đứt mạch hoặc Window quá hẹp từ bước trước). Không có <code>#ifdef KM_*</code> riêng bọc 5 hàm này — <span class="badge inference">INFERENCE</span> có khả năng giữ nguyên gần Marvell gốc.</p>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Deskew chỉnh delay riêng từng bit DQ+DM, không chỉ 1 delay chung/pup.</li>
+<li>DM cần thủ thuật "swap" tạm vào 1 slot deskew của DQ.</li>
+<li>Thứ tự thật: start→dm_deskew→deskew→find_end→center_align (không phải center_align ngay sau start).</li>
+<li>Công thức center vẫn <code>left+(right-left)/2</code>, chỉ viết dạng khác ở bước cuối.</li>
+<li>2/5 hàm chưa đọc thân đầy đủ — đánh dấu rõ, không giả vờ đã xác nhận.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="write-centering">
+<h2>10 · Write Centering</h2>
+<p class="chapter-kicker"><code>lpddr4_write_centering()</code> — 2 lần, bao quanh Write Deskew. Bằng chứng thứ 2 cho "warm boot skip sweep".</p>
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Firmware View</h3><span class="chev">▾</span></div><div class="block-body">
+<p>Write Centering làm ngược hướng Read Centering: <code>Controller → DRAM</code>, tìm điểm để <b>DRAM</b> (không phải Controller) lấy mẫu đúng. Không thể tái dùng kết quả Read — DRAM có receiver/Vref riêng.</p>
+<table><tr><th>Call</th><th>Mốc</th></tr>
+<tr><td><code>lpddr4_write_centering(FIFO, skip=1)</code></td><td>TRN_I0/I1 → TRN_IX (lần 1, trước Deskew)</td></tr>
+<tr><td><i>(giữa 2 lần: Write Deskew — chương 11)</i></td><td>TRN_J0-J2</td></tr>
+<tr><td><code>lpddr4_write_centering(FIFO, skip=1)</code></td><td>TRN_KX (lần 2, sau Deskew)</td></tr>
+</table>
+<div class="codewrap"><pre><code>if (warmboot == 0 || skip == 0) {   // CẢ 2 call site đều truyền skip=1
+    // → khi warmboot=1, TOÀN BỘ sweep CẢ HAI LẦN bị bỏ qua
+    ...
+    if (bvRef_fixed) { j = vref_fixed_num_write; }   // =39, KM_TRAINING_REFINE, bỏ sweep Vref
+}</code></pre></div>
+<p>Ngay sau lần 2: <code>backup_train_area()</code> — comment gốc "trước khi training, backup vùng dùng cho training" (dịch hơi ngược vị trí gọi thật, xem chương 12/16).</p>
+</div></div>
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Dùng lại nguyên khung Center of Mass + công thức center, chỉ đổi hướng đo.</li>
+<li>Chạy 2 lần bao quanh Write Deskew — giống cấu trúc Read.</li>
+<li>Cả 2 lần bị bỏ qua HOÀN TOÀN khi warm boot (<code>skip=1</code>) — bằng chứng thứ 2 cho "không train lại khi resume".</li>
+<li>Có Vref cố định (39) để tăng tốc, cùng nhóm tối ưu <code>KM_TRAINING_REFINE</code>.</li>
+<li><code>lpddr4_write_com()</code> tồn tại, quan hệ với hàm này chưa xác nhận (❓UNKNOWN).</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="write-deskew">
+<h2>11 · Write Deskew</h2>
+<p class="chapter-kicker">3 hàm thật (không phải 5 như Read) — triết lý ngược: tìm điểm FAIL từ 1 điểm đã gần center, không tìm PASS từ 0.</p>
+<div class="block concept"><div class="block-head"><h3>Vì sao khác Read Deskew</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th></th><th>Read <code>find_deskew_start</code></th><th>Write <code>find_deskew_start</code></th></tr>
+<tr><td>Comment gốc</td><td>"...all DQs and DM <b>pass</b>"</td><td>"...first bit <b>fails</b> during write centering"</td></tr>
+<tr><td>Điểm bắt đầu quét</td><td><code>dly=0</code></td><td><code>dly = wcValue[ch][cs][pup]</code> (từ Write Centering)</td></tr>
+<tr><td>Số hàm</td><td>5</td><td>3 (không cần find_end/center_align riêng)</td></tr>
+</table>
+<p><span class="badge inference">INFERENCE</span> Write Deskew chạy <b>sau</b> khi Write Centering đã cho 1 điểm center hợp lý — tận dụng luôn làm điểm khởi đầu, không cần dò lại từ 0 hay đo đủ 2 biên.</p>
+</div></div>
+<div class="block firmware"><div class="block-head"><h3>3 hàm thật (TRN_J0→J2)</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>// Bước 1 — write_find_deskew_start()
+for ( dly = wcValue[ch][cs][pup]; dly &lt; 64; dly++ ) { ... dmFail[...] = dly; }  // ... và dqFail[...]
+deskewStart[ch][cs][pup] = min(dmFail[...], dqFail[...]);   // biên GẦN HƠN
+
+// Bước 2 — write_dm_deskew()
+nova_ddrphy_write(0x1+cs*0x4, 0, pup+4*ch, deskewStart[...]-1);   // baseline = ngay TRƯỚC fail
+for (dly=0; dly&lt;32; dly++) { ... minWRDQDly[...] = dly; }
+
+// Bước 3 — write_deskew()  [❓ chưa đọc hết thân hàm]</code></pre></div>
+</div></div>
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>3 hàm (không phải 5) vì khởi đầu gần center thật nhờ Write Centering chạy trước.</li>
+<li>Chiến lược ngược: Read tìm "PASS đầu" làm baseline; Write tìm "FAIL đầu" (từ điểm gần center) làm baseline.</li>
+<li>DM vẫn cần swap riêng, giống Read.</li>
+<li>Hàm cuối (<code>write_deskew</code>) chưa đọc hết — công thức center cuối vẫn ❓UNKNOWN.</li>
+<li><code>deskewStart = min(dmFail, dqFail)</code> — lấy biên gần hơn, không lấy xa hơn.</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="memory-test">
+<h2>12 · Common Memfill / Memory Test</h2>
+<p class="chapter-kicker">Training PASS ≠ RAM chắc chắn hoạt động. Ranh giới thật giữa "chế độ training" và "chế độ vận hành".</p>
+<div class="block concept"><div class="block-head"><h3>Training ≠ Validation</h3><span class="chev">▾</span></div><div class="block-body">
+<p><b>Training</b> (chương 04-11) chỉ test bằng pattern giả lập ngắn tại vài vùng scratch cố định (<code>train_base_0..7</code>) — mục đích tìm delay/Vref. <b>Validation</b> (<code>common_memfill()</code> + Read/Write Centering DMA lại) test bằng dữ liệu thật, khối lượng lớn, dưới cấu hình vận hành thật (DBI bật, DM tắt training-mode).</p>
+</div></div>
+<div class="block firmware"><div class="block-head"><h3>common_memfill() — ranh giới training/vận hành</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>setReadData();
+memFill(...train_base_0..., TRAIN_NOISE_SIZE);              // CPU ghi noise, 1 lần
+mv_xor_4dma_memcpy_list(src, dst1, size, 3, true, 1);        // DMA chép ra train_base_1..7
+//Enable DBI
+rdModWr(&amp;mc_reg-&gt;CH0_DRAM_Config_4, READ_DBI_MASK|WRITE_DBI_MASK, ..., VERIFY);
+//Disable DM (thoát hẳn training-mode)
+rdModWr(&amp;mc_reg-&gt;CH0_DRAM_Config_2, 0, DM_MASK, VERIFY);
+send_mrx(1,13,3,3); send_mrx(1,3,3,3);   // MR13/MR3 → chế độ vận hành thật</code></pre></div>
+<p><span class="badge inference">INFERENCE</span> Đây là ranh giới thật — sau điểm này DRAM ở đúng cấu hình Linux sẽ dùng (DBI on), giải thích tại sao Read/Write Centering chạy LẦN 2 bằng DMA (re-verify dưới cấu hình mới).</p>
+</div></div>
+<div class="block"><div class="block-head"><h3>backup_train_area() / restore_train_area() — 2 lý do khác nhau</h3><span class="chev">▾</span></div><div class="block-body">
+<p><b>Lý do 1 — An toàn cho RETRY</b> <span class="badge source">SOURCE</span>: <code>if (train_err_cnt != retry_num-1) { restore_train_area(); return_100mhz(); }</code> — dọn <code>train_base_*</code> trước khi thử lại, tránh đọc nhầm noise cũ.</p>
+<p><b>Lý do 2 — Bảo vệ dữ liệu Warm Boot</b> <span class="badge inference">INFERENCE</span>: <code>train_base_*</code> là địa chỉ DRAM thật, trùng vùng Linux dùng — nếu Memory Test chạy lúc resume (dữ liệu Linux còn sống), backup/restore bắt buộc.</p>
+</div></div>
+<div class="bugcard" style="border-color:var(--warning);border-left-color:var(--warning);">
+<h4 style="color:var(--warning);">Bug-fix SuperWarp (khác nhóm bug 05/06)</h4>
+<div class="bugdate">2024/11/27 · OP_BTS-51229</div>
+<p>Comment gốc: "対策 SuperWarp起動時にリブート繰り返す" (đối sách reboot lặp lúc SuperWarp khởi động). <code>p_sram[8] = train_err_cnt</code> — lưu vào SRAM (sống sót qua reboot) để tránh vòng lặp reboot vô hạn nếu lỗi không sửa được bằng retry.</p>
+</div>
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Training PASS ≠ RAM chắc chắn hoạt động — cần Memory Test dưới cấu hình vận hành thật (DBI on).</li>
+<li><code>common_memfill()</code> là ranh giới rõ training/vận hành — giải thích Read/Write Centering chạy lần 2.</li>
+<li>Backup/restore phục vụ 2 mục đích: an toàn retry (xác nhận trực tiếp) VÀ bảo vệ Warm Boot (suy luận).</li>
+<li>1 bug thật riêng (SuperWarp reboot loop) lưu retry count vào SRAM để sống sót qua reboot.</li>
+<li>Câu hỏi mở: sau PASS, <code>train_base_*</code> còn noise pattern — chưa xác nhận có dọn dẹp trước khi Linux dùng.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="qspi-gpio">
+<h2>13 · Chip Detection: GPIO / QSPI / Checksum / Swizzle</h2>
+<p class="chapter-kicker">Ghép mọi mảnh rời rạc (chip_info_reg, cờ FORCE_*) thành 1 bức tranh — dựa trên spec chương 5 đã đọc trực tiếp.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept &amp; Why</h3><span class="chev">▾</span></div><div class="block-body">
+<p>S800 phải chạy được với nhiều chip DRAM khác nhau (Micron/Samsung, nhiều dung lượng) không cần build riêng. <span class="badge spec">SPEC</span> <code>5_1</code> tr.1: ban đầu định dùng GPIO thuần, nhưng số bit không đủ mở rộng + sản xuất không muốn hàn GPIO khác nhau trên board cùng model → giải pháp <b>QSPI ROM lưu sẵn tham số đầy đủ</b>, GPIO chỉ còn vai trò tối thiểu/fallback.</p>
+</div></div>
+
+<div class="block hardware"><div class="block-head"><h3>GPIO thật (khớp SPEC hoàn toàn)</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Bit</th><th>Ý nghĩa</th></tr>
+<tr><td><code>GPIOH[28:26]</code></td><td>Dung lượng CH0 (0x0=1GB...0x7=8GB)</td></tr>
+<tr><td><code>GPIOH[31:29]</code></td><td>Dung lượng CH1 (cùng mã hoá)</td></tr>
+<tr><td><code>GPIOI[23:22]</code></td><td>Vendor CH0 (00b=Micron, 01b=Samsung)</td></tr>
+<tr><td><code>GPIOI[25:24]</code></td><td>Vendor CH1</td></tr>
+</table>
+<p>⚠️ <span class="badge spec">SPEC</span> nguyên văn: bit vendor <b>chỉ hiệu lực ở môi trường FUM</b> — ở máy thật luôn coi là Micron. GPIO không tự phân biệt Samsung trên máy thật.</p>
+<div class="codewrap"><pre><code>m_capacity_info.gpioa_value = mrvl_regread32(0xE830A000);  // GPIOa
+m_capacity_info.gpioh_value = mrvl_regread32(0xE8244824);  // Timer2 — LPPP "gửi tạm" GPIOH
+m_capacity_info.gpioi_value = mrvl_regread32(0xE830A800);  // GPIOi</code></pre></div>
+<p>GPIOH[26:31] dùng chung pin với SMT_CLK/SMT_xSYNC/SMT_DATA (debug sản xuất) — LPPP đọc trước, "né" qua Timer2 để ATF đọc lại sau. <span class="badge match">MATCH HOÀN TOÀN</span> giữa spec và source.</p>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Diagram — QSPI/GPIO selection flow</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<div class="flow">
+<div class="flowbox">Power ON</div><div class="flowarrow">↓</div>
+<div class="flowbox">Read QSPI Params (checksum vùng chính)</div><div class="flowarrow">↓</div>
+<div class="flowbox warn">Checksum OK?</div>
+<div class="flowrow">
+<div style="text-align:center;"><div class="flowarrow">YES ↓</div><div class="flowbox alt">Use QSPI (vùng chính)</div></div>
+<div style="text-align:center;"><div class="flowarrow">NO ↓</div><div class="flowbox alt">Thử từng vùng QSPI dự phòng (2020+)</div></div>
+</div>
+<div class="flowarrow">↓</div>
+<div class="flowbox">LPDDR4 Training bắt đầu (tham số đã chọn)</div>
+</div>
+</div>
+<div class="notebox research">⚠️ <span class="badge unknown">UNKNOWN</span>: chưa xác nhận nhánh fallback cuối cùng về GPIO thuần (nếu KHÔNG vùng QSPI nào khớp) trong source — spec mô tả rõ 2 nhánh (QSPI/GPIO), source cho thấy ≥3 nhánh (QSPI chính → QSPI dự phòng → ❓GPIO).</div>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>⚠️ MISMATCH thật, có ngày xác nhận — QSPI dự phòng</h3><span class="chev">▾</span></div><div class="block-body">
+<p><span class="badge source">SOURCE</span> comment <code>2020/02/26 Harada OP_BTS-20942</code> "LPDDR4パラメータ二重化" (nhân đôi tham số):</p>
+<div class="codewrap"><pre><code>if (param_qspi_flag == 0) {   // checksum vùng CHÍNH không khớp
+    for (i=1; i&lt;sizeof(lpddr4_param)/sizeof(lpddr4_param_t); i++) {
+        sub_checksum_qspi = calculate_checksum_qspi(lpddr4_param[i].chip_info_reg, ...);
+        if (judge_qspi_param(sub_checksum_qspi, ...)) {
+            chip_info_reg = lpddr4_param[i].chip_info_reg;   // dùng vùng DỰ PHÒNG
+            goto LPDDR4_PARAM_BACKUP_USE_START_POINT;
+        }
+    }
+}</code></pre></div>
+<p><span class="badge mismatch">MISMATCH XÁC NHẬN</span> Spec chương 1 (2018) chỉ mô tả 1 vùng QSPI — <b>không hề mô tả</b> cơ chế nhiều vùng dự phòng. Bằng chứng: bug-fix ghi ngày <code>2020/02/26</code>, <b>sau</b> ngày phát hành spec 第2版 (18/11/07) hơn 1 năm — cải tiến thêm SAU khi spec đã phát hành.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>Swizzle — ánh xạ vật lý → logic theo board revision</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>board_type = (gpioi_value &amp; 0x80000000) ? 1/*ES*/ : 0/*Emu*/;
+switch ((gpioa_value &amp; 0xF0) &gt;&gt; 4) {   // HW VER bit[3:0]
+    case 0xF: km_board_rev=0; break;  // A0 (old)
+    case 0xE: km_board_rev=1; break;  // A1 (old)
+    case 0xD: km_board_rev=2; break;  // A1 (mod)
+    case 0xC: km_board_rev=3; break;  // A1S (mod)
+}
+if (km_board_rev==0 || km_board_rev==1)
+    swizzle_patterns[0..3] = {0x591c72a5, 0x591c5527, 0x591c36b8, 0x591caad8};
+else
+    swizzle_patterns[0..3] = {0x591c74a5, 0x591c5527, 0x591c36b8, 0x591cc3d8};</code></pre></div>
+<p><span class="badge inference">INFERENCE</span> 2 board revision có cách đi dây DQ/CA vật lý hơi khác (sửa layout giữa các đợt sản xuất A0→A1→A1S). Chỉ <b>1-2 hằng số</b> pattern thay đổi giữa 2 nhóm — gợi ý chỉ 1-2 đường DQ cụ thể bị đấu khác, không phải toàn bus.</p>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register View</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register/Struct</th><th>Ý nghĩa</th></tr>
+<tr><td><code>CHIP_DETECT_REGS_t</code> (<code>chip_info_reg</code>)</td><td>Struct QSPI đầy đủ — vendor, FORCE_*, KM_* flags</td></tr>
+<tr><td><code>lpddr4_param[]</code></td><td>Mảng vùng QSPI dự phòng (2020)</td></tr>
+<tr><td><code>CH0_MEM_VENDER</code></td><td><code>0x11111111</code>=Micron / <code>0x00000001</code>=Samsung</td></tr>
+<tr><td><code>FORCE_QSPI_MODE</code></td><td>Ép dùng QSPI dù checksum sao</td></tr>
+</table>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>GPIO: bit cố định GPIOH (dung lượng) + GPIOI (vendor, chỉ hiệu lực FUM) — khớp hoàn toàn spec/source.</li>
+<li>QSPI checksum cộng dồn đơn giản, không phải CRC mạnh.</li>
+<li><b>MISMATCH thật có ngày</b>: source có nhiều vùng QSPI dự phòng (2020) mà spec (2018) không mô tả.</li>
+<li>Swizzle = pattern khác theo board revision, bù khác biệt đi dây — chỉ 1-2 pattern đổi.</li>
+<li>3 cờ FORCE_* đều sống trong <code>CHIP_DETECT_REGS_t</code> — "trung tâm điều khiển" khi debug.</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="cold-boot">
+<h2>14 · Cold Boot / Entry Point</h2>
+<p class="chapter-kicker">Entry chain thật (không phải sơ đồ giả định) — <code>ble_main()</code> → <code>lpddr4_config()</code>. Phát hiện: 2 tầng retry khác nhau.</p>
+
+<div class="block firmware"><div class="block-head"><h3>Entry chain thật</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>int ble_main(int bootrom_flags)      // ENTRY POINT thật, gọi bởi BootROM
+{
+    for (i=0;i&lt;2048;i++) p_sram[i]=0xE5;   // xoá SRAM debug
+    get_it(); console_init(); plat_delay_timer_init();
+    lpddr4_config();
+}
+
+int lpddr4_config(void)   // mv_lpddr4_apn806.c:8751
+{
+    warmboot = syncronize_boot_get(BOOT_SYNC_DDR_WARMBOOT(1), false);  // hỏi LPPP
+    // đọc GPIO, swizzle_setting(), QSPI checksum+dự phòng (chương 13)
+    // start Timer3 → display_measure_time(TRN_A0)
+
+    if (warmboot == 0) {                          // COLD BOOT
+        for (i=0; i&lt;6; i++) {                     // ★ TẦNG NGOÀI, tối đa 6 lần
+            lpddr4_training_Error = 0;
+            lpddr4_dynamic_config(config_type, warmboot);
+            if (lpddr4_training_Error == 0) break;
+            p_sram[0]=1; p_sram[1]=i+1;
+        }
+        if (lpddr4_training_Error == 0) p_sram[2] = 0x77;
+    } else {                                       // WARM BOOT — gọi 1 lần, KHÔNG có tầng ngoài
+        lpddr4_dynamic_config(config_type, warmboot);
+    }
+    display_measure_time(TRN_N0); display_measure_time(TRN_N1);
+    syncronize_boot_set(BOOT_SYNC_DDR_READY(1));
+}</code></pre></div>
+</div></div>
+
+<div class="notebox security"><b>⚠️ Phát hiện quan trọng — 2 tầng retry KHÁC NHAU:</b>
+<table style="margin-top:10px;"><tr><th>Tầng</th><th>Biến</th><th>Giới hạn</th><th>Vai trò</th></tr>
+<tr><td><b>Ngoài</b></td><td><code>lpddr4_training_Error</code></td><td>cố định 6, chỉ Cold Boot</td><td>Bọc toàn bộ <code>lpddr4_dynamic_config()</code></td></tr>
+<tr><td><b>Trong</b></td><td><code>train_err_flg</code>/<code>train_err_cnt</code></td><td>10 mặc định, tối đa 255 QSPI</td><td>Retry riêng từng bước training FAIL</td></tr>
+</table>
+</div>
+
+<div class="block diagram"><div class="block-head"><h3>Timeline thật — 36 mốc TRN_A0→N1</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;font-size:.8em;">TRN_A0  Bắt đầu Timer3 đo thời gian
+TRN_A1  Nhận diện dung lượng xong (GPIO/QSPI)          → ch.13
+TRN_A2  Đổi tần số 25MHz → 100MHz
+TRN_B0/B1/B2  Pad Calibration (S800+DRAM)               → ch.04
+TRN_C0-C5  CA Training (CBT, đổi tần số 2 lần)          → ch.05
+TRN_D0/D1  Write Leveling                               → ch.06
+TRN_E0  DQS Gate Training                               → ch.07
+TRN_F0  Read Pre-Amble/Add PBS
+TRN_GX  Read Center (lần 1, FIFO)                       → ch.08
+TRN_H0-H4  Read Deskew (5 hàm)                          → ch.09
+TRN_H5  Read Center (lần 2, FIFO, sau deskew)           → ch.08
+TRN_I0/I1/IX  Write Center (lần 1, FIFO)                → ch.10
+TRN_J0-J2  Write Deskew (3 hàm)                         → ch.11
+TRN_KX  Write Center (lần 2) → backup_train_area()      → ch.10/12
+TRN_L0  common_memfill (bật DBI)                        → ch.12
+TRN_L1/L2  Read Center (DMA)                            → ch.08
+TRN_M0  Write Center (DMA)                               → ch.10
+TRN_N0  lpddr4_dynamic_config() trả về
+TRN_N1  read_ddr_osc() — ❓ BỊ COMMENT OUT, không đo gì cả</pre>
+</div>
+<p><span class="badge spec">SPEC</span> đo "training bắt đầu ~ kết thúc" ≈ 650ms. <span class="badge inference">INFERENCE</span> rất có khả năng chính là TRN_A0→TRN_N0/N1, <span class="badge unknown">UNKNOWN</span> chưa xác nhận 100% qua <code>display_measure_time()</code> đầy đủ.</p>
+</div></div>
+
+<div class="block debug"><div class="block-head"><h3>Debugging</h3><span class="chev">▾</span></div><div class="block-body">
+<ul><li>Không boot → breakpoint đầu tiên: <code>ble_main()</code> rồi <code>lpddr4_config()</code> (warmboot xác định đúng chưa).</li>
+<li>Retry đúng 6 lần rồi vẫn lỗi khác → đã vượt tầng NGOÀI (khác hẳn "retry 10/255 lần" của tầng trong).</li>
+<li>Dump <code>p_sram[0..2]</code> sau treo máy: <code>[0]=1</code> lỗi, <code>[1]</code> số lần thử, <code>[2]=0x77</code> thành công.</li></ul>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Entry point thật: <code>ble_main()</code> → <code>lpddr4_config()</code> → (cold: loop 6) <code>lpddr4_dynamic_config()</code>.</li>
+<li>2 tầng retry riêng biệt — tầng ngoài (6 lần, cold-only) và tầng trong (10-255 lần).</li>
+<li>36 mốc TRN_A0→N1 có vị trí thật, đối chiếu đủ với chương 04-13.</li>
+<li>TRN_N1 và <code>mv_ddr_validate()</code> — 2 tính năng chẩn đoán bị tắt để tiết kiệm thời gian, không phải bug.</li>
+<li>SRAM tại <code>0xC0200000</code> là "bảng điều khiển" debug boot failure quan trọng nhất.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="warm-boot">
+<h2>15 · Warm Boot / Sleep Resume</h2>
+<p class="chapter-kicker"><code>mv_lpddr4_sleep.c</code> (LPPP, 791 dòng) — nơi 2 bug thật (B.4, B.5) được xác nhận đầy đủ ở chương 22.</p>
+
+<div class="block concept"><div class="block-head"><h3>Concept — Dữ liệu DRAM có mất khi Sleep không?</h3><span class="chev">▾</span></div><div class="block-body">
+<p><b>Trả lời: KHÔNG</b> — lúc "ngủ", DRAM vào <b>Self-Refresh</b> (<code>mc_enter_sr()</code>, JEDEC), chip tự refresh nội bộ, tốn ít điện hơn nhưng dữ liệu vẫn còn. "Warm Boot không train lại" và "dữ liệu không mất" là <b>2 khái niệm độc lập</b>, 2 lý do khác nhau: dữ liệu không mất vì Self-Refresh; tham số training không cần train lại vì <span class="badge inference">INFERENCE</span> bản chất vật lý đường dây/silicon không đổi giữa ngủ và thức.</p>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Diagram — Cold Boot vs Warm Boot</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<div class="flowrow">
+<div class="flow"><b style="color:var(--warning)">COLD BOOT</b><div class="flowarrow">↓</div>
+<div class="flowbox warn">Full Training (chương 04-12)</div><div class="flowarrow">↓</div>
+<div class="flowbox warn">lpddr4_backup_train_result()</div><div class="flowarrow">↓</div>
+<div class="flowbox warn">QSPI (qua U-Boot)</div></div>
+<div class="flow"><b style="color:var(--success)">WARM BOOT</b><div class="flowarrow">↓</div>
+<div class="flowbox" style="border-color:var(--success);">Đọc training result đã lưu (train_reg)</div><div class="flowarrow">↓</div>
+<div class="flowbox" style="border-color:var(--success);">Ghi thẳng vào PHY register (SKIP sweep)</div><div class="flowarrow">↓</div>
+<div class="flowbox" style="border-color:var(--success);">check_warm_training() — nếu sai → goto retry</div></div>
+</div>
+</div>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>Hardware/Firmware View — Sleep &amp; Resume</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>void mc_save_state() {
+    if (power_debug_flags_get_pdf_verify_ddr()) ddr_verify_crc(false);  // debug only
+    mc_drain();                                    // đợi MC xả hết lệnh ghi
+    mc_enter_pd((MC6_REGS_t*)MC6_EXT_BASE, 2, 2);   // Power-Down (bên trong: Self-Refresh + tắt pull-down PHY)
+}
+void mc_restore_state() {
+    if (power_debug_flags_get_pdf_verify_ddr()) ddr_verify_crc(true);   // so sánh CRC32
+#ifdef FLEX_quartz
+    syncronize_boot_set(BOOT_SYNC_DDR_CONT_BOOT(1));   // báo ATF: tiếp tục boot
+#endif
+    // comment gốc: "restore training corruption locations... n/a"
+    // → KHÔNG restore tham số training — việc đó do ATF làm riêng
+}
+void mc_configure_dram(bool warm) {
+    if (!warm) syncronize_boot_set(BOOT_SYNC_DDR_CONT_BOOT(true));
+    else syncronize_boot_set(BOOT_SYNC_DDR_WARMBOOT(warm));  // ← nguồn của warmboot mà chương 14 đọc
+}</code></pre></div>
+<p><span class="badge unknown">UNKNOWN</span> chưa xác nhận ai gọi <code>mc_configure_dram(warm)</code> và quyết định <code>warm</code> dựa trên điều kiện gì.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>2 bug đã được sửa lại chính xác ở chương 22 (audit)</h3><span class="chev">▾</span></div><div class="block-body">
+<p>⚠️ <b>ddr_verify_crc()</b> — dùng XOR DMA tính CRC32 4 vùng DRAM lớn, so sánh trước/sau Sleep. <span class="badge mismatch">SỬA LẠI</span> Đây <b>KHÔNG PHẢI</b> fix/công cụ chính cho bug B.4 — fix thật là logic tính <code>mask</code> theo <code>ch0/1_cs1_isValid</code> (đọc từ MMAP thật) trong <code>mc_enter_sr()</code>/<code>mc_enter_pd()</code>.</p>
+<p>⚠️ <b>mc_drain() timeout</b> — comment "タイムアウト対応" (đối sách timeout) quanh <code>MC_STATUS_TIMEOUT=200</code>:</p>
+<div class="codewrap"><pre><code>while ((status &amp; MC_STATUS_CHX_DRAIN_IDLE_BITS) != MC_STATUS_CHX_DRAIN_IDLE_TARGET) {
+    status = mrvl_regread32(&amp;mc_reg-&gt;MC_STATUS_CH0); cnt++;
+    if (cnt == MC_STATUS_TIMEOUT) { log_status("CH0 timeout!!"); break; }
+}</code></pre></div>
+<p><span class="badge mismatch">SỬA LẠI QUAN TRỌNG</span> Log khớp chữ-đối-chữ với bug B.5, nhưng đây chỉ là <b>nơi hiện tượng bị phát hiện</b>, KHÔNG phải fix. Root cause thật ở driver <b>LCDC</b> (ngoài code LPDDR4) — xem chương 22.</p>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>Sleep = Self-Refresh + tắt pull-down PHY — dữ liệu KHÔNG mất, chỉ tiết kiệm điện.</li>
+<li>"Không train lại" và "dữ liệu còn nguyên" là 2 lý do độc lập.</li>
+<li><code>BOOT_SYNC_DDR_WARMBOOT</code> là cầu nối LPPP↔ATF quyết định warmboot.</li>
+<li><code>mc_restore_state()</code> KHÔNG restore tham số training — ATF làm riêng.</li>
+<li>2 giả thuyết ban đầu (ddr_verify_crc=B.4, mc_drain timeout=B.5) đã bị SỬA LẠI khi đọc bug report thật (chương 22).</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="training-result">
+<h2>16 · Training Result Storage</h2>
+<p class="chapter-kicker"><code>TRN_RSLT_REGS_t</code> (2304 byte) + <code>gTrainRegReadTbl[576]</code> — chính xác cái gì được lưu, ở đâu, ai lưu, ai đọc lại.</p>
+
+<div class="block hardware"><div class="block-head"><h3>TRN_RSLT_REGS_t — struct thật, 2304 byte</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Offset</th><th>Field</th><th>Lưu kết quả của...</th><th>Chương</th></tr>
+<tr><td>0x0000</td><td><code>CH0/1_DRAM_Config_4_RSLT</code></td><td>Vref CA cuối cùng</td><td>05</td></tr>
+<tr><td>0x0008-0x00E4</td><td><code>CH*_CADLY0/1_CA0..5</code>, <code>_CS0/1</code>, <code>CLKDLY0/1</code></td><td>Delay CA/CS/CK</td><td>05</td></tr>
+<tr><td>0x0100-0x015C</td><td><code>CH*_CS*_WLCLKDLY_*</code></td><td>WL CLK-shift (field tồn tại, không ghi giá trị mới — ch.06)</td><td>06</td></tr>
+<tr><td>0x0180-0x01BC</td><td><code>CH*_CS*_WLDLY_PUP0..3</code></td><td>WL DQS-shift</td><td>06</td></tr>
+<tr><td>0x0200-0x024C</td><td><code>CH*_PHY_RL_Control_CS*</code>, <code>DQSDLY_PUP*</code></td><td>DQS Gate delay</td><td>07</td></tr>
+<tr><td>0x0280-0x04BC</td><td><code>CH*_CS*_R_SKWDLY_PUP*_DQ0..7_DM</code></td><td>Read Deskew per-bit</td><td>09</td></tr>
+<tr><td>0x0500-0x073C</td><td><code>CH*_CS*_W_SKWDLY_PUP*_DQ0..7_DM</code></td><td>Write Deskew per-bit</td><td>11</td></tr>
+<tr><td>0x0780-0x07FC</td><td><code>R_VREF_PUP*</code>, <code>R_DQDLY_PUP*</code></td><td>Read Centering (Vref+delay)</td><td>08</td></tr>
+<tr><td>0x0880-0x08BC</td><td><code>W_DQDLY_PUP*</code></td><td>Write Centering</td><td>10</td></tr>
+</table>
+<p><span class="badge match">MATCH</span> Mọi giá trị từ chương 04-11 có đúng 1 ô tương ứng — struct thiết kế đúng theo thứ tự training thật.</p>
+</div></div>
+
+<div class="block firmware"><div class="block-head"><h3>gTrainRegReadTbl[576] và lpddr4_backup_train_result()</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>typedef struct { uint32_t data; uint8_t mode; } Train_RegRead_t;
+// mode 0: mrvl_regread32 trực tiếp | mode 1: nova_ddrphy_read3 (PRFA) | mode 2: dummy
+
+pmem  = (Train_Result_t*)TRAIN_RESULT_MEM_ADDR;   // 0x200000000 — DRAM thật
+pmem2 = (Train_Result_t*)0xE8200100;              // bổ sung SuperWarp — KHÔNG phải DRAM
+for (i=0;i&lt;576;i++) { /* ghi CẢ pmem VÀ pmem2, tuỳ mode */ }
+pmem-&gt;regsize = pmem2-&gt;regsize = sizeof(uint32_t)*i;
+// clean+invalidate D-cache bằng assembly ARM64 tay — comment: "u-boot直接"</code></pre></div>
+<p><span class="badge match">MATCH — xác nhận trực tiếp</span> Comment gốc tại call site: <i>"電源ON起動時 / トレーニング結果を一時退避する / この後、u-bootにてQSPIへ保存"</i> (Lúc Power-ON / tạm lưu kết quả training / sau đó U-Boot lưu vào QSPI) — xác nhận đúng data flow: <b>ATF chỉ tạm lưu, U-Boot mới ghi QSPI thật</b>.</p>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Data flow đầy đủ</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<div class="flow">
+<div class="flowbox">Training (ch.04-11) → ghi thẳng PHY/MC register</div><div class="flowarrow">↓</div>
+<div class="flowbox">lpddr4_backup_train_result() — gTrainRegReadTbl[576]</div><div class="flowarrow">↓</div>
+<div class="flowrow"><div class="flowbox alt">pmem @ 0x200000000 (DRAM)</div><div class="flowbox alt">pmem2 @ 0xE8200100 (dự phòng)</div></div>
+<div class="flowarrow">↓</div>
+<div class="flowbox warn">U-Boot: qspi_winbond.c ❓chưa đọc — ghi vào QSPI thật</div><div class="flowarrow">↓</div>
+<div class="flowbox">[Sleep/Resume]</div><div class="flowarrow">↓</div>
+<div class="flowbox">ATF warmboot=true: đọc lại QSPI → SKIP sweep → ghi thẳng PHY</div>
+</div>
+</div>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li><code>TRN_RSLT_REGS_t</code> (2304 byte) = "bộ nhớ dài hạn" toàn bộ training — khớp đầy đủ chương 04-11.</li>
+<li><code>gTrainRegReadTbl[576]</code> tách "địa chỉ" khỏi "cách đọc" (trực tiếp/PRFA/dummy).</li>
+<li>2 bản sao (<code>pmem</code> DRAM + <code>pmem2</code> non-DRAM) — bản 2 là an toàn bổ sung từ bug SuperWarp.</li>
+<li>ATF chỉ tạm lưu; <b>U-Boot mới thực sự ghi QSPI</b> — xác nhận trực tiếp qua comment gốc.</li>
+<li>Warm Boot cũng có thể kích hoạt lại retry loop qua <code>check_warm_training()</code> nếu restore không hợp lệ.</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="error-retry">
+<h2>17 · Error Handling &amp; Retry</h2>
+<p class="chapter-kicker">2 tầng retry độc lập, 2 mục đích khác nhau — sửa lại hiểu nhầm quan trọng về <code>lpddr4_training_Error</code>.</p>
+
+<div class="block firmware"><div class="block-head"><h3>Tầng trong — vòng for thật</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="codewrap"><pre><code>retry:
+for (train_err_cnt = 0; train_err_cnt &lt; retry_num; train_err_cnt++) {
+    p_sram[6] = train_err_cnt;
+    // ... TOÀN BỘ: CA training → ... → Memory Test (ch.05-12) ...
+    if (train_err_flg == 1) {
+        p_sram[8] = train_err_cnt; train_err_flg = 0;
+        rdModWr(0xE8244834, train_err_cnt&lt;&lt;24, 0xFF000000, VERIFY);
+        if (train_err_cnt != retry_num - 1) { restore_train_area(); return_100mhz(mc_reg); }
+        // LẦN CUỐI: KHÔNG restore/return_100mhz — for-loop tự thoát
+    } else {
+        train_err_cnt = retry_num + 1;   // ★ thủ thuật thoát SỚM khi THÀNH CÔNG
+    }
+}</code></pre></div>
+<p><span class="badge match">MATCH TUYỆT ĐỐI với SPEC</span>: <code>retry_num = (chip_info_reg-&gt;TRAIN_RETRY_NUM &gt; 255) ? 10 : TRAIN_RETRY_NUM;</code> — khớp chính xác "10 mặc định, tối đa 255 qua QSPI".</p>
+</div></div>
+
+<div class="notebox security"><b>⚠️ Sửa lại hiểu nhầm quan trọng — Tầng ngoài <code>lpddr4_training_Error</code>:</b>
+<div class="codewrap" style="margin-top:8px;"><pre><code>for (i=0; i&lt;576; i++)
+    if (pmem-&gt;regdata[i] != pmem2-&gt;regdata[i])   // so sánh 2 BẢN SAO training-result
+        lpddr4_training_Error = 1;</code></pre></div>
+<p><code>lpddr4_training_Error</code> <b>KHÔNG đo chất lượng training</b> — nó đo <b>tính nhất quán của việc BACKUP kết quả</b> (<code>pmem</code> vs <code>pmem2</code>). Tầng ngoài (6 lần) lặp lại khi bước LƯU kết quả không đáng tin, không phải khi training tự nó fail (đó là việc của tầng trong).</p>
+</div>
+
+<div class="block register"><div class="block-head"><h3>Bảng p_sram[] đầy đủ</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Index</th><th>Ý nghĩa</th></tr>
+<tr><td>[0]</td><td>=1 nếu tầng ngoài lỗi</td></tr><tr><td>[1]</td><td>Số lần đã thử tầng ngoài</td></tr>
+<tr><td>[2]</td><td>=0x77 nếu tầng ngoài cuối cùng THÀNH CÔNG</td></tr>
+<tr><td>[4]</td><td><code>staticOrDynamic</code></td></tr><tr><td>[5]</td><td><code>warmboot</code></td></tr>
+<tr><td>[6]</td><td><code>train_err_cnt</code> hiện tại (sống)</td></tr><tr><td>[7]</td><td><code>retry_num</code> đọc từ QSPI</td></tr>
+<tr><td>[8]</td><td><code>train_err_cnt</code> tại thời điểm FAIL</td></tr>
+</table>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nếu bạn chỉ nhớ 5 điều</h4><ol>
+<li>2 tầng retry, 2 mục đích khác nhau — không nhầm lẫn.</li>
+<li><code>retry_num</code> khớp SPEC tuyệt đối: 10 mặc định, tối đa 255 qua QSPI.</li>
+<li>Tầng trong dùng thủ thuật <code>train_err_cnt = retry_num+1</code> để thoát sớm khi thành công.</li>
+<li><b>Sửa hiểu nhầm quan trọng</b>: tầng ngoài đo tính nhất quán backup (pmem/pmem2), KHÔNG đo chất lượng training.</li>
+<li><code>p_sram[]</code> là nguồn debug đầu tiên nên đọc cho bất kỳ vấn đề boot/training nào.</li>
+</ol></div>
+</section>
+
+
+<section class="chapter" id="register-map">
+<h2>18 · Register Map</h2>
+<p class="chapter-kicker">Bảng tra cứu tổng hợp mọi register/struct đã xác nhận — không thêm fact mới.</p>
+
+<div class="block register"><div class="block-head"><h3>4 struct/register-file chính</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Struct</th><th>Base address</th><th>Vai trò</th></tr>
+<tr><td><code>MC6_REGS_t</code></td><td><code>0xf0020000</code></td><td>Memory Controller thật ("Mckinley 6c")</td></tr>
+<tr><td><code>DDR_PHY_REGS_t</code></td><td><code>0xf0011000</code></td><td>PHY thật ("MISL DDR PHY") — sequencer + calibration + <code>prfa</code></td></tr>
+<tr><td><code>TRN_RSLT_REGS_t</code></td><td><code>0x200000000</code> (DRAM) + <code>0xE8200100</code> (dự phòng)</td><td>Kết quả training "đóng băng"</td></tr>
+<tr><td><code>CHIP_DETECT_REGS_t</code></td><td><code>chip_detect_base_addr</code></td><td>Tham số QSPI + cờ FORCE_*/KM_*</td></tr>
+</table>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Sub-register per-pup (đi qua PRFA)</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>reg_num</th><th>Vai trò</th><th>Chương</th></tr>
+<tr><td><code>0x1</code></td><td>Delay mức pup — Write</td><td>11</td></tr>
+<tr><td><code>0x2</code></td><td>Delay mức pup — DQS Gate</td><td>07</td></tr>
+<tr><td><code>0x3</code></td><td>Delay mức pup — Read</td><td>09</td></tr>
+<tr><td><code>0x13</code>/<code>0x53</code></td><td>Delay riêng DM — Write/Read</td><td>11/09</td></tr>
+<tr><td><code>0x90</code></td><td>Reset FIFO/counter</td><td>05-11</td></tr>
+<tr><td><code>0x91</code></td><td>Vào/ra CA training mode</td><td>05</td></tr>
+<tr><td><code>0x9A</code>/<code>0x9B</code></td><td>Cờ Preamble PASS (<code>0x100</code>/<code>0x3F7F</code>)</td><td>03,07</td></tr>
+<tr><td><code>0xA1</code>/<code>0xA2</code></td><td>Tắt CMOS receiver comparator (pad_cal)</td><td>04</td></tr>
+<tr><td><code>0xA8</code></td><td>Enhanced Vref (pad_cal) / Pull-down (Sleep)</td><td>04,15</td></tr>
+<tr><td><code>0xBF</code></td><td>Áp calibration đã đo</td><td>04</td></tr>
+<tr><td><code>dqRegAddr[ch][i+pup*8]</code></td><td>Delay riêng từng bit DQ</td><td>09,11</td></tr>
+</table>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Register nghiệp vụ (MC6) &amp; QSPI param quan trọng</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Register</th><th>Vai trò</th></tr>
+<tr><td><code>USER_COMMAND_0</code></td><td>Vào/ra Self-Refresh, Power-Down</td></tr>
+<tr><td><code>CH0/1_DRAM_Config_2/3/4</code></td><td>FSP_OP, CBT, VREF_TRAINING_*, READ/WRITE_DBI</td></tr>
+<tr><td><code>MC_Control_0</code></td><td>Mute Refresh lúc CBT</td></tr>
+</table>
+<table><tr><th>QSPI Field</th><th>Vai trò</th></tr>
+<tr><td><code>FORCE_QSPI_MODE</code> / <code>FORCE_CA_TRAIN_IGNORE</code> / <code>DQS_GATE_PREAMBLE_EN</code></td><td>Override quyết định training</td></tr>
+<tr><td><code>KM_*_SHMOO</code> / <code>KM_CAL_WINDOW</code> / <code>KM_MEASUREMENT_TIME</code></td><td>Debug logging</td></tr>
+<tr><td><code>TRAIN_RETRY_NUM</code></td><td>Override <code>retry_num</code> (≤255)</td></tr>
+</table>
+</div></div>
+
+<div class="block register"><div class="block-head"><h3>Địa chỉ đặc biệt khác</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Địa chỉ</th><th>Ý nghĩa</th></tr>
+<tr><td><code>0xE830A000</code>/<code>0xE8244824</code>/<code>0xE830A800</code></td><td>GPIOa / Timer2 (né GPIOH) / GPIOi</td></tr>
+<tr><td><code>0xE8244834[31:24]</code></td><td>Lưu train_err_cnt hiện tại — kênh debug nhanh</td></tr>
+<tr><td><code>0xC0200000</code> (<code>p_sram</code>, 2048 byte)</td><td>Bảng trạng thái debug đầy đủ (bug SuperWarp)</td></tr>
+<tr><td><code>0xE8200100</code> (<code>pmem2</code>)</td><td>Bản sao dự phòng training result</td></tr>
+<tr><td><code>CSS_ADDR+0x0100</code></td><td>"DM to DQ swap" + board revision</td></tr>
+</table>
+</div></div>
+</section>
+
+<section class="chapter" id="call-graph">
+<h2>19 · Call Graph</h2>
+<p class="chapter-kicker">Call graph đầy đủ entry→return — thay hết placeholder bằng tên hàm/file/dòng thật.</p>
+
+<div class="block diagram"><div class="block-head"><h3>Call graph đầy đủ</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;font-size:.78em;overflow-x:auto;">BootROM
+  ↓
+ble_main(bootrom_flags)                          [ble_main.c:52]
+  ↓  xoá p_sram, get_it(), console_init(), plat_delay_timer_init()
+lpddr4_config()                                   [mv_lpddr4_apn806.c:8751]
+  ↓  warmboot=syncronize_boot_get(...) ; GPIO/QSPI/swizzle (ch.13) ; start Timer3
+  ├─ [cold] for i in 0..6: lpddr4_dynamic_config(warmboot=0)   ★ TẦNG NGOÀI
+  └─ [warm] lpddr4_dynamic_config(warmboot=1)  (gọi 1 lần)
+  ↓
+return MV_OK → U-Boot đọc pmem → ghi QSPI (qspi_winbond.c, ❓chưa đọc)
+
+┌─ lpddr4_dynamic_config(staticOrDynamic, warmboot) ────────────────┐
+│  đọc chip_info_reg (FORCE_*, KM_*_SHMOO, TRAIN_RETRY_NUM)         │
+│  reset PHY, pad_cal() → TRN_B0/B1 (ch.04) ; MCConfig_..._dpi()→B2 │
+│  retry: for (train_err_cnt=0; train_err_cnt&lt;retry_num; ...) {    │  ★ TẦNG TRONG
+│    lpddr4_ca_training()               → TRN_C0-C5 (ch.05)        │
+│    lpddr4_write_leveling() ×ch×cs     → TRN_D0/D1 (ch.06)         │
+│    lpddr4_dqs_gate_training[_preamble]() → TRN_E0 (ch.07)        │
+│    lpddr4_read_centering(FIFO,PBS)    → TRN_GX (ch.08)            │
+│    lpddr4_read_find_deskew_start/dm_deskew/deskew/                │
+│      find_deskew_end/deskew_center_align → TRN_H0-H4 (ch.09)     │
+│    lpddr4_read_centering(FIFO,noPBS)  → TRN_H5 (ch.08)            │
+│    lpddr4_write_centering(skip=1)     → TRN_I0/I1/IX (ch.10)      │
+│    lpddr4_write_find_deskew_start/dm_deskew/deskew → TRN_J0-J2 (11)│
+│    lpddr4_write_centering(skip=1)     → TRN_KX (ch.10)            │
+│    backup_train_area()                                            │
+│    [!warmboot]: common_memfill()→TRN_L0 ; read/write centering DMA│
+│                 → TRN_L1/L2/M0 (ch.08/10/12)                      │
+│    if FAIL: restore_train_area()+return_100mhz() ; else: thoát sớm│
+│  }                                                                  │
+│  [!warmboot]: restore_train_area(); lpddr4_backup_train_result()  │──┐
+│  [warmboot]: check_warm_training(); nếu sai → goto retry          │  │
+└─────────────────────────────────────────────────────────────────────┘  │
+                                                                            ↓
+                                            lpddr4_backup_train_result() (ch.16)
+                                            gTrainRegReadTbl[576] → pmem+pmem2
+                                            so sánh → lpddr4_training_Error</pre>
+</div>
+<p><b>Hàm PHY-access nền</b> (dùng ở mọi khối trên): <code>nova_ddrphy_write/read()</code>, <code>resetPHY()</code>, <code>rdModWr()</code>, <code>send_mrx()</code>, <code>change_clk_freq()</code>/<code>wait_for_dll_lock()</code>.</p>
+<p><b>Nhánh Sleep/Resume (LPPP, tách riêng):</b> <code>mc_configure_dram(warm)</code> → <code>mc_save_state()</code> → <code>mc_drain()</code> → <code>mc_enter_pd()</code> → <code>mc_enter_sr()</code> ; <code>mc_restore_state()</code> → <code>BOOT_SYNC_DDR_CONT_BOOT</code>.</p>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>Điểm chưa trace hết (❓UNKNOWN — thành thật ghi nhận)</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Hàm</th><th>Trạng thái</th></tr>
+<tr><td><code>get_it()</code></td><td>Chưa trace</td></tr>
+<tr><td><code>lpddr4_read_deskew()</code>, <code>lpddr4_read_find_deskew_end()</code></td><td>Chỉ đọc header</td></tr>
+<tr><td><code>lpddr4_write_deskew()</code></td><td>Chỉ đọc phần đầu</td></tr>
+<tr><td><code>lpddr4_write_com()</code></td><td>Quan hệ với <code>write_centering()</code> chưa xác nhận</td></tr>
+<tr><td><code>check_warm_training()</code></td><td>Chưa đọc điều kiện PASS/FAIL cuối</td></tr>
+<tr><td><code>qspi_winbond.c</code> (U-Boot)</td><td>Chưa đọc</td></tr>
+<tr><td>Caller của <code>mc_configure_dram(warm)</code></td><td>Chưa trace — ai quyết định cold/warm</td></tr>
+</table>
+</div></div>
+</section>
+
+<section class="chapter" id="spec-vs-source">
+<h2>20 · SPEC vs SOURCE</h2>
+<p class="chapter-kicker">Bảng tổng hợp mọi đối chiếu — chỉ phản ánh đúng phần đã đọc (11/27 PDF).</p>
+
+<div class="notebox research">⚠️ <b>Giới hạn:</b> chỉ đọc trực tiếp 11/27 file PDF spec (4 chương chính + toàn bộ Appendix B). Bảng dưới KHÔNG suy rộng ra toàn bộ spec chưa đọc.</div>
+
+<table>
+<tr><th>#</th><th>Chủ đề</th><th>Spec</th><th>Source</th><th>Kết quả</th></tr>
+<tr><td>1</td><td>Chip hỗ trợ</td><td>Micron 1-4GB, Samsung 2-4GB (FUM only)</td><td><code>CH0/1_MEM_VENDER</code> = 0x11111111/0x00000001</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>2</td><td>Tốc độ</td><td>2400(1200MHz)/2100(1050MHz)</td><td><code>ddr_top_freq</code>, <code>change_clk_freq()</code></td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>3</td><td>Retry</td><td>10 mặc định, tối đa 255 QSPI</td><td><code>retry_num=(TRAIN_RETRY_NUM&gt;255)?10:...</code></td><td><span class="badge match">MATCH TUYỆT ĐỐI</span></td></tr>
+<tr><td>4</td><td>Sleep resume</td><td>~150ms, không train lại</td><td>warmboot=1 → skip sweep, đọc train_reg</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>5</td><td>Không retrain theo nhiệt độ</td><td>Test 0-60°C, margin đủ JEDEC</td><td>❓ chưa đọc code margin-nhiệt-độ</td><td><span class="badge unknown">UNKNOWN</span></td></tr>
+<tr><td>6</td><td>FW cấu trúc atf/ble</td><td>9 file cụ thể</td><td>Tất cả 9 file tồn tại</td><td><span class="badge match">MATCH</span></td></tr>
+<tr><td>7</td><td>FW "u-boot"</td><td><code>u-boot/drivers/spi/qspi_winbond.c</code></td><td><code>BootROM/Emu800/Src/drivers/spi/...</code></td><td><span class="badge inference">INFERENCE MATCH</span> tên gốc khác</td></tr>
+<tr><td>8</td><td>GPIO bit mapping</td><td>GPIOH[26:31]/GPIOI[22:25]</td><td>Đúng offset, khớp flowchart Timer2</td><td><span class="badge match">MATCH HOÀN TOÀN</span></td></tr>
+<tr><td>9</td><td>QSPI checksum</td><td>1 vùng, không khớp→GPIO</td><td>Nhiều vùng dự phòng (2020, sau spec)</td><td><span class="badge mismatch">MISMATCH THẬT có ngày</span></td></tr>
+<tr><td>10</td><td>Write Leveling</td><td>chưa đọc spec 4.4</td><td>Nửa CLK-shift bị comment-out</td><td><span class="badge warn">NGHI VẤN</span></td></tr>
+<tr><td>11</td><td>DQS Gate multi-window (B.3)</td><td>Hi-Z sau postamble → 2 giải pháp</td><td>2 ngưỡng + cờ preamble — cả 2 hàm là 2 giải pháp thật</td><td><span class="badge match">MATCH TUYỆT ĐỐI</span></td></tr>
+<tr><td>12</td><td>Sleep mất dữ liệu (B.4)</td><td>Mask giả định luôn 2-CS</td><td><code>mc_enter_sr/pd()</code> tính mask theo CS thật</td><td><span class="badge match">MATCH TUYỆT ĐỐI</span></td></tr>
+<tr><td>13</td><td>Drain timeout (B.5)</td><td>Root cause ở LCDC, không phải DDR</td><td><code>mc_drain()</code> chỉ là nơi lộ hiện tượng</td><td><span class="badge mismatch">XÁC NHẬN — fix ngoài code DDR</span></td></tr>
+<tr><td>14</td><td>Samsung Eye tách 2 (B.2.1)</td><td>Công thức không xử lý wrap-around</td><td><code>selectedCenter=fpDly+(lpDly-fpDly)/2</code> khớp nguyên văn</td><td><span class="badge match">MATCH TUYỆT ĐỐI</span></td></tr>
+<tr><td>15</td><td>1-CS không hỗ trợ (B.2.2)</td><td>Code giả định luôn 2-CS</td><td>Pattern <code>num_cs=ch0num_cs/ch1num_cs</code> khắp codebase</td><td><span class="badge match">MATCH TUYỆT ĐỐI</span></td></tr>
+<tr><td>16</td><td>LPDDR4-2400 (B.1)</td><td>FIFO wait-time 6→7</td><td><code>PHY_Control_1=0x4060</code>, ❓ chưa decode bit</td><td><span class="badge inference">MATCH cấu trúc</span></td></tr>
+<tr><td>17</td><td>Samsung 8GB (B.2.3)</td><td>CKE=Low lúc đổi tần số</td><td><code>enter_cbt/exit_cbt</code>, <code>return_100mhz()</code> có mẫu SR-quanh-đổi-tần-số</td><td><span class="badge inference">MATCH khả năng cao</span></td></tr>
+</table>
+
+<div class="notebox research"><b>Bài học quan trọng nhất:</b> 2/7 giả thuyết ban đầu (dựa tên biến/comment khớp) đã <b>SAI khi đối chiếu trực tiếp</b> bug report thật (B.4: không phải <code>ddr_verify_crc</code>; B.5: không phải <code>mc_drain</code> timeout). Không được dừng ở suy luận dù có vẻ hợp lý — phải đọc bằng chứng gốc.</div>
+</section>
+
+
+<section class="chapter" id="debug-guide">
+<h2>21 · Debugging Guide</h2>
+<p class="chapter-kicker">Checklist theo đúng THỨ TỰ pipeline thật — biết "board treo ở đâu thì nhìn gì".</p>
+
+<div class="cardgrid">
+<div class="card"><h4>Scenario 0 — Board không boot (ble_main)</h4>
+<div class="kv"><b>Symptom:</b> Không vào được <code>lpddr4_config()</code></div>
+<div class="kv"><b>Kiểm tra:</b> BootROM, clock/power SoC cơ bản trước</div>
+<div class="kv"><b>Register:</b> <code>p_sram</code> vẫn toàn <code>0xE5</code> → chưa từng chạy tới</div>
+</div>
+<div class="card"><h4>Scenario 1 — Chip detection sai</h4>
+<div class="kv"><b>Log:</b> <code>checksum_qspi</code>/<code>param_qspi_flag</code></div>
+<div class="kv"><b>Register:</b> <code>km_board_rev</code>, dump <code>CHIP_DETECT_REGS_t</code></div>
+<div class="kv"><b>Cause:</b> Sai board_rev → sai swizzle → deskew lạ trên 1-2 DQ</div>
+</div>
+<div class="card"><h4>Scenario 2 — Pad Calibration FAIL</h4>
+<div class="kv"><b>Log:</b> <code>"Failed Calibration init/propogation"</code></div>
+<div class="kv"><b>Cause:</b> PHY chưa cấp clock/reset; lỗi board/pad vật lý</div>
+<div class="kv"><b>Impact:</b> Xảy ra SỚM NHẤT — mọi bước sau chắc chắn fail theo</div>
+</div>
+<div class="card"><h4>Scenario 3 — CA Training FAIL</h4>
+<div class="kv"><b>Kiểm tra:</b> <code>wait_for_dll_lock()</code> timeout trước</div>
+<div class="kv"><b>Cause:</b> 1-2 CA bit fail → PCB/skew riêng; cờ <code>FORCE_CA_TRAIN_IGNORE</code></div>
+</div>
+<div class="card"><h4>Scenario 4 — Write Leveling FAIL</h4>
+<div class="kv"><b>Log:</b> <code>"WL on CH %d CS %d failed. Mask: 0x%x"</code></div>
+<div class="kv"><b>Đọc:</b> bit KHÔNG lên 1 = pup có vấn đề</div>
+<div class="kv"><b>Nhớ:</b> CLK-shift đã bị tắt — CLK delay còn sót từ CA training</div>
+</div>
+<div class="card"><h4>Scenario 5 — DQS Gate FAIL</h4>
+<div class="kv"><b>Log:</b> <code>"PHYDelay=0"</code> hoặc <code>"failed for CH %d"</code></div>
+<div class="kv"><b>Đã biết:</b> Bug B.3 (chọn nhầm Window) — kiểm tra <code>DQS_GATE_PREAMBLE_EN</code></div>
+</div>
+<div class="card"><h4>Scenario 6 — Read Centering/Deskew FAIL</h4>
+<div class="kv"><b>Log:</b> left==right hoặc left&gt;right → không có Window</div>
+<div class="kv"><b>Cause:</b> Tầng thấp hơn (CA/WL/DQS Gate) đã sai trước</div>
+</div>
+<div class="card"><h4>Scenario 7 — Write Centering/Deskew FAIL</h4>
+<div class="kv"><b>Chú ý:</b> Nếu CHỈ fail sau warm boot (không cold boot) → nghi training result restore, không phải thuật toán</div>
+</div>
+<div class="card"><h4>Scenario 8 — Memory Test FAIL</h4>
+<div class="kv"><b>Cause:</b> Chỉ fail sau <code>common_memfill()</code> (DMA) → tác động DBI</div>
+<div class="kv"><b>Register:</b> <code>p_sram[0/1/2]</code> tăng dần tới 6 = tầng NGOÀI retry</div>
+</div>
+<div class="card"><h4>Scenario 9 — Cold Boot OK, Resume FAIL</h4>
+<div class="kv"><b>Log:</b> <code>"CH0/CH1 timeout!!"</code> → <b>Bug B.5</b>, root cause ở LCDC (<code>CFG_GRA_ENA</code>), KHÔNG phải code DDR</div>
+<div class="kv"><b>Data sai (không crash):</b> <b>Bug B.4</b> — kiểm tra <code>ch0/1_cs1_isValid</code> mask trong <code>mc_enter_sr/pd</code></div>
+<div class="kv"><b>Chậm (&gt;150ms):</b> Kiểm tra <code>BOOT_SYNC_DDR_WARMBOOT</code> set đúng chưa</div>
+</div>
+</div>
+
+<div class="block"><div class="block-head"><h3>Nghi ngờ theo board/chip cụ thể</h3><span class="chev">▾</span></div><div class="block-body">
+<ul>
+<li><b>Samsung + Write DQ lỗi, Eye 2 vùng</b> → B.2.1 đã biết/đã vá — nếu vẫn thấy, nghi 1 case wrap-around MỚI.</li>
+<li><b>Chip 1-CS (Micron 1GB/2GB) + lỗi lan byte-lane khác</b> → B.2.2 — kiểm tra TẤT CẢ nơi dùng <code>num_cs</code>.</li>
+<li><b>Samsung 8GB + lỗi ngẫu nhiên ~1/25</b> → hướng B.2.3 (CKE lúc đổi tần số).</li>
+<li><b>LPDDR4-2400 cụ thể lỗi Read</b> → hướng B.1 (<code>phy_rfifo_rptr_dly</code>).</li>
+</ul>
+</div></div>
+
+<div class="remember5"><h4>🎯 Nguyên tắc chung khi debug</h4><ol>
+<li>Luôn xác định TẦNG nào fail trước (retry_num hay 6-lần) — hướng điều tra khác hẳn.</li>
+<li>Không kết luận root cause chỉ từ VỊ TRÍ log — bug B.5 là ví dụ: log ở code DDR nhưng root cause ở LCDC.</li>
+<li>Luôn kiểm tra bước NGAY TRƯỚC trước khi nghi bước hiện tại — hầu hết lỗi tầng cao là hệ quả tầng thấp.</li>
+<li>Tra Register Map (ch.18) và Bug History (ch.22) TRƯỚC KHI tự suy luận root cause mới.</li>
+</ol></div>
+</section>
+
+<section class="chapter" id="bug-analysis">
+<h2>22 · Bug History (Appendix B — đã xác nhận toàn bộ 7 bug)</h2>
+<p class="chapter-kicker">Đọc trực tiếp toàn bộ Appendix B — mọi ứng viên ❓/🧠 trước đó đều được xác nhận hoặc SỬA LẠI.</p>
+
+<div class="bugcard">
+<h4>BUG B.1 — LPDDR4-2400 không hoạt động</h4>
+<div class="bugdate">2018/7/29 · gốc tài liệu Marvell</div>
+<div class="sect"><b>Symptom</b>FUM không đạt tốc độ mục tiêu 2400 trong thời gian dài.</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> FIFO bất đồng bộ giữa PHY/MC — 2 clock domain khác nhau, MC phải chờ 1 khoảng thời gian cố định (<code>phy_rfifo_rptr_dly</code>) trước khi lấy dữ liệu. Cần <b>6</b> ở LPDDR4-2100 nhưng <b>7</b> ở LPDDR4-2400. Dùng sai 6 ở 2400 → "Clipped Read Training Window".</div>
+<div class="sect"><b>Source</b><span class="badge source">SOURCE</span> <code>CH0/1_PHY_Control_1</code> ghi hằng số <code>0x00004060</code>, đọc từ QSPI (<code>m_capacity_info.CH0/1_PHY_Control_1</code>).</div>
+<div class="sect"><b>Validation</b><span class="badge inference">MATCH cấu trúc</span> — <span class="badge unknown">chưa decode bit</span> chính xác giá trị 6/7 trong <code>MC_regmasks.h</code> (9929 dòng, chưa đọc chi tiết).</div>
+</div>
+
+<div class="bugcard">
+<h4>BUG B.2.1 — Samsung: Write DQ Training, Eye bị chia làm 2</h4>
+<div class="bugdate">2018</div>
+<div class="sect"><b>Symptom</b>Samsung 4GB: Write DQ thấy 2 Window PASS tách biệt, code cũ chọn Window rộng hơn — đôi khi đó là vùng NG thật (delay "vòng" qua ranh giới chu kỳ).</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> (trích code Marvell gốc) thuật toán trọng tâm cũ: <code>fpDly[40]=0, lpDly[40]=63</code> → trung điểm=31 → RƠI VÀO VÙNG NG. Hệ quả của không gian delay hình tròn (0↔63 nối liền).</div>
+<div class="sect"><b>Fix</b>Kỹ thuật "Region1/Region2": nếu PASS cách Region1 &gt;10 bước, coi là Region2 do delay vòng, trừ <code>maxDly</code> rồi hợp nhất tính lại trung điểm.</div>
+<div class="sect"><b>Source</b><span class="badge match">MATCH TUYỆT ĐỐI</span> — công thức <code>selectedCenter=fpDly+(lpDly-fpDly)/2</code> tại <code>:5010</code> khớp NGUYÊN VĂN công thức trong bug report. Không chỉ ứng viên — bằng chứng trực tiếp 2 chiều.</div>
+</div>
+
+<div class="bugcard">
+<h4>BUG B.2.2 — Write DQ Training không hỗ trợ chip 1-CS</h4>
+<div class="bugdate">2018/5/20</div>
+<div class="sect"><b>Symptom</b>Chip Micron 1GB/2GB (1-CS) lỗi training sau khi vá B.2.1.</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> Code Marvell gốc giả định LUÔN có 2 CS. Với chip 1-CS, vòng lặp CS1 vẫn chạy dù không có dữ liệu → biến <code>lpAvg</code> (chưa init) mang giá trị RÁC → sai lệch Region1/Region2 ở byte-lane khác.</div>
+<div class="sect"><b>Fix</b><code>if (ch==0) num_cs=ch0num_cs; else if (ch==1) num_cs=ch1num_cs; for(cs=0;cs&lt;num_cs;cs++)</code></div>
+<div class="sect"><b>Source</b><span class="badge match">MATCH TUYỆT ĐỐI</span> — pattern <code>num_cs=ch0num_cs/ch1num_cs</code> xuất hiện RẤT NHIỀU LẦN khắp codebase (CA training, WL, WC, WD) — không phải chi tiết nhỏ, mà là fix lan toàn bộ codebase.</div>
+</div>
+
+<div class="bugcard">
+<h4>BUG B.2.3 — Samsung 8GB: Write DQ lỗi ngẫu nhiên ~1/25</h4>
+<div class="bugdate">2018/7/20-24 · xác nhận qua trao đổi Samsung/Micron</div>
+<div class="sect"><b>Symptom</b>Samsung 4GB×2 (8GB): TOÀN BỘ byte-lane sai (0xFF/0x00), tỉ lệ ~1/25.</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> Đổi tần số 100→1050/1200MHz lúc <code>CKE=High</code> làm hỏng Duty cycle CK → CLK-latch nội bộ DRAM lệch. Nếu thoát Write-Leveling-mode theo thứ tự DRAM trước/Controller sau ngay lúc đó → Controller gửi lệnh mà DRAM hiểu là Illegal Command → Bad state. Khuyến nghị: đổi tần số lúc <code>CKE=Low</code> (Self-Refresh).</div>
+<div class="sect"><b>Source</b><span class="badge inference">MATCH khả năng cao</span> — <code>enter_cbt/exit_cbt</code>, <code>return_100mhz()</code> có mẫu "đổi CS/CKE→đổi tần số→đổi lại" — <span class="badge unknown">chưa xác nhận trực tiếp</span> thứ tự exit Write-Leveling khớp "Controller→Device".</div>
+</div>
+
+<div class="bugcard">
+<h4>BUG B.3 — DQS Gate: nhiều Valid Window</h4>
+<div class="bugdate">2018/6/1</div>
+<div class="sect"><b>Symptom</b>Micron shrink: DQS Gate thấy ≥2 Valid Window, code cũ chọn RỘNG NHẤT, đôi khi chọn nhầm.</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> Không dùng Preamble mode (Marvell mặc định) → sau postamble, DQS về Hi-Z+nhiễu → nhiễu bị hiểu nhầm cạnh DQS thật → Window giả thứ 2. Window ĐẦU luôn thật (preamble &gt;1 chu kỳ, JEDEC tRPRE≥1.8tCK).</div>
+<div class="sect"><b>Fix</b>2 giải pháp, CẢ 2 hiện thực, chọn qua QSPI: (1) chọn Window ĐẦU TIÊN, dừng ngay; (2) dùng Preamble training mode.</div>
+<div class="sect"><b>Source</b><span class="badge match">MATCH TUYỆT ĐỐI</span> — 2 hàm ở chương 07 (<code>lpddr4_dqs_gate_training()</code> = giải pháp 1; <code>_preamble()</code> = giải pháp 2, mặc định) CHÍNH LÀ 2 giải pháp thật của bug này.</div>
+</div>
+
+<div class="bugcard">
+<h4>BUG B.4 — Mất dữ liệu nếu Resume sau khi chờ lâu</h4>
+<div class="bugdate">2018/7/30</div>
+<div class="sect"><b>Symptom</b>DeepSleep ~30s rồi resume → không resume được / dữ liệu như bị phá — CHỈ với Micron shrink 4GB(2+2).</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> Bug ở LPPP FW (không phải ATF): lúc Suspend, mask vào Self-Refresh giả định LUÔN 2-CS — sai với chip 1-CS thật → Self-Refresh KHÔNG vào đúng → dữ liệu rò mất theo thời gian.</div>
+<div class="sect"><b>Fix</b>Đọc mmap register, xác định CS thật, tính mask theo đúng số CS.</div>
+<div class="sect"><b>Source</b><span class="badge match">MATCH TUYỆT ĐỐI</span> — <code>mc_enter_sr()</code>/<code>mc_enter_pd()</code> đọc <code>MMAP1_Low_CH0/1</code> → <code>ch0/1_cs1_isValid</code> → tính mask theo switch nhiều nhánh. Đây CHÍNH LÀ code fix, không chỉ ứng viên nghi vấn.</div>
+</div>
+
+<div class="bugcard">
+<h4>BUG B.5 — Resume timeout ở bước drain</h4>
+<div class="bugdate">2018/10/15</div>
+<div class="sect"><b>Symptom</b>Resume treo ở wfi, log "CH0/CH1 timeout!!", <code>ch0 cs0</code> không vào được Self-Refresh.</div>
+<div class="sect"><b>Root Cause</b><span class="badge spec">SPEC</span> ⚠️ KHÁC HOÀN TOÀN suy đoán ban đầu: root cause KHÔNG ở <code>mv_lpddr4_sleep.c</code>/DDR code. Là driver <b>LCDC</b> lúc Suspend chỉ tắt Clock nhưng để DMA (<code>CFG_GRA_ENA</code>) bật → Read request liên tục → <code>mc_drain()</code> không bao giờ idle thật → timeout → ép Self-Refresh dù chưa sạch → bị phá ngay sau → mất dữ liệu.</div>
+<div class="sect"><b>Fix</b>Tắt <code>CFG_GRA_ENA</code> (<code>0xc057e190</code>) trong driver LCDC lúc Suspend.</div>
+<div class="sect"><b>Source</b><span class="badge mismatch">XÁC NHẬN — fix NGOÀI code LPDDR4</span> — log khớp chữ-đối-chữ (<code>mc_drain()</code>), nhưng đó chỉ là NƠI HIỆN TƯỢNG LỘ RA, không phải fix. Giả thuyết ban đầu ("timeout = fix") là SAI.</div>
+</div>
+
+<div class="block"><div class="block-head"><h3>Bài học tổng hợp</h3><span class="chev">▾</span></div><div class="block-body">
+<table><tr><th>Bug</th><th>Vị trí fix thật</th><th>Bài học</th></tr>
+<tr><td>B.1</td><td>PHY register theo tần số</td><td>Timing bất đồng bộ 2 clock domain cần margin lớn hơn ở tần số cao</td></tr>
+<tr><td>B.2.1</td><td>Công thức center of mass</td><td>Delay là VÒNG (0↔63) — mọi thuật toán center phải xử lý wrap-around</td></tr>
+<tr><td>B.2.2</td><td>Toàn codebase (<code>num_cs</code>)</td><td>1 giả định sai lan khắp hàng chục hàm — sửa 1 chỗ không đủ</td></tr>
+<tr><td>B.2.3</td><td>Thứ tự exit mode + CKE state</td><td>Silicon DRAM có trạng thái nội bộ nhạy thời điểm chuyển tần số</td></tr>
+<tr><td>B.3</td><td>2 giải pháp song song, QSPI flag</td><td>Không phải luôn có 1 fix "đúng nhất" — cho field quyết định</td></tr>
+<tr><td>B.4</td><td>Mask theo CS-valid thật (LPPP)</td><td>Giả định cố định lặp lại (giống B.2.2) ở lớp code khác hẳn</td></tr>
+<tr><td>B.5</td><td>LCDC driver (ngoài code LPDDR4)</td><td>⚠️ Bug "trông giống lỗi DDR" có thể root cause ở subsystem khác hẳn</td></tr>
+</table>
+</div></div>
+</section>
+
+
+<section class="chapter" id="final-master-map">
+<h2>23 · Final Master Map</h2>
+<p class="chapter-kicker">Sơ đồ tổng thể cuối cùng, hiệu chỉnh hoàn toàn theo source thật — không còn placeholder từ outline gốc.</p>
+
+<div class="block diagram"><div class="block-head"><h3>Master Architecture</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<pre style="padding:14px;font-size:.78em;overflow-x:auto;">                         S800 (SoC nền Marvell AP806/Armada)
+                                    |
+          +-------------------------+-------------------------+
+          |                         |                         |
+        LPPP                     ATF (ble)                 U-Boot
+  (mv_lpddr4_sleep.c)   (mv_lpddr4_apn806.c, 13778 dòng)  (qspi_winbond.c ❓)
+          |                         |                         |
+mc_configure_dram(warm)    ble_main()→lpddr4_config()   đọc pmem@0x200000000
+mc_save_state() ──┐        →lpddr4_dynamic_config()      →ghi vào QSPI
+mc_restore_state()─┼─ BOOT_SYNC_DDR_WARMBOOT/CONT_BOOT/READY   |
+(Self-Refresh,      │            |          |                 |
+ Power-Down)         │    +-------+----------+                 |
+                      │    |                 |                 |
+                      │  Memory Controller   PHY                |
+                      │  (MC6_REGS_t,      (DDR_PHY_REGS_t,     |
+                      │   0xf0020000)       0xf0011000)         |
+                      │    |                 |                 |
+                      │    +-------+----------+                 |
+                      │            |                            |
+                      │    LPDDR4 DRAM (Micron/Samsung)          |
+                      │            |                            |
+                      └────────────┴────────────────────────────┘
+                        (dữ liệu sống qua Sleep nhờ Self-Refresh)</pre>
+</div>
+</div></div>
+
+<div class="block diagram"><div class="block-head"><h3>Final Master Flow — Training Pipeline thật</h3><span class="chev">▾</span></div><div class="block-body">
+<div class="diagram">
+<div class="flow">
+<div class="flowbox">Chip Detect (GPIO/QSPI, Swizzle) — ch.13</div><div class="flowarrow">↓</div>
+<div class="flowbox">Pad Calibration (S800 + DRAM) — ch.04</div><div class="flowarrow">↓</div>
+<div class="flowbox">CA Training (CBT, FSP0/1, Vref sweep) — ch.05</div><div class="flowarrow">↓</div>
+<div class="flowbox">Write Leveling (edge-finding, CLK-shift disabled) — ch.06</div><div class="flowarrow">↓</div>
+<div class="flowbox">DQS Gate Training (Preamble/Data-test, bug B.3) — ch.07</div><div class="flowarrow">↓</div>
+<div class="flowbox">Read Centering(1) → Read Deskew(5 hàm) → Read Centering(2) — ch.08-09</div><div class="flowarrow">↓</div>
+<div class="flowbox">Write Centering(1) → Write Deskew(3 hàm) → Write Centering(2) — ch.10-11</div><div class="flowarrow">↓</div>
+<div class="flowbox">backup_train_area() → common_memfill(DBI) → Read/Write Centering DMA — ch.12</div><div class="flowarrow">↓</div>
+<div class="flowbox warn">PASS/FAIL?</div>
+<div class="flowrow">
+<div class="flowbox" style="border-color:var(--error);">FAIL → restore_train_area() → return_100mhz() → retry (10-255)</div>
+<div class="flowbox" style="border-color:var(--success);">PASS → lpddr4_backup_train_result() → pmem/pmem2 → U-Boot → QSPI</div>
+</div>
+<div class="flowarrow">↓</div>
+<div class="flowbox alt">[Warm Boot] check_warm_training() → nếu sai: goto retry (cùng vòng lặp)</div>
+</div>
+</div>
+</div></div>
+
+<div class="block"><div class="block-head"><h3>10 điều bạn giờ nên tự trả lời được</h3><span class="chev">▾</span></div><div class="block-body">
+<ol>
+<li><b>LPDDR4 là gì?</b> Chuẩn giao tiếp JEDEC, không phải chip; DRAM là chip tuân theo chuẩn đó.</li>
+<li><b>Tại sao cần training?</b> PCB + silicon mỗi board/chip khác nhau, không tính trước được, phải đo lúc chạy thật.</li>
+<li><b>PHY vs Memory Controller?</b> 2 khối silicon thật, 2 struct/địa chỉ MMIO khác nhau; PHY có sequencer JEDEC riêng dùng khi training.</li>
+<li><b>Window/Eye/Center/Margin?</b> PASS liên tục=Window; 2 trục=Eye; trung điểm=Center (≥2 biến thể: bisection và center-of-mass); đệm=Margin.</li>
+<li><b>Vì sao cần cả GPIO và QSPI?</b> GPIO tối thiểu không mở rộng được; QSPI chi tiết + có dự phòng đa vùng.</li>
+<li><b>Cold vs Warm Boot?</b> Cold: full training qua retry_num lần; Warm: skip sweep, đọc train_reg, vẫn có thể retry qua check_warm_training().</li>
+<li><b>Dữ liệu DRAM mất khi Sleep?</b> Không — Self-Refresh — độc lập với "không train lại".</li>
+<li><b>Retry hoạt động thế nào?</b> 2 tầng độc lập: trong (lỗi training) và ngoài (lỗi tính-nhất-quán-lưu-kết-quả).</li>
+<li><b>Training PASS = RAM chắc chắn chạy đúng?</b> Không hẳn — cần Memory Test dưới cấu hình vận hành thật.</li>
+<li><b>Board không boot vì DDR thì debug từ đâu?</b> Theo đúng thứ tự pipeline (ch.21), tra bug đã biết (ch.22) trước khi tự suy luận.</li>
+</ol>
+</div></div>
+
+<div class="notebox research"><b>📌 Những gì tài liệu này KHÔNG dám khẳng định (trung thực tới cuối):</b>
+<ul>
+<li>Chỉ đọc trực tiếp 11/27 file PDF spec (4 chương chính + toàn bộ Appendix B) — chương 2, 4.x, 6-10, Appendix A/C <b>chưa đọc trực tiếp</b>.</li>
+<li><code>lpddr4_read_deskew()</code>, <code>lpddr4_read_find_deskew_end()</code>, <code>lpddr4_write_deskew()</code> — chỉ đọc header.</li>
+<li><code>lpddr4_write_com()</code> quan hệ với <code>write_centering()</code> chưa xác nhận.</li>
+<li><code>qspi_winbond.c</code> (U-Boot) — hoàn toàn chưa đọc.</li>
+<li>Caller thật của <code>mc_configure_dram(warm)</code> — chưa trace.</li>
+<li>B.1 (giá trị bit <code>phy_rfifo_rptr_dly</code>) và B.2.3 (thứ tự exit WL) — match cấu trúc, chưa decode chi tiết cuối.</li>
+</ul>
+</div>
+</section>
+
+
+<section class="chapter" id="glossary">
+<h2>24 · Glossary</h2>
+<p class="chapter-kicker">Mỗi thuật ngữ: định nghĩa đơn giản → kỹ thuật → nơi dùng trong S800.</p>
+<table>
+<tr><th>Term</th><th>Simple Definition</th><th>Technical Definition</th><th>Where Used in S800</th></tr>
+<tr><td><b>CA</b></td><td>Đường dây mang "lệnh"</td><td>Command/Address bus — mã hoá Activate/Read/Write/Refresh/MRW + địa chỉ, đồng bộ theo CK</td><td>Chương 05 — CA Training/CBT</td></tr>
+<tr><td><b>CBT</b></td><td>DRAM "hô lại" xem có nghe đúng lệnh không</td><td>Command Bus Training — DRAM phản hồi giá trị CA nhận được qua DQ để so khớp</td><td><code>enter_cbt()</code>/<code>exit_cbt()</code>, ch.05</td></tr>
+<tr><td><b>CK</b></td><td>Nhịp đếm giờ chung</td><td>Clock — mọi tín hiệu lấy mẫu theo cạnh CK</td><td>Ch.01</td></tr>
+<tr><td><b>CKE</b></td><td>"Cho phép nghe nhịp" hay không</td><td>Clock Enable — điều khiển Power-Down/Self-Refresh</td><td>Ch.01, 15, bug B.2.3</td></tr>
+<tr><td><b>CS</b></td><td>Chọn "ai" nhận lệnh</td><td>Chip Select — chọn chip/rank trên cùng channel</td><td>2 CS/channel, ch.01/05</td></tr>
+<tr><td><b>DBI</b></td><td>Tự "đảo màu" bit để giảm nhiễu</td><td>Data Bus Inversion — JEDEC, đảo bit nếu giảm số lần chuyển mức</td><td>Bật trong <code>common_memfill()</code>, ch.12</td></tr>
+<tr><td><b>Deskew</b></td><td>Căn cho các đường dây "về cùng nhịp"</td><td>Chỉnh delay riêng từng bit DQ/DM để cùng PASS tại 1 điểm lấy mẫu</td><td>Ch.09 (Read, 5 hàm), ch.11 (Write, 3 hàm)</td></tr>
+<tr><td><b>DDR</b></td><td>Truyền 2 bit mỗi nhịp clock</td><td>Double Data Rate — dữ liệu ở cả rising+falling edge</td><td>Ch.01</td></tr>
+<tr><td><b>DM</b></td><td>"Mặt nạ" che byte không ghi</td><td>Data Mask — 1 bit/byte báo bỏ qua khi Write</td><td>Cần "swap" vào slot DQ để deskew, ch.09</td></tr>
+<tr><td><b>DQ</b></td><td>Dây mang dữ liệu thật</td><td>Data bus, tổ chức theo byte-lane (pup)</td><td>Ch.01, 08, 09</td></tr>
+<tr><td><b>DQS</b></td><td>"Còi" báo lúc nào đọc dữ liệu</td><td>Data Strobe — bên gửi tạo ra, báo hiệu thời điểm DQ hợp lệ</td><td>Ch.06 (Write Leveling), ch.07 (DQS Gate)</td></tr>
+<tr><td><b>DRAM</b></td><td>Chip nhớ vật lý</td><td>Dynamic RAM — lưu bit bằng tụ điện, cần refresh liên tục</td><td>Ch.00, 01</td></tr>
+<tr><td><b>FSP</b></td><td>2 "hộp" tham số cho 2 tốc độ</td><td>Frequency Set Point — FSP0/FSP1, chuyển bằng 1 bit MR</td><td>Ch.05 — CA training dùng FSP_OP</td></tr>
+<tr><td><b>LPDDR4</b></td><td>Chuẩn RAM tiết kiệm điện, không phải chip</td><td>JEDEC standard thế hệ 4 của Low Power DDR</td><td>Toàn bộ tài liệu</td></tr>
+<tr><td><b>MC</b></td><td>"Người quản lý" ra lệnh cho RAM</td><td>Memory Controller — MC6 "Mckinley 6c" tại <code>0xf0020000</code></td><td>Ch.02</td></tr>
+<tr><td><b>ODT</b></td><td>"Điện trở kết thúc" chống dội tín hiệu</td><td>On-Die Termination — impedance matching để giảm phản xạ</td><td>Ch.01, 04</td></tr>
+<tr><td><b>PBS</b></td><td>Kỹ thuật quét bổ sung (tên đầy đủ chưa xác nhận)</td><td>❓ nghi "Per-Bit Skew" — biến <code>pbsMinDly</code></td><td>Ch.08, 09 — <span class="badge unknown">UNKNOWN</span></td></tr>
+<tr><td><b>PHY</b></td><td>Bộ "phát thanh viên" chuyển số thành điện</td><td>Physical layer — MISL DDR PHY tại <code>0xf0011000</code>, có sequencer JEDEC riêng</td><td>Ch.02</td></tr>
+<tr><td><b>Preamble</b></td><td>"Hắng giọng" trước khi nói câu thật</td><td>Khoảng tín hiệu DQS biết trước, báo sắp có dữ liệu thật</td><td>Ch.07 — DQS Gate, bug B.3</td></tr>
+<tr><td><b>PRFA</b></td><td>1 cổng duy nhất tới mọi "núm chỉnh"</td><td>PHY Register File Access — offset 0x6a0, đóng gói lệnh + polling</td><td>Ch.02 — nền cho mọi training</td></tr>
+<tr><td><b>QSPI</b></td><td>Bộ nhớ nhỏ lưu cấu hình, sống sót mất điện</td><td>Quad SPI flash — lưu tham số chip + training result</td><td>Ch.13, 16</td></tr>
+<tr><td><b>Self-Refresh</b></td><td>DRAM "tự lo" refresh, không cần Controller</td><td>JEDEC mode tiết kiệm điện, chip tự refresh nội bộ</td><td>Ch.15 — Sleep/Resume</td></tr>
+<tr><td><b>Skew</b></td><td>Lệch giờ không mong muốn giữa 2 dây</td><td>Độ lệch thời gian giữa tín hiệu lẽ ra đồng thời — do PCB/capacitance/process</td><td>Ch.01, 09, 11</td></tr>
+<tr><td><b>Swizzle</b></td><td>"Xáo" pattern để bù đi dây khác nhau</td><td>Ánh xạ vật lý→logic theo board revision</td><td>Ch.13</td></tr>
+<tr><td><b>Training</b></td><td>"Tập dượt" đo delay tối ưu lúc chạy thật</td><td>Runtime calibration của timing/voltage giữa Controller-PHY-DRAM</td><td>Toàn bộ ch.04-12</td></tr>
+<tr><td><b>Vref</b></td><td>Mức điện áp "chuẩn" để so sánh 0/1</td><td>Voltage reference — receiver so sánh điện áp chân với Vref</td><td>Ch.04, 05, 08</td></tr>
+<tr><td><b>Window</b></td><td>Khoảng "PASS" liên tục khi quét</td><td>Valid Window — đoạn PASS liên tục khi sweep delay/Vref</td><td>Ch.03 — nền cho mọi thuật toán</td></tr>
+<tr><td><b>Write Leveling</b></td><td>Canh đúng 1 khoảnh khắc, không phải 1 khoảng</td><td>Edge-finding CK-DQS bằng phản hồi ngược JEDEC</td><td>Ch.06</td></tr>
+</table>
+</section>
+
+<section class="chapter" id="self-check">
+<h2>25 · Self-Check Quiz</h2>
+<p class="chapter-kicker">Câu hỏi tự kiểm tra — bấm "Xem đáp án" để mở. Không xem trước khi tự trả lời.</p>
+
+<h3 style="margin-top:20px;">Beginner <span class="difficulty beginner">Cơ bản</span></h3>
+<details class="qa"><summary>1. LPDDR4 là chip hay chuẩn giao tiếp?</summary><div class="qa-answer">Là <b>chuẩn giao tiếp</b> (JEDEC) quy định số chân, điện áp, tốc độ, thứ tự lệnh. "LPDDR4 DRAM" là 1 con chip tuân theo chuẩn này. (Ch.00-01)</div></details>
+<details class="qa"><summary>2. Vì sao "2400" trong LPDDR4-2400 không phải là tần số clock?</summary><div class="qa-answer">2400 là <b>data rate</b> (Mbps/pin). DDR truyền 2 bit/chu kỳ clock, nên data rate = 2 × clock frequency. Clock thật của LPDDR4-2400 là 1200MHz. (Ch.01)</div></details>
+<details class="qa"><summary>3. Tại sao DRAM cần refresh liên tục?</summary><div class="qa-answer">DRAM lưu bit bằng tụ điện nhỏ, tụ tự rò điện tích theo thời gian. Không refresh → dữ liệu mất dù vẫn có điện. (Ch.01)</div></details>
+<details class="qa"><summary>4. DQ và DQS khác nhau thế nào?</summary><div class="qa-answer">DQ = dữ liệu thật. DQS = "còi" báo hiệu thời điểm DQ hợp lệ để lấy mẫu, do bên gửi dữ liệu tạo ra. (Ch.01)</div></details>
+<details class="qa"><summary>5. Tại sao không thể ghi sẵn 1 giá trị delay cố định cho mọi máy?</summary><div class="qa-answer">Đường dây PCB, process silicon, điện áp, nhiệt độ khác nhau giữa từng board/chip/lần bật máy — không tính trước bằng lý thuyết được, phải đo thực tế lúc chạy (training). (Ch.00)</div></details>
+<details class="qa"><summary>6. Memory Controller và PHY khác nhau thế nào?</summary><div class="qa-answer">2 khối silicon thật, 2 struct C khác nhau (<code>MC6_REGS_t</code> vs <code>DDR_PHY_REGS_t</code>), 2 địa chỉ MMIO khác nhau (<code>0xf0020000</code> vs <code>0xf0011000</code>). (Ch.02)</div></details>
+
+<h3 style="margin-top:20px;">Intermediate <span class="difficulty intermediate">Trung cấp</span></h3>
+<details class="qa"><summary>7. Valid Window, Eye, Center, Margin là gì?</summary><div class="qa-answer">Window=đoạn PASS liên tục khi sweep; Eye=Window theo 2 trục (delay+Vref); Center=trung điểm Window (<code>left+(right-left)/2</code>); Margin=khoảng đệm còn lại quanh điểm dùng. (Ch.03)</div></details>
+<details class="qa"><summary>8. Vì sao chọn Center thay vì chỉ 1 điểm PASS bất kỳ?</summary><div class="qa-answer">1 điểm PASS mong manh — nhiệt độ/điện áp dao động nhẹ có thể đẩy nó ra khỏi Window mới. Center có đệm đều 2 phía, chịu được dịch chuyển 2 hướng. (Ch.03)</div></details>
+<details class="qa"><summary>9. Cơ chế PRFA hoạt động thế nào?</summary><div class="qa-answer">Đóng gói <code>reg_num+CnD+pup_num+data</code> vào 1 số 32-bit, ghi vào register <code>prfa</code> duy nhất, poll bit 31 (busy) tới khi hardware tự xoá (tối đa 100 lần). Đây là cổng DUY NHẤT tới mọi sub-register per-pup. (Ch.02)</div></details>
+<details class="qa"><summary>10. Vì sao CA training nguy hiểm hơn lệch DQ?</summary><div class="qa-answer">CA mang lệnh — lệch CA có thể làm DRAM hiểu sai lệnh (ví dụ Activate↔Read), có thể làm cả hệ thống không khởi tạo được, vì cả lệnh "bắt đầu training" cũng đi qua CA. Lệch DQ chỉ sai 1 bit dữ liệu. (Ch.05)</div></details>
+<details class="qa"><summary>11. CBT là gì và hoạt động thế nào?</summary><div class="qa-answer">Command Bus Training — đưa DRAM vào 1 mode đặc biệt (MRW), trong đó DRAM phản hồi lại chính giá trị CA nó nhận được qua DQ, để firmware so khớp "gửi X, nhận được gì?". (Ch.05)</div></details>
+<details class="qa"><summary>12. FSP0/FSP1 giải quyết vấn đề gì?</summary><div class="qa-answer">Cho phép lưu 2 bộ tham số vận hành khác nhau cho 2 mức tần số, chuyển nhanh bằng 1 bit MR — S800 dùng để training ở 100MHz rồi nhảy lên 1050/1200MHz mà không cần 1 bộ tham số chung cho cả 2. (Ch.05)</div></details>
+<details class="qa"><summary>13. Write Leveling khác Read/Write Centering ở điểm gì?</summary><div class="qa-answer">Write Leveling tìm 1 điểm LẬT (edge) duy nhất bằng phản hồi ngược JEDEC — không tìm Window rồi lấy trung điểm. Centering tìm Window rồi lấy Center. Mục tiêu vật lý khác nhau: align 1 cạnh chính xác vs tối đa hoá margin của 1 vùng dữ liệu. (Ch.06)</div></details>
+<details class="qa"><summary>14. Vì sao DQS Gate cần "Preamble"?</summary><div class="qa-answer">DQS không tồn tại liên tục — DRAM chỉ tạo DQS ngay khi trả dữ liệu. Trước đó DQS có thể nhiễu/lửng. Preamble là khoảng tín hiệu ngắn báo trước "sắp có dữ liệu", giúp PHY biết khi nào mở "cổng" nghe DQS mà không bắt nhiễu. (Ch.07)</div></details>
+<details class="qa"><summary>15. Vì sao Read Deskew cần 5 hàm nhưng Write Deskew chỉ cần 3?</summary><div class="qa-answer">Read Deskew chạy trước khi có centering nào cho từng bit riêng — phải tự tìm cả 2 biên (left/right) từ đầu. Write Deskew chạy SAU Write Centering đã có 1 điểm center hợp lý (<code>wcValue</code>) — chỉ cần tìm 1 biên FAIL gần đó, không cần đo đủ 2 biên riêng. (Ch.09, 11)</div></details>
+
+<h3 style="margin-top:20px;">Advanced <span class="difficulty advanced">Nâng cao</span></h3>
+<details class="qa"><summary>16. "Center of Mass" trong Read Centering khác "left+right/2" thế nào?</summary><div class="qa-answer">Center of Mass tính trọng tâm có trọng số: mỗi lát Vref góp 1 "mass" = độ rộng Window tại lát đó, vị trí = midpoint tại lát đó. Lát rộng hơn kéo trọng tâm về gần nó hơn. Khác trung bình đơn giản hoặc bisection 1 trục. Read Centering S800 thực ra là 1 phép LAI: trọng tâm cho trục Vref, bisection cho trục delay tại đúng Vref trọng tâm đó. (Ch.08)</div></details>
+<details class="qa"><summary>17. Vì sao delay có thể "wrap-around" (vòng), và tại sao đây quan trọng cho bug Samsung?</summary><div class="qa-answer">Delay là độ lệch pha trong 1 chu kỳ clock (dly=64 ≡ dly=0), không phải trục số thẳng. Bug B.2.1 (Samsung Eye tách 2) xảy ra vì công thức center gốc không xử lý wrap-around: <code>fpDly=0, lpDly=63</code> → center=31, rơi đúng vào vùng NG (vì Window thật đã "vòng" qua ranh giới). Fix: kỹ thuật Region1/Region2, trừ maxDly để hợp nhất trước khi tính center. (Ch.03, 22 — bug B.2.1)</div></details>
+<details class="qa"><summary>18. Có bao nhiêu tầng retry, và chúng khác nhau ở điểm gì?</summary><div class="qa-answer">2 tầng độc lập: (1) TẦNG TRONG — vòng for quanh gần hết chuỗi training, dùng <code>train_err_cnt</code>/<code>retry_num</code> (10 mặc định, tối đa 255 QSPI) — lặp lại khi 1 BƯỚC TRAINING cụ thể FAIL; (2) TẦNG NGOÀI — bọc quanh CẢ lời gọi <code>lpddr4_dynamic_config()</code>, tối đa 6 lần, chỉ Cold Boot, dùng <code>lpddr4_training_Error</code> — lặp lại khi 2 BẢN SAO backup kết quả training (pmem/pmem2) KHÔNG khớp nhau (tính nhất quán lưu trữ), KHÔNG phải khi training tự nó fail. (Ch.14, 17)</div></details>
+<details class="qa"><summary>19. Tại sao Write Leveling ở S800 có thể đang chạy KHÔNG đầy đủ theo lý thuyết JEDEC?</summary><div class="qa-answer">JEDEC Write Leveling đầy đủ cho phép chỉnh CẢ CK-delay (CLK-shift) và DQS-delay (DQS-shift). Trong source S800 hiện tại, toàn bộ khối code tìm CLK-shift nằm trong comment block <code>/* ... */</code> — không được compile. Biến <code>i</code> không bao giờ đổi trong code thực thi → <code>wlClockDly</code> luôn = 0. Chỉ nửa DQS-shift thực sự chạy. Chưa xác nhận đây là chủ đích hay sơ suất (cần đọc spec 4.4 để xác nhận MISMATCH). (Ch.06)</div></details>
+<details class="qa"><summary>20. Vì sao <code>lpddr4_backup_train_result()</code> ghi vào 2 nơi (pmem và pmem2)?</summary><div class="qa-answer"><code>pmem</code> tại <code>0x200000000</code> (DRAM thật, cần cache-flush cho U-Boot đọc trực tiếp). <code>pmem2</code> tại <code>0xE8200100</code> (KHÔNG phải DRAM) — bổ sung bởi bug-fix SuperWarp (2024/11/27): 1 bản sao độc lập khỏi chính DRAM, để nếu nghi ngờ tính toàn vẹn DRAM (bối cảnh SuperWarp reboot loop), vẫn còn 1 nguồn đáng tin. <code>lpddr4_training_Error</code> (tầng ngoài) chính là so sánh 2 bản này. (Ch.16, 17)</div></details>
+
+<h3 style="margin-top:20px;">Expert <span class="difficulty expert">Chuyên gia</span></h3>
+<details class="qa"><summary>21. Tại sao bug B.5 (drain timeout) là ví dụ quan trọng về nguyên tắc source-grounding?</summary><div class="qa-answer">Log <code>"CH0/CH1 timeout!!"</code> xuất phát từ <code>mc_drain()</code> trong code LPDDR4 (<code>mv_lpddr4_sleep.c</code>) — dễ khiến người debug kết luận vội fix nằm ở đó. Nhưng đọc bug report thật (Appendix B.5) cho thấy root cause THẬT nằm ở driver LCDC (DMA không tắt lúc Suspend) — hoàn toàn ngoài code LPDDR4. Bài học: KHÔNG được kết luận root cause chỉ từ VỊ TRÍ log xuất hiện — đây chính là lý do 1 giả thuyết ban đầu ("<code>MC_STATUS_TIMEOUT</code> = fix") phải bị SỬA LẠI khi đọc bằng chứng gốc. (Ch.15, 22)</div></details>
+<details class="qa"><summary>22. Giải thích toàn bộ data flow của Training Result từ lúc training PASS tới lúc Warm Boot dùng lại.</summary><div class="qa-answer">Training ghi thẳng PHY/MC register → <code>lpddr4_backup_train_result()</code> đọc lại qua <code>gTrainRegReadTbl[576]</code> (mỗi entry biết cách đọc: trực tiếp/PRFA/dummy) → ghi vào <code>pmem</code> (DRAM, cache-flush) + <code>pmem2</code> (dự phòng) → so sánh 2 bản → <code>lpddr4_training_Error</code>. U-Boot đọc <code>pmem</code>, ghi vào QSPI thật (xác nhận qua comment gốc "u-boot直接"). Khi Warm Boot, ATF đọc lại QSPI vào <code>train_reg</code> (<code>TRN_RSLT_REGS_t</code>), các hàm training (DQS Gate, Read/Write Centering...) SKIP sweep, ghi thẳng giá trị đã lưu vào PHY. <code>check_warm_training()</code> validate bằng test thật; nếu sai → <code>goto retry</code> vào lại vòng for tầng trong. (Ch.16, 17, 19)</div></details>
+<details class="qa"><summary>23. Tại sao "Error Flag = ON" trong spec khó xác định chính xác ứng với biến nào trong source?</summary><div class="qa-answer">Không tìm thấy 1 register/biến riêng tên "Error Flag" trong toàn bộ file đã đọc. Suy luận hợp lý nhất: <code>train_err_flg</code> vẫn còn =1 sau khi thoát vòng for tầng trong (vì ở lần retry CUỐI, code cố ý KHÔNG reset nó về 0, khác các lần giữa). Nhưng chưa xác nhận có đoạn code SAU vòng for đọc lại giá trị này để ghi vào 1 register công khai cho U-Boot đọc — đây vẫn là ❓UNKNOWN, không khẳng định chắc. (Ch.17)</div></details>
+<details class="qa"><summary>24. So sánh kiến trúc: vì sao "sdram_cfg/timing/operation" (có vẻ là việc của Memory Controller) lại nằm trong struct DDR_PHY_REGS_t, không nằm trong MC6_REGS_t?</summary><div class="qa-answer"><code>MC6_REGS_t</code> chỉ chứa những gì MC "đúng nghĩa" cần khi vận hành BÌNH THƯỜNG sau khi đã train xong (status, user command, performance counter). Nhưng lúc đang TRAINING, PHY cần tự phát lệnh JEDEC trực tiếp tới DRAM (Activate/Read/Write/Refresh/MRW) mà KHÔNG qua MC6 — vì vậy PHY có 1 sequencer lệnh riêng, và các register cấu hình timing/ODT/operation cho sequencer đó nằm trong <code>DDR_PHY_REGS_t</code>. Đây là 1 nghịch lý kiến trúc thật, không phải lỗi phân loại. (Ch.02)</div></details>
+<details class="qa"><summary>25. Nếu bạn phải ưu tiên đọc tiếp 1 trong các phần còn ❓UNKNOWN để tăng giá trị tài liệu nhiều nhất, bạn chọn gì và vì sao?</summary><div class="qa-answer">Theo tài liệu 23 (Final Master Map), thứ tự ưu tiên đề xuất: (1) <code>qspi_winbond.c</code> — khép kín hoàn toàn data flow training result (U-Boot phía cuối); (2) 3 hàm còn ❓ ở Read/Write Deskew — hoàn thiện 2 chương đã viết gần đủ; (3) spec chương 4.x — có thể tìm thêm MISMATCH như đã tìm ở QSPI dự phòng; (4) spec 8.1/8.2 Cold/Warm Boot theo spec; (5) Appendix A (đo đạc margin/nhiệt độ). Ưu tiên theo tỷ lệ giá trị thông tin / công sức đọc thêm.</div></details>
+</section>
+
+<section class="chapter" id="completion">
+<h2>26 · Completion Checklist</h2>
+<p class="chapter-kicker">Tổng kiểm — mọi mục đã được nghiên cứu source-grounded trong bộ tài liệu này.</p>
+<div class="block"><div class="block-head"><h3>S800 LPDDR4 TRAINING — KNOWLEDGE CHECK</h3><span class="chev">▾</span></div><div class="block-body">
+<ul class="checklist">
+<li>LPDDR4 fundamentals (DRAM/DDR/LPDDR/data rate vs clock)</li>
+<li>Memory Controller (MC6, struct thật, địa chỉ MMIO)</li>
+<li>PHY (DDR_PHY, sequencer JEDEC, cơ chế PRFA)</li>
+<li>Training concept (Window/Eye/Center/Margin, wrap-around)</li>
+<li>Pad calibration (auto-measure-then-freeze, ncal/pcal)</li>
+<li>CA training (CBT, FSP0/1, Vref sweep, Window rộng nhất)</li>
+<li>Write leveling (edge-finding, phát hiện CLK-shift bị tắt)</li>
+<li>DQS gate (Preamble/Data-test, 2 ngưỡng, bug B.3 xác nhận)</li>
+<li>Read centering (Center of Mass, 4 lần gọi FIFO/DMA×PBS)</li>
+<li>Read deskew (5 hàm, DM-swap, 2/5 chưa đọc hết thân)</li>
+<li>Write centering (2 lần bao Write Deskew, skip khi warmboot)</li>
+<li>Write deskew (3 hàm, triết lý ngược Read)</li>
+<li>QSPI (checksum, dự phòng đa vùng — MISMATCH thật 2020)</li>
+<li>GPIO (bit mapping khớp spec hoàn toàn)</li>
+<li>Cold boot (entry chain ble_main→lpddr4_config, 36 mốc TRN_*)</li>
+<li>Warm boot (Self-Refresh, BOOT_SYNC_DDR_WARMBOOT)</li>
+<li>Resume (mc_save/restore_state, 2 bug B.4/B.5 xác nhận)</li>
+<li>Training result (TRN_RSLT_REGS_t 2304 byte, gTrainRegReadTbl[576])</li>
+<li>Retry (2 tầng độc lập, ý nghĩa thật lpddr4_training_Error)</li>
+<li>Registers (Register Map tổng hợp, ch.18)</li>
+<li>Call graph (entry→return đầy đủ, ch.19)</li>
+<li>Bug history (7/7 bug Appendix B đã đọc và xác nhận)</li>
+<li>Debugging (checklist theo pipeline thật, ch.21)</li>
+<li>SPEC vs SOURCE (17 mục đối chiếu, ch.20)</li>
+</ul>
+</div></div>
+<div class="notebox research"><b>Tổng kết trung thực:</b> Bộ tài liệu dựng từ 13778 dòng <code>mv_lpddr4_apn806.c</code> + các file liên quan, và 11/27 file spec PDF đọc trực tiếp (4 chương chính + toàn bộ 7 bug Appendix B). Mọi claim gắn nhãn SPEC/SOURCE/INFERENCE/UNKNOWN. 2 giả thuyết ban đầu đã được SỬA LẠI khi đối chiếu bug report gốc — minh chứng nguyên tắc "không dừng ở suy luận, phải đọc bằng chứng thật".</div>
+</section>
+
+</main>
+</div>
+
+<button id="backtotop" title="Về đầu trang">↑</button>
+<footer class="site">
+  S800 LPDDR4 Training FW — Technical Knowledge Base · Dựng từ nghiên cứu source-grounded (13778 dòng <code>mv_lpddr4_apn806.c</code> + các file liên quan) và 11/27 file spec PDF gốc (KONICA MINOLTA 社外秘/管理外, Marvell Confidential — chỉ diễn giải, không copy nguyên văn).<br>
+  Mọi claim được gắn nhãn SPEC / SOURCE / INFERENCE / UNKNOWN — không có nhãn = diễn giải liên kết ý, không phải fact mới.
+</footer>
+
+<script>
+/* ============ THEME ============ */
+(function(){
+  var saved = localStorage.getItem('s800-theme');
+  if(saved){ document.documentElement.setAttribute('data-theme', saved); }
+  function upd(){
+    var t = document.documentElement.getAttribute('data-theme');
+    document.getElementById('themeToggle').textContent = (t==='dark' ? '🌙 Dark' : '☀ Light');
+  }
+  upd();
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    try{ localStorage.setItem('s800-theme', t); }catch(e){}
+    upd();
+  });
+})();
+
+/* ============ SIDEBAR MOBILE ============ */
+document.getElementById('hamburger').addEventListener('click', function(){
+  document.getElementById('sidebar').classList.toggle('open');
+});
+document.querySelectorAll('#sidebar a').forEach(function(a){
+  a.addEventListener('click', function(){ document.getElementById('sidebar').classList.remove('open'); });
+});
+
+/* ============ SIDEBAR ACTIVE HIGHLIGHT + PROGRESS ============ */
+(function(){
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main section.chapter'));
+  var links = {};
+  document.querySelectorAll('#sidebar a').forEach(function(a){ links[a.getAttribute('href').slice(1)] = a; });
+  function onScroll(){
+    var y = window.scrollY + 120;
+    var current = null;
+    sections.forEach(function(s){ if(s.offsetTop <= y) current = s.id; });
+    Object.keys(links).forEach(function(k){ links[k].classList.toggle('active', k===current); });
+    var doc = document.documentElement;
+    var pct = (window.scrollY) / (doc.scrollHeight - doc.clientHeight) * 100;
+    document.getElementById('progressbar').style.width = Math.min(100,Math.max(0,pct)) + '%';
+    document.getElementById('backtotop').style.display = window.scrollY > 400 ? 'block' : 'none';
+  }
+  window.addEventListener('scroll', onScroll);
+  onScroll();
+})();
+document.getElementById('backtotop').addEventListener('click', function(){ window.scrollTo({top:0,behavior:'smooth'}); });
+
+/* ============ COLLAPSIBLE BLOCKS ============ */
+document.querySelectorAll('.block > .block-head').forEach(function(h){
+  h.addEventListener('click', function(){ h.parentElement.classList.toggle('collapsed'); });
+});
+
+/* ============ CODE COPY ============ */
+document.querySelectorAll('pre').forEach(function(pre){
+  var wrap = document.createElement('div'); wrap.className='codewrap';
+  pre.parentNode.insertBefore(wrap, pre); wrap.appendChild(pre);
+  var btn = document.createElement('button'); btn.className='copybtn'; btn.textContent='Copy';
+  wrap.appendChild(btn);
+  btn.addEventListener('click', function(){
+    var text = pre.innerText;
+    navigator.clipboard.writeText(text).then(function(){
+      btn.textContent='Copied!'; btn.classList.add('copied');
+      setTimeout(function(){ btn.textContent='Copy'; btn.classList.remove('copied'); },1500);
+    });
+  });
+  // line numbers
+  var lines = pre.textContent.split('\n');
+  if(lines.length>1){
+    var ln = document.createElement('div'); ln.className='ln';
+    ln.innerHTML = lines.map(function(_,i){return (i+1)+'<br>';}).join('');
+    pre.appendChild(ln);
+  }
+});
+
+/* ============ SEARCH ============ */
+(function(){
+  var index = [];
+  document.querySelectorAll('main section.chapter').forEach(function(sec){
+    var title = sec.querySelector('h2') ? sec.querySelector('h2').textContent : sec.id;
+    sec.querySelectorAll('h3, p, li, td, code, summary').forEach(function(el){
+      var t = el.textContent.trim();
+      if(t.length>25){ index.push({id:sec.id, title:title, text:t}); }
+    });
+  });
+  var box = document.getElementById('searchbox');
+  var results = document.getElementById('searchResults');
+  box.addEventListener('input', function(){
+    var q = box.value.trim().toLowerCase();
+    if(q.length<2){ results.style.display='none'; return; }
+    var found = index.filter(function(item){ return item.text.toLowerCase().indexOf(q)>-1; }).slice(0,25);
+    if(found.length===0){ results.innerHTML = '<div class="sr-count">Không tìm thấy kết quả.</div>'; results.style.display='block'; return; }
+    var html = '<div class="sr-count">'+found.length+' kết quả</div>';
+    found.forEach(function(item){
+      var idx = item.text.toLowerCase().indexOf(q);
+      var snippet = item.text.substring(Math.max(0,idx-40), idx+80);
+      var re = new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig');
+      snippet = snippet.replace(re,'<mark>$1</mark>');
+      html += '<div class="sr-item" data-target="'+item.id+'"><div class="sr-title">'+item.title+'</div><div class="sr-snippet">…'+snippet+'…</div></div>';
+    });
+    results.innerHTML = html;
+    results.style.display='block';
+  });
+  results.addEventListener('click', function(e){
+    var it = e.target.closest('.sr-item');
+    if(it){ document.getElementById(it.dataset.target).scrollIntoView({behavior:'smooth'}); results.style.display='none'; box.value=''; }
+  });
+  document.addEventListener('click', function(e){ if(e.target!==box && !results.contains(e.target)) results.style.display='none'; });
+})();
+</script>
+</body>
+</html>

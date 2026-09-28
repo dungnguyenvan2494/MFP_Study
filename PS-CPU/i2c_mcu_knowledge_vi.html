@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kho Tri Thức Kỹ Thuật I2C MCU</title>
+<style>
+:root{
+  --bg:#f7f7f8; --bg-alt:#ffffff; --bg-panel:#eef0f3; --bg-code:#f1f2f5;
+  --text:#1b1f24; --text-dim:#5b6472; --border:#d8dce2;
+  --accent:#0b5fff; --accent-dim:#e6efff;
+  --ok:#1a7f37; --warn:#a86400; --danger:#c1272d;
+  --mono:"JetBrains Mono","Consolas","SFMono-Regular",Menlo,monospace;
+  --sans:"Inter",-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --radius:6px;
+  --sidebar-w:280px;
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --bg-alt:#12161c; --bg-panel:#171b22; --bg-code:#0b0e13;
+  --text:#dde3ea; --text-dim:#8a94a3; --border:#262c36;
+  --accent:#4c8dff; --accent-dim:#132338;
+  --ok:#3fb950; --warn:#d29922; --danger:#f85149;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+code,pre,kbd,.mono{font-family:var(--mono);}
+a{color:var(--accent); text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3,h4{line-height:1.25; font-weight:650; scroll-margin-top:70px;}
+h2{font-size:1.6em; border-bottom:1px solid var(--border); padding-bottom:.35em; margin-top:0;}
+h3{font-size:1.2em; color:var(--text); margin-top:2em;}
+h4{font-size:1em; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; margin-top:1.6em;}
+p{margin:.7em 0;}
+ul,ol{padding-left:1.4em;}
+table{border-collapse:collapse; width:100%; margin:1em 0; font-size:.92em;}
+th,td{border:1px solid var(--border); padding:.5em .7em; text-align:left; vertical-align:top;}
+th{background:var(--bg-panel); font-weight:600;}
+tr:nth-child(even) td{background:rgba(127,127,127,0.04);}
+.table-wrap{overflow-x:auto; margin:1em 0;}
+
+/* ---------- layout ---------- */
+#app{display:flex; min-height:100vh;}
+#sidebar{
+  width:var(--sidebar-w); flex:0 0 var(--sidebar-w); background:var(--bg-alt);
+  border-right:1px solid var(--border); position:sticky; top:0; height:100vh;
+  overflow-y:auto; padding:14px 10px 40px; z-index:30;
+}
+#sidebar::-webkit-scrollbar{width:8px;}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+#sidebar h5{font-size:.72em; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); margin:1.2em .5em .3em;}
+#search-box{
+  width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--bg-panel); color:var(--text); font-size:.85em; font-family:var(--sans);
+}
+#search-count{font-size:.72em; color:var(--text-dim); margin:.3em .5em;}
+#toc a{
+  display:block; padding:5px 10px; border-radius:var(--radius); font-size:.86em;
+  color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#toc a:hover{background:var(--bg-panel); text-decoration:none; color:var(--text);}
+#toc a.active{background:var(--accent-dim); color:var(--accent); font-weight:600;}
+#toc a mark{background:none; color:inherit;}
+
+#content-col{flex:1 1 auto; min-width:0;}
+header#top{
+  position:sticky; top:0; z-index:40; background:var(--bg-alt);
+  border-bottom:1px solid var(--border); padding:10px 24px;
+  display:flex; align-items:center; gap:16px;
+}
+#hamburger{display:none; background:none; border:1px solid var(--border); border-radius:var(--radius); width:34px; height:34px; color:var(--text); cursor:pointer; font-size:1.1em;}
+#brand{font-weight:700; font-size:1.02em; white-space:nowrap;}
+#brand small{display:block; font-weight:400; font-size:.68em; color:var(--text-dim); text-transform:none; letter-spacing:0;}
+#top-search{flex:1; max-width:420px;}
+#top-search input{width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-panel); color:var(--text); font-size:.88em;}
+.spacer{flex:1;}
+#theme-toggle{
+  background:var(--bg-panel); border:1px solid var(--border); border-radius:20px;
+  padding:6px 14px; cursor:pointer; color:var(--text); font-size:.82em; font-weight:600;
+}
+#progress-wrap{position:fixed; top:0; left:var(--sidebar-w); right:0; height:3px; background:transparent; z-index:50;}
+#progress-bar{height:100%; width:0%; background:var(--accent); transition:width .1s linear;}
+
+main{max-width:920px; margin:0 auto; padding:28px 32px 100px;}
+section.chapter{padding-top:8px; margin-bottom:64px; border-top:1px dashed var(--border);}
+section.chapter:first-of-type{border-top:none;}
+.kicker{font-size:.74em; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:.3em;}
+
+/* callouts */
+.callout{border-left:4px solid var(--border); background:var(--bg-panel); border-radius:0 var(--radius) var(--radius) 0; padding:10px 16px; margin:1.1em 0; font-size:.93em;}
+.callout .tag{font-weight:700; font-size:.72em; letter-spacing:.06em; text-transform:uppercase; display:block; margin-bottom:.25em;}
+.callout.why{border-color:#8a63d2;} .callout.why .tag{color:#8a63d2;}
+.callout.important{border-color:var(--danger);} .callout.important .tag{color:var(--danger);}
+.callout.mistake{border-color:var(--warn);} .callout.mistake .tag{color:var(--warn);}
+.callout.debug{border-color:var(--accent);} .callout.debug .tag{color:var(--accent);}
+.callout.hw{border-color:#2b8a3e;} .callout.hw .tag{color:#2b8a3e;}
+.callout.src{border-color:#555;} .callout.src .tag{color:var(--text-dim);}
+.callout.proto{border-color:#c2255c;} .callout.proto .tag{color:#c2255c;}
+
+/* code */
+.code-block{position:relative; margin:1em 0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+.code-head{display:flex; justify-content:space-between; align-items:center; background:var(--bg-panel); padding:5px 10px; font-size:.72em; color:var(--text-dim); font-family:var(--mono);}
+.copy-btn{background:transparent; border:1px solid var(--border); color:var(--text-dim); border-radius:4px; font-size:.72em; padding:2px 8px; cursor:pointer; font-family:var(--sans);}
+.copy-btn:hover{color:var(--text); border-color:var(--text-dim);}
+pre{margin:0; padding:12px 14px; overflow-x:auto; background:var(--bg-code); font-size:.84em; line-height:1.55;}
+pre code{color:var(--text);}
+.hl{background:var(--accent-dim); display:block; margin:0 -14px; padding:0 14px; border-left:2px solid var(--accent);}
+.kw{color:#c2255c;font-weight:600;} .cm{color:var(--text-dim);font-style:italic;} .st{color:#2b8a3e;} .nm{color:#a86400;}
+
+/* takeaways */
+.takeaways{background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; margin-top:1.4em;}
+.takeaways h4{margin-top:0; color:var(--ok);}
+.takeaways ul{list-style:none; padding-left:0; margin:.4em 0;}
+.takeaways li{padding-left:1.4em; position:relative; margin:.3em 0;}
+.takeaways li::before{content:"✓"; color:var(--ok); position:absolute; left:0; font-weight:700;}
+
+details{border:1px solid var(--border); border-radius:var(--radius); margin:.8em 0; background:var(--bg-alt);}
+details summary{cursor:pointer; padding:9px 14px; font-weight:600; font-size:.92em; list-style:none;}
+details summary::-webkit-details-marker{display:none;}
+details summary::before{content:"▸ "; color:var(--accent);}
+details[open] summary::before{content:"▾ ";}
+details .details-body{padding:0 16px 14px;}
+
+/* diagram box */
+.diagram{background:var(--bg-alt); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin:1.2em 0; overflow-x:auto; text-align:center;}
+.diagram svg{max-width:100%; height:auto;}
+.diagram figcaption{font-size:.78em; color:var(--text-dim); margin-top:8px;}
+
+/* cards (failure cases) */
+.card-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin:1em 0;}
+.fcard{border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-alt); overflow:hidden;}
+.fcard h5{margin:0; padding:9px 14px; background:var(--bg-panel); font-size:.9em; border-bottom:1px solid var(--border);}
+.fcard .body{padding:10px 14px; font-size:.86em;}
+.fcard dt{font-weight:700; font-size:.72em; text-transform:uppercase; color:var(--text-dim); margin-top:.6em;}
+.fcard dd{margin:.15em 0 0;}
+
+/* matrix / search */
+.filter-row{display:flex; gap:8px; margin:.6em 0;}
+.filter-row input{flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-panel); color:var(--text); font-size:.85em;}
+mark{background:#ffe066; color:#1b1f24; padding:0 1px; border-radius:2px;}
+:root[data-theme="dark"] mark{background:#7a5c00; color:#fff;}
+
+/* quiz */
+.quiz-item{border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; margin:.6em 0; background:var(--bg-alt);}
+.quiz-item .qtag{font-size:.68em; text-transform:uppercase; font-weight:700; padding:1px 7px; border-radius:10px; margin-right:8px;}
+.qtag.beg{background:#e6f4ea; color:#1a7f37;} .qtag.int{background:#e6efff; color:#0b5fff;}
+.qtag.adv{background:#fff4e0; color:#a86400;} .qtag.exp{background:#fde8e8; color:#c1272d;}
+:root[data-theme="dark"] .qtag.beg{background:#123420;} :root[data-theme="dark"] .qtag.int{background:#132338;}
+:root[data-theme="dark"] .qtag.adv{background:#3a2c07;} :root[data-theme="dark"] .qtag.exp{background:#3a1414;}
+
+footer{text-align:center; padding:30px; color:var(--text-dim); font-size:.82em; border-top:1px solid var(--border);}
+
+/* mobile */
+@media (max-width:920px){
+  #sidebar{position:fixed; left:-300px; top:0; transition:left .2s ease; box-shadow:0 0 40px rgba(0,0,0,.4);}
+  #sidebar.open{left:0;}
+  #hamburger{display:inline-block;}
+  #progress-wrap{left:0;}
+  main{padding:20px 16px 80px;}
+  #top-search{display:none;}
+}
+</style>
+</head>
+<body>
+<div id="progress-wrap"><div id="progress-bar"></div></div>
+
+<div id="app">
+  <aside id="sidebar">
+    <input id="search-box" type="text" placeholder="Tìm trong tài liệu...">
+    <div id="search-count"></div>
+    <nav id="toc"></nav>
+  </aside>
+
+  <div id="content-col">
+    <header id="top">
+      <button id="hamburger" aria-label="menu">☰</button>
+      <div id="brand">I2C MCU KB<small>Kho Tri Thức Kỹ Thuật</small></div>
+      <div id="top-search"><input id="global-search" type="text" placeholder="Tìm section, register, function, lỗi..."></div>
+      <div class="spacer"></div>
+      <button id="theme-toggle">🌙 Tối</button>
+    </header>
+
+    <main id="main">
+
+<!-- ============================================================ HERO ============================================================ -->
+<section class="chapter" id="hero">
+<div class="kicker">Tổng quan</div>
+<h2>I2C MCU — Từ Software Đến Hardware</h2>
+<p><strong>I2C không chỉ là một API phần mềm.</strong> Nó là một máy trạng thái phần cứng, được điều khiển qua các thanh ghi (register), đồng bộ với cặp tín hiệu vật lý SDA/SCL. Mỗi lời gọi <code>i2c_write()</code> bạn viết cuối cùng đều trở thành một sự thay đổi điện áp trên hai sợi dây. Kho tri thức này đi qua toàn bộ ngăn xếp (stack) theo cả hai chiều, và mọi khẳng định về peripheral I2C của MCU đều được đối chiếu với một driver thật, đang hoạt động — để bạn có thể mang chính phương pháp đọc này sang bất kỳ driver I2C của MCU khác.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 620 340" xmlns="http://www.w3.org/2000/svg" font-family="inherit" font-size="13">
+  <style>.b{fill:none;stroke:currentColor;stroke-opacity:.35;} .box{fill:none;stroke:currentColor;stroke-opacity:.55;} text{fill:currentColor;}</style>
+  <g class="stack">
+  <rect class="box" x="180" y="10"  width="260" height="34" rx="5"/><text x="310" y="32" text-anchor="middle">Application</text>
+  <line class="b" x1="310" y1="44" x2="310" y2="62"/><polygon points="310,62 305,52 315,52" fill="currentColor" opacity=".55"/>
+  <rect class="box" x="180" y="64"  width="260" height="34" rx="5"/><text x="310" y="86" text-anchor="middle">I2C Driver (protocol ứng dụng)</text>
+  <line class="b" x1="310" y1="98" x2="310" y2="116"/><polygon points="310,116 305,106 315,106" fill="currentColor" opacity=".55"/>
+  <rect class="box" x="180" y="118" width="260" height="34" rx="5"/><text x="310" y="140" text-anchor="middle">I2C Peripheral của MCU</text>
+  <line class="b" x1="310" y1="152" x2="310" y2="170"/><polygon points="310,170 305,160 315,160" fill="currentColor" opacity=".55"/>
+  <rect class="box" x="180" y="172" width="260" height="34" rx="5"/><text x="310" y="194" text-anchor="middle">Thanh ghi (CR1/CR2/ISR/OAR/TIMINGR)</text>
+  <line class="b" x1="310" y1="206" x2="310" y2="224"/><polygon points="310,224 305,214 315,214" fill="currentColor" opacity=".55"/>
+  <rect class="box" x="180" y="226" width="260" height="34" rx="5"/><text x="310" y="248" text-anchor="middle">Máy trạng thái I2C (phần cứng)</text>
+  <line class="b" x1="310" y1="260" x2="310" y2="278"/><polygon points="310,278 305,268 315,268" fill="currentColor" opacity=".55"/>
+  <rect class="box" x="180" y="280" width="260" height="34" rx="5"/><text x="310" y="302" text-anchor="middle">SDA / SCL (dây vật lý)</text>
+  <line class="b" x1="310" y1="314" x2="310" y2="326"/><polygon points="310,326 305,316 315,316" fill="currentColor" opacity=".55"/>
+  <text x="310" y="336" text-anchor="middle" font-weight="700">I2C Slave / Master (thiết bị khác)</text>
+  </g>
+</svg>
+<figcaption>Hình 0 — mọi tầng mà tài liệu này bao quát, từ trên xuống dưới, và hướng dữ liệu thực sự di chuyển.</figcaption>
+</div>
+
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng</span>
+Đa số lỗi "I2C không hoạt động" nằm ở ranh giới giữa hai tầng liền kề trong stack này — một register được set đúng nhưng GPIO mux lại sai, một ISR nổ đúng nhưng state machine không kịp tiêu thụ nó. Bạn không thể debug I2C hiệu quả nếu chỉ nhìn vào một tầng duy nhất. Tài liệu này được tổ chức để bạn có thể nhảy thẳng đến bất kỳ ranh giới nào.</div>
+
+<h4>Mốc case study</h4>
+<p>Xuyên suốt tài liệu, các khái niệm MCU tổng quát (đánh dấu <code>[GENERIC]</code>) được ghép với một driver I2C slave-mode thật, đang hoạt động, từ firmware STM32F0 (đánh dấu <code>[CASE STUDY]</code>) — tên file và số dòng được trích dẫn để bạn có thể mở source thật và theo dõi song song. Ở đâu source của case study không đủ thông tin để trả lời một câu hỏi, điều đó được nói rõ là <strong>SOURCE CODE CHƯA ĐỦ</strong> thay vì suy đoán.</p>
+</section>
+
+<!-- ============================================================ 01 FUNDAMENTALS ============================================================ -->
+<section class="chapter" id="ch01">
+<div class="kicker">01</div>
+<h2>I2C Fundamentals — Kiến Thức Nền</h2>
+
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Trước khi chạm vào một thanh ghi nào, bạn cần một mô hình tư duy về vấn đề I2C đang giải quyết: nhiều chip, hai dây, một bus, không cần chip trọng tài (arbiter) riêng.</div>
+
+<h3>I2C là gì?</h3>
+<p>I2C (Inter-Integrated Circuit) là một bus serial đồng bộ, half-duplex, nhiều thiết bị (multi-drop), chỉ dùng đúng hai dây tín hiệu chung — <strong>SDA</strong> (data) và <strong>SCL</strong> (clock) — cộng với ground. Một thiết bị là <strong>Master</strong> (tạo clock, khởi tạo mọi transaction); bất kỳ số lượng thiết bị khác là <strong>Slave</strong> (chỉ phản hồi khi địa chỉ của nó được gọi). Một bus có thể có nhiều master (multi-master) dùng cơ chế trọng tài (arbitration), dù đa số thiết kế embedded chỉ dùng đúng một master.</p>
+
+<h3>Vì sao I2C tồn tại</h3>
+<p>Trước I2C, giao tiếp chip-với-chip trong điện tử dân dụng cần một cặp dây riêng (hoặc nhiều hơn) cho mỗi thiết bị — không thực tế khi một board có cả chục sensor/EEPROM/RTC. I2C (do Philips phát minh năm 1982) đánh đổi tốc độ để lấy số chân: mọi thiết bị trên bus chia sẻ đúng hai dây, được đánh địa chỉ riêng, với giá phải trả là chậm hơn các bus song song hoặc điểm-nối-điểm.</p>
+
+<h3>Vai trò Master / Slave</h3>
+<ul>
+<li><strong>Master</strong>: tạo SCL, tạo START/STOP, khởi tạo mọi transaction, quyết định độ dài transaction, và (khi đọc) quyết định ACK/NACK cho mỗi byte nhận được.</li>
+<li><strong>Slave</strong>: không bao giờ tạo SCL (chỉ "kéo giãn" nó xuống LOW khi cần — clock stretching), chỉ phản hồi địa chỉ của chính nó, và (khi truyền) không quyết định gì về việc khi nào transaction kết thúc — nó chỉ trả lời cho đến khi bị NACK hoặc có STOP.</li>
+</ul>
+
+<div class="callout important"><span class="tag">Quan trọng</span>Một chip có thể triển khai cả hai vai trò trong silicon (nhiều MCU làm vậy) nhưng một <em>bản firmware</em> cụ thể thường chỉ dùng một trong hai. Đừng giả định "MCU có peripheral I2C hỗ trợ master" nghĩa là firmware bạn đang đọc dùng nó như master — hãy kiểm tra các lời gọi API thực tế (xem <a href="#ch22">§22</a>).</div>
+
+<h3>SDA / SCL — nhìn nhanh</h3>
+<table>
+<tr><th>Tín hiệu</th><th>Tên đầy đủ</th><th>Ai tạo clock</th><th>Trạng thái idle</th></tr>
+<tr><td>SCL</td><td>Serial Clock</td><td>Chỉ Master (slave có thể giữ LOW để stretch)</td><td>HIGH</td></tr>
+<tr><td>SDA</td><td>Serial Data</td><td>Bên đang truyền bit hiện tại</td><td>HIGH</td></tr>
+</table>
+
+<h3>Ưu điểm / Hạn chế</h3>
+<div class="table-wrap"><table>
+<tr><th>Đặc điểm</th><th>I2C</th><th>SPI</th><th>UART</th></tr>
+<tr><td>Số dây (tối thiểu)</td><td>2 (SDA, SCL) + GND</td><td>4 (MOSI, MISO, SCK, CS) + GND (mỗi thiết bị 1 CS)</td><td>2 (TX, RX) + GND</td></tr>
+<tr><td>Đánh địa chỉ</td><td>In-band, 7/10-bit, bằng phần mềm</td><td>Out-of-band, một chân chip-select mỗi thiết bị</td><td>Không có — chỉ điểm-nối-điểm</td></tr>
+<tr><td>Duplex</td><td>Half-duplex</td><td>Full-duplex</td><td>Full-duplex</td></tr>
+<tr><td>Nhiều thiết bị trên một bus</td><td>Có, tự nhiên (open-drain + addressing)</td><td>Có, nhưng cần N chân chip-select</td><td>Không (cần một cặp transceiver riêng cho mỗi thiết bị)</td></tr>
+<tr><td>Tốc độ điển hình</td><td>100 kHz–1 MHz (Standard/Fast/Fast+)</td><td>Vài MHz–hàng chục MHz</td><td>Đến vài Mbit/s, nhưng điểm-nối-điểm</td></tr>
+<tr><td>Ứng dụng điển hình</td><td>Sensor, EEPROM, RTC, PMIC, peripheral tốc độ thấp</td><td>Flash, màn hình, ADC/DAC, peripheral băng thông cao</td><td>Console debug, modem, GPS, link điểm-nối-điểm đơn giản</td></tr>
+</table></div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>I2C chia sẻ SDA/SCL cho mọi thiết bị trên bus — đánh địa chỉ diễn ra in-band, không cần thêm chân.</li>
+<li>Master sở hữu clock và ranh giới transaction; Slave chỉ phản hồi.</li>
+<li>Một peripheral "hỗ trợ master" về phần cứng không có nghĩa firmware bạn đang đọc dùng nó theo cách đó.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 02 PHYSICAL LAYER ============================================================ -->
+<section class="chapter" id="ch02">
+<div class="kicker">02</div>
+<h2>I2C Physical Layer — Tầng Vật Lý</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Một nửa các lỗi "driver đúng nhưng I2C vẫn không hoạt động" là lỗi tầng vật lý. Bạn không thể debug logic register đúng cách nếu không hiểu điều gì thực sự đang xảy ra trên dây.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 460 200" xmlns="http://www.w3.org/2000/svg" font-size="13">
+<style>.w{stroke:currentColor;stroke-width:2;fill:none;} text{fill:currentColor;}</style>
+<text x="210" y="20" text-anchor="middle" font-weight="700">VCC</text>
+<line class="w" x1="210" y1="28" x2="210" y2="50"/>
+<rect class="w" x="195" y="50" width="30" height="26"/><text x="210" y="68" text-anchor="middle" font-size="11">R_pu</text>
+<line class="w" x1="210" y1="76" x2="210" y2="100"/>
+<line class="w" x1="60" y1="100" x2="380" y2="100"/><text x="20" y="104">SDA</text>
+<rect class="w" x="30" y="120" width="90" height="40" rx="4"/><text x="75" y="144" text-anchor="middle">MCU</text>
+<line class="w" x1="75" y1="120" x2="75" y2="100"/>
+<rect class="w" x="290" y="120" width="90" height="40" rx="4"/><text x="335" y="144" text-anchor="middle">Slave</text>
+<line class="w" x1="335" y1="120" x2="335" y2="100"/>
+<circle cx="210" cy="100" r="3" fill="currentColor"/>
+<text x="400" y="104" font-size="11" fill="currentColor" opacity=".7">bus chung</text>
+</svg>
+<figcaption>Hình 2.1 — SDA (và SCL, cấu trúc giống hệt, có pull-up riêng) là một node open-drain, được chia sẻ, được kéo lên (pulled-up).</figcaption>
+</div>
+
+<h3>Open-drain, không phải push-pull</h3>
+<p>Tầng output I2C của mỗi thiết bị chỉ có thể <strong>kéo đường dây xuống LOW</strong> (nối đất) hoặc <strong>để nó thả nổi</strong> (trở kháng cao / "release"). Không thiết bị nào trên bus chủ động lái lên HIGH. Đường dây chỉ đạt HIGH vì một <strong>điện trở pull-up</strong> bên ngoài (nối lên VCC) kéo nó lên, một khi mọi thiết bị trên bus đã thả (release).</p>
+
+<div class="callout important"><span class="tag">Quan trọng</span>I2C <strong>không</strong> chủ động lái lên HIGH theo cách GPIO push-pull làm. Nếu bạn đo một bus I2C đang idle và thấy nó thả nổi thay vì nằm ở mức VCC, pull-up đang thiếu, quá yếu, hoặc bị đứt — không phải lỗi firmware.</div>
+
+<h3>Vì sao open-drain?</h3>
+<ul>
+<li><strong>An toàn</strong>: nếu hai driver push-pull bất đồng (một HIGH, một LOW) chúng sẽ đoản mạch qua bus. Open-drain làm điều đó không thể xảy ra về mặt vật lý — trường hợp xấu nhất chỉ là "mọi người đã release, nhưng một người kéo LOW", đúng chính xác là hình dạng của mức LOW.</li>
+<li><strong>Clock stretching</strong>: một slave cần thêm thời gian có thể đơn giản giữ SCL ở mức LOW sau khi master đã release nó — master, khi đọc lại đường dây, thấy nó vẫn LOW và chờ. Điều này chỉ khả thi vì SCL là open-drain trên <em>mọi</em> thiết bị, không chỉ master.</li>
+<li><strong>Arbitration</strong> (multi-master): mỗi master đọc lại bit nó vừa cố lái. Nếu nó cố release (HIGH) nhưng đọc lại LOW, một master khác đang lái — nó đã thua trọng tài và phải rút lui. Cơ chế phát hiện xung đột không phá hủy này chỉ hoạt động được vì xung đột không bao giờ tạo ra đoản mạch.</li>
+</ul>
+
+<h3>Rise time, dung kháng bus, và giá trị pull-up</h3>
+<p>Việc release đường dây không làm nó lên HIGH ngay lập tức — điện trở pull-up phải nạp điện cho dung kháng ký sinh của bus (mọi chân, mọi trace, mọi input thiết bị) qua một đường cong RC. Rise time ≈ <code>0.8473 × R<sub>pullup</sub> × C<sub>bus</sub></code> cho một swing 10%→90%. Pull-up quá yếu (điện trở quá lớn) làm rise time quá chậm cho tốc độ bus mục tiêu; quá mạnh (điện trở quá nhỏ) lãng phí năng lượng và có thể vượt quá định mức dòng sink của I/O khi một thiết bị kéo LOW. Chuẩn I2C giới hạn dung kháng bus tối đa (400pF cho Standard/Fast mode) chính vì lý do này.</p>
+
+<h4>Các dạng lỗi điện cần biết</h4>
+<table>
+<tr><th>Triệu chứng</th><th>Nguyên nhân vật lý khả dĩ</th></tr>
+<tr><td>Bus nằm ở 0V ngay cả khi idle</td><td>SDA hoặc SCL bị kẹt LOW — một thiết bị crash giữa transaction đang giữ đường dây, hoặc một short phần cứng</td></tr>
+<tr><td>Bus không bao giờ đạt VCC đầy, các cạnh bị làm tròn</td><td>Pull-up quá yếu hoặc dung kháng bus quá cao cho tốc độ đã cấu hình</td></tr>
+<tr><td>Hoạt động ở 100 kHz, fail ở 400 kHz</td><td>Vượt ngân sách rise time — cùng bus điện, yêu cầu timing khắt khe hơn</td></tr>
+<tr><td>Glitch/lỗi bit ngẫu nhiên</td><td>Thiếu/yếu pull-up, ground bounce, hoặc probe/cáp đo thêm dung kháng khi đang đo</td></tr>
+</table>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Mọi output I2C là open-drain: kéo LOW hoặc release, không bao giờ lái HIGH.</li>
+<li>Mức HIGH luôn đến từ một điện trở pull-up bên ngoài, không bao giờ từ chip.</li>
+<li>Open-drain là điều làm clock-stretching và arbitration không-phá-hủy trở nên khả thi.</li>
+<li>Rise time (R×C) là một ngân sách điện thật, không chỉ là chú thích lý thuyết — đây là điều đầu tiên cần kiểm tra khi bus hoạt động ở tốc độ thấp nhưng fail khi nhanh hơn.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 03 PROTOCOL ============================================================ -->
+<section class="chapter" id="ch03">
+<div class="kicker">03</div>
+<h2>I2C Protocol — START, STOP, ACK, NACK, Repeated START</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Mọi báo cáo lỗi I2C cuối cùng đều quy về "primitive nào đã xảy ra, theo thứ tự nào, và bên kia có ACK hay NACK nó không?" — section này là bộ từ vựng mà toàn bộ phần còn lại của tài liệu phụ thuộc vào.</div>
+
+<h3>Điều kiện START</h3>
+<div class="diagram">
+<svg viewBox="0 0 320 90" font-size="12"><style>.l{stroke:currentColor;stroke-width:2;fill:none;} text{fill:currentColor;}</style>
+<text x="10" y="20">SCL</text><path class="l" d="M40,15 L300,15"/>
+<text x="10" y="60">SDA</text><path class="l" d="M40,55 L120,55 L140,75 L300,75"/>
+<line x1="120" y1="45" x2="120" y2="85" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3,3"/>
+<text x="130" y="88" font-size="11" opacity=".7">SDA giảm khi SCL còn cao</text>
+</svg>
+<figcaption>Hình 3.1 — START: SDA chuyển từ HIGH→LOW <em>trong khi SCL đang HIGH</em>. Đây là thời điểm duy nhất SDA được phép thay đổi khi SCL cao (ngoại trừ STOP).</figcaption>
+</div>
+
+<h3>Điều kiện STOP</h3>
+<div class="diagram">
+<svg viewBox="0 0 320 90" font-size="12"><style>.l{stroke:currentColor;stroke-width:2;fill:none;} text{fill:currentColor;}</style>
+<text x="10" y="20">SCL</text><path class="l" d="M40,15 L300,15"/>
+<text x="10" y="60">SDA</text><path class="l" d="M40,75 L120,75 L140,55 L300,55"/>
+<line x1="120" y1="45" x2="120" y2="85" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="3,3"/>
+<text x="130" y="88" font-size="11" opacity=".7">SDA tăng khi SCL còn cao</text>
+</svg>
+<figcaption>Hình 3.2 — STOP: SDA chuyển từ LOW→HIGH trong khi SCL đang HIGH. Hướng ngược với START, cùng điều kiện tiên quyết "SCL giữ cao".</figcaption>
+</div>
+
+<h3>ACK / NACK</h3>
+<p>Sau mỗi 8 bit dữ liệu, bus có một xung clock thứ 9 dành riêng cho việc xác nhận: <em>bên nhận</em> kéo SDA xuống LOW trong xung đó để nói "đã nhận, tiếp tục" (ACK), hoặc để nó HIGH để nói "dừng lại" (NACK). Ai là bên nhận — và do đó ai điều khiển ACK/NACK — tùy thuộc vào hướng của transaction:</p>
+<table>
+<tr><th>Giai đoạn</th><th>Bên nhận (điều khiển ACK/NACK)</th></tr>
+<tr><td>Byte địa chỉ</td><td>Slave đang được gọi (ACK nếu địa chỉ khớp; mọi slave khác im lặng)</td></tr>
+<tr><td>Master → Slave data (Write)</td><td>Slave ACK mỗi byte nó chấp nhận</td></tr>
+<tr><td>Slave → Master data (Read)</td><td>Master ACK mọi byte trừ byte cuối cùng nó muốn, byte đó nó NACK để báo "dừng gửi"</td></tr>
+</table>
+<div class="callout proto"><span class="tag">Protocol</span>NACK không tự động là lỗi. Một NACK ở byte cuối của một Read là cách <em>bình thường, được mong đợi</em> để một Read transaction kết thúc — đây là lý do một driver viết đúng phải phân biệt "NACK vì Master đã đọc xong" với "NACK/không-ACK vì không có ai ở địa chỉ này" (xem <a href="#ch18">§18</a>).</div>
+
+<h3>Repeated START</h3>
+<p>Repeated START là một điều kiện START thứ hai được phát ra <strong>không có</strong> STOP ở giữa. Nó cho phép Master đổi hướng (ví dụ Write một địa chỉ register, rồi Read giá trị của nó) hoặc gọi một thiết bị khác, đồng thời vẫn giữ quyền kiểm soát bus để không có gì khác chen ngang một transaction ở giữa.</p>
+
+<h3>Một transaction hoàn chỉnh, từ đầu đến cuối</h3>
+<div class="diagram">
+<svg viewBox="0 0 700 70" font-size="12"><style>text{fill:currentColor;} .b{fill:none;stroke:currentColor;stroke-opacity:.5;}</style>
+<g>
+<rect class="b" x="5"   y="15" width="55" height="30"/><text x="32" y="34" text-anchor="middle">START</text>
+<rect class="b" x="65"  y="15" width="90" height="30"/><text x="110" y="34" text-anchor="middle">Addr+W</text>
+<rect class="b" x="160" y="15" width="55" height="30"/><text x="187" y="34" text-anchor="middle">ACK</text>
+<rect class="b" x="220" y="15" width="70" height="30"/><text x="255" y="34" text-anchor="middle">Reg Addr</text>
+<rect class="b" x="295" y="15" width="55" height="30"/><text x="322" y="34" text-anchor="middle">ACK</text>
+<rect class="b" x="355" y="15" width="120" height="30"/><text x="415" y="34" text-anchor="middle">Repeated START</text>
+<rect class="b" x="480" y="15" width="90" height="30"/><text x="525" y="34" text-anchor="middle">Addr+R</text>
+<rect class="b" x="575" y="15" width="55" height="30"/><text x="602" y="34" text-anchor="middle">ACK</text>
+<rect class="b" x="635" y="15" width="55" height="30"/><text x="662" y="34" text-anchor="middle">Data</text>
+</g></svg>
+<figcaption>Hình 3.3 — transaction kết hợp Write-rồi-Read (còn tiếp: Data / ACK.../NACK(cuối) / STOP, cắt bớt để vừa khung hình).</figcaption>
+</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>START = SDA giảm khi SCL cao; STOP = SDA tăng khi SCL cao.</li>
+<li>Bên nhận điều khiển ACK/NACK, không phải bên truyền — vai trò "bên nhận" đổi tùy theo Write hay Read.</li>
+<li>Một NACK ở byte cuối của Read là protocol bình thường, không phải lỗi.</li>
+<li>Repeated START đổi hướng/đích mà không release bus.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 04 ADDRESSING ============================================================ -->
+<section class="chapter" id="ch04">
+<div class="kicker">04</div>
+<h2>I2C Addressing — Đánh Địa Chỉ</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Lỗi tích hợp phổ biến nhất là gửi sai byte trên dây vì nhầm lẫn shift-lệch-một-bit giữa địa chỉ 7-bit và byte 8-bit địa chỉ+R/W.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 420 90" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;}</style>
+<g font-family="var(--mono)">
+<rect class="b" x="10"  y="10" width="40" height="30"/><text x="30" y="30" text-anchor="middle">A6</text>
+<rect class="b" x="50"  y="10" width="40" height="30"/><text x="70" y="30" text-anchor="middle">A5</text>
+<rect class="b" x="90"  y="10" width="40" height="30"/><text x="110" y="30" text-anchor="middle">A4</text>
+<rect class="b" x="130" y="10" width="40" height="30"/><text x="150" y="30" text-anchor="middle">A3</text>
+<rect class="b" x="170" y="10" width="40" height="30"/><text x="190" y="30" text-anchor="middle">A2</text>
+<rect class="b" x="210" y="10" width="40" height="30"/><text x="230" y="30" text-anchor="middle">A1</text>
+<rect class="b" x="250" y="10" width="40" height="30"/><text x="270" y="30" text-anchor="middle">A0</text>
+<rect class="b" x="290" y="10" width="50" height="30" fill="currentColor" fill-opacity=".08"/><text x="315" y="30" text-anchor="middle">R/W</text>
+</g>
+<text x="30" y="60" font-size="11">địa chỉ 7-bit (A6..A0)</text>
+<text x="315" y="60" font-size="11" text-anchor="middle">1 bit</text>
+<text x="200" y="80" font-size="11" text-anchor="middle" opacity=".7">↑ một byte 8-bit thực sự được truyền trên dây</text>
+</svg>
+<figcaption>Hình 4.1 — byte thực sự đi trên dây là <code>(địa chỉ 7-bit &lt;&lt; 1) | R/W</code>.</figcaption>
+</div>
+
+<h3>Ví dụ cụ thể</h3>
+<pre><code>Address = 0x50           // địa chỉ thiết bị 7-bit, như in trong datasheet
+byte WRITE trên dây = 0x50 &lt;&lt; 1 | 0 = 0xA0
+byte READ  trên dây = 0x50 &lt;&lt; 1 | 1 = 0xA1</code></pre>
+<p>Ở dạng nhị phân: <code>0x50 = 101 0000</code> → dịch trái một bit → <code>1010 0000</code> = <code>0xA0</code>, với bit 0 là cờ R/W (0=Write, 1=Read).</p>
+
+<div class="callout mistake"><span class="tag">Lỗi thường gặp</span>Đa số HAL của vendor đã tự làm việc shift cho bạn (bạn truyền địa chỉ 7-bit gốc, ví dụ <code>0x50</code>, vào <code>HAL_I2C_Master_Transmit(..., DevAddress, ...)</code> trong đó <code>DevAddress</code> lại được HAL của STM32 kỳ vọng đã shift sẵn thành <code>0xA0</code> — hãy kiểm tra quy ước của HAL cụ thể bạn dùng!). Shift hai lần (shift một giá trị đã được shift rồi) là lỗi "thiết bị không bao giờ ACK" phổ biến nhất được báo cáo trên các forum.</div>
+
+<h3>Đánh địa chỉ 10-bit</h3>
+<p>Một mở rộng cho không gian địa chỉ lớn hơn: dùng hai byte trên dây thay vì một, với một mẫu prefix 5-bit đặc biệt (<code>11110xx</code>) trong byte đầu để phân biệt với đánh địa chỉ 7-bit. Hiếm gặp trong thực tế — đa số sensor/EEPROM dùng 7-bit thuần.</p>
+
+<h3>Dual own-address (phía slave)</h3>
+<p><span class="kicker" style="font-size:.65em">CASE STUDY</span> Nhiều peripheral I2C của MCU cho phép một <em>slave</em> trả lời đồng thời hai địa chỉ khác nhau (một chính, một phụ), hữu ích khi cùng một firmware cần được gọi tới dưới hai vai trò logic trên một bus vật lý. Giá trị thật từ case study STM32F0:</p>
+<pre><code>hi2c1.Init.OwnAddress1 = 122;              // 0x7A
+hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_ENABLE;
+hi2c1.Init.OwnAddress2 = 124;              // 0x7C
+hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;</code></pre>
+<p>Trên dây: Write vào OA1 = <code>0xF4</code>, Read = <code>0xF5</code>; Write vào OA2 = <code>0xF8</code>, Read = <code>0xF9</code>. Cả hai địa chỉ đều đổ vào đúng một máy trạng thái nhận duy nhất trong firmware này — phần cứng, không phải phần mềm, thực hiện so khớp với <code>OAR1</code>/<code>OAR2</code>.</p>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Byte trên dây luôn là <code>(địa chỉ 7-bit &lt;&lt; 1) | RW</code> — biết rõ HAL của bạn mong đợi giá trị trước hay sau khi shift.</li>
+<li>Đánh địa chỉ 10-bit tồn tại nhưng hiếm khi được dùng trong thực tế.</li>
+<li>Một peripheral slave thường có thể trả lời hai own-address cùng lúc, bằng phần cứng, không cần thêm logic phần mềm nào cho mỗi byte.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 05 MCU PERIPHERAL ============================================================ -->
+<section class="chapter" id="ch05">
+<div class="kicker">05</div>
+<h2>MCU I2C Peripheral — Kiến Trúc Bên Trong</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Peripheral là một máy trạng thái phần cứng chạy độc lập với code của bạn một khi đã được "arm" — hiểu các block bên trong nó cho bạn biết chính xác một lần ghi register hay một status bit thực sự gây ra điều gì.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 560 260" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.55;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.35;}</style>
+<rect class="b" x="10" y="10" width="540" height="240" rx="6"/><text x="280" y="30" text-anchor="middle" font-weight="700">MCU I2C Peripheral</text>
+<rect class="b" x="30" y="45" width="120" height="34"/><text x="90" y="66" text-anchor="middle">SDA pin I/O</text>
+<rect class="b" x="30" y="90" width="120" height="34"/><text x="90" y="111" text-anchor="middle">SCL pin I/O</text>
+<rect class="b" x="180" y="45" width="160" height="80" rx="4"/><text x="260" y="68" text-anchor="middle" font-weight="700">Control Logic /</text><text x="260" y="86" text-anchor="middle" font-weight="700">State Machine</text>
+<rect class="b" x="180" y="140" width="160" height="34"/><text x="260" y="161" text-anchor="middle">Address Match (OAR1/OAR2)</text>
+<rect class="b" x="370" y="45" width="160" height="34"/><text x="450" y="66" text-anchor="middle">TX Register (TXDR)</text>
+<rect class="b" x="370" y="90" width="160" height="34"/><text x="450" y="111" text-anchor="middle">RX Register (RXDR)</text>
+<rect class="b" x="370" y="140" width="160" height="34"/><text x="450" y="161" text-anchor="middle">Status Reg (ISR)</text>
+<rect class="b" x="370" y="185" width="160" height="34"/><text x="450" y="206" text-anchor="middle">Control Reg (CR1/CR2)</text>
+<rect class="b" x="180" y="185" width="160" height="34"/><text x="260" y="206" text-anchor="middle">Clock Logic (TIMINGR)</text>
+<line class="l" x1="150" y1="62" x2="180" y2="62"/><line class="l" x1="150" y1="107" x2="180" y2="107"/>
+<line class="l" x1="340" y1="62" x2="370" y2="62"/><line class="l" x1="340" y1="107" x2="370" y2="107"/>
+<line class="l" x1="260" y1="125" x2="260" y2="140"/>
+<line class="l" x1="260" y1="219" x2="450" y2="219"/><line class="l" x1="450" y1="219" x2="450" y2="219"/>
+<text x="280" y="240" text-anchor="middle" font-size="11" opacity=".7">IRQ Logic → NVIC → CPU vector</text>
+</svg>
+<figcaption>Hình 5.1 — các block bên trong một I2C peripheral MCU điển hình (hình dạng này tổng quát hóa qua các vendor; tên register khác nhau).</figcaption>
+</div>
+
+<h3>Trách nhiệm của từng block</h3>
+<table>
+<tr><th>Block</th><th>Trách nhiệm</th></tr>
+<tr><td>Pin I/O (SDA/SCL)</td><td>Transceiver open-drain; đọc lại đường dây nó đang lái (cần cho phát hiện arbitration/clock-stretch)</td></tr>
+<tr><td>Control Logic / State Machine</td><td>Tạo START/STOP/Repeated-START theo lệnh (master mode); theo dõi bộ đếm bit/byte; quyết định khi nào raise interrupt</td></tr>
+<tr><td>Address Match</td><td>Bộ so sánh phần cứng với register own-address — chạy độc lập với firmware, không cần software polling để phát hiện trúng địa chỉ</td></tr>
+<tr><td>TX/RX Register</td><td>Buffer shift một-byte giữa dòng bit serial và bus dữ liệu song song — <em>không phải</em> FIFO trên đa số MCU nhỏ</td></tr>
+<tr><td>Status Register</td><td>Cờ chỉ-đọc cho mọi sự kiện (ACK/NACK, address match, byte done, lỗi) — interface chính giữa hardware và ISR</td></tr>
+<tr><td>Control Register</td><td>Bit enable, bit enable interrupt, bit yêu cầu START/STOP/NACK, các trường byte-count</td></tr>
+<tr><td>Clock Logic</td><td>Chia clock peripheral thành timing SCL (master mode) và định nghĩa các cửa sổ lấy mẫu setup/hold (cả hai mode)</td></tr>
+<tr><td>IRQ Logic</td><td>OR các điều kiện status đã enable vào một (hoặc nhiều) đường ngắt NVIC</td></tr>
+</table>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Máy trạng thái của peripheral chạy tự trị trong phần cứng một khi đã arm — CPU là người quan sát phản ứng với ngắt, không phải người lái từng bit.</li>
+<li>So khớp địa chỉ diễn ra trong phần cứng, song song với bất kỳ việc gì khác CPU đang làm.</li>
+<li>Đa số peripheral I2C của MCU nhỏ không có FIFO — chỉ một byte đang bay tại một thời điểm, do đó ngân sách thời gian ISR rất chặt dưới clock stretching.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 06 REGISTERS ============================================================ -->
+<section class="chapter" id="ch06">
+<div class="kicker">06</div>
+<h2>Register Architecture — Kiến Trúc Thanh Ghi</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là tầng sự thật gốc — mọi hành vi được mô tả ở nơi khác trong tài liệu này cuối cùng đều quy về một bit trong một trong các register này.</div>
+
+<h3>Bộ register tổng quát <span style="font-weight:400;color:var(--text-dim);font-size:.7em;">[GENERIC]</span></h3>
+<div class="table-wrap"><table>
+<tr><th>Register</th><th>Mục đích điển hình</th><th>Truy cập</th></tr>
+<tr><td>CR1 (Control 1)</td><td>Enable peripheral, enable interrupt tổng quát, mode đánh địa chỉ, cấu hình clock-stretch/noise-filter</td><td>R/W</td></tr>
+<tr><td>CR2 (Control 2)</td><td>Bit yêu cầu START/STOP/NACK, byte-count (NBYTES), mode reload/autoend, địa chỉ đích (master mode)</td><td>R/W</td></tr>
+<tr><td>OAR1 / OAR2</td><td>(Các) own address, chọn mode 7/10-bit</td><td>R/W</td></tr>
+<tr><td>TIMINGR</td><td>Prescaler + timing SCL high/low + delay setup/hold</td><td>R/W (thường chỉ khi peripheral đang disable)</td></tr>
+<tr><td>ISR (Status)</td><td>Mọi cờ sự kiện: address match, TX/RX ready, transfer complete, NACK, STOP, bus error, arbitration lost, overrun</td><td>Chỉ đọc; đa số bit được clear bằng một hành động phần mềm cụ thể, không phải ghi thường</td></tr>
+<tr><td>TXDR / RXDR</td><td>Byte dữ liệu vào / ra</td><td>W / R</td></tr>
+</table></div>
+
+<h3>Case study: STM32F0 I2C1, chỉ những bit driver thật đụng tới <span style="font-weight:400;color:var(--text-dim);font-size:.7em;">[CASE STUDY]</span></h3>
+
+<details open><summary>CR1 — Control Register 1</summary><div class="details-body">
+<div class="diagram">
+<svg viewBox="0 0 560 60" font-size="11"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;}</style>
+<rect class="b" x="10" y="10" width="60" height="30"/><text x="40" y="29" text-anchor="middle">bit21 ANFOFF</text>
+<rect class="b" x="70" y="10" width="60" height="30"/><text x="100" y="29" text-anchor="middle">bit17 NOSTR.</text>
+<rect class="b" x="130" y="10" width="60" height="30"/><text x="160" y="29" text-anchor="middle">bit16 SBC</text>
+<rect class="b" x="190" y="10" width="60" height="30"/><text x="220" y="29" text-anchor="middle">bit0 PE</text>
+</svg>
+</div>
+<table>
+<tr><th>Bit</th><th>Tên</th><th>Ý nghĩa</th><th>Ai set</th><th>Ai clear</th></tr>
+<tr><td>0</td><td>PE</td><td>Peripheral Enable</td><td><code>__HAL_I2C_ENABLE</code></td><td><code>__HAL_I2C_DISABLE</code></td></tr>
+<tr><td>16</td><td>SBC</td><td>Slave Byte Control — buộc ACK/NACK thủ công từng byte</td><td>HAL nội bộ, trên đường code bị loại khỏi biên dịch trong bản build này (xem §28)</td><td>tương tự</td></tr>
+<tr><td>17</td><td>NOSTRETCH</td><td>Tắt clock stretching khi set</td><td>không bao giờ set ở đây — <code>I2C_NOSTRETCH_DISABLE</code> được cấu hình, nghĩa là stretching vẫn <strong>bật</strong></td><td>—</td></tr>
+<tr><td>21</td><td>ANFOFF</td><td>Tắt analog noise filter khi set</td><td>không bao giờ — analog filter được bật tường minh thay vào đó</td><td>—</td></tr>
+</table>
+<p class="mono" style="font-size:.8em;color:var(--text-dim)">Nguồn: <code>mx_init.c:213</code> (<code>NoStretchMode = I2C_NOSTRETCH_DISABLE</code>), <code>mx_init.c:221</code> (<code>HAL_I2CEx_ConfigAnalogFilter(..., I2C_ANALOGFILTER_ENABLE)</code>).</p>
+</div></details>
+
+<details><summary>CR2 — Control Register 2</summary><div class="details-body">
+<table>
+<tr><th>Bit</th><th>Tên</th><th>Ý nghĩa</th><th>Sử dụng thật trong driver này</th></tr>
+<tr><td>[9:0]</td><td>SADD</td><td>Địa chỉ slave đích (master mode)</td><td>không bao giờ được ghi — firmware này không bao giờ đóng vai master</td></tr>
+<tr><td>14</td><td>STOP</td><td>Yêu cầu STOP (master mode)</td><td>không bao giờ dùng trực tiếp bởi application code</td></tr>
+<tr><td>15</td><td>NACK</td><td>Yêu cầu NACK (slave mode, với SBC=1)</td><td><code>__HAL_I2C_GENERATE_NACK()</code>, gọi từ case <code>KM_ARM_I2C_GENERATE_NACK</code> trong <code>I2Cx_Control()</code></td></tr>
+<tr><td>[24:16]</td><td>NBYTES</td><td>Số byte cho segment transfer kế tiếp</td><td>hard-code thành <code>1</code> mỗi lần, bên trong cùng hàm <code>Control()</code></td></tr>
+<tr><td>25</td><td>RELOAD</td><td>Mode "segment xong, nhưng transaction còn tiếp tục"</td><td>chỉ tồn tại trong nhánh <code>#else</code> chết của app driver — hành vi reload <em>thực sự</em> chạy đến từ cấu hình mặc định của chính vendor HAL cho slave-receive interrupt-driven, độc lập với nhánh chết này (xem §11 và §28)</td></tr>
+</table>
+<p class="mono" style="font-size:.8em;color:var(--text-dim)">Nguồn: <code>I2C_stm32f0xx.c:552-608</code>.</p>
+</div></details>
+
+<details><summary>ISR — Interrupt &amp; Status Register</summary><div class="details-body">
+<table>
+<tr><th>Bit</th><th>Tên</th><th>Ai set (HW)</th><th>Ai clear (SW)</th><th>Đọc ở đâu trong driver này</th></tr>
+<tr><td>1</td><td>TXIS</td><td>TX register trống, cần byte kế tiếp</td><td>ghi TXDR</td><td>vendor HAL slave ISR</td></tr>
+<tr><td>2</td><td>RXNE</td><td>RX register có byte mới</td><td>đọc RXDR</td><td>vendor HAL slave ISR</td></tr>
+<tr><td>3</td><td>ADDR</td><td>Địa chỉ khớp OAR1/OAR2</td><td>clear tường minh — <strong>chính hành động này gửi ACK</strong></td><td><code>I2C_ITAddrCplt</code></td></tr>
+<tr><td>4</td><td>NACKF (AF)</td><td>Master đã NACK (hướng slave-transmit)</td><td>clear tường minh</td><td><code>I2C_Slave_ISR_IT</code></td></tr>
+<tr><td>5</td><td>STOPF</td><td>Phát hiện điều kiện STOP</td><td>clear tường minh</td><td><code>I2C_ITSlaveCplt</code></td></tr>
+<tr><td>6</td><td>TCR</td><td>Hết byte-count, transaction chưa xong (reload)</td><td>tự động, khi NBYTES được ghi lại</td><td>điều khiển quyết định ACK/NACK từng byte của app, xem §11</td></tr>
+<tr><td>8</td><td>BERR</td><td>Lỗi bus (START/STOP sai vị trí)</td><td>clear tường minh</td><td><code>HAL_I2C_ER_IRQHandler</code></td></tr>
+<tr><td>9</td><td>ARLO</td><td>Mất trọng tài (arbitration lost)</td><td>clear tường minh</td><td>tương tự — chỉ lý thuyết, chip này không bao giờ làm master</td></tr>
+<tr><td>10</td><td>OVR</td><td>Overrun/underrun</td><td>clear tường minh</td><td>tương tự</td></tr>
+<tr><td>16</td><td>DIR</td><td>Hướng transaction hiện tại</td><td>—</td><td><code>I2Cx_GetStatus()</code> — đọc trực tiếp từ <code>Instance-&gt;ISR</code>, nơi duy nhất driver này bỏ qua hoàn toàn macro của HAL</td></tr>
+</table>
+<div class="callout mistake"><span class="tag">Lỗi thường gặp</span><code>ISR.DIR = 1</code> nghĩa là "Master đang đọc" ở tầng phần cứng, nhưng field <code>ARM_I2C_STATUS.direction</code> của application lại định nghĩa <code>0 = Transmitter</code> — nên driver chủ động đảo ngược bit khi map một cái sang cái khác. Hãy đọc code mapping, không giả định hai khái niệm "direction" chỉ cùng một hướng.</div>
+</div></details>
+
+<h4>Đối chiếu Register ↔ Source Code, ví dụ cụ thể</h4>
+<div class="code-block">
+<div class="code-head"><span>I2C_stm32f0xx.c — yêu cầu NACK</span><button class="copy-btn">Sao chép</button></div>
+<pre><code><span class="cm">/* Application yêu cầu từ chối "2nd address" này */</span>
+<span class="kw">case</span> KM_ARM_I2C_GENERATE_NACK:
+<span class="hl">    __HAL_I2C_GENERATE_NACK( I2c-&gt;Handle );   <span class="cm">/* set CR2.NACK */</span></span>
+<span class="kw">case</span> KM_ARM_I2C_GENERATE_ACK:
+    I2c-&gt;Handle-&gt;Instance-&gt;CR2 |= ( (1 &lt;&lt; I2C_CR2_NBYTES_Pos) &amp; I2C_CR2_NBYTES );
+    <span class="kw">break</span>;</code></pre>
+</div>
+<div class="diagram" style="text-align:left">
+<svg viewBox="0 0 560 50" font-size="12"><text x="5" y="20" fill="currentColor">Source Code</text><text x="200" y="20" fill="currentColor">→ CR2.NACK = 1</text><text x="330" y="20" fill="currentColor">→ Hardware gửi NACK</text><text x="0" y="45" font-size="10" fill="currentColor" opacity=".7">Control(GENERATE_NACK,0)</text><text x="200" y="45" font-size="10" fill="currentColor" opacity=".7">bit kế tiếp được clock trên SDA</text><text x="330" y="45" font-size="10" fill="currentColor" opacity=".7">Master thấy NACK, dừng/thử lại</text></svg>
+</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Clear cờ ADDR không phải là ghi chép thụ động — đó là hành động phần mềm khiến phần cứng truyền ACK.</li>
+<li>Cực tính của một bit "direction" ở tầng phần cứng và ở tầng application không đảm bảo khớp nhau — luôn đọc code mapping.</li>
+<li>Chỉ tài liệu hóa những bit register mà source code của bạn thực sự đụng tới; mọi thứ khác là nhiễu cho driver cụ thể đó.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 07 CLOCK ============================================================ -->
+<section class="chapter" id="ch07">
+<div class="kicker">07</div>
+<h2>Clock Configuration — Cấu Hình Clock</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Tần số SCL không chỉ là "một setting" — nó được suy ra từ clock đầu vào của peripheral qua một bộ chia, và suy ra sai tạo ra một bus trông có vẻ ổn trên waveform nhưng vi phạm timing spec một cách vô hình.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 480 130" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.55;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.4;}</style>
+<rect class="b" x="10" y="10" width="120" height="30"/><text x="70" y="30" text-anchor="middle">MCU Clock (HSI)</text>
+<line class="l" x1="70" y1="40" x2="70" y2="55"/>
+<rect class="b" x="10" y="60" width="120" height="30"/><text x="70" y="80" text-anchor="middle">I2C kernel clock</text>
+<line class="l" x1="70" y1="90" x2="70" y2="105"/>
+<rect class="b" x="10" y="110" width="120" height="15" opacity="0"/>
+<line class="l" x1="130" y1="75" x2="190" y2="75"/>
+<rect class="b" x="190" y="60" width="120" height="30"/><text x="250" y="80" text-anchor="middle">TIMINGR divider</text>
+<line class="l" x1="310" y1="75" x2="370" y2="75"/>
+<rect class="b" x="370" y="60" width="100" height="30"/><text x="420" y="80" text-anchor="middle">SCL</text>
+</svg>
+<figcaption>Hình 7.1 — chuỗi suy ra clock (hình dạng tổng quát; STM32 gọi register chia này là TIMINGR).</figcaption>
+</div>
+
+<h3>Standard vs Fast vs Fast-Mode-Plus</h3>
+<table>
+<tr><th>Mode</th><th>SCL tối đa</th><th>Ứng dụng điển hình</th></tr>
+<tr><td>Standard Mode</td><td>100 kHz</td><td>Đa số sensor, EEPROM, lựa chọn mặc định</td></tr>
+<tr><td>Fast Mode</td><td>400 kHz</td><td>Sensor băng thông cao hơn, lập trình EEPROM nhanh hơn</td></tr>
+<tr><td>Fast-Mode Plus</td><td>1 MHz</td><td>Peripheral mới hơn, ngân sách timing chặt hơn, cần pull-up mạnh hơn</td></tr>
+</table>
+
+<h3>Case study: giải mã TIMINGR <span style="font-weight:400;color:var(--text-dim);font-size:.7em">[CASE STUDY]</span></h3>
+<pre><code>hi2c1.Init.Timing = 0x00200000;   <span class="cm">// mx_init.c:206, ghi thẳng vào TIMINGR</span></code></pre>
+<p>Bố cục field TIMINGR: <code>PRESC[31:28] | SCLDEL[23:20] | SDADEL[19:16] | SCLH[15:8] | SCLL[7:0]</code>. Giải mã <code>0x00200000</code>:</p>
+<table>
+<tr><th>Field</th><th>Giá trị</th></tr>
+<tr><td>PRESC</td><td>0</td></tr>
+<tr><td>SCLDEL</td><td>2</td></tr>
+<tr><td>SDADEL</td><td>0</td></tr>
+<tr><td>SCLH</td><td>0</td></tr>
+<tr><td>SCLL</td><td>0</td></tr>
+</table>
+<div class="callout debug"><span class="tag">Debug tip</span><code>SCLH=SCLL=0</code> sẽ tạo ra một chu kỳ SCL vô nghĩa, gần bằng 0 <em>nếu chính chip này tạo clock</em>. Nó không gây lỗi ở đây vì firmware này chỉ chạy ở Slave mode — SCL do Master bên ngoài lái, và SCLH/SCLL chỉ có ý nghĩa cho việc tạo clock master-mode của chính peripheral. Hai preset đã được tính toán sẵn tồn tại trong cùng file cho hoạt động master ở Standard (<code>0x2000090E</code>) và Fast (<code>0x0000020B</code>) mode — cả hai đều là dead code trong bản build này, xác nhận bằng grep: không có call site nào chọn chúng.</div>
+<p><strong>SOURCE CODE CHƯA ĐỦ</strong>: không có công thức nào suy ra field TIMINGR từ một tần số SCL mục tiêu ở bất kỳ đâu trong repo này — hai preset master-mode trên đến từ công cụ cấu hình của ST đã tính sẵn, không phải từ một tính toán trong-repo.</p>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Tần số SCL là một đại lượng suy ra: clock kernel → register chia/timing → chu kỳ bus thực tế.</li>
+<li>Một giá trị timing register trông "sai" cho việc tạo clock master-mode có thể hoàn toàn ổn cho một peripheral chỉ-slave — luôn kiểm tra các giá trị đó nhằm phục vụ mode nào.</li>
+<li>Không bao giờ giả định một hằng số hex "ma thuật" được suy ra bằng tay; kiểm tra xem nó có đến từ công cụ cấu hình của vendor không, và công thức có tồn tại ở đâu trong repo không.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 08 GPIO/PINMUX ============================================================ -->
+<section class="chapter" id="ch08">
+<div class="kicker">08</div>
+<h2>GPIO / Pinmux</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Pinmux là tầng thường bị bỏ qua nhất khi debug — và là tầng thường có lỗi nhất khi "mọi register trông đều đúng nhưng bus không bao giờ chuyển động."</div>
+
+<pre><code>PB6 ------&gt; I2C1_SCL
+PB7 ------&gt; I2C1_SDA</code></pre>
+<pre><code><span class="hl">GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;      <span class="cm">/* Alternate Function, OPEN-DRAIN */</span></span>
+GPIO_InitStruct.Pull      = GPIO_NOPULL;          <span class="cm">/* không có pull-up nội bộ: board PHẢI có pull-up ngoài */</span>
+GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;
+HAL_GPIO_Init(GPIOB, &amp;GPIO_InitStruct);</code></pre>
+<p class="mono" style="font-size:.8em;color:var(--text-dim)">Nguồn: <code>stm32f0xx_hal_msp.c:66-97</code> (<code>HAL_I2C_MspInit</code>).</p>
+
+<div class="callout mistake"><span class="tag">Lỗi thường gặp</span>Nếu <code>Mode</code> vô tình bị để là <code>GPIO_MODE_AF_PP</code> (push-pull) thay vì <code>AF_OD</code>, mọi register trong I2C peripheral vẫn có thể được cấu hình hoàn hảo, state machine vẫn chạy đúng bên trong — và bus vẫn hỏng về điện, vì output push-pull có thể đoản mạch với một thiết bị khác đang kéo LOW. Loại lỗi này vô hình khi nhìn register dump; nó chỉ hiện ra trên oscilloscope.</div>
+
+<h3>Vì sao lỗi pinmux trông giống lỗi driver</h3>
+<p>Một bảng pin mux Alternate-Function thường có vài số AF ứng viên cho mỗi chân (AF1, AF4, AF6...) ánh xạ tới các peripheral khác nhau. Chọn sai số AF sẽ âm thầm định tuyến chân đó tới một peripheral khác, không mong muốn (hoặc để nó là GPIO thường) — chính peripheral I2C không bao giờ thấy chân đó, nên <em>mọi register I2C vẫn đọc lại đúng</em> trong khi bus đã chết về mặt vật lý. Luôn kiểm tra pinmux với bảng alternate-function của datasheet trước khi giả định đó là lỗi tầng register.</p>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Chân I2C phải là Alternate-Function, Open-Drain, với pull-up bên ngoài hoặc (nếu có sẵn và đủ mạnh) pull-up nội bộ.</li>
+<li>Cấu hình register đúng không thể bù cho pinmux sai — luôn kiểm tra lựa chọn AF của GPIO đầu tiên khi không có gì xảy ra trên bus.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 09 INIT ============================================================ -->
+<section class="chapter" id="ch09">
+<div class="kicker">09</div>
+<h2>Initialization Sequence — Trình Tự Khởi Tạo</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Lỗi thứ tự init (clock bật sau khi đã đụng peripheral, GPIO cấu hình sau khi transaction đầu tiên đã được thử) là một trong những lỗi khó tái hiện nhất vì chúng chỉ fail lúc cold boot.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 360 400" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.55;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.4;}</style>
+<g>
+<rect class="b" x="60" y="10" width="240" height="30"/><text x="180" y="30" text-anchor="middle">MX_I2C1_Init()</text>
+<line class="l" x1="180" y1="40" x2="180" y2="55"/>
+<rect class="b" x="60" y="60" width="240" height="30"/><text x="180" y="80" text-anchor="middle">Set Timing / OwnAddr / Mode</text>
+<line class="l" x1="180" y1="90" x2="180" y2="105"/>
+<rect class="b" x="60" y="110" width="240" height="30"/><text x="180" y="130" text-anchor="middle">HAL_I2C_Init()</text>
+<line class="l" x1="180" y1="140" x2="180" y2="155"/>
+<rect class="b" x="60" y="160" width="240" height="30"/><text x="180" y="180" text-anchor="middle">Callback HAL_I2C_MspInit()</text>
+<line class="l" x1="180" y1="190" x2="180" y2="205"/>
+<rect class="b" x="60" y="210" width="240" height="30"/><text x="180" y="230" text-anchor="middle">GPIO AF_OD, bật clock, NVIC</text>
+<line class="l" x1="180" y1="240" x2="180" y2="255"/>
+<rect class="b" x="60" y="260" width="240" height="30"/><text x="180" y="280" text-anchor="middle">Ghi CR1/CR2/OAR/TIMINGR, PE=1</text>
+<line class="l" x1="180" y1="290" x2="180" y2="305"/>
+<rect class="b" x="60" y="310" width="240" height="30"/><text x="180" y="330" text-anchor="middle">Bật analog filter</text>
+<line class="l" x1="180" y1="340" x2="180" y2="355"/>
+<rect class="b" x="60" y="360" width="240" height="30"/><text x="180" y="380" text-anchor="middle">Arm SlaveReceive() lần đầu</text>
+</g></svg>
+<figcaption>Hình 9.1 — thứ tự init của case study, trace trực tiếp từ <code>mx_init.c</code>/<code>km_i2c.c</code>.</figcaption>
+</div>
+
+<h4>Checklist init tổng quát</h4>
+<ol>
+<li>Bật clock bus của peripheral (RCC/PCC — không gì hoạt động trước bước này, và ghi register vào một peripheral bị clock-gate thường bị âm thầm bỏ qua hoặc gây fault).</li>
+<li>Cấu hình chân GPIO đúng alternate function, open-drain, pull setting (§8).</li>
+<li>Cấu hình register timing/speed (§7) — thường chỉ ghi được khi peripheral đang disable.</li>
+<li>Cấu hình own address nếu hoạt động như slave.</li>
+<li>Enable đường ngắt NVIC, set priority.</li>
+<li>Enable peripheral (bit PE).</li>
+<li>Arm transfer đầu tiên (slave: bắt đầu lắng nghe; master: chưa cần arm gì cho đến khi có yêu cầu transaction).</li>
+</ol>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Cấu hình GPIO cho I2C nằm trong chính callback init của HAL ở nhiều vendor HAL — đọc callback đó, không giả định nó được inline trong hàm bạn đang xem.</li>
+<li>Enable peripheral (PE) thường là lần ghi register cuối cùng, sau khi mọi field khác đã được cấu hình.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 10 STATE MACHINE ============================================================ -->
+<section class="chapter" id="ch10">
+<div class="kicker">10</div>
+<h2>I2C State Machine — tái dựng từ source thật</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là section thực sự giải thích "firmware của tôi đang làm gì ngay lúc này" — mọi phần khác trong tài liệu tồn tại để hỗ trợ đọc đúng phần này.</div>
+
+<div class="callout important"><span class="tag">Quan trọng</span>Đây là máy trạng thái protocol ứng dụng 3-state <strong>thật</strong> tìm thấy trong source của case study (<code>km_i2c.c</code>) — không phải một hình dạng textbook tổng quát. Nó điều khiển protocol ứng dụng phía slave, nằm trên máy trạng thái riêng của phần cứng (thấp hơn nhiều, cấp độ từng byte).</div>
+
+<div class="diagram">
+<svg viewBox="0 0 460 280" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.45;fill:none;} .lbl{font-size:10px;opacity:.75;}</style>
+<circle cx="60" cy="30" r="4" fill="currentColor"/><line class="l" x1="60" y1="34" x2="60" y2="55"/>
+<rect class="b" x="10" y="55" width="180" height="34" rx="17"/><text x="100" y="76" text-anchor="middle" font-weight="700">Wait_Write</text>
+<path class="l" d="M190,72 C 280,20 340,20 350,55" marker-end="url(#ar)"/>
+<text x="280" y="35" class="lbl" text-anchor="middle">write xong, xfer_size==1 (yêu cầu đọc)</text>
+<rect class="b" x="270" y="55" width="180" height="34" rx="17"/><text x="360" y="76" text-anchor="middle" font-weight="700">Wait_Read</text>
+<path class="l" d="M270,80 C 200,120 130,120 100,89" marker-end="url(#ar)"/>
+<text x="185" y="118" class="lbl" text-anchor="middle">read xong → re-arm receive</text>
+<path class="l" d="M190,60 C 130,20 60,20 60,20 C 60,20 20,20 15,55" marker-end="url(#ar)"/>
+<text x="80" y="10" class="lbl" text-anchor="middle">write xong, xfer_size&gt;1 (write thật) → re-arm cùng state</text>
+<path class="l" d="M100,89 C 100,140 260,190 260,190" marker-end="url(#ar)"/>
+<path class="l" d="M360,89 C 360,140 260,190 260,190" marker-end="url(#ar)"/>
+<rect class="b" x="170" y="190" width="180" height="34" rx="6"/><text x="260" y="211" text-anchor="middle">i2c_check_error() timeout / lệch protocol</text>
+<path class="l" d="M260,224 C 260,250 120,250 60,250 C 60,250 60,110 60,89" marker-end="url(#ar)"/>
+<text x="180" y="266" class="lbl" text-anchor="middle">i2c_sw_reset() → ép về lại Wait_Write (không có state Error riêng)</text>
+<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="currentColor" opacity=".6"/></marker></defs>
+</svg>
+<figcaption>Hình 10.1 — máy trạng thái thật. Chú ý <strong>không có state Error riêng</strong> — mọi đường lỗi reset thẳng về <code>Wait_Write</code>.</figcaption>
+</div>
+
+<h3>Bảng trạng thái</h3>
+<table>
+<tr><th>State</th><th>Trigger</th><th>Action</th><th>State kế tiếp</th></tr>
+<tr><td>Wait_Write (ban đầu)</td><td>boot / <code>i2c_sw_reset()</code></td><td>arm <code>SlaveReceive()</code></td><td>Wait_Write</td></tr>
+<tr><td>Wait_Write</td><td>write hoàn tất, kích thước transfer == 1 byte (một yêu cầu đọc)</td><td>tra register được yêu cầu, arm <code>SlaveTransmit()</code></td><td>Wait_Read</td></tr>
+<tr><td>Wait_Write</td><td>write hoàn tất, kích thước transfer &gt; 1 byte (write thật)</td><td>áp dụng việc ghi vào register/peripheral đích</td><td>Wait_Write (re-armed)</td></tr>
+<tr><td>Wait_Write</td><td>một sự kiện read-complete đến thay vì write-complete</td><td>lệch protocol → <code>i2c_sw_reset()</code></td><td>ép về Wait_Write</td></tr>
+<tr><td>Wait_Read</td><td>read hoàn tất (master đã clock phản hồi ra)</td><td>re-arm <code>SlaveReceive()</code></td><td>Wait_Write</td></tr>
+<tr><td>Wait_Read</td><td>một sự kiện write-complete đến thay vì read-complete</td><td>lệch protocol → <code>i2c_sw_reset()</code></td><td>ép về Wait_Write</td></tr>
+<tr><td>(bất kỳ)</td><td><code>i2c_check_error()</code> true (timeout/lỗi đã latch)</td><td><code>i2c_sw_reset()</code></td><td>ép về Wait_Write</td></tr>
+</table>
+
+<div class="callout src"><span class="tag">Source code</span>Một enumerator thứ ba, <code>TYPE_State_Init</code>, tồn tại trong code nhưng không bao giờ thực sự được chạm tới bởi bất kỳ đường code nào (<code>i2c_recv_first()</code> set <code>Wait_Write</code> trực tiếp) — một giá trị thừa (vestigial), không phải một state thứ ba có chức năng thật.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Máy trạng thái embedded thật thường nhỏ hơn phiên bản textbook — máy này không có state Error tường minh nào cả.</li>
+<li>Khôi phục lỗi trong firmware này luôn là một reset cứng về lại trạng thái ban đầu, không bao giờ là retry theo cấp độ.</li>
+<li>Luôn kiểm tra một enumerator state có thực sự đạt tới được trước khi tài liệu hóa nó là một state "thật" — được khai báo ≠ được dùng.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 11 INTERRUPT ============================================================ -->
+<section class="chapter" id="ch11">
+<div class="kicker">11</div>
+<h2>Interrupt Architecture — Kiến Trúc Ngắt</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>I2C interrupt-driven là nơi hardware và software thực sự gặp nhau theo thời gian thực — đọc sai luồng này là nguồn lỗi "lúc chạy lúc không" lớn nhất.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 380 420" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.45;}</style>
+<rect class="b" x="80" y="10" width="220" height="30"/><text x="190" y="30" text-anchor="middle">Sự kiện hardware I2C</text>
+<line class="l" x1="190" y1="40" x2="190" y2="55"/>
+<rect class="b" x="80" y="60" width="220" height="30"/><text x="190" y="80" text-anchor="middle">NVIC (I2C1_IRQn)</text>
+<line class="l" x1="190" y1="90" x2="190" y2="105"/>
+<rect class="b" x="80" y="110" width="220" height="30"/><text x="190" y="130" text-anchor="middle">I2C1_IRQHandler()</text>
+<line class="l" x1="190" y1="140" x2="190" y2="155"/>
+<rect class="b" x="80" y="160" width="220" height="30"/><text x="190" y="180" text-anchor="middle">Đọc cờ ISR (BERR/ARLO/OVR?)</text>
+<line class="l" x1="130" y1="190" x2="90" y2="210"/><line class="l" x1="250" y1="190" x2="290" y2="210"/>
+<rect class="b" x="10" y="212" width="160" height="30"/><text x="90" y="232" text-anchor="middle">HAL_I2C_ER_IRQHandler</text>
+<rect class="b" x="210" y="212" width="160" height="30"/><text x="290" y="232" text-anchor="middle">HAL_I2C_EV_IRQHandler</text>
+<line class="l" x1="290" y1="242" x2="290" y2="257"/>
+<rect class="b" x="210" y="259" width="160" height="30"/><text x="290" y="279" text-anchor="middle">I2C_Slave_ISR_IT()</text>
+<line class="l" x1="290" y1="289" x2="190" y2="305"/><line class="l" x1="90" y1="242" x2="190" y2="305"/>
+<rect class="b" x="80" y="307" width="220" height="30"/><text x="190" y="327" text-anchor="middle">Callback ứng dụng (rx_comp)</text>
+<line class="l" x1="190" y1="337" x2="190" y2="352"/>
+<rect class="b" x="80" y="354" width="220" height="30"/><text x="190" y="374" text-anchor="middle">Cập nhật state chung (latch, an toàn với IRQ)</text>
+<line class="l" x1="190" y1="384" x2="190" y2="399"/>
+<rect class="b" x="80" y="401" width="220" height="15" opacity="0"/>
+<text x="190" y="410" text-anchor="middle" font-weight="700">Main loop tiêu thụ ở lượt kế tiếp</text>
+</svg>
+<figcaption>Hình 11.1 — chuỗi dispatch thật, đã trace, từ sự kiện hardware đến cập nhật state ứng dụng.</figcaption>
+</div>
+
+<h3>Dispatch cờ ISR, theo thứ tự ưu tiên</h3>
+<table>
+<tr><th>Cờ kiểm tra trước</th><th>Ý nghĩa</th><th>Hành động</th></tr>
+<tr><td>AF (NACK)</td><td>Master đã NACK</td><td>nếu transfer count đã bằng 0, đây là kết thúc <em>bình thường</em> của một read; ngược lại là một điều kiện lỗi</td></tr>
+<tr><td>RXNE</td><td>Nhận byte</td><td>đọc RXDR vào buffer, giảm số còn lại</td></tr>
+<tr><td>ADDR</td><td>Địa chỉ khớp</td><td>dispatch tới handler address-complete → đây là nơi ACK thực sự được gửi (bằng cách clear cờ)</td></tr>
+<tr><td>TXIS</td><td>TX register cần data</td><td>ghi byte kế tiếp vào TXDR</td></tr>
+<tr><td>TCR</td><td>Hết byte-count nhưng transaction còn tiếp tục (reload)</td><td>đọc byte vừa hoàn tất, rồi gọi một reload callback — <strong>đây là nơi quyết định ACK/NACK từng byte được đưa ra trong driver này</strong></td></tr>
+<tr><td>STOPF (kiểm tra cuối, không điều kiện)</td><td>Phát hiện STOP</td><td>hoàn tất transfer, gọi callback completion</td></tr>
+</table>
+
+<div class="callout why"><span class="tag">Vì sao "manual ACK" ở đây tinh vi hơn nó trông có vẻ</span>
+Tầng application gọi một hàm tên "manual ACK mode" tin rằng nó chuyển đổi hành vi phần cứng — nhưng trong bản build thực sự được biên dịch, hàm đó chỉ set một biến toàn cục không ai đọc và <strong>không chạm register nào cả</strong>. Cơ chế reload/ACK từng byte thật sự <em>có</em> hoạt động đến từ đường cấu hình mặc định của chính vendor HAL cho transfer interrupt nhỏ, không DMA, độc lập với toggle chết đó. Bài học tổng quát hóa: không bao giờ tin tên hàm hay comment lịch sử hơn nhánh thực sự được biên dịch — luôn kiểm tra preprocessor guard (<code>#if 0</code>/<code>#if 1</code>) trước khi tin một hàm "đổi mode" có tác dụng thật.</div>
+
+<h3>Ai chạy ở đâu</h3>
+<p>Callback receive/reload ở tầng application chạy <strong>bên trong ISR</strong> (nó được gọi trực tiếp từ chuỗi dispatch ngắt trên, cùng call stack). Bên tiêu thụ phản ứng với transfer đã hoàn tất (chuyển state machine, áp dụng write, arm transfer kế tiếp) chạy trong <strong>main loop</strong>, ở lượt kế tiếp. Đồng bộ hóa duy nhất giữa hai bên là disable/enable đúng đường ngắt I2C quanh các đoạn tới hạn của state chung — không có mutex RTOS nào trong firmware này (xem §21).</p>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Clear ADDR là hành động gửi ACK — không phải một lần đọc status thụ động.</li>
+<li>Một ngắt "reload" (kiểu TCR) là nơi phần lớn logic manual-ACK từng-byte sinh sống, khi một peripheral hỗ trợ nó.</li>
+<li>Code phía ISR và phía main-loop chia nhau trách nhiệm: ISR latch sự kiện nhanh; main loop diễn giải chúng khi nó có thời gian.</li>
+<li>Không bao giờ tin tên một hàm hơn nhánh được biên dịch của nó — kiểm tra preprocessor guard.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 12 POLLING ============================================================ -->
+<section class="chapter" id="ch12">
+<div class="kicker">12</div>
+<h2>Polling</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Polling dễ đọc hơn code interrupt-driven, nhưng nó ẩn chứa rủi ro vòng lặp vô hạn mà code interrupt-driven tránh được về mặt cấu trúc.</div>
+
+<pre><code><span class="kw">while</span> (!(status &amp; TX_READY))
+    ;   <span class="cm">/* busy-wait */</span></code></pre>
+<p>Trong khi vòng lặp này quay, CPU không làm gì khác — không task nào khác, không service peripheral nào khác chạy. Trong khi đó, phần cứng đang làm việc của nó một cách độc lập (clock bit, chờ ACK) và cuối cùng sẽ hoặc thỏa điều kiện hoặc treo mãi mãi nếu điều kiện thoát không bao giờ đúng (ví dụ một NACK mà vòng lặp không kiểm tra). Bất kỳ vòng lặp polling nào không có timeout chỉ cách một treo máy vĩnh viễn đúng một slave bị mất kết nối/lỗi.</p>
+
+<div class="callout mistake"><span class="tag">Lỗi thường gặp</span>Một vòng lặp polling trần như trên, không có giới hạn số lần lặp hay kiểm tra thời gian trôi qua, sẽ treo toàn bộ CPU mãi mãi nếu cờ đang chờ không bao giờ set — về mặt chức năng điều này giống hệt một bus lockup phần cứng, chỉ khác là giờ đây nó là một lỗi phần mềm không thể phân biệt với lỗi đó trên oscilloscope.</div>
+
+<p><span class="kicker" style="font-size:.65em">CASE STUDY</span> Firmware cụ thể này <em>không</em> dùng vòng lặp polling chặn cho chính các transfer I2C — mọi transfer đều interrupt-driven (§11). Các vòng lặp busy-wait duy nhất đụng đến hardware liên quan I2C là một <code>HAL_Delay()</code> cố định 2ms trong lúc software reset, và một spin-loop 10.000 lần lặp (không dựa trên thời gian) chờ một cờ init RTC ở nơi khác trong cùng firmware — <strong>SOURCE CODE CHƯA ĐỦ</strong> để nói chính xác thời gian thực (wall-clock) của spin-loop đó, vì nó phụ thuộc vào mức tối ưu hóa của compiler và tốc độ clock, không phải một timer được đo.</p>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Mọi vòng lặp polling cần một timeout tường minh — "cờ sẽ set thôi" là một giả định, không phải một bảo đảm.</li>
+<li>I2C interrupt-driven và polled không loại trừ nhau trong cùng một firmware — kiểm tra xem đường nào thực sự dùng cái nào.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 13 DMA ============================================================ -->
+<section class="chapter" id="ch13">
+<div class="kicker">13</div>
+<h2>DMA</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>DMA thay đổi ai "đang theo dõi" transfer — CPU không còn được báo về mỗi byte, chỉ về completion (hoặc lỗi), điều này thay đổi cách bạn phải nghĩ về timing và quyền sở hữu buffer.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 460 180" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.55;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.4;}</style>
+<rect class="b" x="10" y="10" width="100" height="30"/><text x="60" y="30" text-anchor="middle">CPU</text>
+<line class="l" x1="60" y1="40" x2="60" y2="55"/>
+<rect class="b" x="10" y="60" width="100" height="30"/><text x="60" y="80" text-anchor="middle">Cấu hình I2C</text>
+<line class="l" x1="60" y1="90" x2="60" y2="105"/>
+<rect class="b" x="10" y="110" width="100" height="30"/><text x="60" y="130" text-anchor="middle">Cấu hình DMA</text>
+<line class="l" x1="110" y1="125" x2="190" y2="125"/>
+<rect class="b" x="190" y="110" width="100" height="30"/><text x="240" y="130" text-anchor="middle">DMA Engine</text>
+<line class="l" x1="290" y1="125" x2="370" y2="125"/>
+<rect class="b" x="370" y="110" width="80" height="30"/><text x="410" y="130" text-anchor="middle">Memory</text>
+<line class="l" x1="190" y1="110" x2="60" y2="45" marker-end="none"/>
+<text x="150" y="60" font-size="10" opacity=".7">Đường request peripheral I2C ↔ channel DMA</text>
+<line class="l" x1="240" y1="110" x2="240" y2="95"/>
+<rect class="b" x="190" y="60" width="100" height="30"/><text x="240" y="80" text-anchor="middle">IRQ hoàn tất</text>
+</svg>
+<figcaption>Hình 13.1 — đường dữ liệu I2C hỗ trợ bởi DMA (tổng quát).</figcaption>
+</div>
+
+<h3>Điều gì thay đổi so với interrupt-mỗi-byte</h3>
+<ul>
+<li>CPU cấu hình source, destination, và kích thước transfer một lần, sau đó chỉ bị ngắt ở cuối (hoặc khi lỗi) — không phải mỗi byte một lần.</li>
+<li>Alignment và lifetime của buffer trở nên tới hạn: buffer phải giữ hợp lệ và không bị code khác đụng tới suốt toàn bộ transfer, vì không có callback per-byte nào để điều phối truy cập.</li>
+<li>Trên các MCU có data cache, tính nhất quán cache (cache coherency) giữa DMA engine (bỏ qua cache CPU) và bất kỳ bản sao cache của buffer trở thành một vấn đề thật — CPU phải explicit invalidate/clean cache line cho vùng đó.</li>
+</ul>
+
+<div class="callout src"><span class="tag">Source code</span><strong>DMA KHÔNG ĐƯỢC SỬ DỤNG TRONG SOURCE CODE NÀY.</strong> Không có kênh DMA nào được cấu hình cho I2C (hoặc cho bất kỳ peripheral nào) ở bất kỳ đâu trong firmware của case study — xác nhận bằng tìm kiếm toàn diện. Mọi transfer đều là interrupt-driven từng byte (§11). Section này được đưa vào để hoàn thiện mental model I2C tổng quát, không phải vì case study sử dụng nó.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>DMA đánh đổi việc CPU tham gia mỗi byte để lấy trách nhiệm về lifetime buffer và cache coherency.</li>
+<li>Không bao giờ giả định DMA đang được dùng chỉ vì một peripheral hỗ trợ nó — xác minh một kênh DMA thực sự được cấu hình và khởi động.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 14 WRITE ============================================================ -->
+<section class="chapter" id="ch14">
+<div class="kicker">14</div>
+<h2>Write Transaction — trace đầy đủ</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là trace đầu tiên trong ba trace transaction kết nối mọi tầng (software → register → điện) cho một hoạt động cụ thể, có thật.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 600 90" font-size="11"><style>text{fill:currentColor;}</style>
+<text x="10" y="20" font-weight="700">Software</text><text x="10" y="40">i2c_write(reg, data)</text>
+<text x="220" y="20" font-weight="700">Register</text><text x="220" y="40">TXDR / CR2.NBYTES</text>
+<text x="420" y="20" font-weight="700">Điện</text><text x="420" y="40">Waveform SDA/SCL</text>
+<path d="M120,30 L200,30" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a2)"/>
+<path d="M330,30 L410,30" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a2)"/>
+<defs><marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor" opacity=".5"/></marker></defs>
+</svg>
+</div>
+
+<h3>Case study: ghi một register I/O (địa chỉ <code>0x74</code>)</h3>
+<table>
+<tr><th>Bước</th><th>Hoạt động trên bus</th><th>Xử lý ISR</th></tr>
+<tr><td>1</td><td>START → Addr+W → ACK</td><td>phần cứng khớp địa chỉ, phần mềm clear ADDR → ACK được gửi</td></tr>
+<tr><td>2</td><td>byte 0 = <code>0x74</code> ("2nd address")</td><td>RXNE→buffer, rồi reload/TCR nổ → app kiểm tra địa chỉ nằm trong khoảng hợp lệ → tạo ACK cho byte kế tiếp</td></tr>
+<tr><td>3</td><td>byte 1-4 = payload data 32-bit, little-endian</td><td>mọi byte tiếp theo đều được ACK vô điều kiện trong thiết kế của driver này</td></tr>
+<tr><td>4</td><td>STOP</td><td>STOPF → callback completion → application đánh dấu "write hoàn tất"</td></tr>
+<tr><td>5 (lượt main-loop kế tiếp)</td><td>—</td><td>state machine diễn giải <code>second_addr=0x74</code>, áp dụng việc ghi vào peripheral đích, re-arm bộ nhận</td></tr>
+</table>
+
+<div class="callout debug"><span class="tag">Debug tip</span>Nếu một write "có vẻ thành công" (Master thấy ACK suốt, nhận được STOP sạch) nhưng register đích không bao giờ thay đổi, lỗi hầu như luôn nằm ở bước 5 — diễn giải của main-loop, không phải tầng điện/ISR. Kiểm tra dispatch switch/case trên địa chỉ register trước tiên.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Tính đúng đắn ở cấp byte-protocol của một Write transaction (ACK, STOP) và tính đúng đắn ngữ nghĩa của nó (register đúng có thực sự thay đổi) được xác nhận ở hai tầng khác nhau — không nhập chung chúng khi debug.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 15 READ ============================================================ -->
+<section class="chapter" id="ch15">
+<div class="kicker">15</div>
+<h2>Read Transaction — trace đầy đủ</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Read là nơi Repeated START, phát hiện đổi hướng, và "ai NACK byte cuối" đều phải phối hợp đúng với nhau.</div>
+
+<pre><code>START → Addr+W → ACK → 0x8C (chọn register) → [Repeated START]
+     → Addr+R → ACK → D0 → ACK → D1 → ... → D_cuối → NACK(bởi Master) → STOP</code></pre>
+
+<h3>Vì sao cần Repeated START ở đây</h3>
+<p>Protocol ứng dụng luôn cần một byte "register nào" trước khi biết trả lời gì — không có định nghĩa Read trần, không kèm địa chỉ. Repeated START cho phép Master đổi hướng (Write→Read) mà không release bus, để không có traffic khác chen giữa "đây là register tôi muốn" và "giờ cho tôi giá trị của nó."</p>
+
+<h3>Vì sao byte cuối bị NACK</h3>
+<p>Chỉ Master biết nó muốn bao nhiêu byte — Slave không có cách nào biết "đây là byte cuối" ngoại trừ được báo qua NACK. Khi Slave-transmit thấy cờ NACK với số byte còn lại của chính nó đã bằng 0, nó xem đó là kết thúc thành công, được mong đợi của read (xem §18 vì sao điều này phải được phân biệt với một lỗi thật).</p>
+
+<h3>Trace case study</h3>
+<table>
+<tr><th>Bước</th><th>Function</th><th>Điều gì xảy ra</th></tr>
+<tr><td>1</td><td><code>rx_comp()</code> (ISR)</td><td>write-complete với transfer 1-byte → được nhận diện là một yêu cầu đọc</td></tr>
+<tr><td>2</td><td>main loop, <code>i2c_recv_wait()</code></td><td>tra register được yêu cầu, gọi entry point slave-transmit với buffer phản hồi, đổi state sang Wait_Read</td></tr>
+<tr><td>3</td><td>ISR, xử lý TXIS</td><td>đưa byte phản hồi vào TXDR khi Master clock chúng ra</td></tr>
+<tr><td>4</td><td>ISR, xử lý AF (NACK)</td><td>số còn lại đã bằng 0 → kết thúc bình thường của transfer, không phải lỗi</td></tr>
+<tr><td>5</td><td>main loop</td><td>re-arm bộ nhận, quay về Wait_Write</td></tr>
+</table>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Repeated START tồn tại chính xác để một Write-rồi-Read kết hợp có thể xảy ra như một transaction bus nguyên tử (atomic).</li>
+<li>NACK byte-cuối được tạo bởi Master, không phải được Slave chọn — Slave chỉ biết được sau khi việc đã xảy ra.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 16 COMBINED ============================================================ -->
+<section class="chapter" id="ch16">
+<div class="kicker">16</div>
+<h2>Combined Transaction — Transaction Kết Hợp</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Hầu như mọi driver I2C thực tế bạn sẽ đọc đều được xây dựng quanh chính pattern này — "chọn một register, rồi đọc/ghi giá trị của nó" — nên nhận diện nó ngay lập tức tiết kiệm rất nhiều thời gian trace.</div>
+
+<pre><code>i2c_read_register(device, reg, &amp;data);
+   → Write(reg)         // chọn register — không STOP
+   → Repeated START
+   → Read(data, N)      // lấy giá trị ra
+   → STOP</code></pre>
+
+<p><span class="kicker" style="font-size:.65em">CASE STUDY</span> Toàn bộ tập lệnh cấp ứng dụng của firmware này (passthrough RTC, extended I/O, checksum, chuỗi version, control IAP, event log, v.v. — <a href="#ch24">xem register map đầy đủ ở §24</a>) được xây dựng từ đúng một hình dạng combined-transaction này: một byte chọn "register nào", và tùy vào việc transaction tiếp tục là Write (thêm byte) hay đổi sang Read (Repeated START), cùng một byte đó có nghĩa là "ghi giá trị này" hoặc "trả lời giá trị này."</p>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Một transaction Write-rồi-Read kết hợp là pattern thực tế thống trị cho các thiết bị I2C "kiểu register" — nhận diện nó là một idiom duy nhất, không phải hai hoạt động không liên quan.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 17 ACK/NACK ============================================================ -->
+<section class="chapter" id="ch17">
+<div class="kicker">17</div>
+<h2>ACK / NACK — đào sâu</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>ACK/NACK là kênh phản hồi duy nhất I2C có — mọi điều kiện lỗi cấp cao hơn cuối cùng đều thể hiện thành một ACK hoặc NACK không mong đợi ở đâu đó.</div>
+
+<table>
+<tr><th>Tình huống</th><th>Ai điều khiển</th><th>Ý nghĩa</th></tr>
+<tr><td>ACK byte địa chỉ</td><td>slave được gọi</td><td>"Tôi nhận ra địa chỉ này, và tôi đang lắng nghe"</td></tr>
+<tr><td>NACK byte địa chỉ (không ai)</td><td>không ai (đường dây chỉ giữ HIGH)</td><td>"không có thiết bị ở địa chỉ này" — triệu chứng kinh điển của lỗi wiring/gõ nhầm địa chỉ</td></tr>
+<tr><td>ACK byte data khi Write</td><td>slave</td><td>"đã nhận, gửi cái kế tiếp"</td></tr>
+<tr><td>NACK byte data khi Write</td><td>slave</td><td>"từ chối cái này — register không hợp lệ, buffer đầy, hoặc lỗi protocol"</td></tr>
+<tr><td>ACK byte data khi Read</td><td>master</td><td>"tiếp tục gửi"</td></tr>
+<tr><td>NACK byte data khi Read (byte cuối)</td><td>master</td><td>"đủ rồi, tôi xong" — <strong>bình thường</strong></td></tr>
+</table>
+
+<div class="callout proto"><span class="tag">Protocol</span><span class="kicker" style="font-size:.65em">CASE STUDY</span> Driver này chủ động loại sự kiện "nhận NACK khi đang transmit" khỏi error mask tổng quát của nó, cụ thể để tránh phân loại nhầm một kết thúc-Read hoàn toàn bình thường thành lỗi bus. Sai lệch phân biệt này ở một trong hai hướng là một lỗi kinh điển: quá dễ dãi, và lỗi giao tiếp thật sẽ không bị phát hiện; quá nghiêm khắc, và mọi Read thành công đều bị xem là lỗi.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Ý nghĩa của NACK hoàn toàn phụ thuộc vào ngữ cảnh giai đoạn và hướng transaction — không có một quy tắc "NACK = lỗi" phổ quát duy nhất.</li>
+<li>Một driver thiết kế tốt tách rõ "NACK được mong đợi" khỏi "NACK không mong đợi" thay vì xử lý mọi NACK giống nhau.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 18 ERROR HANDLING ============================================================ -->
+<section class="chapter" id="ch18">
+<div class="kicker">18</div>
+<h2>Error Handling — Xử Lý Lỗi</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Biết tầng nào phát hiện lỗi nào — cờ hardware, ISR, hay main loop — cho bạn biết chính xác đặt breakpoint ở đâu.</div>
+
+<div class="table-wrap"><table>
+<tr><th>Lỗi</th><th>Dấu hiệu hardware</th><th>Driver phát hiện</th><th>Khôi phục</th></tr>
+<tr><td>NACK (địa chỉ, không có thiết bị)</td><td>cờ AF/NACKF</td><td>ISR thấy NACK với số byte còn lại khác 0</td><td>hủy transfer, báo lỗi lên trên</td></tr>
+<tr><td>Bus Error (BERR)</td><td>ISR.BERR</td><td>đường ISR lỗi, latch vào một error code cấp driver</td><td><span class="kicker" style="font-size:.6em">CASE STUDY</span> reset phần mềm toàn bộ peripheral</td></tr>
+<tr><td>Arbitration Lost (ARLO)</td><td>ISR.ARLO</td><td>đường lỗi tương tự</td><td>tương tự — dù về lý thuyết không thể đạt tới trong build chỉ-slave</td></tr>
+<tr><td>Overrun/Underrun (OVR)</td><td>ISR.OVR</td><td>đường lỗi tương tự — thường do độ trễ ISR vượt ngân sách clock-stretch</td><td>tương tự</td></tr>
+<tr><td>Timeout (không hoàn tất)</td><td>không trực tiếp — suy ra từ thời gian trôi qua</td><td>main-loop so sánh timer với timestamp "transfer bắt đầu"</td><td>tương tự</td></tr>
+<tr><td>Bus Busy (kẹt)</td><td>bit status BUSY liên tục</td><td>so sánh thời gian trôi qua</td><td>tương tự, dù bus kẹt thật cần khôi phục tầng vật lý (§20)</td></tr>
+<tr><td>Lệch protocol</td><td>—</td><td>phần mềm: "tôi mong đợi sự kiện A, nhận được sự kiện B"</td><td>tương tự</td></tr>
+</table></div>
+
+<h4>Case study: bảng timeout thực sự được dùng</h4>
+<table>
+<tr><th>Điều kiện giám sát</th><th>Ngưỡng</th><th>Hành động khi hết hạn</th></tr>
+<tr><td>Slave-transmit busy liên tục</td><td>2000 ms</td><td>reset phần mềm toàn bộ peripheral I2C</td></tr>
+<tr><td>Receive đang tiến hành, không bao giờ hoàn tất</td><td>1000 ms</td><td>tương tự</td></tr>
+<tr><td>Transmit đang tiến hành, không bao giờ hoàn tất</td><td>1000 ms</td><td>tương tự</td></tr>
+<tr><td>Bất kỳ BERR/ARLO/OVR bị latch</td><td>ngay lập tức</td><td>tương tự</td></tr>
+<tr><td>Phát hiện lệch direction/state</td><td>ngay lập tức</td><td>tương tự</td></tr>
+</table>
+<div class="callout important"><span class="tag">Quan trọng</span>Không có bộ đếm retry hay backoff nào ở bất kỳ đâu trong logic xử lý lỗi này — timeout hoặc lỗi đã latch đầu tiên kích hoạt một reset toàn bộ vô điều kiện, mỗi lần, không phân biệt nguyên nhân lỗi trong hành động khôi phục. Đây là một lựa chọn thiết kế hợp lý cho một thiết bị slave đơn giản, nhưng nó có nghĩa "một glitch reset toàn bộ peripheral" — điều đáng biết trước khi bạn diễn giải một lần reset ngẫu nhiên là bằng chứng của một lỗi sâu hơn.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Cờ lỗi hardware (BERR/ARLO/OVR) được phát hiện ở cấp ISR; timeout được phát hiện ở cấp main-loop bằng so sánh thời gian trôi qua.</li>
+<li>Độ chi tiết khôi phục có thể là nhị phân (reset toàn bộ hoặc không gì cả) theo thiết kế — kiểm tra driver của bạn có mode suy giảm trung gian nào không trước khi giả định nó tồn tại.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 19 TIMEOUT ============================================================ -->
+<section class="chapter" id="ch19">
+<div class="kicker">19</div>
+<h2>Timeout</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Một timeout chỉ đáng tin bằng chính đồng hồ mà nó được đo — và firmware thường chạy nhiều hơn một time base độc lập cùng lúc.</div>
+
+<pre><code><span class="kw">while</span> (!(status &amp; READY)) {
+    <span class="kw">if</span> (timeout_expired())
+        <span class="kw">return</span> ERROR_TIMEOUT;
+}</code></pre>
+<p>Timeout "dựa trên" cái gì rất quan trọng: một timer chạy tự do bằng hardware, một bộ đếm millisecond do SysTick điều khiển, hoặc một bộ đếm số-lần-lặp trần không có quan hệ thời gian nào cả — là ba mức đảm bảo tin cậy rất khác nhau.</p>
+
+<table>
+<tr><th>Cơ sở</th><th>Độ tin cậy</th><th>Lưu ý</th></tr>
+<tr><td>Timer hardware / bộ đếm tick SysTick</td><td>Cao</td><td>Vẫn phụ thuộc vào việc ISR tăng nó có thực sự chạy không — một ISR ưu tiên cao hơn bị kẹt trong loop có thể làm nó đói tick</td></tr>
+<tr><td>Bộ đếm số-lần-lặp trần</td><td>Thấp</td><td>Thời gian thực (wall-clock) thực tế phụ thuộc mức tối ưu hóa compiler và clock CPU — cùng một source có thể timeout ở 1ms trên build này và 5ms trên build khác</td></tr>
+</table>
+
+<div class="callout debug"><span class="tag">Debug tip</span><span class="kicker" style="font-size:.6em">CASE STUDY</span> — firmware này chạy hai time base độ phân giải millisecond độc lập (một điều khiển hệ thống software-timer tổng quát, một chỉ điều khiển logic phát hiện lỗi I2C) tình cờ chạy ở cùng tốc độ danh định nhưng không bao giờ được đối chiếu chéo với nhau. Nếu bạn cần tương quan một timeout I2C với timer của subsystem khác, hãy nhớ chúng không đảm bảo đồng bộ — đó là hai bộ đếm riêng biệt chỉ tình cờ tick ở cùng tần số danh định.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Luôn xác định một timeout thực sự được đếm dựa trên cái gì trước khi tin vào thời lượng nó công bố.</li>
+<li>Nhiều time base độc lập trong một firmware là phổ biến — đừng giả định chúng đồng bộ chỉ vì chúng tick cùng tốc độ.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 20 BUS RECOVERY ============================================================ -->
+<section class="chapter" id="ch20">
+<div class="kicker">20</div>
+<h2>Bus Recovery — Khôi Phục Bus</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Một reset cấp peripheral và một khôi phục cấp bus giải quyết hai vấn đề hoàn toàn khác nhau — nhầm lẫn chúng là lý do phổ biến khiến "cách sửa không hoạt động."</div>
+
+<pre><code>SDA bị kẹt LOW
+     |
+     v
+Disable I2C peripheral
+     |
+     v
+Cấu hình lại chân SCL thành GPIO output thường
+     |
+     v
+Toggle SCL tối đa 9 lần (clock ra byte dở mà một slave bị kẹt đang giữ)
+     |
+     v
+Tạo một điều kiện STOP thủ công
+     |
+     v
+Khôi phục lại I2C peripheral / pin mux</code></pre>
+<p>Điều này hoạt động vì một slave bị kẹt giữ SDA LOW giữa byte hầu như luôn chỉ đang chờ đủ xung clock để clock xong byte nó nghĩ nó đang ở giữa — tối đa 9 xung clock thêm (8 bit data + 1 khe ACK) sẽ flush nó về lại trạng thái idle, sau đó một STOP thủ công reset trạng thái protocol của mọi bên về "idle."</p>
+
+<div class="callout important"><span class="tag">Quan trọng</span><span class="kicker" style="font-size:.6em">CASE STUDY</span> — <strong>kỹ thuật này không tồn tại ở bất kỳ đâu trong firmware của case study.</strong> Cơ chế "reset" duy nhất của nó là một reset phần mềm cấp peripheral (force/release block I2C qua clock-reset controller) — nó không bao giờ chuyển đổi mục đích các chân thành GPIO thường để toggle SCL thủ công. Nếu SDA thực sự bị kẹt LOW bởi một thiết bị ngoài hoạt động sai, cơ chế reset của chính firmware này <strong>sẽ không sửa được nó</strong>, vì nó không bao giờ chạm vào chân vật lý — nó chỉ reset logic nội bộ của chính peripheral I2C.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Reset phần mềm cấp peripheral (cấp RCC) sửa sự nhầm lẫn nội bộ của peripheral, không phải một bus bị kẹt vật lý.</li>
+<li>Khôi phục bus thật cần tạm thời lấy quyền kiểm soát GPIO trực tiếp lên SCL — xác minh firmware của bạn có thực sự triển khai điều này trước khi trông cậy vào nó ở hiện trường.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 21 RTOS/CONCURRENCY ============================================================ -->
+<section class="chapter" id="ch21">
+<div class="kicker">21</div>
+<h2>RTOS / Concurrency</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Ngay khi hơn một context (task, ISR) có thể chạm vào cùng một transfer I2C, tính đúng đắn hoàn toàn phụ thuộc vào cách truy cập được serialize — sai chỗ này và các transaction sẽ âm thầm đan xen thành rác.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 460 140" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.55;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.4;}</style>
+<rect class="b" x="10" y="10" width="110" height="30"/><text x="65" y="30" text-anchor="middle">Task A</text>
+<rect class="b" x="10" y="90" width="110" height="30"/><text x="65" y="110" text-anchor="middle">Task B</text>
+<line class="l" x1="120" y1="25" x2="190" y2="55"/><line class="l" x1="120" y1="105" x2="190" y2="75"/>
+<rect class="b" x="190" y="50" width="40" height="30" fill="currentColor" fill-opacity=".08"/><text x="210" y="70" text-anchor="middle" font-size="10">Mutex</text>
+<line class="l" x1="230" y1="65" x2="290" y2="65"/>
+<rect class="b" x="290" y="50" width="130" height="30"/><text x="355" y="70" text-anchor="middle">I2C Driver</text>
+<line class="l" x1="420" y1="65" x2="450" y2="65"/>
+</svg>
+<figcaption>Hình 21.1 — nhiều task truy cập một peripheral I2C, được điều phối bởi mutex (hình dạng RTOS tổng quát).</figcaption>
+</div>
+
+<p>Không có mutex, hai task đua nhau dùng cùng một peripheral I2C tạo ra chính xác lỗi diagram này ngụ ý: Transaction A + Transaction B (đan xen) = một transaction hỏng, không thể khôi phục trên dây, vì I2C không có framing tích hợp nào cho slave (hoặc phần cứng peripheral) biết "byte kế tiếp này thuộc về một yêu cầu logic khác."</p>
+
+<h3>Nguy hiểm thực sự nằm ở đâu</h3>
+<ul>
+<li><strong>Task-context vs Task-context</strong>: cần một mutex/semaphore chặn (blocking) — hai task không bao giờ được ở giữa transaction trên cùng peripheral đồng thời.</li>
+<li><strong>ISR-context vs Task-context</strong>: một mutex chặn không thể được lấy trong ISR — state chung được cả hai chạm tới phải được bảo vệ bằng cách disable interrupt liên quan cho đoạn tới hạn, hoặc chỉ dùng primitive an toàn với ISR.</li>
+</ul>
+
+<div class="callout hw"><span class="tag">Case study</span>Firmware này <strong>không có RTOS nào cả</strong> — một super-loop trần duy nhất cộng với interrupt. Chỉ có đúng một producer sự kiện I2C (ISR) và đúng một consumer (main loop), nên primitive đồng bộ duy nhất cần — và duy nhất thực sự được dùng — là disable/enable đúng đường ngắt I2C quanh các đoạn tới hạn của state chung. Đây là một thiết kế tối thiểu hợp lệ cho đúng một consumer; nó sẽ không scale đúng nếu một task/consumer thứ hai được thêm vào mà không thêm một lock thật.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>I2C không có cơ chế cấp-protocol nào để phát hiện hai transaction logic đan xen — serialization hoàn toàn là trách nhiệm của application.</li>
+<li>State chia sẻ với ISR cần đoạn tới hạn dựa trên disable-interrupt, không phải mutex chặn.</li>
+<li>"Không RTOS" không có nghĩa "không có concurrency phải lo" — ISR vs main-loop vẫn là một ranh giới concurrency thật.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 22 SOURCE ARCHITECTURE ============================================================ -->
+<section class="chapter" id="ch22">
+<div class="kicker">22</div>
+<h2>Source Code Architecture — Kiến Trúc Source Code</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Biết file/tầng nào sở hữu trách nhiệm nào cho phép bạn nhảy thẳng đến đúng chỗ thay vì grep mù quáng.</div>
+
+<table>
+<tr><th>Tầng</th><th>Trách nhiệm</th><th>File case-study</th></tr>
+<tr><td>Application</td><td>Logic nghiệp vụ quyết định một lần đọc/ghi register thực sự nghĩa là gì</td><td><code>km_i2c.c</code> (state machine, bảng lệnh)</td></tr>
+<tr><td>API I2C hướng application</td><td>Bề mặt trung lập-vendor <code>Initialize/SlaveReceive/SlaveTransmit/Control/GetStatus</code></td><td><code>I2C_stm32f0xx.c/.h</code> (kiểu CMSIS-Driver)</td></tr>
+<tr><td>Vendor HAL</td><td>Máy trạng thái transfer cấp register, dispatch ISR, ghi chép per-transfer</td><td><code>stm32f0xx_hal_i2c.c</code> — được OEM patch để thêm một reload callback mà HAL gốc không có</td></tr>
+<tr><td>Board init</td><td>Setup clock/GPIO/NVIC/handle, gọi một lần lúc boot</td><td><code>mx_init.c</code>, <code>stm32f0xx_hal_msp.c</code></td></tr>
+<tr><td>IRQ wiring</td><td>Handler ngắt thực sự được CPU vector tới</td><td><code>stm32f0xx_it.c</code> (<code>I2C1_IRQHandler</code>)</td></tr>
+</table>
+
+<div class="callout mistake"><span class="tag">Lỗi thường gặp</span>Một wrapper kiểu CMSIS-Driver thường đi kèm một API Master đầy đủ (<code>MasterTransmit</code>/<code>MasterReceive</code>, preset tốc độ bus) đơn giản vì đó là một template tổng quát. Trong case study này, <strong>không phần nào của nó từng được gọi</strong> từ application code — xác nhận bằng grep toàn diện qua cả hai firmware image. Không bao giờ giả định một bề mặt API được sử dụng chỉ vì nó tồn tại và biên dịch được.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Một driver stack theo tầng (application → API trung lập-vendor → vendor HAL → board init → IRQ vector) là một hình dạng phổ biến — học nhận diện công việc của mỗi tầng ngay khi nhìn thấy.</li>
+<li>Grep tìm call site thật trước khi giả định một bề mặt API đang được sử dụng.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 23 CALL GRAPH / TRACE ============================================================ -->
+<section class="chapter" id="ch23">
+<div class="kicker">23</div>
+<h2>Call Graph &amp; Trace Source Code Thật</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là trace duy nhất kết nối mọi section trước đó thành một con đường cụ thể, có trích dẫn số dòng.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 420 470" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.45;}</style>
+<rect class="b" x="70" y="10" width="280" height="30"/><text x="210" y="30" text-anchor="middle">Sự kiện hardware I2C1 (ADDR/RXNE/TCR/STOPF)</text>
+<line class="l" x1="210" y1="40" x2="210" y2="55"/>
+<rect class="b" x="70" y="60" width="280" height="30"/><text x="210" y="80" text-anchor="middle">NVIC → I2C1_IRQHandler()</text>
+<line class="l" x1="210" y1="90" x2="210" y2="105"/>
+<rect class="b" x="70" y="110" width="280" height="30"/><text x="210" y="130" text-anchor="middle">HAL_I2C_EV/ER_IRQHandler()</text>
+<line class="l" x1="210" y1="140" x2="210" y2="155"/>
+<rect class="b" x="70" y="160" width="280" height="30"/><text x="210" y="180" text-anchor="middle">I2C_Slave_ISR_IT()</text>
+<line class="l" x1="210" y1="190" x2="210" y2="205"/>
+<rect class="b" x="70" y="210" width="280" height="30"/><text x="210" y="230" text-anchor="middle">rx_comp() — callback application</text>
+<line class="l" x1="210" y1="240" x2="210" y2="255"/>
+<rect class="b" x="70" y="260" width="280" height="30"/><text x="210" y="280" text-anchor="middle">i2c_info (chung, bảo vệ bằng disable-IRQ)</text>
+<line class="l" x1="210" y1="290" x2="210" y2="305"/>
+<rect class="b" x="70" y="310" width="280" height="30"/><text x="210" y="330" text-anchor="middle">i2c_recv_wait() — main loop</text>
+<line class="l" x1="210" y1="340" x2="210" y2="355"/>
+<rect class="b" x="70" y="360" width="280" height="30"/><text x="210" y="380" text-anchor="middle">i2c_check_error() → i2c_sw_reset() nếu cần</text>
+<line class="l" x1="210" y1="390" x2="210" y2="405"/>
+<rect class="b" x="70" y="410" width="280" height="30"/><text x="210" y="430" text-anchor="middle">switch(second_addr) → áp dụng hiệu ứng</text>
+<line class="l" x1="210" y1="440" x2="210" y2="455"/>
+<text x="210" y="465" text-anchor="middle" font-weight="700">Register/RAM/peripheral được cập nhật</text>
+</svg>
+<figcaption>Hình 23.1 — chuỗi gọi thật, đầy đủ, cho một sự kiện I2C trong case study.</figcaption>
+</div>
+
+<h4>Bảng trace (file/dòng/function/register/mục đích)</h4>
+<table>
+<tr><th>Bước</th><th>Function</th><th>File</th><th>Register đụng tới</th><th>Mục đích</th></tr>
+<tr><td>1</td><td><code>I2C1_IRQHandler</code></td><td><code>stm32f0xx_it.c:198-207</code></td><td>đọc <code>ISR</code></td><td>phân loại event vs error, dispatch tới entry point HAL đúng</td></tr>
+<tr><td>2</td><td><code>HAL_I2C_EV_IRQHandler</code></td><td><code>stm32f0xx_hal_i2c.c:2949-2960</code></td><td>đọc <code>ISR</code>, <code>CR1</code></td><td>gọi con trỏ hàm ISR đặc thù theo transfer-mode</td></tr>
+<tr><td>3</td><td><code>I2C_Slave_ISR_IT</code></td><td><code>stm32f0xx_hal_i2c.c:3380-3495</code></td><td><code>RXDR</code>/<code>TXDR</code>, clear <code>ADDR</code>/<code>STOPF</code>/<code>AF</code></td><td>điều khiển máy trạng thái transfer cấp byte</td></tr>
+<tr><td>4</td><td><code>rx_comp</code></td><td><code>km_i2c.c:171-255</code></td><td>không trực tiếp trừ qua <code>Control()</code> cho ACK/NACK</td><td>diễn giải sự kiện cấp application, vẫn trong ISR</td></tr>
+<tr><td>5</td><td><code>i2c_recv_wait</code></td><td><code>km_i2c.c:485-758</code></td><td>không trực tiếp</td><td>main-loop tiêu thụ cờ completion đã latch</td></tr>
+</table>
+<div class="callout src"><span class="tag">Source code</span>Mọi số dòng trên được trích dẫn nguyên văn từ source đã trace, không phải ước lượng. Ở đâu một số dòng không thể xác nhận, tài liệu này nói rõ điều đó thay vì bịa ra một số.</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Một sự kiện ngắt I2C duy nhất lan qua ít nhất bốn lời gọi hàm trước khi application thấy nó.</li>
+<li>Hai execution context riêng biệt (ISR, main loop) chạm vào cùng state chung ở hai điểm khác nhau trong đúng một trace này — biết chính xác nơi bàn giao (handoff).</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 24 REGISTER MAPPING MATRIX ============================================================ -->
+<section class="chapter" id="ch24">
+<div class="kicker">24</div>
+<h2>Register ↔ Source Code Mapping (có thể tìm kiếm)</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là bảng tra cứu nhanh — khi bạn đã biết tên một register/bit/function và chỉ cần tìm nó được dùng ở đâu.</div>
+
+<div class="filter-row"><input id="matrix-filter" type="text" placeholder="Lọc theo register, function, bit, hoặc file..."></div>
+<div class="table-wrap"><table id="matrix-table">
+<thead><tr><th>Source File</th><th>Function</th><th>Register</th><th>Bit</th><th>Mục đích</th><th>Hiệu ứng Hardware</th></tr></thead>
+<tbody>
+<tr><td>I2C_stm32f0xx.c</td><td>I2Cx_Control (ARM_I2C_OWN_ADDRESS)</td><td>OAR1</td><td>OA1EN, OA1</td><td>set own address của slave lúc runtime</td><td>bộ so sánh địa chỉ hardware được cập nhật</td></tr>
+<tr><td>I2C_stm32f0xx.c</td><td>I2Cx_Control (ARM_I2C_BUS_SPEED)</td><td>TIMINGR</td><td>mọi field</td><td>nạp một preset Standard/Fast (đường dead code)</td><td>sẽ đổi timing SCL nếu từng được gọi</td></tr>
+<tr><td>I2C_stm32f0xx.c</td><td>I2Cx_Control (GENERATE_NACK)</td><td>CR2</td><td>NACK (15)</td><td>từ chối byte hiện tại</td><td>NACK được truyền ở khe ACK kế tiếp</td></tr>
+<tr><td>I2C_stm32f0xx.c</td><td>I2Cx_Control (GENERATE_ACK)</td><td>CR2</td><td>NBYTES (24:16)</td><td>arm thêm một byte cho reload</td><td>nhả clock-stretch, byte kế tiếp được clock vào</td></tr>
+<tr><td>I2C_stm32f0xx.c</td><td>I2Cx_GetStatus</td><td>ISR</td><td>DIR (16)</td><td>xác định hướng transaction</td><td>chỉ đọc, không có hiệu ứng hardware</td></tr>
+<tr><td>stm32f0xx_hal_i2c.c</td><td>I2C_ITAddrCplt</td><td>ISR</td><td>ADDR (3)</td><td>xác nhận address match</td><td>ACK gửi tới Master</td></tr>
+<tr><td>stm32f0xx_hal_i2c.c</td><td>I2C_Slave_ISR_IT</td><td>ISR / RXDR</td><td>RXNE (2)</td><td>tiêu thụ một byte đã nhận</td><td>không có — thuần di chuyển dữ liệu</td></tr>
+<tr><td>stm32f0xx_hal_i2c.c</td><td>I2C_Slave_ISR_IT</td><td>ISR / TXDR</td><td>TXIS (1)</td><td>cấp byte kế tiếp để truyền</td><td>byte được clock ra ở các xung SCL kế</td></tr>
+<tr><td>stm32f0xx_hal_i2c.c</td><td>I2C_Slave_ISR_IT</td><td>ISR</td><td>TCR (6)</td><td>reload cho byte kế tiếp, gọi callback app</td><td>nhả clock-stretch một khi NBYTES được ghi lại</td></tr>
+<tr><td>stm32f0xx_hal_i2c.c</td><td>I2C_ITSlaveCplt</td><td>ISR</td><td>STOPF (5)</td><td>hoàn tất transfer</td><td>không trực tiếp — bus đã stop rồi</td></tr>
+<tr><td>stm32f0xx_hal_i2c.c</td><td>HAL_I2C_ER_IRQHandler</td><td>ISR</td><td>BERR/ARLO/OVR (8/9/10)</td><td>latch error code</td><td>không trực tiếp — chỉ mang tính thông tin</td></tr>
+<tr><td>mx_init.c</td><td>MX_I2C1_Init</td><td>OAR1/OAR2/TIMINGR/CR1</td><td>nhiều</td><td>cấu hình một lần lúc boot</td><td>peripheral được cấu hình đầy đủ, chưa enable cho đến khi HAL_I2C_Init xong</td></tr>
+<tr><td>stm32f0xx_hal_msp.c</td><td>HAL_I2C_MspInit</td><td>GPIO AFR, RCC APB1ENR, NVIC</td><td>AF1, I2C1EN, IRQ enable</td><td>setup pin mux + clock gate + đường ngắt</td><td>các chân trở thành I2C SCL/SDA về điện</td></tr>
+</tbody>
+</table></div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Giữ loại matrix này được cập nhật khi bạn đọc source mới — nó trở thành công cụ tra cứu nhanh nhất của bạn cho phần đời còn lại của dự án.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 25 WAVEFORM / LOGIC ANALYZER ============================================================ -->
+<section class="chapter" id="ch25">
+<div class="kicker">25</div>
+<h2>Waveform Analysis / Đọc Capture Logic Analyzer</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là tầng sự thật gốc cho debug — một capture không bao giờ nói dối về điều thực sự xảy ra trên dây, ngay cả khi giả định trong code của bạn nói dối.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 640 70" font-size="11"><style>text{fill:currentColor;} .b{fill:none;stroke:currentColor;stroke-opacity:.5;}</style>
+<g>
+<rect class="b" x="5"   y="15" width="70" height="30"/><text x="40" y="34" text-anchor="middle">START</text>
+<rect class="b" x="80"  y="15" width="80" height="30"/><text x="120" y="34" text-anchor="middle">ADDRESS</text>
+<rect class="b" x="165" y="15" width="55" height="30"/><text x="192" y="34" text-anchor="middle">ACK</text>
+<rect class="b" x="225" y="15" width="90" height="30"/><text x="270" y="34" text-anchor="middle">REGISTER</text>
+<rect class="b" x="320" y="15" width="55" height="30"/><text x="347" y="34" text-anchor="middle">ACK</text>
+<rect class="b" x="380" y="15" width="70" height="30"/><text x="415" y="34" text-anchor="middle">DATA</text>
+<rect class="b" x="455" y="15" width="90" height="30"/><text x="500" y="34" text-anchor="middle">ACK/NACK</text>
+<rect class="b" x="550" y="15" width="70" height="30"/><text x="585" y="34" text-anchor="middle">STOP</text>
+</g></svg>
+<figcaption>Hình 25.1 — cấu trúc cấp-byte mong đợi của một transaction đúng chuẩn, để so sánh với một capture thật.</figcaption>
+</div>
+
+<h3>Checklist đọc capture</h3>
+<div class="table-wrap"><table><tr><th>Kiểm tra</th><th>Nếu sai, điều đó nói lên điều gì</th></tr>
+<tr><td>☐ START tồn tại</td><td>nếu hoàn toàn thiếu, phía Master chưa từng thử một transaction — kiểm tra code gọi, không phải slave</td></tr>
+<tr><td>☐ Byte địa chỉ đúng</td><td>so byte đã capture với <code>(addr 7-bit &lt;&lt; 1) | RW</code>, không phải giá trị 7-bit gốc</td></tr>
+<tr><td>☐ Bit R/W đúng</td><td>một Read khi định làm Write (hoặc ngược lại) thường nghĩa là nhầm lẫn bit-0 trong code gọi</td></tr>
+<tr><td>☐ ACK tồn tại sau địa chỉ</td><td>thiếu ACK = không có thiết bị trả lời địa chỉ đó — có thể do sai địa chỉ, thiết bị mất kết nối, hoặc slave đã chết</td></tr>
+<tr><td>☐ Byte register đúng</td><td>so với register map của bạn (§24) — một byte lệch một so với mong đợi thường nghĩa là lệch enum/offset</td></tr>
+<tr><td>☐ Data đúng</td><td>nếu mọi byte protocol đều đúng nhưng data sai, lỗi hầu như chắc chắn nằm ở diễn giải cấp application, không phải bản thân bus</td></tr>
+<tr><td>☐ STOP tồn tại</td><td>một transaction không bao giờ có STOP sẽ giữ bus vô thời hạn — tìm một Master bị treo hoặc một ISR không bao giờ tới đường completion của nó</td></tr>
+<tr><td>☐ Timing đúng</td><td>so chu kỳ SCL với setting clock/speed đã cấu hình (§7) — lệch ở đây giải thích triệu chứng "hoạt động ở 100kHz, fail ở 400kHz"</td></tr>
+</table></div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Luôn so một capture với cấu trúc cấp-byte mong đợi từng field một, theo thứ tự — không nhìn lướt toàn bộ trace một lần.</li>
+<li>Một capture logic analyzer là cách nhanh nhất để xác định tầng nào (điện, protocol, hay application) thực sự chịu trách nhiệm cho một lỗi.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 26 DEBUGGING ============================================================ -->
+<section class="chapter" id="ch26">
+<div class="kicker">26</div>
+<h2>I2C Debugging Playbook</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Một cây quyết định có cấu trúc biến "I2C bị hỏng" — một câu nói không thể kiểm chứng — thành một chuỗi ngắn các kiểm tra có thể kiểm chứng.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 460 260" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.45;}</style>
+<rect class="b" x="130" y="10" width="200" height="30" rx="15"/><text x="230" y="30" text-anchor="middle" font-weight="700">Transaction I2C fail</text>
+<line class="l" x1="230" y1="40" x2="230" y2="55"/>
+<rect class="b" x="90" y="55" width="280" height="30" rx="4"/><text x="230" y="75" text-anchor="middle">SDA/SCL có toggle không?</text>
+<line class="l" x1="150" y1="85" x2="80" y2="115"/><text x="105" y="105" font-size="10">KHÔNG</text>
+<line class="l" x1="310" y1="85" x2="380" y2="115"/><text x="345" y="105" font-size="10">CÓ</text>
+<rect class="b" x="10" y="115" width="150" height="60" rx="4"/><text x="85" y="135" text-anchor="middle">Kiểm tra clock enable,</text><text x="85" y="152" text-anchor="middle">pinmux (§8), GPIO</text><text x="85" y="169" text-anchor="middle">config, bit PE</text>
+<rect class="b" x="300" y="115" width="150" height="60" rx="4"/><text x="375" y="135" text-anchor="middle">Kiểm tra địa chỉ,</text><text x="375" y="152" text-anchor="middle">ACK/NACK, byte</text><text x="375" y="169" text-anchor="middle">register, data, timing</text>
+</svg>
+<figcaption>Hình 26.1 — nhánh rẽ đầu tiên trong cây debug: điện vs protocol/logic.</figcaption>
+</div>
+
+<pre><code>Không có waveform nào cả
+  → Kiểm tra clock enable, GPIO AF/pinmux, bit PE
+Có waveform, không bao giờ thấy START
+  → Kiểm tra code gọi có thực sự chạy — breakpoint trước lời gọi transfer
+Có START, không có ACK sau địa chỉ
+  → Sai địa chỉ, thiết bị mất kết nối, hoặc slave chưa init
+Address được ACK, chọn sai register
+  → So với register map — lệch enum/offset
+Register đúng, data sai
+  → Lỗi diễn giải cấp application, không phải lỗi bus
+Không bao giờ thấy STOP
+  → Master bị treo, hoặc một ISR không bao giờ tới đường completion
+Bus kẹt (SDA hoặc SCL giữ LOW vô thời hạn)
+  → Vấn đề tầng vật lý — cần bus recovery (§20), không phải software reset</code></pre>
+
+<h3>Card lỗi theo từng trường hợp</h3>
+<div class="card-grid">
+
+<div class="fcard"><h5>Không có waveform nào cả</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>SDA/SCL nằm phẳng, không hoạt động ngay cả ở mức idle</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Clock peripheral chưa enable, GPIO chưa mux tới AF, bit PE chưa bao giờ set</dd>
+<dt>Bằng chứng</dt><dd>Trace chỉ có DC; điện áp idle có thể thậm chí là 0V thay vì HIGH được kéo lên</dd>
+<dt>Bước debug</dt><dd>Kiểm tra register clock-enable của RCC, register AFR của GPIO, CR1.PE của peripheral</dd>
+<dt>Cách sửa</dt><dd>Sửa lỗi thứ tự init hoặc pinmux (§8, §9)</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>Không có ACK</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>START và byte địa chỉ xuất hiện, đường dây không bao giờ bị kéo xuống LOW ở khe ACK</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Sai địa chỉ (lệch shift, §4), thiết bị chưa có nguồn, thiết bị chưa init</dd>
+<dt>Bằng chứng</dt><dd>Capture cho thấy rõ giá trị byte địa chỉ — so từng byte</dd>
+<dt>Bước debug</dt><dd>Tính lại byte trên dây mong đợi từ địa chỉ 7-bit; quét bus tìm thiết bị nào có ACK</dd>
+<dt>Cách sửa</dt><dd>Sửa địa chỉ hoặc wiring</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>Chọn sai register</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Địa chỉ đúng, ACK khắp nơi, nhưng register sai trên thiết bị phản hồi</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Lệch-một trong bảng offset register, lệch enum giữa hai phía của protocol</dd>
+<dt>Bằng chứng</dt><dd>So byte register đã capture với register map (§24)</dd>
+<dt>Bước debug</dt><dd>Log/trace giá trị byte thật tại điểm nó rời khỏi application code</dd>
+<dt>Cách sửa</dt><dd>Sửa offset/enum</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>Data sai</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Tầng protocol trông hoàn hảo (địa chỉ, register, ACK, STOP) nhưng giá trị sai</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Lệch endianness, sai scale/đơn vị, buffer cũ, lỗi logic application</dd>
+<dt>Bằng chứng</dt><dd>Capture cấp bus sạch — lỗi hoàn toàn không phải điện hay protocol</dd>
+<dt>Bước debug</dt><dd>Trace giá trị từ thời điểm nó được đọc ra khỏi RXDR về sau</dd>
+<dt>Cách sửa</dt><dd>Sửa application code, không phải sửa driver</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>SDA kẹt LOW</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Bus không bao giờ trở lại HIGH ngay cả khi không có hoạt động clock</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Một slave crash giữa byte đang giữ đường dây; một short phần cứng</dd>
+<dt>Bằng chứng</dt><dd>Đo DC bằng oscilloscope, không phải decode protocol logic-analyzer</dd>
+<dt>Bước debug</dt><dd>Rút từng thiết bị để cô lập; kiểm tra firmware của bạn có code bus-recovery không (§20)</dd>
+<dt>Cách sửa</dt><dd>Triển khai bus-recovery bằng clock, hoặc cắt nguồn thiết bị gây lỗi</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>SCL kẹt LOW</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Đường clock giữ LOW vô thời hạn — thường do clock-stretching quá mức/kẹt</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>ISR của một slave bị kẹt hoặc quá chậm, hoặc một slave crash trong lúc stretch</dd>
+<dt>Bằng chứng</dt><dd>So với ngưỡng timeout của chính bạn (§18/§19) — chúng có nổ không?</dd>
+<dt>Bước debug</dt><dd>Kiểm tra một ISR ưu tiên cao hơn ở nơi khác có làm đói ISR I2C không</dd>
+<dt>Cách sửa</dt><dd>Sửa priority/latency ISR, hoặc triển khai bus recovery</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>Lỗi ngẫu nhiên/thỉnh thoảng</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Hoạt động đa số thời gian, thỉnh thoảng fail không có pattern rõ ràng</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Timing biên (rise time gần giới hạn), main-loop thỉnh thoảng bị block quá lâu, nhiễu</dd>
+<dt>Bằng chứng</dt><dd>Log mỗi sự kiện reset/lỗi với một cause code và so với hoạt động subsystem khác</dd>
+<dt>Bước debug</dt><dd>Kiểm tra bất kỳ lời gọi block dài nào ở nơi khác trong cùng execution context</dd>
+<dt>Cách sửa</dt><dd>Loại bỏ/rút ngắn lời gọi block, hoặc thêm margin vào cấu hình timing</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>100 kHz hoạt động, 400 kHz fail</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Code và wiring giống hệt, chỉ đổi setting tốc độ</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Vượt ngân sách rise-time ở tốc độ nhanh hơn (§2), hoặc timing register không thực sự được chỉnh theo tốc độ</dd>
+<dt>Bằng chứng</dt><dd>Đo rise time SCL thật so với tối đa của spec cho mode mục tiêu</dd>
+<dt>Bước debug</dt><dd>Xác nhận preset timing register cho tốc độ mới thực sự được áp dụng, không bị giữ ở giá trị của mode khác</dd>
+<dt>Cách sửa</dt><dd>Pull-up mạnh hơn, bus ngắn hơn/dung kháng thấp hơn, hoặc preset timing đúng</dd>
+</dl></div></div>
+
+<div class="fcard"><h5>Hoạt động sau reset, fail sau N transaction</h5><div class="body"><dl>
+<dt>Triệu chứng</dt><dd>Sạch lúc boot, xuống cấp theo thời gian/sử dụng</dd>
+<dt>Nguyên nhân khả dĩ</dt><dd>Một bit status latch không bao giờ clear, một resource rò rỉ, một counter tích lũy tràn</dd>
+<dt>Bằng chứng</dt><dd>So snapshot đầy đủ state driver trước và sau nhiều transaction</dd>
+<dt>Bước debug</dt><dd>Watchpoint trên mọi field mà hàm "reset/init" phải clear — xác minh mỗi field thực sự được clear</dd>
+<dt>Cách sửa</dt><dd>Thêm bước reset còn thiếu</dd>
+</dl></div></div>
+
+</div>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Luôn chia chẩn đoán tại "có gì đang xảy ra về điện hay không" trước khi đi vào debug cấp protocol.</li>
+<li>Một lỗi sạch ở tầng protocol nhưng sai về giá trị là lỗi application, không phải lỗi driver — không tiếp tục debug sai tầng.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 27 SOURCE CODE REVIEW ============================================================ -->
+<section class="chapter" id="ch27">
+<div class="kicker">27</div>
+<h2>Source Code Review</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Một review chỉ có giá trị khi mọi khẳng định được hậu thuẫn bằng bằng chứng bạn có thể tự kiểm tra lại — nên mỗi finding dưới đây nêu rõ bằng chứng và rủi ro thực sự của nó, không phải một cảm nhận mơ hồ.</div>
+
+<details open><summary>Finding 1 — fallthrough giữa case NACK và ACK</summary><div class="details-body">
+<p><strong>Quan sát:</strong> case "generate NACK" trong hàm control không có <code>break</code> trước khi rơi xuống case "generate ACK".</p>
+<p><strong>Bằng chứng:</strong> đọc trực tiếp từ source — case NACK gọi macro NACK, rồi rơi thẳng vào code cũng (vô điều kiện) ghi lại field byte-count.</p>
+<p><strong>Rủi ro khả dĩ:</strong> nhìn thoáng qua giống lỗi thiếu <code>break</code>, nhưng có khả năng là cố ý — NACK cũng cần field byte-count được ghi lại để đóng đúng khung reload hiện tại. Một "fix" thiện chí thêm <code>break</code> ở đây mà không hiểu ý đồ có thể âm thầm phá vỡ cơ chế reload.</p>
+</div></details>
+
+<details><summary>Finding 2 — một hàm "chuyển mode" chỉ đổi một biến không ai đọc</summary><div class="details-body">
+<p><strong>Quan sát:</strong> một hàm có tên và comment mô tả việc chuyển đổi hành vi ACK phần cứng thực ra chỉ ghi một cờ toàn cục không có code nào khác từng đọc, trong nhánh được biên dịch vào bản build thật.</p>
+<p><strong>Bằng chứng:</strong> điều kiện preprocessor (<code>#if 1 / #else</code>) — nhánh có tác dụng thật ở cấp register bị loại khỏi biên dịch vĩnh viễn.</p>
+<p><strong>Rủi ro khả dĩ:</strong> rủi ro bảo trì cao — một người bảo trì tương lai tin vào tên hàm/comment hơn nhánh thực sự được biên dịch có thể đưa ra giả định tự tin nhưng sai về hành vi runtime. Điểm cứu vãn trong trường hợp cụ thể này là hành vi thực sự cần thiết đến từ nơi khác (cấu hình mặc định của chính vendor HAL), nhưng đó là tình cờ, không phải theo thiết kế.</p>
+</div></details>
+
+<details><summary>Finding 3 — logic phân loại IRQ trùng lặp, chết</summary><div class="details-body">
+<p><strong>Quan sát:</strong> một bản sao thứ hai của logic "phân loại event vs error, rồi dispatch" tồn tại trong file driver hướng application, được bọc trong các hàm không bao giờ thực sự được cài làm vector ngắt thật.</p>
+<p><strong>Bằng chứng:</strong> không có tham chiếu nào tới tên các hàm wrapper đó ở bất kỳ đâu ngoài chính định nghĩa của chúng; vector thật là một hàm viết tay trong một file khác, tự lặp lại cùng logic một cách độc lập.</p>
+<p><strong>Rủi ro khả dĩ:</strong> nếu một trong hai bản bị sửa (ví dụ thêm một cờ lỗi mới) mà không sửa bản còn lại, bản chết âm thầm lệch khỏi đồng bộ — vô hại hôm nay, gây nhầm lẫn cho người đọc kế tiếp, và là một lỗi ẩn nếu bản chết vô tình bị nối vào trong một lần refactor tương lai.</p>
+</div></details>
+
+<details><summary>Finding 4 — một API Master được triển khai đầy đủ nhưng hoàn toàn không dùng</summary><div class="details-body">
+<p><strong>Quan sát:</strong> các hàm transmit/receive master-mode và preset tốc độ bus được triển khai đầy đủ nhưng không bao giờ được gọi từ bất kỳ đường application code nào trong cả hai firmware image.</p>
+<p><strong>Bằng chứng:</strong> tìm kiếm toàn diện xác nhận không có call site nào cho các entry point master-mode hay lời gọi control tốc độ bus.</p>
+<p><strong>Rủi ro khả dĩ:</strong> không phải lỗi hôm nay, nhưng register timing clock của peripheral được cấu hình với một giá trị chỉ hợp lý cho hoạt động Slave-mode — một bản firmware tương lai bắt đầu gọi API Master mà không sửa luôn cấu hình timing sẽ âm thầm chạy với một tần số SCL không hợp lệ/không xác định.</p>
+</div></details>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Mọi finding review ở đây tách riêng quan sát, bằng chứng của nó, và rủi ro thực sự (không giả định) — một review thiếu sự tách biệt đó chỉ là ý kiến cá nhân.</li>
+<li>Dead code và tên gây hiểu lầm đều là rủi ro bảo trì thật, ngay cả khi chúng gây ra 0 lỗi chức năng hôm nay.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 28 MENTAL MODEL ============================================================ -->
+<section class="chapter" id="ch28">
+<div class="kicker">28</div>
+<h2>I2C Mental Model</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Đây là section để đọc lại mỗi khi bạn bị lạc — nó trả lời, từ đầu đến cuối, hai câu hỏi thực sự quan trọng khi làm việc với firmware I2C.</div>
+
+<div class="diagram">
+<svg viewBox="0 0 460 380" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.45;}</style>
+<rect class="b" x="120" y="10" width="220" height="30"/><text x="230" y="30" text-anchor="middle" font-weight="700">I2C TRANSACTION</text>
+<line class="l" x1="230" y1="40" x2="230" y2="55"/>
+<rect class="b" x="120" y="60" width="220" height="30"/><text x="230" y="80" text-anchor="middle">I2C PROTOCOL</text>
+<line class="l" x1="230" y1="90" x2="230" y2="105"/>
+<rect class="b" x="70" y="110" width="320" height="30"/><text x="230" y="130" text-anchor="middle">MCU I2C PERIPHERAL</text>
+<line class="l" x1="130" y1="140" x2="130" y2="160"/><line class="l" x1="230" y1="140" x2="230" y2="160"/><line class="l" x1="330" y1="140" x2="330" y2="160"/>
+<rect class="b" x="70" y="162" width="120" height="28"/><text x="130" y="181" text-anchor="middle">CONTROL</text>
+<rect class="b" x="190" y="162" width="80" height="28"/><text x="230" y="181" text-anchor="middle">STATUS</text>
+<rect class="b" x="270" y="162" width="120" height="28"/><text x="330" y="181" text-anchor="middle">DATA</text>
+<line class="l" x1="130" y1="190" x2="230" y2="205"/><line class="l" x1="330" y1="190" x2="230" y2="205"/>
+<rect class="b" x="150" y="207" width="160" height="28"/><text x="230" y="226" text-anchor="middle">INTERRUPT</text>
+<line class="l" x1="230" y1="235" x2="230" y2="255"/>
+<rect class="b" x="120" y="257" width="220" height="28"/><text x="230" y="276" text-anchor="middle">I2C DRIVER</text>
+<line class="l" x1="230" y1="285" x2="230" y2="305"/>
+<rect class="b" x="120" y="307" width="220" height="28"/><text x="230" y="326" text-anchor="middle" font-weight="700">APPLICATION</text>
+</svg>
+<figcaption>Hình 28.1 — cột sống của mental model: mọi thứ một transaction chạm tới, từ trên xuống dưới.</figcaption>
+</div>
+
+<h3>Khi application gọi một I2C Read — 10 câu hỏi, trả lời theo thứ tự</h3>
+<ol>
+<li><strong>Hàm nào thực thi?</strong> Entry point read/receive của driver — cấu hình con trỏ buffer, độ dài, và mode, rồi bàn giao cho peripheral.</li>
+<li><strong>State nào thay đổi?</strong> Field transfer-state của chính driver chuyển từ idle/ready sang "busy receiving" (hoặc, với slave, "listening").</li>
+<li><strong>Register nào được ghi?</strong> Các field control register: địa chỉ (master mode) hoặc không có gì (slave, đã cấu hình own-address lúc init), byte count, bit start/mode.</li>
+<li><strong>Hardware làm gì?</strong> State machine bắt đầu lái (master) hoặc chờ (slave) một điều kiện START, và arm logic address-match/byte-transfer.</li>
+<li><strong>Điều gì xảy ra trên SDA/SCL?</strong> START, byte địa chỉ + ACK, rồi các byte data được clock vào từng cái một, mỗi cái theo sau bởi một khe ACK/NACK.</li>
+<li><strong>Ngắt nào xảy ra?</strong> Một cho mỗi sự kiện quan trọng — address match, nhận byte, transfer complete/reload, STOP — không phải một ngắt "done" khổng lồ duy nhất ở cuối (trừ khi DMA đang buffer nội bộ).</li>
+<li><strong>Bit status nào thay đổi?</strong> Cờ tương ứng trong status register (ADDR, RXNE, TCR, STOPF, v.v.) set, được đọc, và được clear tường minh bởi ISR.</li>
+<li><strong>ISR làm gì?</strong> Đọc data register vào buffer của driver, cập nhật ghi chép số byte còn lại, và — một khi transfer thực sự hoàn tất — gọi một callback completion.</li>
+<li><strong>Driver tiếp tục thế nào?</strong> Callback completion chuyển state của driver về lại idle/ready và (trong nhiều thiết kế) bàn giao quyền kiểm soát lại cho một consumer main-loop thay vì làm thêm việc trong chính ISR.</li>
+<li><strong>Data đến RAM như thế nào?</strong> Từng byte một, bên trong ISR, khi mỗi byte được đọc ra khỏi data register vào buffer do caller cung cấp — data đã nằm trong RAM từ lâu trước khi sự kiện "transfer complete" thậm chí nổ cho byte cuối.</li>
+</ol>
+
+<h3>"Nếu I2C bị treo, tôi bắt đầu từ đâu?"</h3>
+<ol>
+<li>Đo các chân vật lý trước — HIGH lúc idle? Có START/STOP nào không?</li>
+<li>Nếu chết về điện: kiểm tra clock-enable, pinmux, bit enable peripheral.</li>
+<li>Nếu còn sống về điện nhưng kẹt giữa transaction: kiểm tra state cấp ISR (cờ status, error code đã latch).</li>
+<li>Nếu ISR trông đúng nhưng không có gì tiến triển: kiểm tra consumer main-loop/task được cho là phản ứng với state đã latch bởi ISR có thực sự đang chạy không (không bị block ở nơi khác).</li>
+<li>Nếu mọi thứ trên đều ổn nhưng vẫn treo lâu dài: kiểm tra logic timeout của bạn có thực sự nổ không, và nếu có, khôi phục nó kích hoạt có đủ không — hay bạn cần bus recovery thật (§20) thay vì một peripheral reset.</li>
+</ol>
+
+<div class="takeaways"><h4>Điểm cốt lõi</h4><ul>
+<li>Data đến RAM dần dần, bên trong ISR, từ lâu trước khi transaction chính thức "hoàn tất."</li>
+<li>Debug một treo luôn bắt đầu ở tầng vật lý và đi vào trong — không bao giờ theo hướng ngược lại.</li>
+</ul></div>
+</section>
+
+<!-- ============================================================ 29 KNOWLEDGE CHECK ============================================================ -->
+<section class="chapter" id="ch29">
+<div class="kicker">29</div>
+<h2>I2C Knowledge Check</h2>
+<div class="callout why"><span class="tag">Tại sao điều này quan trọng?</span>Có thể trả lời những câu này từ trí nhớ là một ngưỡng hợp lý cho "giờ tôi có thể đọc driver I2C của một MCU lạ mà không cần trợ giúp."</div>
+
+<h3>Beginner (Cơ bản)</h3>
+<div id="quiz-beg"></div>
+<h3>Intermediate (Trung cấp)</h3>
+<div id="quiz-int"></div>
+<h3>Advanced (Nâng cao)</h3>
+<div id="quiz-adv"></div>
+<h3>Expert (Chuyên gia)</h3>
+<div id="quiz-exp"></div>
+</section>
+
+<!-- ============================================================ 30 CHEAT SHEET ============================================================ -->
+<section class="chapter" id="ch30">
+<div class="kicker">30</div>
+<h2>Final Cheat Sheet</h2>
+
+<div class="table-wrap"><table>
+<tr><th>Protocol</th><th>Registers</th><th>Driver</th><th>Debug</th></tr>
+<tr>
+<td>START<br>ADDRESS<br>R/W<br>ACK<br>DATA<br>ACK/NACK<br>Repeated START<br>STOP</td>
+<td>CONTROL (CR1/CR2)<br>STATUS (ISR)<br>DATA (TXDR/RXDR)<br>CLOCK (TIMINGR)<br>OWN ADDRESS (OAR1/OAR2)</td>
+<td>INIT<br>START/transfer<br>WRITE<br>READ<br>STOP/complete<br>ISR dispatch<br>ERROR latch<br>RECOVERY (reset)</td>
+<td>CLOCK enable<br>PINMUX / AF<br>PULL-UP có<br>Byte ADDRESS đúng<br>Có ACK<br>Byte REGISTER đúng<br>WAVEFORM đúng mong đợi<br>TIMEOUT có nổ?<br>Cần BUS RECOVERY?</td>
+</tr>
+</table></div>
+
+<div class="diagram">
+<svg viewBox="0 0 380 470" font-size="12"><style>.b{fill:none;stroke:currentColor;stroke-opacity:.6;} text{fill:currentColor;} .l{stroke:currentColor;stroke-opacity:.45;}</style>
+<rect class="b" x="80" y="10" width="220" height="30"/><text x="190" y="30" text-anchor="middle" font-weight="700">APPLICATION</text>
+<line class="l" x1="190" y1="40" x2="190" y2="55"/>
+<rect class="b" x="80" y="60" width="220" height="30"/><text x="190" y="80" text-anchor="middle">I2C API</text>
+<line class="l" x1="190" y1="90" x2="190" y2="105"/>
+<rect class="b" x="80" y="110" width="220" height="30"/><text x="190" y="130" text-anchor="middle">I2C DRIVER</text>
+<line class="l" x1="130" y1="140" x2="130" y2="160"/><line class="l" x1="250" y1="140" x2="250" y2="160"/>
+<rect class="b" x="30" y="162" width="150" height="28"/><text x="105" y="181" text-anchor="middle">STATE MACHINE</text>
+<rect class="b" x="200" y="162" width="150" height="28"/><text x="275" y="181" text-anchor="middle">ISR / DMA</text>
+<line class="l" x1="105" y1="190" x2="190" y2="205"/><line class="l" x1="275" y1="190" x2="190" y2="205"/>
+<rect class="b" x="80" y="207" width="220" height="28"/><text x="190" y="226" text-anchor="middle">I2C REGISTERS</text>
+<line class="l" x1="190" y1="235" x2="190" y2="250"/>
+<rect class="b" x="80" y="252" width="220" height="28"/><text x="190" y="271" text-anchor="middle">MCU I2C PERIPHERAL</text>
+<line class="l" x1="190" y1="280" x2="190" y2="295"/>
+<rect class="b" x="80" y="297" width="220" height="28"/><text x="190" y="316" text-anchor="middle">PINMUX / GPIO</text>
+<line class="l" x1="190" y1="325" x2="190" y2="340"/>
+<rect class="b" x="80" y="342" width="220" height="28"/><text x="190" y="361" text-anchor="middle">SDA / SCL</text>
+<line class="l" x1="190" y1="370" x2="190" y2="385"/>
+<rect class="b" x="80" y="387" width="220" height="28"/><text x="190" y="406" text-anchor="middle" font-weight="700">I2C SLAVE</text>
+</svg>
+<figcaption>Hình 30.1 — sơ đồ kiến trúc cuối cùng, đầy đủ: mọi tầng tài liệu này bao quát, trong một hình duy nhất.</figcaption>
+</div>
+
+<footer>I2C MCU Engineering Knowledge Base — xây dựng từ source firmware thật, có trích dẫn (driver I2C slave-mode STM32F0) kết hợp với kiến thức nền I2C/MCU tổng quát. Một file HTML tự chứa duy nhất: không build step, không CDN, không backend.</footer>
+</section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- Theme ---------------- */
+var root = document.documentElement;
+var themeBtn = document.getElementById('theme-toggle');
+function applyTheme(t){
+  root.setAttribute('data-theme', t);
+  themeBtn.textContent = t === 'dark' ? '☀️ Sáng' : '🌙 Tối';
+  try{ localStorage.setItem('i2ckb-theme', t); }catch(e){}
+}
+var savedTheme = 'light';
+try{ savedTheme = localStorage.getItem('i2ckb-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }catch(e){}
+applyTheme(savedTheme);
+themeBtn.addEventListener('click', function(){
+  applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+});
+
+/* ---------------- TOC generation ---------------- */
+var groups = [
+  {label:"Tổng quan", items:[["hero","Tổng quan"]]},
+  {label:"Nền tảng", items:[["ch01","01 Fundamentals"],["ch02","02 Physical Layer"],["ch03","03 Protocol"],["ch04","04 Addressing"]]},
+  {label:"Hardware", items:[["ch05","05 MCU Peripheral"],["ch06","06 Registers"],["ch07","07 Clock Config"],["ch08","08 GPIO / Pinmux"],["ch09","09 Initialization"]]},
+  {label:"Control Flow", items:[["ch10","10 State Machine"],["ch11","11 Interrupt"],["ch12","12 Polling"],["ch13","13 DMA"]]},
+  {label:"Transaction", items:[["ch14","14 Write"],["ch15","15 Read"],["ch16","16 Combined"],["ch17","17 ACK / NACK"]]},
+  {label:"Độ tin cậy", items:[["ch18","18 Error Handling"],["ch19","19 Timeout"],["ch20","20 Bus Recovery"],["ch21","21 RTOS / Concurrency"]]},
+  {label:"Phân tích Source", items:[["ch22","22 Source Architecture"],["ch23","23 Call Graph / Trace"],["ch24","24 Register Mapping"]]},
+  {label:"Debug", items:[["ch25","25 Waveform Analysis"],["ch26","26 Debug Playbook"],["ch27","27 Source Review"]]},
+  {label:"Tổng hợp", items:[["ch28","28 Mental Model"],["ch29","29 Knowledge Check"],["ch30","30 Cheat Sheet"]]}
+];
+var toc = document.getElementById('toc');
+var allLinks = [];
+groups.forEach(function(g){
+  var h = document.createElement('h5'); h.textContent = g.label; toc.appendChild(h);
+  g.items.forEach(function(it){
+    var a = document.createElement('a');
+    a.href = '#'+it[0]; a.textContent = it[1]; a.dataset.target = it[0];
+    toc.appendChild(a); allLinks.push(a);
+  });
+});
+
+/* ---------------- Sidebar active-section highlight ---------------- */
+var sections = Array.prototype.slice.call(document.querySelectorAll('main section.chapter'));
+function setActive(id){
+  allLinks.forEach(function(a){ a.classList.toggle('active', a.dataset.target === id); });
+}
+var io = new IntersectionObserver(function(entries){
+  var visible = entries.filter(function(e){return e.isIntersecting;})
+                        .sort(function(a,b){return a.boundingClientRect.top - b.boundingClientRect.top;});
+  if(visible.length) setActive(visible[0].target.id);
+}, {rootMargin:"-15% 0px -70% 0px", threshold:0});
+sections.forEach(function(s){ io.observe(s); });
+
+/* ---------------- Reading progress bar ---------------- */
+var bar = document.getElementById('progress-bar');
+function updateProgress(){
+  var doc = document.documentElement;
+  var scrollTop = window.scrollY || doc.scrollTop;
+  var height = doc.scrollHeight - doc.clientHeight;
+  var pct = height > 0 ? Math.min(100, Math.round((scrollTop/height)*100)) : 0;
+  bar.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, {passive:true});
+updateProgress();
+
+/* ---------------- Mobile sidebar ---------------- */
+var sidebar = document.getElementById('sidebar');
+document.getElementById('hamburger').addEventListener('click', function(){
+  sidebar.classList.toggle('open');
+});
+allLinks.forEach(function(a){
+  a.addEventListener('click', function(){ sidebar.classList.remove('open'); });
+});
+
+/* ---------------- Copy buttons ---------------- */
+document.querySelectorAll('pre').forEach(function(pre){
+  if(pre.closest('.code-block')) return; /* already wrapped */
+  var wrap = document.createElement('div'); wrap.className='code-block';
+  var head = document.createElement('div'); head.className='code-head';
+  var lbl = document.createElement('span'); lbl.textContent='code';
+  var btn = document.createElement('button'); btn.className='copy-btn'; btn.textContent='Sao chép';
+  head.appendChild(lbl); head.appendChild(btn);
+  pre.parentNode.insertBefore(wrap, pre);
+  wrap.appendChild(head); wrap.appendChild(pre);
+});
+document.querySelectorAll('.code-block').forEach(function(block){
+  var btn = block.querySelector('.copy-btn');
+  var pre = block.querySelector('pre');
+  if(!btn || !pre) return;
+  btn.addEventListener('click', function(){
+    var text = pre.innerText;
+    var done = function(){ var old=btn.textContent; btn.textContent='Đã sao chép!'; setTimeout(function(){btn.textContent=old==='Đã sao chép!'?'Sao chép':old;},1200); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){ fallbackCopy(text); done(); });
+    } else {
+      fallbackCopy(text); done();
+    }
+  });
+});
+function fallbackCopy(text){
+  var ta = document.createElement('textarea'); ta.value = text;
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+}
+
+/* ---------------- Quiz rendering ---------------- */
+var QUIZ = {
+  beg: [
+    ["Vì sao I2C cần điện trở pull-up?","Vì mọi output I2C là open-drain — nó chỉ có thể kéo LOW, không bao giờ lái HIGH. Điện trở pull-up chính là thứ thực sự tạo ra mức HIGH."],
+    ["Sự khác biệt giữa START và STOP là gì?","START = SDA giảm khi SCL cao. STOP = SDA tăng khi SCL cao. Cùng điều kiện tiên quyết (SCL cao), hướng ngược lại."],
+    ["Ai tạo ACK khi Master đang ghi vào Slave?","Slave — nó là bên nhận trong giai đoạn đó, và bên nhận luôn điều khiển ACK/NACK."],
+    ["Repeated START dùng để làm gì?","Đổi hướng transaction hoặc thiết bị đích mà không release bus, để không traffic nào khác chen vào."],
+    ["Vì sao địa chỉ I2C thường được biểu diễn bằng 7 bit?","Vì bit thứ 8 của byte địa chỉ trên dây được dành riêng cho cờ Read/Write."],
+    ["0x50 là địa chỉ thiết bị: byte nào được gửi cho một Write?","0xA0 — (0x50 << 1) | 0."],
+    ["0x50 là địa chỉ thiết bị: byte nào được gửi cho một Read?","0xA1 — (0x50 << 1) | 1."],
+    ["Điều gì có nghĩa khi không thiết bị nào ACK byte địa chỉ?","Không có thiết bị nào trên bus nhận ra địa chỉ đó — thường là sai địa chỉ, thiết bị mất kết nối, hoặc slave chưa init."],
+    ["Clock stretching là gì?","Một Slave giữ SCL ở mức LOW để bắt Master chờ, cho chính nó thêm thời gian trước bit/byte kế tiếp."],
+    ["Hai thiết bị có thể an toàn cùng kéo SDA xuống LOW cùng lúc không?","Có — vì cả hai đều open-drain, kết quả đơn giản là LOW; không có xung đột điện, khác với hai output push-pull bất đồng nhau."]
+  ],
+  int: [
+    ["Trong firmware case study, MCU đóng vai Master hay Slave? Bằng chứng là gì?","Chỉ Slave — mode nội bộ mặc định của driver là Slave và không hàm transmit/receive master-mode nào từng được gọi từ application code."],
+    ["Hai Own Address của firmware này là gì?","122 (0x7A) và 124 (0x7C), cả hai 7-bit, cả hai đổ vào đúng một máy trạng thái nhận."],
+    ["Vì sao chân GPIO I2C phải cấu hình Alternate-Function Open-Drain, không phải push-pull?","Push-pull sẽ cho MCU chủ động lái HIGH, có thể đoản mạch với một thiết bị khác đang kéo LOW, và phá vỡ ngữ nghĩa clock-stretching/arbitration."],
+    ["Hành động phần cứng nào thực sự xảy ra khi clear cờ status ADDR?","Nó khiến peripheral truyền ACK trở lại cho Master — không phải một xác nhận thụ động của ngắt."],
+    ["NOSTRETCH = DISABLE thực sự nghĩa là gì, dù tên gây hiểu nhầm?","Clock stretching vẫn BẬT — tên field là 'NoStretchMode', nên disable mode đó nghĩa là hành vi stretch bình thường được giữ lại."],
+    ["Vì sao SCLH=SCLL=0 trong một timing register có thể chấp nhận được trong một số firmware thật?","Chỉ khi peripheral không bao giờ tự tạo SCL của nó — nghĩa là nó hoạt động hoàn toàn như Slave, nơi timing SCL do Master bên ngoài định đoạt."],
+    ["Vì sao 'NBYTES' bị hard-code thành 1 trong một driver slave dựa trên reload?","Vì nó arm đúng một byte thêm cho mỗi ngắt reload, khớp với thiết kế ACK/NACK thủ công từng-byte."],
+    ["Sự khác biệt thực tế giữa khôi phục cấp-bus và reset phần mềm cấp-peripheral là gì?","Khôi phục cấp-bus toggle SCL bằng GPIO thật để giải phóng một thiết bị kẹt; reset peripheral chỉ reset logic I2C nội bộ của MCU và không làm gì với một đường dây kẹt vật lý."],
+    ["Vì sao bạn không bao giờ nên tin tên một hàm hơn nhánh được biên dịch của nó?","Vì preprocessor guard (#if 0/#if 1) có thể làm hành vi thật của một hàm hoàn toàn khác với tên và comment của nó gợi ý."],
+    ["Vì sao 'AF' (nhận NACK) đôi khi bị chủ động loại khỏi một error mask tổng quát?","Vì một NACK ở byte cuối của một Read là cách bình thường mà transaction đó kết thúc — xử lý nó như lỗi sẽ phân loại sai mọi Read thành công."]
+  ],
+  adv: [
+    ["Vì sao so khớp địa chỉ không cần CPU polling?","Peripheral có một bộ so sánh phần cứng với (các) register own-address chạy độc lập với firmware, song song với bất kỳ việc gì khác CPU đang làm."],
+    ["Trong thứ tự dispatch ISR đã học, vì sao STOPF được kiểm tra vô điều kiện ở cuối, ngoài chuỗi if/else-if?","Vì STOP có thể đến trong cùng một sự kiện ngắt với một cờ khác (ví dụ RXNE hoặc AF cuối cùng), và phải luôn được xử lý bất kể nhánh nào khác đã nổ."],
+    ["Hai time base độc lập nào có thể cùng tồn tại trong một firmware, và vì sao đối chiếu chéo chúng rủi ro?","Một hệ thống software-timer millisecond tổng quát và một bộ đếm tick riêng chỉ dùng cho phát hiện timeout lỗi I2C — cả hai có thể chạy ở cùng tốc độ danh định mà không bao giờ được đồng bộ với nhau."],
+    ["Vì sao 'không có bộ đếm retry nào ở bất kỳ đâu trong đường lỗi' quan trọng cho phân tích độ tin cậy?","Nghĩa là timeout hoặc lỗi đã latch đầu tiên được phát hiện kích hoạt một reset toàn bộ vô điều kiện, không phân biệt nguyên nhân tạm thời và dai dẳng — một thiết kế hợp lệ cho sự đơn giản, nhưng không có suy giảm nhẹ nhàng (graceful degradation)."],
+    ["Giải thích vì sao một hàm phân loại IRQ chết, trùng lặp là một rủi ro bảo trì dù nó gây ra 0 lỗi hôm nay.","Nếu một sửa đổi tương lai cập nhật logic của vector thật (ví dụ thêm một cờ lỗi mới) mà không cập nhật bản chết, hai bản âm thầm lệch nhau — vô hại cho đến khi ai đó vô tình nối bản cũ vào."],
+    ["Vì sao 'ISR.DIR=1 nghĩa là Master đang đọc' đôi khi được map thành 'application direction=0=Transmitter'?","Vì cực tính của bit hardware (từ góc nhìn bus) và quy ước của struct application (từ góc nhìn thiết bị cục bộ) được định nghĩa ngược nhau — driver phải chủ động đảo một trong hai để khớp với cái còn lại."],
+    ["Rủi ro thật nào tồn tại nếu API Master-mode của một firmware được triển khai đầy đủ nhưng chưa từng dùng?","Timing register có thể được cấu hình với giá trị chỉ hợp lệ cho hoạt động Slave-mode; một bản sửa đổi tương lai bật Master mode mà không sửa luôn timing sẽ chạy với tần số SCL không xác định/không hợp lệ."],
+    ["Vì sao single-producer/single-consumer với disable-interrupt đủ ở đây, nhưng không đủ nếu thêm một consumer task thứ hai?","Với đúng một ISR (producer) và một lượt main-loop (consumer), disable đúng interrupt trong lúc truy cập state chung hoàn toàn ngăn race. Một consumer đồng thời thứ hai sẽ cần một mutex thật, vì chỉ disable-interrupt không serialize hai task context với nhau."],
+    ["Vì sao một thiết kế slave dựa trên reload, manual-ACK từng-byte nói chung phải tránh dùng DMA cho chính transfer đó?","DMA giải phóng CPU khỏi việc tham gia mỗi byte, nhưng một driver cần kiểm tra và quyết định ACK/NACK trên từng byte riêng lẻ cần kiểm soát phần mềm từng-byte, điều mà transfer DMA, theo thiết kế, không cung cấp."],
+    ["Nguy hiểm của một timeout spin-loop dựa trên số lần lặp thay vì timer phần cứng là gì?","Thời gian thực (wall-clock) thực tế của nó phụ thuộc mức tối ưu hóa compiler và tốc độ clock CPU — cùng một source code có thể timeout sau một thời lượng thật rất khác trên một build hoặc chip revision khác."]
+  ],
+  exp: [
+    ["Nếu bạn tìm thấy một trường hợp NACK-rồi-rơi-xuống-case-ACK trông giống thiếu một 'break', bạn sẽ quyết định có nên 'sửa' nó không như thế nào?","Trace xem code case-ACK thực sự làm gì (ví dụ rearm register byte-count) và xác định đường NACK có cần cùng hiệu ứng phụ đó để đóng đúng khung reload hiện tại không, trước khi kết luận đó là lỗi thay vì logic chia sẻ có chủ đích."],
+    ["Thiết kế một routine bus-recovery tối thiểu cho một firmware MCU chỉ-slave hiện chỉ có reset cấp-peripheral. Nó phải chạm vào điều gì mà reset hiện tại không chạm?","Nó phải tạm thời cấu hình lại chân SCL thành GPIO output thường (giữ I2C peripheral disable), toggle nó tối đa 9 lần để flush byte dở của bất kỳ slave kẹt nào, tạo một STOP thủ công bằng cách toggle SDA/SCL trực tiếp, rồi khôi phục lại mux alternate-function của chân và enable lại peripheral — không điều nào trong số đó một reset RCC nội bộ-peripheral chạm tới."],
+    ["Một driver xử lý mọi lỗi I2C phát hiện được giống nhau (reset toàn bộ, không phân biệt). Rủi ro nào của thiết kế này dưới một lỗi thực sự không tạm thời (ví dụ một bus bị short vĩnh viễn), và bạn sẽ phát hiện nó từ pattern triệu chứng như thế nào?","Firmware sẽ reset peripheral I2C liên tục, mãi mãi, không có backoff hay điều kiện dừng — từ bên ngoài, triệu chứng là một vòng lặp reset định kỳ ở một khoảng cố định (giới hạn dưới bởi timeout ngắn nhất đã cấu hình) không bao giờ được giải quyết, phân biệt được với một glitch thực sự tạm thời bằng tính đều đặn và dai dẳng của nó."],
+    ["Vì sao việc mù quáng bật một đường code Master-mode trước đó chết, mà không kiểm tra lại cấu hình timing register, nguy hiểm ngay cả khi code 'biên dịch và chạy được'?","Vì 'biên dịch và chạy được' không nói gì về việc SCL có đáp ứng spec timing điện hay không — nếu SCLH/SCLL bị để ở giá trị chỉ hợp lệ cho Slave mode (nơi peripheral không tạo SCL nào cả), bật Master mode có thể tạo ra một clock ngoài-spec có vẻ hoạt động với một thiết bị ngoài dễ dãi nhưng fail với một thiết bị khắt khe hơn, hoặc vi phạm spec bus một cách vô hình."],
+    ["Hai time base 1kHz độc lập tồn tại trong một firmware (một tổng quát, một chuyên cho lỗi I2C) không đối chiếu chéo. Đề xuất một cách rủi ro thấp để thêm kiểm tra nhất quán mà không đổi hành vi timeout hiện tại.","Thêm một so sánh định kỳ (ví dụ một lần mỗi giây) đọc cả hai bộ đếm và log/assert nếu độ lệch của chúng vượt một epsilon mong đợi, mà không dùng so sánh đó để gate hay đổi bất kỳ quyết định timeout hiện tại nào — một bổ sung quan sát thuần túy, để nó có thể bắt được một lỗi cấu hình clock-source tương lai mà không đưa vào một sự ràng buộc thay-đổi-hành-vi mới giữa hai timer."]
+  ]
+};
+function renderQuiz(containerId, tag, list){
+  var el = document.getElementById(containerId);
+  list.forEach(function(pair, idx){
+    var item = document.createElement('div'); item.className='quiz-item';
+    var q = document.createElement('div');
+    var span = document.createElement('span'); span.className='qtag '+tag; span.textContent=tag.toUpperCase();
+    q.appendChild(span);
+    var qtext = document.createElement('strong'); qtext.textContent = 'Q'+(idx+1)+'. '+pair[0];
+    q.appendChild(qtext);
+    var det = document.createElement('details');
+    var sum = document.createElement('summary'); sum.textContent='Xem đáp án';
+    var body = document.createElement('div'); body.className='details-body'; body.textContent = pair[1];
+    det.appendChild(sum); det.appendChild(body);
+    item.appendChild(q); item.appendChild(det);
+    el.appendChild(item);
+  });
+}
+renderQuiz('quiz-beg','beg',QUIZ.beg);
+renderQuiz('quiz-int','int',QUIZ.int);
+renderQuiz('quiz-adv','adv',QUIZ.adv);
+renderQuiz('quiz-exp','exp',QUIZ.exp);
+
+/* ---------------- Matrix filter (§24) ---------------- */
+var matrixFilter = document.getElementById('matrix-filter');
+if(matrixFilter){
+  matrixFilter.addEventListener('input', function(){
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('#matrix-table tbody tr').forEach(function(row){
+      row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+    });
+  });
+}
+
+/* ---------------- Global search ---------------- */
+var searchInputs = [document.getElementById('global-search'), document.getElementById('search-box')];
+var searchCount = document.getElementById('search-count');
+var marked = [];
+function clearMarks(){
+  marked.forEach(function(m){
+    var parent = m.parentNode;
+    if(!parent) return;
+    parent.replaceChild(document.createTextNode(m.textContent), m);
+    parent.normalize();
+  });
+  marked = [];
+}
+function doSearch(q){
+  clearMarks();
+  if(!q || q.trim().length < 2){ searchCount.textContent=''; return; }
+  var re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+  var count = 0;
+  var walker = document.createTreeWalker(document.getElementById('main'), NodeFilter.SHOW_TEXT, {
+    acceptNode: function(node){
+      var p = node.parentNode;
+      if(!p) return NodeFilter.FILTER_REJECT;
+      var tag = p.nodeName;
+      if(tag==='SCRIPT'||tag==='STYLE'||tag==='MARK') return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  var nodes = [];
+  var n;
+  while((n = walker.nextNode())) { if(re.test(n.textContent)) nodes.push(n); }
+  nodes.forEach(function(node){
+    var text = node.textContent;
+    var frag = document.createDocumentFragment();
+    var lastIndex = 0; var m; var localRe = new RegExp(re.source, 'gi');
+    while((m = localRe.exec(text))){
+      frag.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+      var mk = document.createElement('mark'); mk.textContent = m[0];
+      frag.appendChild(mk); marked.push(mk);
+      lastIndex = m.index + m[0].length;
+      count++;
+    }
+    frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+    node.parentNode.replaceChild(frag, node);
+  });
+  searchCount.textContent = count + ' kết quả';
+  if(marked.length){ marked[0].scrollIntoView({behavior:'smooth', block:'center'}); }
+}
+searchInputs.forEach(function(inp){
+  if(!inp) return;
+  var t;
+  inp.addEventListener('input', function(){
+    clearTimeout(t);
+    var v = this.value;
+    t = setTimeout(function(){ doSearch(v); }, 250);
+    searchInputs.forEach(function(other){ if(other && other!==inp) other.value=v; });
+  });
+});
+
+})();
+</script>
+</body>
+</html>

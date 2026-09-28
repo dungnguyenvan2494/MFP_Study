@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPI MCU Knowledge Base</title>
+<style>
+:root{
+  --bg:#f4f6f9; --bg-alt:#ffffff; --text:#1b2430; --text-dim:#5b6472;
+  --border:#dfe4ea; --accent:#0b63c5; --accent-2:#0891b2; --code-bg:#0f1720;
+  --code-text:#d7e3f0; --card-shadow:0 1px 3px rgba(20,30,50,.08), 0 1px 2px rgba(20,30,50,.06);
+  --sidebar-bg:#0f1b2d; --sidebar-text:#c8d3e0; --sidebar-active:#123a63;
+  --warn-bg:#fff7e6; --warn-border:#e8b93b; --important-bg:#e9f3ff; --important-border:#0b63c5;
+  --debug-bg:#eefcf3; --debug-border:#18a558; --concept-bg:#f3f0ff; --concept-border:#7c5cff;
+  --fact-bg:#e6f7ee; --fact-text:#0f7a3d; --inf-bg:#fff4e0; --inf-text:#9a5b00;
+  --hyp-bg:#fdeaea; --hyp-text:#a3242f;
+  --mark-bg:#ffe58a;
+}
+:root[data-theme="dark"]{
+  --bg:#0d1420; --bg-alt:#141e2e; --text:#dbe4ee; --text-dim:#8a97a8;
+  --border:#243248; --accent:#5aa9ff; --accent-2:#33c4dd; --code-bg:#0a1017;
+  --code-text:#c9d8e6; --card-shadow:0 1px 3px rgba(0,0,0,.4);
+  --sidebar-bg:#08101c; --sidebar-text:#a9b7c9; --sidebar-active:#173a5f;
+  --warn-bg:#2b2410; --warn-border:#7a6420; --important-bg:#10233a; --important-border:#3f80c9;
+  --debug-bg:#0f2418; --debug-border:#1f8a55; --concept-bg:#1c1730; --concept-border:#8a71ff;
+  --fact-bg:#0f2a1c; --fact-text:#4fd18a; --inf-bg:#2b230f; --inf-text:#e0ab4a;
+  --hyp-bg:#2a1417; --hyp-text:#f08a94;
+  --mark-bg:#5a4a12;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1420; --bg-alt:#141e2e; --text:#dbe4ee; --text-dim:#8a97a8;
+    --border:#243248; --accent:#5aa9ff; --accent-2:#33c4dd; --code-bg:#0a1017;
+    --code-text:#c9d8e6; --card-shadow:0 1px 3px rgba(0,0,0,.4);
+    --sidebar-bg:#08101c; --sidebar-text:#a9b7c9; --sidebar-active:#173a5f;
+    --warn-bg:#2b2410; --warn-border:#7a6420; --important-bg:#10233a; --important-border:#3f80c9;
+    --debug-bg:#0f2418; --debug-border:#1f8a55; --concept-bg:#1c1730; --concept-border:#8a71ff;
+    --fact-bg:#0f2a1c; --fact-text:#4fd18a; --inf-bg:#2b230f; --inf-text:#e0ab4a;
+    --hyp-bg:#2a1417; --hyp-text:#f08a94;
+    --mark-bg:#5a4a12;
+  }
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:Inter,"Segoe UI",Roboto,Arial,sans-serif;
+  line-height:1.65; font-size:15.5px;
+}
+code, pre, .mono{font-family:"JetBrains Mono","Fira Code",Consolas,"Courier New",monospace;}
+a{color:var(--accent); text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3,h4{line-height:1.3; scroll-margin-top:76px;}
+img,svg{max-width:100%;}
+
+/* ---------- HEADER ---------- */
+header.topbar{
+  position:sticky; top:0; z-index:50; height:60px; display:flex; align-items:center;
+  gap:14px; padding:0 18px; background:var(--bg-alt); border-bottom:1px solid var(--border);
+}
+header.topbar .brand{font-weight:700; font-size:17px; white-space:nowrap;}
+header.topbar .brand small{display:block; font-weight:400; font-size:11px; color:var(--text-dim);}
+.menu-toggle{
+  display:none; background:none; border:1px solid var(--border); color:var(--text);
+  border-radius:8px; width:38px; height:38px; font-size:18px; cursor:pointer;
+}
+.theme-toggle{
+  margin-left:auto; background:var(--bg); border:1px solid var(--border); color:var(--text);
+  border-radius:20px; padding:7px 14px; cursor:pointer; font-size:13px; display:flex; gap:6px; align-items:center;
+}
+.theme-toggle:hover{border-color:var(--accent);}
+
+/* ---------- LAYOUT ---------- */
+.layout{display:flex; align-items:flex-start; min-height:calc(100vh - 60px);}
+aside.sidebar{
+  width:290px; flex-shrink:0; background:var(--sidebar-bg); color:var(--sidebar-text);
+  position:sticky; top:60px; height:calc(100vh - 60px); overflow-y:auto; padding:16px 12px 40px;
+}
+aside.sidebar::-webkit-scrollbar{width:8px;}
+aside.sidebar::-webkit-scrollbar-thumb{background:#33465f; border-radius:4px;}
+.search-box{position:relative; margin-bottom:14px;}
+.search-box input{
+  width:100%; padding:9px 34px 9px 12px; border-radius:8px; border:1px solid #2a3b53;
+  background:#0b1524; color:#e7edf5; font-size:13.5px;
+}
+.search-box input:focus{outline:2px solid var(--accent-2);}
+.search-clear{
+  position:absolute; right:6px; top:6px; background:none; border:none; color:#8fa3bd;
+  cursor:pointer; font-size:16px; padding:4px;
+}
+.search-status{font-size:11.5px; color:#7d90a8; margin:-6px 0 12px 2px; min-height:14px;}
+nav.toc{list-style:none; margin:0; padding:0;}
+nav.toc li{margin:0;}
+nav.toc a{
+  display:flex; gap:8px; align-items:baseline; padding:7px 10px; border-radius:7px;
+  color:var(--sidebar-text); font-size:13.3px;
+}
+nav.toc a:hover{background:#132540; text-decoration:none;}
+nav.toc a.active{background:var(--sidebar-active); color:#fff; font-weight:600;}
+nav.toc a .num{font-family:"JetBrains Mono",monospace; font-size:11px; color:#6d84a3; width:20px; flex-shrink:0;}
+nav.toc a.dim{opacity:.28;}
+nav.toc a.match{outline:1px dashed var(--accent-2);}
+nav.toc .group-label{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:#5c7191; margin:16px 8px 4px; font-weight:700;}
+
+main{flex:1; min-width:0; padding:28px 34px 90px; max-width:980px;}
+
+/* ---------- DASHBOARD ---------- */
+.dash-hero{margin-bottom:26px;}
+.dash-hero h1{font-size:30px; margin:0 0 4px;}
+.dash-hero p{color:var(--text-dim); margin:0; font-size:15px;}
+.stat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:22px 0 30px;}
+.stat-card{
+  background:var(--bg-alt); border:1px solid var(--border); border-radius:12px; padding:16px;
+  text-align:center; box-shadow:var(--card-shadow);
+}
+.stat-card .num{font-size:26px; font-weight:800; color:var(--accent);}
+.stat-card .label{font-size:12px; color:var(--text-dim); margin-top:2px;}
+.fact-banner{
+  background:var(--important-bg); border:1px solid var(--important-border); border-radius:10px;
+  padding:14px 16px; font-size:14px; margin-bottom:26px;
+}
+.fact-banner b{color:var(--important-border);}
+
+/* ---------- SECTIONS ---------- */
+section.chapter{padding-top:26px; border-top:1px solid var(--border); margin-top:26px;}
+section.chapter:first-of-type{border-top:none; margin-top:0;}
+.chapter-head{
+  background:linear-gradient(135deg, var(--important-bg), transparent);
+  border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin-bottom:18px;
+}
+.chapter-head .kicker{font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--accent); font-weight:700;}
+.chapter-head h2{margin:2px 0 0; font-size:22px;}
+.subhead{display:flex; align-items:center; gap:8px; font-size:16.5px; font-weight:700; margin:26px 0 10px;}
+.subhead .emoji{font-size:18px;}
+p{margin:8px 0 12px;}
+table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.6px;}
+table caption{caption-side:top; text-align:left; font-weight:600; margin-bottom:6px;}
+th,td{border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top;}
+th{background:var(--bg); font-weight:700;}
+tr:nth-child(even) td{background:rgba(120,140,170,.05);}
+.table-wrap{overflow-x:auto; border-radius:8px;}
+.term{color:var(--accent); font-weight:600;}
+
+/* cards */
+.card{border-radius:10px; padding:14px 16px; margin:14px 0; border:1px solid var(--border); box-shadow:var(--card-shadow);}
+.card .card-title{font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; display:flex; gap:6px; align-items:center;}
+.card.concept{background:var(--concept-bg); border-color:var(--concept-border);}
+.card.concept .card-title{color:var(--concept-border);}
+.card.important{background:var(--important-bg); border-color:var(--important-border);}
+.card.important .card-title{color:var(--important-border);}
+.card.warn{background:var(--warn-bg); border-color:var(--warn-border);}
+.card.warn .card-title{color:#8a6d00;}
+.card.debug{background:var(--debug-bg); border-color:var(--debug-border);}
+.card.debug .card-title{color:var(--debug-border);}
+
+.badge{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.04em; padding:2px 8px; border-radius:5px; margin-right:6px; text-transform:uppercase; vertical-align:middle;}
+.badge.fact{background:var(--fact-bg); color:var(--fact-text);}
+.badge.inference{background:var(--inf-bg); color:var(--inf-text);}
+.badge.hypothesis{background:var(--hyp-bg); color:var(--hyp-text);}
+
+/* code blocks */
+.codeblock{position:relative; margin:14px 0; border-radius:10px; overflow:hidden; border:1px solid #223047;}
+.codeblock .cb-head{display:flex; justify-content:space-between; align-items:center; background:#182335; color:#93a5bf; font-size:11.5px; padding:6px 12px;}
+.codeblock pre{margin:0; background:var(--code-bg); color:var(--code-text); padding:14px 16px; overflow-x:auto; font-size:13px;}
+.copy-btn{background:#243248; color:#dce6f2; border:none; border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer;}
+.copy-btn:hover{background:var(--accent);}
+mark.hl{background:var(--mark-bg); color:inherit; border-radius:3px; padding:0 1px;}
+
+/* diagrams */
+.diagram-box{background:var(--bg-alt); border:1px solid var(--border); border-radius:10px; padding:16px; margin:14px 0; overflow-x:auto; text-align:center;}
+.diagram-box svg{max-width:100%; height:auto;}
+.ascii{font-family:"JetBrains Mono",monospace; font-size:12.6px; white-space:pre; background:var(--code-bg); color:var(--code-text); padding:14px 16px; border-radius:10px; overflow-x:auto; margin:14px 0; line-height:1.5;}
+
+/* interview */
+details.qa{border:1px solid var(--border); border-radius:8px; margin:8px 0; background:var(--bg-alt);}
+details.qa summary{cursor:pointer; padding:10px 14px; font-weight:600; list-style:none;}
+details.qa summary::-webkit-details-marker{display:none;}
+details.qa summary::before{content:"▶ "; color:var(--accent); font-size:11px;}
+details.qa[open] summary::before{content:"▼ ";}
+details.qa .ans{padding:2px 14px 14px; color:var(--text-dim); border-top:1px dashed var(--border);}
+
+/* checklist */
+ul.checklist{list-style:none; padding-left:0;}
+ul.checklist li{padding:5px 0 5px 26px; position:relative;}
+ul.checklist li::before{content:"☐"; position:absolute; left:0; color:var(--accent);}
+
+/* decision tree */
+.tree{font-family:"JetBrains Mono",monospace; font-size:12.6px; background:var(--code-bg); color:var(--code-text); border-radius:10px; padding:16px; overflow-x:auto; margin:14px 0;}
+
+/* back to top */
+#backTop{
+  position:fixed; right:22px; bottom:22px; width:44px; height:44px; border-radius:50%;
+  background:var(--accent); color:#fff; border:none; font-size:18px; cursor:pointer;
+  box-shadow:0 4px 12px rgba(0,0,0,.25); display:none; z-index:60;
+}
+#backTop.show{display:block;}
+
+footer.sitefoot{
+  border-top:1px solid var(--border); padding:26px 34px; color:var(--text-dim); font-size:13px; text-align:center;
+}
+
+/* responsive */
+@media (max-width:980px){
+  main{max-width:100%; padding:22px 16px 90px;}
+}
+@media (max-width:840px){
+  .menu-toggle{display:inline-block;}
+  aside.sidebar{
+    position:fixed; left:0; top:60px; height:calc(100vh - 60px); width:270px;
+    transform:translateX(-100%); transition:transform .2s ease; z-index:55;
+    box-shadow:4px 0 18px rgba(0,0,0,.3);
+  }
+  aside.sidebar.open{transform:translateX(0);}
+  .stat-grid{grid-template-columns:repeat(2,1fr);}
+  header.topbar .brand small{display:none;}
+}
+@media (max-width:480px){
+  body{font-size:14.5px;}
+  main{padding:18px 12px 80px;}
+  .chapter-head h2{font-size:19px;}
+}
+
+/* print */
+@media print{
+  aside.sidebar, header.topbar, #backTop, .search-box, .copy-btn, .menu-toggle{display:none !important;}
+  .layout{display:block;}
+  main{max-width:100%; padding:0;}
+  body{background:#fff; color:#000; font-size:11pt;}
+  .codeblock pre{color:#000; background:#f2f2f2;}
+  section.chapter{page-break-inside:avoid; border-top:1px solid #ccc;}
+  a{color:#000; text-decoration:underline;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Mở menu điều hướng">☰</button>
+  <div class="brand">SPI MCU Knowledge Base<small>Embedded SPI Technical Handbook · Tiếng Việt</small></div>
+  <button class="theme-toggle" id="themeToggle" aria-label="Đổi giao diện sáng/tối"><span id="themeIcon">🌙</span><span id="themeLabel">Dark</span></button>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar" id="sidebar" aria-label="Mục lục">
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="🔍 Tìm CPOL, DMA, RX FIFO..." aria-label="Tìm kiếm nội dung SPI">
+    <button class="search-clear" id="searchClear" title="Clear Search" aria-label="Xóa tìm kiếm">✕</button>
+  </div>
+  <div class="search-status" id="searchStatus"></div>
+  <nav class="toc" aria-label="Danh sách chương">
+    <div class="group-label">Bắt đầu</div>
+    <li><a href="#dashboard" data-n="00"><span class="num">00</span>Dashboard</a></li>
+    <div class="group-label">Nền tảng giao thức</div>
+    <li><a href="#overview" data-n="01"><span class="num">01</span>SPI Overview</a></li>
+    <li><a href="#architecture" data-n="02"><span class="num">02</span>SPI Architecture</a></li>
+    <li><a href="#signals" data-n="03"><span class="num">03</span>SPI Signals</a></li>
+    <li><a href="#fullduplex" data-n="04"><span class="num">04</span>Full Duplex</a></li>
+    <li><a href="#shiftreg" data-n="05"><span class="num">05</span>Shift Register</a></li>
+    <li><a href="#clock" data-n="06"><span class="num">06</span>Clock</a></li>
+    <li><a href="#cpolcpha" data-n="07"><span class="num">07</span>CPOL / CPHA</a></li>
+    <li><a href="#modes" data-n="08"><span class="num">08</span>SPI Modes</a></li>
+    <li><a href="#msblsb" data-n="09"><span class="num">09</span>MSB / LSB</a></li>
+    <li><a href="#cs" data-n="10"><span class="num">10</span>Chip Select</a></li>
+    <li><a href="#transaction" data-n="11"><span class="num">11</span>SPI Transaction</a></li>
+    <li><a href="#framesize" data-n="12"><span class="num">12</span>Frame / Word Size</a></li>
+    <div class="group-label">MCU Peripheral</div>
+    <li><a href="#peripheral" data-n="13"><span class="num">13</span>MCU SPI Peripheral</a></li>
+    <li><a href="#registers" data-n="14"><span class="num">14</span>SPI Registers</a></li>
+    <li><a href="#flags" data-n="15"><span class="num">15</span>Status Flags</a></li>
+    <li><a href="#polling" data-n="16"><span class="num">16</span>Polling</a></li>
+    <li><a href="#interrupt" data-n="17"><span class="num">17</span>Interrupt</a></li>
+    <li><a href="#dma" data-n="18"><span class="num">18</span>DMA</a></li>
+    <li><a href="#gpio" data-n="19"><span class="num">19</span>GPIO / Pinmux</a></li>
+    <div class="group-label">Driver &amp; Source Code</div>
+    <li><a href="#driverarch" data-n="20"><span class="num">20</span>Driver Architecture</a></li>
+    <li><a href="#sourceanalysis" data-n="21"><span class="num">21</span>Source Code Analysis</a></li>
+    <li><a href="#caseflash" data-n="22"><span class="num">22</span>Case Study: SPI Flash</a></li>
+    <li><a href="#casesensor" data-n="23"><span class="num">23</span>Case Study: Sensor Bug</a></li>
+    <li><a href="#protocolvs" data-n="24"><span class="num">24</span>Protocol vs Device Protocol</a></li>
+    <div class="group-label">Debug &amp; So sánh</div>
+    <li><a href="#debugging" data-n="25"><span class="num">25</span>Debugging Guide</a></li>
+    <li><a href="#decisiontree" data-n="26"><span class="num">26</span>Debug Decision Tree</a></li>
+    <li><a href="#commonbugs" data-n="27"><span class="num">27</span>Common Bugs</a></li>
+    <li><a href="#compare" data-n="28"><span class="num">28</span>SPI vs I2C vs UART</a></li>
+    <div class="group-label">Tổng hợp</div>
+    <li><a href="#interview" data-n="29"><span class="num">29</span>Interview Questions</a></li>
+    <li><a href="#quickref" data-n="30"><span class="num">30</span>Quick Reference</a></li>
+    <li><a href="#glossary" data-n="31"><span class="num">31</span>Glossary</a></li>
+    <li><a href="#learningmap" data-n="32"><span class="num">32</span>Final Knowledge Map</a></li>
+  </nav>
+</aside>
+
+<main id="content">
+
+<!-- ================= DASHBOARD ================= -->
+<section class="chapter" id="dashboard" data-title="Dashboard Overview SPI MCU Knowledge Base">
+  <div class="dash-hero">
+    <h1>SPI MCU Knowledge Base</h1>
+    <p>Tài liệu tham chiếu kỹ thuật cá nhân — SPI từ <b>Application → Driver → Register → Peripheral → Signal → Slave</b>.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="num">32</div><div class="label">Chương (Chapters)</div></div>
+    <div class="stat-card"><div class="num">4</div><div class="label">SPI Modes</div></div>
+    <div class="stat-card"><div class="num">4</div><div class="label">Tín hiệu vật lý</div></div>
+    <div class="stat-card"><div class="num">15+</div><div class="label">Lỗi thực tế đã phân tích</div></div>
+  </div>
+
+  <div class="fact-banner">
+    <span class="badge fact">FACT</span> Toàn bộ ví dụ register/code trong tài liệu này được trích trực tiếp từ
+    <span class="mono">STM32F0xx HAL/LL SPI Driver</span> có thật trong repo <b>PS-CPU (pscpu_s800)</b>.
+    Repo này <b>chưa kích hoạt SPI trong application</b> (chỉ dùng I2C) — driver SPI có mặt như thư viện HAL đi kèm CubeMX.
+    Chi tiết đầy đủ ở chương <a href="#sourceanalysis">21. Source Code Analysis</a>.
+  </div>
+
+  <div class="subhead"><span class="emoji">🗺️</span>SPI Learning Map</div>
+  <div class="ascii">SPI
+│
+├── Fundamentals ......... Overview, Architecture, Signals, Full Duplex, Shift Register
+├── Protocol ............. Clock, CPOL/CPHA, Modes, MSB/LSB, CS, Transaction, Frame Size
+├── MCU Peripheral ....... Registers (CR1/CR2/SR/DR), Status Flags
+├── Driver ............... Polling, Interrupt, DMA, GPIO/Pinmux, Driver Architecture
+├── Source Code .......... Source Analysis (PS-CPU), Case Studies (Flash, Sensor bug)
+├── Debugging ............ Debug Guide, Decision Tree, Common Bugs
+└── Reference ............ SPI vs I2C vs UART, Interview, Quick Reference, Glossary</div>
+
+  <div class="card important">
+    <div class="card-title">⭐ Cách dùng tài liệu này</div>
+    Dùng <b>Search</b> ở sidebar để tra nhanh 1 thuật ngữ (vd "CPHA", "OVR", "DMA").
+    Mỗi chương có cấu trúc cố định: Mục tiêu → Kiến thức nền → Core Concept → Hardware → Register → Source Code →
+    Waveform → Debugging → Common Mistakes → Key Takeaways, để bạn tra cứu nhanh khi đọc source code thật hoặc debug trên board.
+  </div>
+</section>
+
+<!-- ================= 01 OVERVIEW ================= -->
+<section class="chapter" id="overview" data-title="SPI Overview la gi giao thuc serial dong bo full duplex master slave">
+  <div class="chapter-head"><div class="kicker">Chapter 01</div><h2>SPI Overview — SPI là gì?</h2></div>
+
+  <div class="subhead"><span class="emoji">🎯</span>Mục tiêu</div>
+  <p>Hiểu SPI (<span class="term">Serial Peripheral Interface</span>) giải quyết vấn đề gì, khác gì UART/I2C, và khi nào nên/không nên dùng.</p>
+
+  <div class="subhead"><span class="emoji">🧠</span>Core Concept</div>
+  <div class="card concept">
+    <div class="card-title">🧠 Concept</div>
+    SPI là giao thức truyền dữ liệu nối tiếp (serial), <b>đồng bộ</b> (có đường Clock riêng do Master phát ra),
+    <b>full-duplex</b> (truyền và nhận đồng thời), theo mô hình <span class="term">Master–Slave</span>.
+    Đây là de-facto standard (do Motorola đưa ra), không phải chuẩn ISO/IEC chính thức.
+  </div>
+  <p><b>Vấn đề SPI giải quyết:</b> UART không có Clock riêng → 2 bên phải tự thống nhất tốc độ trước, dễ lệch pha ở tốc độ cao.
+  SPI có Clock riêng do Master phát → Slave chỉ "bắt tín hiệu theo Clock" → cho phép tốc độ cao hơn UART/I2C nhiều lần (thường vài chục MHz).</p>
+
+  <div class="subhead"><span class="emoji">⚖️</span>Ưu điểm / Nhược điểm</div>
+  <div class="table-wrap"><table>
+    <tr><th>Ưu điểm</th><th>Nhược điểm</th></tr>
+    <tr><td>Tốc độ cao (chục MHz), full-duplex thật sự</td><td>Không có địa chỉ trên bus → cần 1 chân CS riêng cho mỗi Slave</td></tr>
+    <tr><td>Không cần thỏa thuận baud rate như UART</td><td>Nhiều dây hơn I2C (4 dây cơ bản, thêm 1 CS/Slave)</td></tr>
+    <tr><td>Phần cứng đơn giản (shift register)</td><td>Không có ACK/NACK chuẩn hóa như I2C</td></tr>
+    <tr><td>Hỗ trợ nhiều Slave trên cùng 3 dây chung</td><td>Khoảng cách truyền ngắn (board-level)</td></tr>
+  </table></div>
+
+  <div class="subhead"><span class="emoji">🧪</span>Ứng dụng thực tế</div>
+  <p>Flash (bộ nhớ ngoài), EEPROM (cấu hình), ADC/DAC, Sensor (accelerometer, gyro), Display (LCD/OLED nhỏ),
+  Touch controller, RTC, PMIC, Ethernet/CAN controller ngoài.</p>
+
+  <div class="subhead"><span class="emoji">🎯</span>Key Takeaways</div>
+  <ul>
+    <li>SPI = đồng bộ + full-duplex + Master-Slave, không có địa chỉ trên bus.</li>
+    <li>Chọn SPI khi cần tốc độ cao, khoảng cách ngắn (trong board); chọn I2C khi cần tiết kiệm chân với nhiều thiết bị; chọn UART cho point-to-point đơn giản, khoảng cách xa hơn.</li>
+  </ul>
+</section>
+
+<!-- ================= 02 ARCHITECTURE ================= -->
+<section class="chapter" id="architecture" data-title="SPI Architecture kien truc phan cung MCU controller">
+  <div class="chapter-head"><div class="kicker">Chapter 02</div><h2>SPI Architecture</h2></div>
+
+  <div class="diagram-box">
+    <svg viewBox="0 0 640 260" role="img" aria-label="Sơ đồ kiến trúc SPI: MCU với SPI Controller kết nối tới SPI Slave qua 4 dây SCLK, MOSI, MISO, CS">
+      <style>.b{font:12px monospace; fill:var(--text,#1b2430);} .box{fill:none; stroke:#0b63c5; stroke-width:2;} .ln{stroke:#5b6472; stroke-width:1.5; fill:none;}</style>
+      <rect class="box" x="230" y="14" width="180" height="46" rx="8"/>
+      <text x="320" y="42" text-anchor="middle" class="b">MCU / SPI Controller</text>
+      <line class="ln" x1="270" y1="60" x2="270" y2="120"/>
+      <line class="ln" x1="320" y1="60" x2="320" y2="120"/>
+      <line class="ln" x1="370" y1="60" x2="370" y2="120"/>
+      <text x="270" y="112" text-anchor="middle" class="b">SCLK</text>
+      <text x="320" y="112" text-anchor="middle" class="b">MOSI</text>
+      <text x="370" y="112" text-anchor="middle" class="b">MISO</text>
+      <line class="ln" x1="230" y1="150" x2="410" y2="150"/>
+      <line class="ln" x1="270" y1="120" x2="270" y2="150"/>
+      <line class="ln" x1="320" y1="120" x2="320" y2="150"/>
+      <line class="ln" x1="370" y1="120" x2="370" y2="150"/>
+      <line class="ln" x1="320" y1="150" x2="320" y2="180"/>
+      <text x="335" y="172" class="b">CS</text>
+      <rect class="box" x="230" y="180" width="180" height="46" rx="8"/>
+      <text x="320" y="208" text-anchor="middle" class="b">SPI Slave</text>
+    </svg>
+  </div>
+
+  <div class="subhead"><span class="emoji">⚙️</span>Hardware</div>
+  <table>
+    <tr><th>Thành phần</th><th>Vai trò</th></tr>
+    <tr><td>Master</td><td>Thiết bị tạo SCLK, chủ động khởi tạo mọi transaction</td></tr>
+    <tr><td>Slave</td><td>Thiết bị bị động, chỉ phản hồi khi CS của nó được kéo active</td></tr>
+    <tr><td>SCLK</td><td>Clock đồng bộ, luôn do Master phát ra</td></tr>
+    <tr><td>MOSI</td><td>Master Out Slave In — dữ liệu từ Master → Slave</td></tr>
+    <tr><td>MISO</td><td>Master In Slave Out — dữ liệu từ Slave → Master</td></tr>
+    <tr><td>CS/SS/NSS</td><td>Chip Select — chọn đúng 1 Slave để giao tiếp, thường active-LOW</td></tr>
+  </table>
+
+  <div class="card important">
+    <div class="card-title">⭐ Important</div>
+    CS gần như luôn được điều khiển bằng <span class="term">GPIO thường (Software CS)</span> do phần mềm bật/tắt,
+    vì SPI peripheral thường chỉ có 1 chân NSS "cứng" trong khi hệ thống cần nhiều Slave.
+    STM32 SPI hỗ trợ cả 2: <span class="mono">LL_SPI_NSS_SOFT</span> (bit <span class="mono">CR1.SSM</span>=1, GPIO điều khiển)
+    và <span class="mono">LL_SPI_NSS_HARD_OUTPUT</span> (phần cứng tự quản lý, chỉ dùng khi có đúng 1 Slave).
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_ll_spi.h</span><button class="copy-btn">Copy</button></div>
+    <pre><code>#define LL_SPI_NSS_SOFT         (SPI_CR1_SSM)   // NSS quản lý nội bộ, GPIO CS tự kéo tay
+#define LL_SPI_NSS_HARD_OUTPUT  (((uint32_t)SPI_CR2_SSOE << 16U))  // NSS pin cứng, dùng ở Slave mode</code></pre>
+  </div>
+</section>
+
+<!-- ================= 03 SIGNALS ================= -->
+<section class="chapter" id="signals" data-title="SPI Signals MOSI MISO SCLK CS active low direction">
+  <div class="chapter-head"><div class="kicker">Chapter 03</div><h2>SPI Signals</h2></div>
+  <table>
+    <tr><th>Dây</th><th>Master</th><th>Slave</th><th>Ý nghĩa tên gọi</th></tr>
+    <tr><td>SCLK</td><td>OUT</td><td>IN</td><td>Master luôn là bên tạo Clock — khác biệt căn bản với UART</td></tr>
+    <tr><td>MOSI</td><td>OUT</td><td>IN</td><td><b>M</b>aster <b>O</b>ut <b>S</b>lave <b>I</b>n</td></tr>
+    <tr><td>MISO</td><td>IN</td><td>OUT</td><td><b>M</b>aster <b>I</b>n <b>S</b>lave <b>O</b>ut</td></tr>
+    <tr><td>CS/SS/NSS</td><td>OUT</td><td>IN</td><td>Chọn đúng 1 Slave để "nói chuyện"</td></tr>
+  </table>
+  <div class="card warn">
+    <div class="card-title">⚠️ Common Bug</div>
+    Nếu cả Master và Slave cùng lúc "output" trên MISO (do cấu hình sai chiều GPIO), xảy ra <b>bus contention</b> —
+    có thể gây ngắn mạch điện (hai bên cùng kéo mức khác nhau trên cùng 1 dây).
+  </div>
+  <p><b>Tại sao CS thường active-LOW?</b> Đây là quy ước phổ biến (không bắt buộc theo lý thuyết SPI) để khi bus rảnh
+  (mọi CS = HIGH), không Slave nào bị "đánh thức" nhầm do nhiễu ngẫu nhiên kéo dây xuống thấp — nhờ pull-up giữ mức HIGH mặc định.</p>
+</section>
+
+<!-- ================= 04 FULL DUPLEX ================= -->
+<section class="chapter" id="fullduplex" data-title="SPI Full Duplex transmit receive dong thoi TX RX register">
+  <div class="chapter-head"><div class="kicker">Chapter 04</div><h2>Full Duplex</h2></div>
+  <div class="card concept">
+    <div class="card-title">🧠 Concept</div>
+    Full-duplex trong SPI là <b>thuộc tính vật lý của bus</b>, không phải tính năng phần mềm: mỗi cạnh Clock,
+    TX shift register đẩy 1 bit ra MOSI <i>đồng thời</i> RX shift register nhận 1 bit vào từ MISO.
+  </div>
+
+  <div class="subhead"><span class="emoji">💻</span>Source Code — <span class="mono">HAL_SPI_Transmit</span> (STM32F0, thật)</div>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_hal_spi.c :494-544</span><button class="copy-btn">Copy</button></div>
+    <pre><code>/* Transmit data in 8 Bit mode */
+while (hspi->TxXferCount > 0)
+{
+  if((hspi->Instance->SR & SPI_FLAG_TXE) == SPI_FLAG_TXE)     // (1) polling cờ TXE
+  {
+    if(hspi->TxXferCount > 1)
+    {
+      hspi->Instance->DR = *((uint16_t*)hspi->pTxBuffPtr);    // (2) packing mode: ghi 2 byte 1 lần
+      hspi->pTxBuffPtr += sizeof(uint16_t);
+      hspi->TxXferCount -= 2;
+    }
+    else
+    {
+      *((__IO uint8_t*)&hspi->Instance->DR) = (*hspi->pTxBuffPtr++); // (3) byte cuối
+      hspi->TxXferCount--;
+    }
+  }
+  else { /* timeout check */ }                                 // (4)
+}</code></pre>
+  </div>
+
+  <div class="card warn">
+    <div class="card-title">⚠️ FACT quan trọng</div>
+    <span class="badge fact">FACT</span> Trước vòng lặp này, HAL đặt <span class="mono">hspi->pRxBuffPtr = NULL; hspi->RxXferCount = 0;</span>
+    — nghĩa là <b><span class="mono">HAL_SPI_Transmit</span> hoàn toàn bỏ qua dữ liệu RX</b> dù phần cứng vẫn nhận bit trên MISO song song.
+    Nếu bạn cần đọc data trả về thật, phải dùng <span class="mono">HAL_SPI_TransmitReceive</span>.
+  </div>
+
+  <div class="subhead"><span class="emoji">📈</span>Waveform mô phỏng shift từng clock</div>
+  <div class="ascii">TX = 0xA5 = 1010 0101 (MSB-first), Slave gửi về 0x3C = 0011 1100
+
+Trước CLK1: TX shift reg = 10100101   RX shift reg = 00000000
+CLK1: MOSI=1(bit7) ra | MISO=0(bit7 slave) vào   -> TX=0100101_  RX=_______0
+CLK2: MOSI=0(bit6)    | MISO=0(bit6 slave)       -> TX=100101__  RX=______00
+CLK3: MOSI=1(bit5)    | MISO=1(bit5 slave)       -> TX=00101___  RX=_____001
+...
+CLK8: MOSI=1(bit0)    | MISO=0(bit0 slave)       -> TX=00000000  RX=00111100 = 0x3C</div>
+
+  <div class="subhead"><span class="emoji">⚠️</span>Common Mistakes</div>
+  <ul class="checklist">
+    <li>Gọi <span class="mono">HAL_SPI_Transmit</span> liên tiếp mà không xử lý RX → RX shift register cứ latch dữ liệu cũ vào DR nhưng không ai đọc → có thể set cờ OVR.</li>
+    <li>Nhầm SPI "transmit" 1 chiều giống UART TX — dẫn tới thiết kế sai khi Slave cần trả lời ngay trong cùng byte.</li>
+  </ul>
+</section>
+
+<!-- ================= 05 SHIFT REGISTER ================= -->
+<section class="chapter" id="shiftreg" data-title="Shift Register TX RX bit MSB first LSB first">
+  <div class="chapter-head"><div class="kicker">Chapter 05</div><h2>Shift Register</h2></div>
+  <div class="card concept">
+    <div class="card-title">🧠 Concept</div>
+    Shift Register là một dãy flip-flop nối tiếp: mỗi xung Clock, dữ liệu dịch sang 1 vị trí,
+    bit ngoài cùng bị đẩy ra chân, đồng thời 1 bit từ chân khác được nạp vào đầu kia.
+  </div>
+  <div class="diagram-box">
+    <svg viewBox="0 0 640 200" role="img" aria-label="Sơ đồ TX shift register nối tới MOSI và RX shift register nối tới MISO">
+      <style>.b{font:12px monospace; fill:var(--text,#1b2430);} .box{fill:none; stroke:#0b63c5; stroke-width:2;} .ln{stroke:#5b6472; stroke-width:1.5; fill:none; marker-end:url(#arrow);}</style>
+      <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5b6472"/></marker></defs>
+      <rect class="box" x="40" y="20" width="180" height="40" rx="6"/><text x="130" y="45" text-anchor="middle" class="b">TX Shift Register</text>
+      <line class="ln" x1="220" y1="40" x2="290" y2="40"/><text x="255" y="30" text-anchor="middle" class="b">MOSI</text>
+      <rect class="box" x="40" y="130" width="180" height="40" rx="6"/><text x="130" y="155" text-anchor="middle" class="b">RX Shift Register</text>
+      <line class="ln" x1="290" y1="150" x2="220" y2="150"/><text x="255" y="140" text-anchor="middle" class="b">MISO</text>
+      <text x="330" y="45" class="b">CPU ghi DR</text>
+      <line class="ln" x1="325" y1="50" x2="230" y2="35" />
+      <text x="330" y="160" class="b">CPU đọc DR (từ latch)</text>
+    </svg>
+  </div>
+  <div class="subhead"><span class="emoji">📚</span>MSB-first vs LSB-first</div>
+  <div class="ascii">Giá trị: 0xA5 = 1010 0101
+
+MSB-first (mặc định đa số chip):
+bit ra: 1  0  1  0  0  1  0  1
+        ^ đầu tiên          ^ cuối
+
+LSB-first:
+bit ra theo thứ tự bit0 -> bit7 (đẩy bit thấp nhất ra chân trước)</div>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_ll_spi.h :218-219</span><button class="copy-btn">Copy</button></div>
+    <pre><code>#define LL_SPI_LSB_FIRST   (SPI_CR1_LSBFIRST)      // set bit -> LSB first
+#define LL_SPI_MSB_FIRST   ((uint32_t)0x00000000U) // clear bit (mặc định) -> MSB first</code></pre>
+  </div>
+  <p><span class="badge fact">FACT</span> Chỉ 1 bit duy nhất (<span class="mono">CR1.LSBFIRST</span>) điều khiển hướng dịch của
+  <b>cả TX lẫn RX</b> cùng lúc — không có bit riêng cho từng chiều.</p>
+</section>
+
+<!-- ================= 06 CLOCK ================= -->
+<section class="chapter" id="clock" data-title="SPI Clock prescaler baud rate divider PCLK tan so">
+  <div class="chapter-head"><div class="kicker">Chapter 06</div><h2>SPI Clock — Prescaler &amp; Baud Rate</h2></div>
+
+  <div class="subhead"><span class="emoji">🎯</span>Mục tiêu</div>
+  <p>Hiểu SCLK = PCLK chia qua prescaler, tính đúng tần số thực tế từ register.</p>
+
+  <div class="subhead"><span class="emoji">⚙️</span>Hardware</div>
+  <div class="ascii">   APB Bus Clock (PCLK, vd 48 MHz trên STM32F0)
+                |
+                v
+        Prescaler (chia bởi CR1.BR[2:0])
+                |
+                v
+             SCLK  --------> chân vật lý SCK</div>
+
+  <div class="subhead"><span class="emoji">📝</span>Register</div>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_ll_spi.h</span><button class="copy-btn">Copy</button></div>
+    <pre><code>#define LL_SPI_BAUDRATEPRESCALER_DIV2    (0U)                                  // fPCLK/2
+#define LL_SPI_BAUDRATEPRESCALER_DIV4    (SPI_CR1_BR_0)                        // fPCLK/4
+#define LL_SPI_BAUDRATEPRESCALER_DIV8    (SPI_CR1_BR_1)                        // fPCLK/8
+#define LL_SPI_BAUDRATEPRESCALER_DIV16   (SPI_CR1_BR_1 | SPI_CR1_BR_0)         // fPCLK/16
+#define LL_SPI_BAUDRATEPRESCALER_DIV32   (SPI_CR1_BR_2)                        // fPCLK/32
+#define LL_SPI_BAUDRATEPRESCALER_DIV64   (SPI_CR1_BR_2 | SPI_CR1_BR_0)         // fPCLK/64
+#define LL_SPI_BAUDRATEPRESCALER_DIV128  (SPI_CR1_BR_2 | SPI_CR1_BR_1)         // fPCLK/128
+#define LL_SPI_BAUDRATEPRESCALER_DIV256  (SPI_CR1_BR_2 | SPI_CR1_BR_1 | SPI_CR1_BR_0) // fPCLK/256</code></pre>
+  </div>
+  <p>Chỉ 3 bit <span class="mono">BR[2:0]</span> → 8 mức chia cố định. Ví dụ: PCLK=48MHz, chọn DIV4 → SCLK = 48/4 = <b>12 MHz</b> (T ≈ 83.3ns).</p>
+
+  <div class="subhead"><span class="emoji">💻</span>Source Code — ghi CR1 thật trong <span class="mono">HAL_SPI_Init</span></div>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_hal_spi.c :302-308</span><button class="copy-btn">Copy</button></div>
+    <pre><code>hspi->Instance->CR1 = (hspi->Init.Mode | hspi->Init.Direction |
+                       hspi->Init.CLKPolarity | hspi->Init.CLKPhase | (hspi->Init.NSS & SPI_CR1_SSM) |
+                       hspi->Init.BaudRatePrescaler | hspi->Init.FirstBit  | hspi->Init.CRCCalculation);</code></pre>
+  </div>
+  <div class="card warn">
+    <div class="card-title">⚠️ Common Mistake</div>
+    Dòng trên ghi <b>toàn bộ CR1 một lần</b> — nếu gọi lại <span class="mono">HAL_SPI_Init</span> chỉ để đổi baud rate mà quên set lại các field khác (CPOL/CPHA/NSS/FirstBit), chúng có thể bị reset về giá trị mặc định/rác của struct.
+  </div>
+
+  <div class="subhead"><span class="emoji">🔍</span>Debugging</div>
+  <p>SCLK đo được khác tính toán? Kiểm tra theo thứ tự: (1) PCLK thật đang chạy tần số nào (clock tree),
+  (2) giá trị <span class="mono">BR</span> trong CR1 đọc bằng debugger, (3) có code khác ghi đè CR1 sau đó không.</p>
+
+  <div class="subhead"><span class="emoji">🎯</span>Key Takeaways</div>
+  <ul><li>SCLK = PCLK / prescaler (8 mức cố định).</li>
+  <li>Giới hạn tốc độ thực tế phụ thuộc CPU (polling/interrupt) lẫn Slave, không chỉ giá trị ghi vào BR.</li></ul>
+</section>
+
+<!-- ================= 07 CPOL/CPHA ================= -->
+<section class="chapter" id="cpolcpha" data-title="CPOL CPHA clock polarity phase idle sample edge rising falling">
+  <div class="chapter-head"><div class="kicker">Chapter 07</div><h2>CPOL / CPHA</h2></div>
+
+  <div class="subhead"><span class="emoji">📚</span>Kiến thức nền</div>
+  <p><b>Clock idle</b> là mức SCLK giữ khi không giao dịch. <b>Rising edge</b> = cạnh lên (LOW→HIGH), <b>Falling edge</b> = cạnh xuống.
+  Dữ liệu không được đổi đúng lúc bị đọc (setup/hold time) → SPI dùng nguyên tắc: 1 cạnh dùng để <b>đổi dữ liệu</b>, cạnh còn lại dùng để <b>lấy mẫu (sample)</b>.</p>
+
+  <div class="card concept">
+    <div class="card-title">🧠 Concept</div>
+    <b>CPOL</b> (Clock Polarity) quyết định mức idle của SCLK: CPOL=0 → idle LOW; CPOL=1 → idle HIGH.<br>
+    <b>CPHA</b> (Clock Phase) quyết định cạnh nào dùng để sample: CPHA=0 → sample cạnh đầu tiên; CPHA=1 → sample cạnh thứ hai.
+  </div>
+
+  <div class="subhead"><span class="emoji">📝</span>Register (STM32F0, thật)</div>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_ll_spi.h</span><button class="copy-btn">Copy</button></div>
+    <pre><code>#define LL_SPI_PHASE_1EDGE   ((uint32_t)0x00000000U)  // CPHA=0, sample cạnh đầu
+#define LL_SPI_PHASE_2EDGE   (SPI_CR1_CPHA)            // CPHA=1, sample cạnh thứ 2
+#define LL_SPI_POLARITY_LOW  ((uint32_t)0x00000000U)   // CPOL=0, idle LOW
+#define LL_SPI_POLARITY_HIGH (SPI_CR1_CPOL)             // CPOL=1, idle HIGH
+
+MODIFY_REG(SPIx->CR1, SPI_CR1_CPHA, ClockPhase);   // chỉ đổi bit CPHA
+MODIFY_REG(SPIx->CR1, SPI_CR1_CPOL, ClockPolarity);// chỉ đổi bit CPOL</code></pre>
+  </div>
+
+  <div class="card important">
+    <div class="card-title">⭐ Important</div>
+    Master và Slave <b>bắt buộc</b> cùng SPI Mode. Nếu lệch, Slave có thể đọc dữ liệu đúng lúc nó còn đang biến đổi (chưa ổn định)
+    hoặc lấy sai bit hoàn toàn — dữ liệu nhận được là rác dù waveform "trông có vẻ đúng" nếu không để ý đúng cạnh sample.
+  </div>
+
+  <div class="subhead"><span class="emoji">📈</span>Waveform 4 SPI Mode</div>
+  <p>Ký hiệu: S = sample, dữ liệu đổi ở cạnh còn lại.</p>
+  <div class="diagram-box">
+    <svg viewBox="0 0 620 420" role="img" aria-label="Waveform 4 SPI Mode: Mode 0 idle low sample rising, Mode 1 idle low sample falling, Mode 2 idle high sample falling, Mode 3 idle high sample rising">
+      <style>.lbl{font:12px monospace; fill:var(--text,#1b2430);} .wl{stroke:#0b63c5; stroke-width:2; fill:none;} .cl{stroke:#0891b2; stroke-width:1.5; fill:none; stroke-dasharray:3,2;} .sm{font:11px monospace; fill:#c0392b; font-weight:bold;}</style>
+      <!-- Mode0 -->
+      <text x="10" y="18" class="lbl" font-weight="bold">Mode 0  CPOL=0 CPHA=0  idle LOW  sample=Rising</text>
+      <path class="wl" d="M20,40 L20,55 L60,55 L60,40 L100,40 L100,55 L140,55 L140,40 L180,40 L180,55 L220,55 L220,40 L260,40"/>
+      <text x="60" y="35" class="sm" text-anchor="middle">S</text><text x="140" y="35" class="sm" text-anchor="middle">S</text><text x="220" y="35" class="sm" text-anchor="middle">S</text>
+      <text x="10" y="75" class="lbl">CS</text><line class="cl" x1="20" y1="70" x2="260" y2="70"/>
+      <!-- Mode1 -->
+      <text x="10" y="110" class="lbl" font-weight="bold">Mode 1  CPOL=0 CPHA=1  idle LOW  sample=Falling</text>
+      <path class="wl" d="M20,132 L20,147 L60,147 L60,132 L100,132 L100,147 L140,147 L140,132 L180,132 L180,147 L220,147 L220,132 L260,132"/>
+      <text x="100" y="165" class="sm" text-anchor="middle">S</text><text x="180" y="165" class="sm" text-anchor="middle">S</text><text x="260" y="165" class="sm" text-anchor="middle">S</text>
+      <!-- Mode2 -->
+      <text x="10" y="205" class="lbl" font-weight="bold">Mode 2  CPOL=1 CPHA=0  idle HIGH  sample=Falling</text>
+      <path class="wl" d="M20,225 L20,240 L60,240 L60,225 L100,225 L100,240 L140,240 L140,225 L180,225 L180,240 L220,240 L220,225 L260,225" transform="translate(0,0) scale(1,-1) translate(0,-450)"/>
+      <text x="60" y="200" class="sm" text-anchor="middle">S</text><text x="140" y="200" class="sm" text-anchor="middle">S</text><text x="220" y="200" class="sm" text-anchor="middle">S</text>
+      <!-- Mode3 -->
+      <text x="10" y="300" class="lbl" font-weight="bold">Mode 3  CPOL=1 CPHA=1  idle HIGH  sample=Rising</text>
+      <path class="wl" d="M20,320 L20,335 L60,335 L60,320 L100,320 L100,335 L140,335 L140,320 L180,320 L180,335 L220,335 L220,320 L260,320" transform="translate(0,0) scale(1,-1) translate(0,-640)"/>
+      <text x="100" y="392" class="sm" text-anchor="middle">S</text><text x="180" y="392" class="sm" text-anchor="middle">S</text><text x="260" y="392" class="sm" text-anchor="middle">S</text>
+    </svg>
+    <div class="ascii" style="text-align:left; margin-top:10px;">Mode 0: CS‾‾\_____________  SCLK ___/‾\___/‾\___/‾\___  MOSI ==C1====C2====C3======  (sample rising, đổi ở falling)
+Mode 1: CS‾‾\_____________  SCLK ___/‾\___/‾\___/‾\___  MOSI ==C1====C2====C3======  (sample falling, đổi ở rising)
+Mode 2: CS‾‾\_____________  SCLK ‾‾‾\___/‾‾‾\___/‾‾‾__  MOSI ==C1====C2====C3======  (idle HIGH, sample falling)
+Mode 3: CS‾‾\_____________  SCLK ‾‾‾\___/‾‾‾\___/‾‾‾__  MOSI ==C1====C2====C3======  (idle HIGH, sample rising)</div>
+  </div>
+
+  <div class="subhead"><span class="emoji">🔍</span>Debugging</div>
+  <div class="card debug">
+    <div class="card-title">🔧 Debug</div>
+    Đây là nguyên nhân phổ biến bậc nhất của "SPI có clock, có data, nhưng đọc ra toàn giá trị sai/lệch bit".
+    Xác nhận bằng cách đối chiếu Mode trong datasheet Slave với <span class="mono">CLKPolarity</span>/<span class="mono">CLKPhase</span> code đang set — không đoán.
+  </div>
+
+  <div class="subhead"><span class="emoji">🎯</span>Key Takeaways</div>
+  <ul><li>4 mode = 2(CPOL) × 2(CPHA); STM32 chỉ dùng 2 bit CR1.CPOL/CR1.CPHA.</li>
+  <li>Sai CPOL/CPHA thường biểu hiện: byte đầu "có vẻ đúng" do trùng hợp, byte sau sai rõ ràng.</li></ul>
+</section>
+
+<!-- ================= 08 MODES TABLE ================= -->
+<section class="chapter" id="modes" data-title="SPI Modes table 0 1 2 3 idle clock first edge">
+  <div class="chapter-head"><div class="kicker">Chapter 08</div><h2>SPI Modes — Bảng tổng hợp</h2></div>
+  <table>
+    <tr><th>Mode</th><th>CPOL</th><th>CPHA</th><th>Idle Clock</th><th>Sample Edge</th></tr>
+    <tr><td>0</td><td>0</td><td>0</td><td>LOW</td><td>Rising (cạnh 1)</td></tr>
+    <tr><td>1</td><td>0</td><td>1</td><td>LOW</td><td>Falling (cạnh 2)</td></tr>
+    <tr><td>2</td><td>1</td><td>0</td><td>HIGH</td><td>Falling (cạnh 1)</td></tr>
+    <tr><td>3</td><td>1</td><td>1</td><td>HIGH</td><td>Rising (cạnh 2)</td></tr>
+  </table>
+  <p>Mode 0 và Mode 3 là 2 mode phổ biến nhất trong thực tế (nhiều chip Flash/sensor mặc định Mode 0).</p>
+</section>
+
+<!-- ================= 09 MSB/LSB ================= -->
+<section class="chapter" id="msblsb" data-title="MSB first LSB first bit order register FirstBit">
+  <div class="chapter-head"><div class="kicker">Chapter 09</div><h2>MSB / LSB First</h2></div>
+  <p>Xem chi tiết cơ chế ở <a href="#shiftreg">Chương 05 — Shift Register</a>. Tóm tắt: chỉ 1 bit <span class="mono">CR1.LSBFIRST</span>
+  quyết định hướng dịch của <b>toàn bộ</b> TX/RX. Sai bit order → clock/mode đúng nhưng giá trị byte hoàn toàn sai
+  (dễ nhầm với lỗi CPOL/CPHA nếu không kiểm tra riêng).</p>
+  <div class="card warn"><div class="card-title">⚠️ Common Bug</div>
+  Copy code mẫu từ project khác (Slave khác) mà quên đổi <span class="mono">FirstBit</span> cho đúng Slave hiện tại.</div>
+</section>
+
+<!-- ================= 10 CHIP SELECT ================= -->
+<section class="chapter" id="cs" data-title="Chip Select CS timing setup hold active low NSS pulse">
+  <div class="chapter-head"><div class="kicker">Chapter 10</div><h2>Chip Select — Timing chi tiết</h2></div>
+
+  <p><b>CS setup time:</b> thời gian tối thiểu giữa CS xuống LOW và xung clock đầu tiên — Slave cần thời gian "tỉnh dậy".<br>
+  <b>CS hold time:</b> thời gian tối thiểu giữ CS LOW sau xung clock cuối trước khi thả lên — đảm bảo Slave latch xong byte cuối.</p>
+
+  <div class="subhead"><span class="emoji">📈</span>Waveform — 2 cách dùng CS</div>
+  <div class="ascii">Case 1 — Một CS cho toàn bộ transaction (phổ biến, đa số SPI Flash/EEPROM):
+CS   \_________________________________/
+        Command   Address   Data
+SCLK  ___/‾\/‾\/‾\/‾\/‾\/‾\/‾\/‾\/‾\_____
+
+Case 2 — CS toggle giữa từng byte (ít gặp, một số chip cho phép):
+CS   \____/‾‾\____/‾‾\____/‾‾\____
+SCLK      /‾\      /‾\      /‾\</div>
+
+  <p><span class="badge fact">FACT</span> STM32F0 có tính năng phần cứng <span class="mono">NSSP</span> để tự sinh 1 xung NSS
+  giữa mỗi data frame (chỉ áp dụng khi dùng NSS hardware, không áp dụng khi <span class="mono">SSM</span> — software NSS — đang bật):</p>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_hal_spi.h / ll_spi.h</span><button class="copy-btn">Copy</button></div>
+    <pre><code>#define SPI_NSS_PULSE_ENABLE   SPI_CR2_NSSP
+#define SPI_NSS_PULSE_DISABLE  ((uint32_t)0x00000000)
+SET_BIT(SPIx->CR2, SPI_CR2_NSSP);   // bật NSS pulse (chỉ có tác dụng ở NSS hardware mode)</code></pre>
+  </div>
+
+  <div class="card important"><div class="card-title">⭐ Important</div>
+  Đa số SPI Flash <b>bắt buộc</b> giữ CS LOW xuyên suốt command+address+data vì command decoder bên trong Flash
+  reset trạng thái mỗi khi CS lên HIGH. Thả CS giữa command và data sẽ khiến Slave hiểu nhầm là bắt đầu 1 lệnh mới.</div>
+</section>
+
+<!-- ================= 11 TRANSACTION ================= -->
+<section class="chapter" id="transaction" data-title="SPI Transaction boundary command address dummy data read flash">
+  <div class="chapter-head"><div class="kicker">Chapter 11</div><h2>SPI Transaction</h2></div>
+  <p>Một <b>transaction</b> là khoảng thời gian CS active liên tục, chứa command + address + dummy + data theo giao thức riêng của Slave.</p>
+  <div class="ascii">CS LOW
+  |
+  +-- Command (vd 0x03 = READ)
+  |
+  +-- Address (24-bit với Flash)
+  |
+  +-- Dummy cycles (nếu cần)
+  |
+  +-- Data
+  |
+CS HIGH</div>
+  <p>Xem case study đầy đủ ở <a href="#caseflash">Chương 22 — SPI Flash</a> và bug thực tế liên quan CS transaction boundary ở
+  <a href="#casesensor">Chương 23 — Case Study Sensor</a>.</p>
+</section>
+
+<!-- ================= 12 FRAME SIZE ================= -->
+<section class="chapter" id="framesize" data-title="Frame word size 8 bit 16 bit data width configurable">
+  <div class="chapter-head"><div class="kicker">Chapter 12</div><h2>Frame / Word Size</h2></div>
+  <p>STM32F0 SPI hỗ trợ data width cấu hình được từ 4-bit đến 16-bit qua <span class="mono">CR2.DS[3:0]</span>:</p>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_ll_spi.h</span><button class="copy-btn">Copy</button></div>
+    <pre><code>#define LL_SPI_DATAWIDTH_4BIT   (SPI_CR2_DS_0 | SPI_CR2_DS_1)
+...
+#define LL_SPI_DATAWIDTH_8BIT   (SPI_CR2_DS_2 | SPI_CR2_DS_1 | SPI_CR2_DS_0)
+...
+#define LL_SPI_DATAWIDTH_16BIT  (SPI_CR2_DS_3 | SPI_CR2_DS_2 | SPI_CR2_DS_1 | SPI_CR2_DS_0)</code></pre>
+  </div>
+  <p>Data width ảnh hưởng trực tiếp đến cách CPU ép kiểu con trỏ khi ghi/đọc <span class="mono">DR</span> (xem Chương 04 — "packing mode"),
+  đến ngưỡng FIFO (Chương 15), và đến cách tính <span class="mono">TxXferCount</span> khi dùng DMA (Chương 18).</p>
+</section>
+
+<!-- ================= 13 PERIPHERAL ================= -->
+<section class="chapter" id="peripheral" data-title="MCU SPI Peripheral block diagram clock TX RX FIFO shift register">
+  <div class="chapter-head"><div class="kicker">Chapter 13</div><h2>MCU SPI Peripheral — Sơ đồ khối</h2></div>
+  <div class="ascii">                SPI Peripheral
+                     |
+        +------------+------------+
+        |            |            |
+      Clock         TX           RX
+        |            |            |
+        v            v            v
+    Prescaler     TX FIFO       RX FIFO
+                     |
+                     v
+                Shift Register
+                     |
+              +------+------+
+              |             |
+            MOSI           MISO</div>
+  <p>Toàn bộ khối này nằm "bên trong silicon" — chỉ hoạt động ra tín hiệu điện thật khi lớp GPIO Alternate Function
+  đã nối đúng chân vật lý (xem <a href="#gpio">Chương 19</a>).</p>
+</section>
+
+<!-- ================= 14 REGISTERS ================= -->
+<section class="chapter" id="registers" data-title="SPI Registers CR1 CR2 SR DR bit field STM32F0 table">
+  <div class="chapter-head"><div class="kicker">Chapter 14</div><h2>SPI Registers (STM32F0, thật)</h2></div>
+  <div class="table-wrap"><table>
+    <caption>Bảng register — trích từ <span class="mono">stm32f0xx_ll_spi.h</span></caption>
+    <tr><th>Register</th><th>Bit</th><th>Name</th><th>Access</th><th>Ý nghĩa</th></tr>
+    <tr><td>CR1</td><td>6</td><td>SPE</td><td>RW</td><td>Enable toàn bộ khối SPI (state machine)</td></tr>
+    <tr><td>CR1</td><td>2,8</td><td>MSTR, SSI</td><td>RW</td><td>Chọn Master mode</td></tr>
+    <tr><td>CR1</td><td>0</td><td>CPHA</td><td>RW</td><td>Clock phase — cạnh sample</td></tr>
+    <tr><td>CR1</td><td>1</td><td>CPOL</td><td>RW</td><td>Clock polarity — mức idle</td></tr>
+    <tr><td>CR1</td><td>5:3</td><td>BR[2:0]</td><td>RW</td><td>Baud rate prescaler (/2..../256)</td></tr>
+    <tr><td>CR1</td><td>7</td><td>LSBFIRST</td><td>RW</td><td>0=MSB first, 1=LSB first</td></tr>
+    <tr><td>CR1</td><td>9</td><td>SSM</td><td>RW</td><td>Software NSS management</td></tr>
+    <tr><td>CR2</td><td>3:0</td><td>DS[3:0]</td><td>RW</td><td>Data width 4..16 bit</td></tr>
+    <tr><td>CR2</td><td>12</td><td>FRXTH</td><td>RW</td><td>RX FIFO threshold</td></tr>
+    <tr><td>CR2</td><td>3</td><td>NSSP</td><td>RW</td><td>NSS Pulse mode (hardware NSS only)</td></tr>
+    <tr><td>CR2</td><td>7</td><td>TXEIE</td><td>RW</td><td>TX buffer empty interrupt enable</td></tr>
+    <tr><td>CR2</td><td>6</td><td>RXNEIE</td><td>RW</td><td>RX buffer not empty interrupt enable</td></tr>
+    <tr><td>CR2</td><td>5</td><td>ERRIE</td><td>RW</td><td>Error interrupt enable</td></tr>
+    <tr><td>CR2</td><td>1</td><td>TXDMAEN</td><td>RW</td><td>Enable DMA request cho TX</td></tr>
+    <tr><td>CR2</td><td>0</td><td>RXDMAEN</td><td>RW</td><td>Enable DMA request cho RX</td></tr>
+    <tr><td>SR</td><td>1</td><td>TXE</td><td>RO</td><td>TX buffer empty — sẵn sàng nạp byte kế tiếp</td></tr>
+    <tr><td>SR</td><td>0</td><td>RXNE</td><td>RO</td><td>RX buffer not empty — có dữ liệu mới</td></tr>
+    <tr><td>SR</td><td>7</td><td>BSY</td><td>RO</td><td>Peripheral đang bận (đang shift bit)</td></tr>
+    <tr><td>SR</td><td>3</td><td>UDR</td><td>RO</td><td>Underrun (chủ yếu TI mode)</td></tr>
+    <tr><td>SR</td><td>4</td><td>CRCERR</td><td>RO</td><td>CRC error</td></tr>
+    <tr><td>SR</td><td>5</td><td>MODF</td><td>RO</td><td>Mode Fault — tự động tắt SPE khi clear</td></tr>
+    <tr><td>SR</td><td>6</td><td>OVR</td><td>RO</td><td>Overrun — RX mới đè lên RX cũ chưa đọc</td></tr>
+    <tr><td>SR</td><td>8</td><td>FRE</td><td>RO</td><td>TI mode frame format error</td></tr>
+    <tr><td>DR</td><td>15:0</td><td>DR</td><td>RW</td><td>Data Register — cổng vào/ra của Shift Register</td></tr>
+  </table></div>
+  <div class="card debug"><div class="card-title">🔧 Hardware behavior đặc biệt</div>
+  Đọc <span class="mono">DR</span> có tác dụng phụ <b>tự động clear RXNE</b>. Ngược lại các cờ lỗi (OVR/MODF/FRE) phải clear
+  bằng macro riêng — xem <a href="#debugging">Chương 25</a>.</div>
+</section>
+
+<!-- ================= 15 FLAGS ================= -->
+<section class="chapter" id="flags" data-title="Status Flags TXE RXNE BSY OVR MODF error">
+  <div class="chapter-head"><div class="kicker">Chapter 15</div><h2>Status Flags</h2></div>
+  <table>
+    <tr><th>Flag</th><th>Ý nghĩa</th><th>Ai clear, bằng cách nào</th></tr>
+    <tr><td>TXE</td><td>TX buffer rỗng, sẵn sàng ghi byte mới</td><td>Tự động clear khi ghi DR</td></tr>
+    <tr><td>RXNE</td><td>Có data mới trong RX</td><td>Tự động clear khi đọc DR</td></tr>
+    <tr><td>BSY</td><td>Đang shift bit / bận</td><td>Tự động, phần cứng quản lý</td></tr>
+    <tr><td>MODF</td><td>Mode Fault (NSS hardware bị kéo sai lúc Master)</td><td>Đọc SR rồi <b>tự động clear luôn CR1.SPE</b> — phải enable lại SPI</td></tr>
+    <tr><td>OVR</td><td>Overrun — mất data cũ chưa đọc kịp</td><td>Đọc DR trước, rồi đọc SR</td></tr>
+    <tr><td>FRE</td><td>TI mode frame error</td><td>Đọc SR</td></tr>
+  </table>
+  <div class="codeblock"><div class="cb-head"><span>Ví dụ polling flag</span><button class="copy-btn">Copy</button></div>
+  <pre><code>while (!(SPI->SR & SPI_SR_TXE))
+    ; /* chờ TX buffer rỗng */
+SPI->DR = data;</code></pre></div>
+</section>
+
+<!-- ================= 16 POLLING ================= -->
+<section class="chapter" id="polling" data-title="Polling mode CPU busy wait while TXE RXNE sequence">
+  <div class="chapter-head"><div class="kicker">Chapter 16</div><h2>Polling Mode</h2></div>
+  <div class="ascii">CPU
+ |
+ | ghi DR
+ v
+SPI Peripheral
+ |
+ | sinh SCLK, shift bit
+ v
+Slave
+ |
+ | trả data qua MISO
+ v
+SPI RX shift register
+ |
+ | latch -> RXNE=1
+ v
+CPU (polling while) đọc DR</div>
+  <p>CPU liên tục lặp <span class="mono">while(!(SR & TXE))</span> — tốn 100% thời gian CPU trong lúc chờ. Xem code thật ở
+  <a href="#fullduplex">Chương 04</a>.</p>
+</section>
+
+<!-- ================= 17 INTERRUPT ================= -->
+<section class="chapter" id="interrupt" data-title="Interrupt mode NVIC ISR TXEIE RXNEIE ERRIE HAL_SPI_IRQHandler">
+  <div class="chapter-head"><div class="kicker">Chapter 17</div><h2>Interrupt Mode</h2></div>
+
+  <div class="subhead"><span class="emoji">💻</span>Source Code thật — <span class="mono">HAL_SPI_IRQHandler</span></div>
+  <div class="codeblock">
+    <div class="cb-head"><span>stm32f0xx_hal_spi.c :1728-1784</span><button class="copy-btn">Copy</button></div>
+    <pre><code>void HAL_SPI_IRQHandler(SPI_HandleTypeDef *hspi)
+{
+  uint32_t itsource = hspi->Instance->CR2;   // (1) interrupt nào đang được bật
+  uint32_t itflag   = hspi->Instance->SR;    // (2) cờ nào đang set
+
+  if(((itflag & SPI_FLAG_OVR) == RESET) &&
+     ((itflag & SPI_FLAG_RXNE) != RESET) && ((itsource & SPI_IT_RXNE) != RESET))
+  {
+    hspi->RxISR(hspi);   // (3) con trỏ hàm — không hardcode!
+    return;
+  }
+  if(((itflag & SPI_FLAG_TXE) != RESET) && ((itsource & SPI_IT_TXE) != RESET))
+  {
+    hspi->TxISR(hspi);   // (4)
+    return;
+  }
+  if((itflag & (SPI_FLAG_MODF | SPI_FLAG_OVR | SPI_FLAG_FRE)) != RESET)
+  {
+    /* xử lý lỗi, disable interrupt, gọi HAL_SPI_ErrorCallback(hspi); */  // (5)
+  }
+}</code></pre>
+  </div>
+  <div class="card important"><div class="card-title">⭐ Important</div>
+  <span class="mono">hspi->RxISR(hspi)</span> và <span class="mono">TxISR(hspi)</span> là <b>con trỏ hàm</b>, HAL tự đổi hàm xử lý
+  theo runtime tùy 8-bit/16-bit/CRC. Đặt breakpoint ngay trong <span class="mono">HAL_SPI_IRQHandler</span> sẽ không thấy code xử lý thật — phải step tiếp vào con trỏ hàm.</div>
+
+  <div class="subhead"><span class="emoji">💻</span>RX ISR thật</div>
+  <div class="codeblock"><div class="cb-head"><span>stm32f0xx_hal_spi.c :2422-2442</span><button class="copy-btn">Copy</button></div>
+  <pre><code>static void SPI_RxISR_8BIT(struct __SPI_HandleTypeDef *hspi)
+{
+  *hspi->pRxBuffPtr++ = (*(__IO uint8_t *)&hspi->Instance->DR);  // đọc DR -> tự clear RXNE
+  hspi->RxXferCount--;
+  if(hspi->RxXferCount == 0) { SPI_CloseRx_ISR(hspi); }
+}</code></pre></div>
+
+  <div class="subhead"><span class="emoji">📈</span>Sequence Diagram</div>
+  <div class="ascii">SPI peripheral (RXNE=1)
+        |
+        v
+NVIC (kiểm tra RXNEIE đã enable + priority)
+        |
+        v
+CPU nhảy vào SPI1_IRQHandler() -> HAL_SPI_IRQHandler(&hspi1)
+        |
+        v
+hspi->RxISR(hspi) -> đọc DR, giảm counter
+        |
+        v (hết byte)
+SPI_CloseRx_ISR -> HAL_SPI_RxCpltCallback(hspi)  (weak, app override)</div>
+
+  <div class="subhead"><span class="emoji">🔍</span>Debugging</div>
+  <ul class="checklist">
+    <li>CR2.RXNEIE/TXEIE/ERRIE đã được bật bởi <span class="mono">HAL_SPI_Transmit_IT</span>/<span class="mono">Receive_IT</span> chưa?</li>
+    <li>NVIC (<span class="mono">NVIC_EnableIRQ</span>) cho đúng IRQ line có được gọi trong MspInit chưa?</li>
+    <li>Priority NVIC có bị mask bởi ISR khác priority cao hơn đang chạy dài không?</li>
+  </ul>
+</section>
+
+<!-- ================= 18 DMA ================= -->
+<section class="chapter" id="dma" data-title="DMA SPI TXDMAEN RXDMAEN packing mode LDMATX HAL_SPI_Transmit_DMA">
+  <div class="chapter-head"><div class="kicker">Chapter 18</div><h2>DMA + SPI</h2></div>
+
+  <div class="subhead"><span class="emoji">💻</span>Source Code thật — <span class="mono">HAL_SPI_Transmit_DMA</span></div>
+  <div class="codeblock"><div class="cb-head"><span>stm32f0xx_hal_spi.c :1311-1394</span><button class="copy-btn">Copy</button></div>
+  <pre><code>hspi->hdmatx->XferCpltCallback = SPI_DMATransmitCplt;   // (1) đăng ký callback
+hspi->hdmatx->XferErrorCallback = SPI_DMAError;
+
+HAL_DMA_Start_IT(hspi->hdmatx,
+                  (uint32_t)hspi->pTxBuffPtr,             // source = RAM buffer
+                  (uint32_t)&hspi->Instance->DR,           // dest   = SPI->DR (địa chỉ cố định)
+                  hspi->TxXferCount);                       // count  = Size
+
+if((hspi->Instance->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE)
+{
+  __HAL_SPI_ENABLE(hspi);                                   // (2) enable SPI TRƯỚC
+}
+SET_BIT(hspi->Instance->CR2, SPI_CR2_TXDMAEN);              // (3) bật DMA request SAU</code></pre></div>
+
+  <div class="card warn"><div class="card-title">⚠️ Common Bug</div>
+  Bật <span class="mono">TXDMAEN</span> <b>trước khi</b> SPI enable có thể miss request đầu tiên tùy silicon revision —
+  code thật cố ý enable SPI trước, bật TXDMAEN sau để tránh race này.</div>
+
+  <div class="subhead"><span class="emoji">⚙️</span>So sánh 3 chế độ</div>
+  <div class="ascii">Polling   : CPU --(ghi DR)--> SPI --(chờ TXE while)--> CPU --(ghi DR)--> ...    [CPU bận 100%]
+Interrupt : SPI --(TXE)--> NVIC --> CPU chạy ISR (1 byte) --> rảnh --> lặp lại              [CPU bận từng lúc ngắn]
+DMA       : SPI --(TXDMAEN)--> DMA tự copy RAM<->DR liên tục --> callback khi xong          [CPU rảnh hoàn toàn]</div>
+
+  <div class="subhead"><span class="emoji">📝</span>Packing mode DMA (fact đặc biệt STM32F0)</div>
+  <div class="codeblock"><div class="cb-head"><span>stm32f0xx_hal_spi.c :1361-1376</span><button class="copy-btn">Copy</button></div>
+  <pre><code>if((hspi->Init.DataSize <= SPI_DATASIZE_8BIT) && (hspi->hdmatx->Init.MemDataAlignment == DMA_MDATAALIGN_HALFWORD))
+{
+  if((hspi->TxXferCount & 0x1) == 0)
+    hspi->TxXferCount = (hspi->TxXferCount >> 1);          // Size chẵn: mỗi DMA transfer = 2 byte
+  else
+  {
+    SET_BIT(hspi->Instance->CR2, SPI_CR2_LDMATX);           // Size lẻ: báo "lần cuối chỉ 1 byte"
+    hspi->TxXferCount = (hspi->TxXferCount >> 1) + 1;
+  }
+}</code></pre></div>
+
+  <div class="subhead"><span class="emoji">🔍</span>Debugging</div>
+  <ul class="checklist">
+    <li>DMA channel không bận từ transfer trước chưa hoàn tất?</li>
+    <li>TXDMAEN/RXDMAEN trong CR2 đã set?</li>
+    <li>DMA channel gán đúng request line của đúng SPI instance (bảng mapping cố định theo MCU)?</li>
+    <li>SPI_CR1_SPE đã bật?</li>
+  </ul>
+</section>
+
+<!-- ================= 19 GPIO ================= -->
+<section class="chapter" id="gpio" data-title="GPIO pinmux alternate function MspInit clock enable SPI">
+  <div class="chapter-head"><div class="kicker">Chapter 19</div><h2>GPIO / Pinmux &amp; MspInit</h2></div>
+
+  <div class="card important"><div class="card-title">⭐ Important — Vì sao "SPI enable rồi mà không có waveform"</div>
+  <span class="mono">HAL_SPI_MspInit</span> là hàm <b>weak</b>, mặc định rỗng (thật, dòng 371-379 <span class="mono">stm32f0xx_hal_spi.c</span>).
+  Đây là nơi bật clock peripheral + cấu hình GPIO Alternate Function + NVIC. Nếu quên override, <span class="mono">SPI_CR1_SPE</span> có set
+  cũng vô nghĩa vì clock chưa bật và GPIO chưa nối vào khối SPI.</div>
+
+  <div class="subhead"><span class="emoji">💻</span>Pattern thật (I2C1, đang chạy trong PS-CPU — cùng cấu trúc CubeMX sinh cho SPI)</div>
+  <div class="codeblock"><div class="cb-head"><span>main/Src/stm32f0xx_hal_msp.c :66-97</span><button class="copy-btn">Copy</button></div>
+  <pre><code>void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
+{
+  GPIO_InitTypeDef GPIO_InitStruct;
+  if(hi2c->Instance==I2C1)
+  {
+    GPIO_InitStruct.Pin       = GPIO_PIN_6|GPIO_PIN_7;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    __HAL_RCC_I2C1_CLK_ENABLE();                 // BẬT CLOCK
+    HAL_NVIC_SetPriority(I2C1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(I2C1_IRQn);
+  }
+}</code></pre></div>
+  <p><span class="badge inference">INFERENCE</span> Nếu SPI được dùng trong PS-CPU, CubeMX sẽ sinh <span class="mono">HAL_SPI_MspInit</span>
+  cùng cấu trúc, chỉ khác: <span class="mono">GPIO_MODE_AF_PP</span> (Push-Pull, không Open-Drain như I2C), đúng <span class="mono">GPIO_AFx_SPIx</span>,
+  <span class="mono">__HAL_RCC_SPIx_CLK_ENABLE()</span>, <span class="mono">SPIx_IRQn</span>.</p>
+
+  <div class="subhead"><span class="emoji">🔍</span>Debug checklist "không có SCLK"</div>
+  <ul class="checklist">
+    <li>Clock cho SPI instance đã bật? (đọc RCC->APB1ENR/APB2ENR)</li>
+    <li>GPIOx->MODER của chân SCK = Alternate Function (giá trị 10)?</li>
+    <li>GPIOx->AFRL/AFRH đúng AF number của SPI đó?</li>
+    <li>SPI_CR1_SPE đã set?</li>
+    <li>Vẫn không có sóng → nghi phần cứng board (đứt trace, sai footprint).</li>
+  </ul>
+</section>
+
+<!-- ================= 20 DRIVER ARCHITECTURE ================= -->
+<section class="chapter" id="driverarch" data-title="Driver architecture call graph application HAL register hardware">
+  <div class="chapter-head"><div class="kicker">Chapter 20</div><h2>Driver Architecture — Call Graph tổng hợp</h2></div>
+  <div class="ascii">Application code
+      |
+HAL_SPI_Init(&hspi1)
+      |
+      +--> HAL_SPI_MspInit(hspi)      [clock + GPIO AF + NVIC]
+      |
+      +--> ghi CR1 (Mode|CPOL|CPHA|BR|FirstBit)
+      +--> ghi CR2 (DataSize|NSS|NSSP)
+      |
+HAL_SPI_Transmit/_IT/_DMA(&hspi1, buf, size)
+      |
+      +--> __HAL_SPI_ENABLE (set SPI_CR1_SPE)
+      +--> ghi DR (polling)
+      |    hoặc bật TXEIE/RXNEIE (interrupt)
+      |    hoặc bật TXDMAEN/RXDMAEN (DMA)
+      |
+TX shift register dịch bit ra MOSI theo SCLK
+RX shift register dịch bit vào từ MISO
+      |
+   PCB trace -> chân Slave -> phản hồi thật trên MISO</div>
+  <p>Ghép đầy đủ nguyên tắc <b>"Source Code → Register → Peripheral → Signal"</b>:</p>
+  <div class="ascii">spi_transfer()
+      │
+      ▼
+SPI->DR = data   (MMIO write)
+      │
+      ▼
+TX Register / FIFO
+      │
+      ▼
+Shift Register
+      │
+      ▼
+MOSI  (điện áp thay đổi thật trên chân)
+      │
+      ▼
+SPI Slave</div>
+</section>
+
+<!-- ================= 21 SOURCE ANALYSIS ================= -->
+<section class="chapter" id="sourceanalysis" data-title="Source Code Analysis PS-CPU pscpu_s800 SPI unused I2C used fact inference">
+  <div class="chapter-head"><div class="kicker">Chapter 21</div><h2>Source Code Analysis — Repo PS-CPU</h2></div>
+
+  <div class="card important">
+    <div class="card-title">⭐ Kết quả điều tra repo (thật)</div>
+    <span class="badge fact">FACT</span> Repo <span class="mono">PS-CPU/pscpu_s800</span> có đầy đủ driver
+    <span class="mono">STM32F0xx_HAL_Driver/{Inc,Src}/stm32f0xx_hal_spi.c/h</span> và <span class="mono">stm32f0xx_ll_spi.c/h</span>.<br>
+    <span class="badge fact">FACT</span> Không có nơi nào trong code ứng dụng (<span class="mono">main/App</span>, <span class="mono">iap/App</span>)
+    gọi <span class="mono">MX_SPI*_Init</span>, khai báo <span class="mono">hspi1/hspi2</span>, hay dùng <span class="mono">HAL_SPI_*</span>.<br>
+    <span class="badge fact">FACT</span> File cấu hình CubeMX <span class="mono">main/PowerSubCPU.ioc</span> không có dòng nào liên quan SPI.<br>
+    <span class="badge fact">FACT</span> <span class="mono">main/App</span> chỉ có <span class="mono">km_i2c.c</span> — PS-CPU giao tiếp ngoại vi bằng I2C.
+  </div>
+  <div class="card debug">
+    <div class="card-title">🔧 Kết luận</div>
+    <span class="badge inference">INFERENCE</span> File <span class="mono">stm32f0xx_hal_spi.c/h</span> chỉ là thư viện HAL đi kèm bộ CubeMX
+    (chưa được kích hoạt/gọi), không phải driver đang chạy thật trên board PS-CPU.<br>
+    <span class="badge hypothesis">HYPOTHESIS</span> Nếu về sau PS-CPU cần thêm 1 thiết bị SPI (Flash/sensor mới), driver này
+    đã sẵn sàng dùng được — chỉ cần thêm cấu hình <span class="mono">.ioc</span> + <span class="mono">HAL_SPI_MspInit</span> theo đúng pattern I2C đã có (Chương 19).
+  </div>
+  <p>Toàn bộ ví dụ register/code trong tài liệu này (Chương 04-20) đều trích <b>nguyên văn</b> từ driver thật này, dùng làm
+  tài liệu tham chiếu mức MCU — không phải luồng chạy thật của PS-CPU hiện tại.</p>
+</section>
+
+<!-- ================= 22 CASE STUDY FLASH ================= -->
+<section class="chapter" id="caseflash" data-title="Case Study SPI Flash read command address dummy data 0x03">
+  <div class="chapter-head"><div class="kicker">Chapter 22</div><h2>Case Study — SPI NOR Flash READ</h2></div>
+  <div class="ascii">CS    \_______________________________________________/
+SCLK  __/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\_____
+MOSI  [  0x03  ][  0x12  ][  0x34  ][  0x56  ][ xx ][ xx ]
+                 command   addr[23:16] addr[15:8] addr[7:0]
+MISO  [  xx  ][  xx  ][  xx  ][  xx  ][ D0 ][ D1 ]</div>
+  <ul>
+    <li><span class="mono">0x03</span> = mã lệnh READ — quy ước <b>riêng của SPI Flash</b>, không phải của giao thức SPI vật lý.</li>
+    <li>3 byte tiếp theo = địa chỉ 24-bit cần đọc.</li>
+    <li>MISO trong lúc gửi command+address là rác — Master bỏ qua.</li>
+    <li>Sau address, Master tiếp tục phát clock (byte dummy 0x00 trên MOSI) và đọc MISO để lấy data thật.</li>
+  </ul>
+  <div class="card important"><div class="card-title">⭐ Ranh giới quan trọng</div>
+  Đây chính là ranh giới giữa <b>SPI vật lý</b> (chỉ lo shift bit) và <b>giao thức riêng của Flash</b> (ý nghĩa byte 0x03) —
+  xem thêm <a href="#protocolvs">Chương 24</a>.</div>
+</section>
+
+<!-- ================= 23 CASE STUDY SENSOR BUG ================= -->
+<section class="chapter" id="casesensor" data-title="Case study sensor CS toggle bug transaction boundary root cause fix">
+  <div class="chapter-head"><div class="kicker">Chapter 23</div><h2>Case Study — Bug CS Transaction Boundary (Sensor Read)</h2></div>
+
+  <div class="subhead"><span class="emoji">🧪</span>Code lỗi</div>
+  <div class="codeblock"><div class="cb-head"><span>Ví dụ minh họa (dùng đúng API HAL thật)</span><button class="copy-btn">Copy</button></div>
+  <pre><code>HAL_StatusTypeDef Sensor_ReadReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data)
+{
+    uint8_t cmd = 0x80 | reg;
+    uint8_t dummy_tx = 0x00, rx_dummy;
+
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);   // CS LOW
+    HAL_SPI_TransmitReceive(hspi, &cmd, &rx_dummy, 1, 100);    // gửi command
+
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);     // CS HIGH  <-- (A) BUG
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);   // CS LOW lại <-- (B) BUG
+
+    for (int i = 0; i < 4; i++)
+        HAL_SPI_TransmitReceive(hspi, &dummy_tx, &data[i], 1, 100);
+
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);
+    return HAL_OK;
+}</code></pre></div>
+
+  <p><b>Triệu chứng:</b> <span class="mono">data[0]</span> luôn đúng, <span class="mono">data[1..3]</span> sai theo 1 pattern cố định (không ngẫu nhiên).</p>
+
+  <div class="card warn"><div class="card-title">⚠️ Root Cause</div>
+  Dòng (A)+(B) thả CS lên HIGH rồi hạ xuống lại <b>ngay sau command</b> — sensor coi mỗi lần CS HIGH→LOW là bắt đầu
+  transaction mới, command decoder bị reset. Đoạn đọc 4 byte data trở thành 1 transaction <b>không có command hợp lệ</b>
+  → data trả về là giá trị mặc định/rác cố định của sensor (giải thích vì sao lỗi lặp lại y hệt, không random).</p>
+  </div>
+
+  <div class="subhead"><span class="emoji">✅</span>Fix</div>
+  <div class="codeblock"><div class="cb-head"><span>Fixed</span><button class="copy-btn">Copy</button></div>
+  <pre><code>HAL_StatusTypeDef Sensor_ReadReg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t *data)
+{
+    uint8_t cmd = 0x80 | reg;
+    uint8_t rx_dummy;
+    uint8_t tx_dummy[4] = {0};
+
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET);   // CS LOW — 1 lần duy nhất
+    HAL_SPI_TransmitReceive(hspi, &cmd, &rx_dummy, 1, 100);
+    HAL_SPI_TransmitReceive(hspi, tx_dummy, data, 4, 100);     // cùng 1 transaction
+    HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET);     // CS HIGH — kết thúc
+    return HAL_OK;
+}</code></pre></div>
+  <p><b>Vấn đề tiềm ẩn thứ hai:</b> gọi 4 lần <span class="mono">HAL_SPI_TransmitReceive</span> riêng biệt (mỗi lần 1 byte) có overhead
+  hàm chèn giữa các byte — nếu sensor có ràng buộc timeout tối đa giữa các byte trong 1 transaction, nên gộp thành 1 lệnh
+  transfer 4 byte như bản fix, vừa đúng vừa hiệu quả hơn.</p>
+</section>
+
+<!-- ================= 24 PROTOCOL VS DEVICE PROTOCOL ================= -->
+<section class="chapter" id="protocolvs" data-title="SPI protocol vs device protocol flash sensor layer boundary">
+  <div class="chapter-head"><div class="kicker">Chapter 24</div><h2>SPI Protocol vs Device Protocol</h2></div>
+  <div class="table-wrap"><table>
+    <tr><th>Lớp</th><th>Quy định</th></tr>
+    <tr><td>SPI vật lý (physical/protocol layer)</td><td>Chỉ định nghĩa SCLK, MOSI, MISO, CS, CPOL/CPHA, bit order — không biết "byte nào nghĩa là gì"</td></tr>
+    <tr><td>SPI Flash protocol</td><td>Tự định nghĩa 0x03=READ, 0x02=PAGE PROGRAM, 0x06=WRITE ENABLE...</td></tr>
+    <tr><td>SPI Sensor protocol</td><td>Tự định nghĩa bit 7 của byte command = Read/Write, 7 bit còn lại = địa chỉ thanh ghi...</td></tr>
+  </table></div>
+  <p>Ranh giới này cực kỳ quan trọng khi đọc datasheet: phần "SPI Interface Timing" thuộc lớp vật lý (áp dụng chung mọi SPI),
+  còn phần "Command Set"/"Register Map" thuộc lớp giao thức riêng của thiết bị.</p>
+</section>
+
+<!-- ================= 25 DEBUGGING GUIDE ================= -->
+<section class="chapter" id="debugging" data-title="SPI Debugging Guide methodology 5 steps MODF OVR clear">
+  <div class="chapter-head"><div class="kicker">Chapter 25</div><h2>SPI Debugging Guide</h2></div>
+
+  <div class="subhead"><span class="emoji">📝</span>Cơ chế clear-flag thật (STM32F0)</div>
+  <div class="codeblock"><div class="cb-head"><span>stm32f0xx_hal_spi.h :471-504</span><button class="copy-btn">Copy</button></div>
+  <pre><code>// MODF — đọc SR rồi TỰ TẮT LUÔN SPI
+#define __HAL_SPI_CLEAR_MODFFLAG(__HANDLE__) do{ \
+   tmpreg_modf = (__HANDLE__)->Instance->SR; \
+   (__HANDLE__)->Instance->CR1 &= (~SPI_CR1_SPE); \
+} while(0)
+
+// OVR — đọc DR trước, rồi đọc SR
+#define __HAL_SPI_CLEAR_OVRFLAG(__HANDLE__) do{ \
+   tmpreg_ovr = (__HANDLE__)->Instance->DR; \
+   tmpreg_ovr = (__HANDLE__)->Instance->SR; \
+} while(0)
+
+// FRE — chỉ cần đọc SR
+#define __HAL_SPI_CLEAR_FREFLAG(__HANDLE__) do{ \
+   tmpreg_fre = (__HANDLE__)->Instance->SR; \
+} while(0)</code></pre></div>
+  <div class="card warn"><div class="card-title">⚠️ Fact quan trọng nhất</div>
+  Clear <span class="mono">MODF</span> <b>tự động tắt SPI</b> (<span class="mono">CR1 &amp;= ~SPI_CR1_SPE</span>)! Driver phải
+  <b>enable lại SPI thủ công</b> sau khi xử lý xong lỗi này.</div>
+
+  <div class="subhead"><span class="emoji">🔧</span>Quy trình debug 5 bước theo triệu chứng</div>
+
+  <div class="card debug"><div class="card-title">🔧 Bước 1 — Không có SCLK</div>
+  Kiểm tra: RCC clock của SPI instance → GPIO MODER=AF → GPIO AFR đúng số AF → SPI_CR1_SPE đã set → (nếu vẫn không có sóng) phần cứng board.</div>
+
+  <div class="card debug"><div class="card-title">🔧 Bước 2 — Có SCLK nhưng MOSI sai</div>
+  Kiểm tra: giá trị ghi vào DR đúng chưa → FirstBit (MSB/LSB) → DataSize khớp cách ép kiểu con trỏ ghi DR chưa.</div>
+
+  <div class="card debug"><div class="card-title">🔧 Bước 3 — MOSI đúng nhưng MISO sai</div>
+  Kiểm tra phía Slave: CPOL/CPHA khớp 2 bên → CS setup/hold time đủ theo datasheet Slave → bus contention (2 Slave cùng nghĩ mình được chọn).</div>
+
+  <div class="card debug"><div class="card-title">🔧 Bước 4 — Byte đầu đúng, byte sau sai</div>
+  Kiểm tra: CS bị thả sai thời điểm giữa các byte (xem Chương 23) → thiếu dummy byte để tạo đủ clock → OVR do gọi
+  <span class="mono">HAL_SPI_Transmit</span> (bỏ qua RX) rồi Receive riêng biệt ngay sau.</div>
+
+  <div class="card debug"><div class="card-title">🔧 Bước 5 — Chạy lâu mới lỗi (ngẫu nhiên)</div>
+  Kiểm tra: race condition (2 task cùng gọi SPI, xem Chương RTOS) → DMA transfer count sai ở trường hợp biên (Size lẻ/chẵn, Chương 18) → FIFO overflow nếu ISR xử lý không kịp ở baud rate cao.</div>
+</section>
+
+<!-- ================= 26 DECISION TREE ================= -->
+<section class="chapter" id="decisiontree" data-title="Debug decision tree SPI khong hoat dong flowchart">
+  <div class="chapter-head"><div class="kicker">Chapter 26</div><h2>Debug Decision Tree</h2></div>
+  <div class="tree">SPI không hoạt động
+       │
+       ▼
+  Có SCLK không? ────NO───→ Check: RCC clock / GPIO AF / SPI_CR1_SPE
+       │YES
+       ▼
+  MOSI đúng giá trị? ──NO──→ Check: DR write / FirstBit / DataSize
+       │YES
+       ▼
+  MISO đúng giá trị? ──NO──→ Check: CPOL/CPHA khớp Slave / CS timing / bus contention
+       │YES
+       ▼
+  Byte đầu đúng, byte sau sai? ──YES──→ Check: CS transaction boundary / dummy byte / OVR
+       │NO (mọi byte đều đúng lúc test, lỗi chỉ xuất hiện khi chạy lâu)
+       ▼
+  Check: race condition / DMA count / FIFO overflow / timeout</div>
+</section>
+
+<!-- ================= 27 COMMON BUGS ================= -->
+<section class="chapter" id="commonbugs" data-title="Common bugs table SPI MODF OVR CS FIFO DMA race condition list">
+  <div class="chapter-head"><div class="kicker">Chapter 27</div><h2>Common Bugs — Bảng tổng hợp</h2></div>
+  <div class="table-wrap"><table>
+    <tr><th>#</th><th>Lỗi</th><th>Fact/nguyên nhân liên quan</th></tr>
+    <tr><td>1</td><td>MODF xảy ra, code chỉ clear cờ mà quên enable lại SPI</td><td>__HAL_SPI_CLEAR_MODFFLAG tự tắt SPE</td></tr>
+    <tr><td>2</td><td>OVR do gọi liên tiếp HAL_SPI_Transmit không xử lý RX</td><td>pRxBuffPtr=NULL trong HAL_SPI_Transmit</td></tr>
+    <tr><td>3</td><td>Interrupt không xảy ra dù cờ SR set</td><td>Quên bật CR2.xxxIE hoặc quên NVIC_EnableIRQ trong Msp</td></tr>
+    <tr><td>4</td><td>DMA transfer thiếu/dư 1 byte khi Size lẻ</td><td>Packing mode LDMATX, TxXferCount>>1</td></tr>
+    <tr><td>5</td><td>SPI enable nhưng không ra sóng</td><td>Thiếu HAL_SPI_MspInit (weak, rỗng mặc định)</td></tr>
+    <tr><td>6</td><td>Đúng byte đầu, sai byte sau khi đọc Flash/Sensor</td><td>CS thả sai giữa command/address/data (Chương 23)</td></tr>
+    <tr><td>7</td><td>Sai toàn bộ giá trị byte dù clock/CS đúng</td><td>Sai FirstBit (MSB/LSB), không phải CPOL/CPHA</td></tr>
+    <tr><td>8</td><td>Byte đầu "có vẻ đúng" ngẫu nhiên, byte sau sai rõ</td><td>Sai CPOL/CPHA (lệch đúng 1 mode gần giống)</td></tr>
+    <tr><td>9</td><td>Chạy tốc độ cao lỗi, chậm thì đúng</td><td>Vượt tốc độ tối đa Slave hỗ trợ, hoặc setup/hold time không đủ</td></tr>
+    <tr><td>10</td><td>Treo vô hạn ở HAL_SPI_Transmit</td><td>Timeout=HAL_MAX_DELAY + phần cứng lỗi (không set TXE)</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 28 COMPARE ================= -->
+<section class="chapter" id="compare" data-title="SPI vs I2C vs UART so sanh speed wires addressing master slave">
+  <div class="chapter-head"><div class="kicker">Chapter 28</div><h2>SPI vs I2C vs UART</h2></div>
+  <div class="table-wrap"><table>
+    <tr><th>Feature</th><th>SPI</th><th>I2C</th><th>UART</th></tr>
+    <tr><td>Clock riêng</td><td>Có</td><td>Có (SCL)</td><td>Không</td></tr>
+    <tr><td>Full duplex</td><td>Có</td><td>Không (half-duplex)</td><td>Có (2 dây riêng TX/RX)</td></tr>
+    <tr><td>Số dây tối thiểu</td><td>4 (+1 CS/Slave)</td><td>2 (SCL, SDA)</td><td>2 (TX, RX)</td></tr>
+    <tr><td>Địa chỉ trên bus</td><td>Không (dùng CS riêng)</td><td>Có (7/10-bit address)</td><td>Không (point-to-point)</td></tr>
+    <tr><td>Tốc độ điển hình</td><td>Vài chục MHz</td><td>100kHz–3.4MHz</td><td>Vài trăm kbps–vài Mbps</td></tr>
+    <tr><td>Master/Slave</td><td>1 Master, nhiều Slave (CS riêng)</td><td>Multi-master, multi-slave (địa chỉ)</td><td>Point-to-point, không phân cấp</td></tr>
+    <tr><td>Độ phức tạp phần cứng</td><td>Đơn giản (shift register)</td><td>Trung bình (open-drain, ACK/NACK)</td><td>Đơn giản</td></tr>
+    <tr><td>Ứng dụng điển hình</td><td>Flash, ADC/DAC, Display tốc độ cao</td><td>EEPROM nhỏ, sensor mật độ cao, cấu hình chip</td><td>Debug console, GPS, modem</td></tr>
+  </table></div>
+  <p><b>Tại sao khác nhau:</b> SPI đánh đổi số dây lấy tốc độ và đơn giản mạch số (không cần logic địa chỉ/ACK); I2C đánh đổi
+  tốc độ lấy khả năng nhiều thiết bị chỉ trên 2 dây; UART đơn giản nhất nhưng chỉ nối được 2 điểm.</p>
+</section>
+
+<!-- ================= 29 INTERVIEW ================= -->
+<section class="chapter" id="interview" data-title="Interview questions SPI beginner intermediate advanced expert">
+  <div class="chapter-head"><div class="kicker">Chapter 29</div><h2>Interview Questions</h2></div>
+
+  <div class="subhead"><span class="emoji">🟢</span>Beginner</div>
+  <details class="qa"><summary>SPI là gì?</summary><div class="ans">Giao thức truyền dữ liệu nối tiếp, đồng bộ, full-duplex, Master-Slave, dùng 4 dây SCLK/MOSI/MISO/CS.</div></details>
+  <details class="qa"><summary>MOSI/MISO là gì?</summary><div class="ans">MOSI = Master Out Slave In (dữ liệu Master→Slave). MISO = Master In Slave Out (dữ liệu Slave→Master).</div></details>
+  <details class="qa"><summary>Master/Slave là gì?</summary><div class="ans">Master chủ động tạo Clock và khởi tạo transaction; Slave bị động, chỉ phản hồi khi được chọn qua CS.</div></details>
+
+  <div class="subhead"><span class="emoji">🟡</span>Intermediate</div>
+  <details class="qa"><summary>CPOL/CPHA là gì?</summary><div class="ans">CPOL quyết định mức idle của Clock (LOW/HIGH). CPHA quyết định cạnh nào dùng để sample dữ liệu (cạnh 1 hay cạnh 2).</div></details>
+  <details class="qa"><summary>SPI Mode là gì?</summary><div class="ans">Tổ hợp CPOL×CPHA tạo ra 4 mode (0-3), quy định chính xác cách 2 bên đồng bộ đổi/đọc dữ liệu theo Clock.</div></details>
+  <details class="qa"><summary>Vì sao SPI full duplex?</summary><div class="ans">Vì có 2 dây dữ liệu riêng (MOSI, MISO) chạy song song dùng chung 1 Clock — TX và RX shift register hoạt động đồng thời mỗi cạnh clock.</div></details>
+
+  <div class="subhead"><span class="emoji">🟠</span>Advanced</div>
+  <details class="qa"><summary>SPI FIFO hoạt động thế nào?</summary><div class="ans">FIFO đệm giữa CPU/DMA và Shift Register, cho phép CPU nạp/lấy nhiều byte mà không cần chờ từng bit shift xong, giảm số lần CPU can thiệp.</div></details>
+  <details class="qa"><summary>SPI interrupt hoạt động thế nào?</summary><div class="ans">Phần cứng set cờ (TXE/RXNE/lỗi) trong SR khi có sự kiện; nếu bit enable tương ứng trong CR2 đang bật, NVIC báo CPU nhảy vào ISR xử lý, thường qua con trỏ hàm tùy độ rộng dữ liệu.</div></details>
+  <details class="qa"><summary>SPI DMA hoạt động thế nào?</summary><div class="ans">SPI tự phát "DMA request" mỗi khi TXE/RXNE set (khi TXDMAEN/RXDMAEN bật); DMA controller tự copy dữ liệu giữa RAM và DR mà không cần CPU can thiệp từng byte.</div></details>
+  <details class="qa"><summary>Tại sao RX overflow (OVR)?</summary><div class="ans">Khi RX shift register latch xong 1 byte mới vào DR nhưng byte cũ trong DR chưa được CPU đọc kịp — byte cũ bị mất, cờ OVR set.</div></details>
+  <details class="qa"><summary>Tại sao CS timing quan trọng?</summary><div class="ans">CS không chỉ chọn Slave mà còn là ranh giới transaction; thả CS sai thời điểm giữa các byte có thể khiến Slave reset command decoder giữa chừng, làm sai toàn bộ phần data còn lại.</div></details>
+
+  <div class="subhead"><span class="emoji">🔴</span>Expert</div>
+  <details class="qa"><summary>Trace SPI từ application đến register — trình bày các bước.</summary><div class="ans">Application gọi API driver → driver ghi CR1/CR2 (mode, baud, CPOL/CPHA) → enable SPE → ghi DR (hoặc bật interrupt/DMA) → Shift Register dịch bit ra MOSI theo SCLK, đồng thời nhận bit vào từ MISO → CS đánh dấu ranh giới transaction. Xem đầy đủ ở Chương 20.</div></details>
+  <details class="qa"><summary>Debug SPI bằng logic analyzer — quy trình?</summary><div class="ans">Bắt đồng thời CS/SCLK/MOSI/MISO → xác định tần số SCLK, Mode (idle level + sample edge), bit order, số xung clock/byte, timing CS so với clock đầu/cuối, rồi so khớp giá trị byte thực tế với giá trị mong đợi.</div></details>
+  <details class="qa"><summary>Debug race condition trong SPI driver?</summary><div class="ans">Kiểm tra: có 2 task/ISR cùng truy cập chung 1 SPI peripheral hoặc chung buffer không có mutex/critical section; kiểm tra thứ tự lock/unlock trong driver (__HAL_LOCK/__HAL_UNLOCK) có bị bỏ qua ở đường lỗi (error path) không.</div></details>
+</section>
+
+<!-- ================= 30 QUICK REFERENCE ================= -->
+<section class="chapter" id="quickref" data-title="Quick reference signals modes common errors debug checklist">
+  <div class="chapter-head"><div class="kicker">Chapter 30</div><h2>Quick Reference</h2></div>
+
+  <div class="subhead"><span class="emoji">📌</span>Signals</div>
+  <p>MOSI · MISO · SCLK · CS/SS/NSS</p>
+
+  <div class="subhead"><span class="emoji">📌</span>4 Modes</div>
+  <table><tr><th>Mode</th><th>CPOL</th><th>CPHA</th></tr><tr><td>0</td><td>0</td><td>0</td></tr><tr><td>1</td><td>0</td><td>1</td></tr><tr><td>2</td><td>1</td><td>0</td></tr><tr><td>3</td><td>1</td><td>1</td></tr></table>
+
+  <div class="subhead"><span class="emoji">📌</span>Common Errors</div>
+  <p>No clock · Wrong mode (CPOL/CPHA) · Wrong bit order (MSB/LSB) · CS timing sai · RX overflow (OVR) · TX underrun (UDR) · Mode Fault (MODF) · DMA error</p>
+
+  <div class="subhead"><span class="emoji">📌</span>Debug Checklist</div>
+  <ul class="checklist">
+    <li>Peripheral clock enabled (RCC)</li>
+    <li>GPIO Alternate Function mux đúng</li>
+    <li>SPI enable (CR1.SPE)</li>
+    <li>Baud rate / prescaler đúng</li>
+    <li>CPOL đúng</li>
+    <li>CPHA đúng</li>
+    <li>Bit order (MSB/LSB) đúng</li>
+    <li>Frame size (data width) đúng</li>
+    <li>CS timing &amp; transaction boundary đúng</li>
+    <li>FIFO threshold cấu hình phù hợp</li>
+    <li>Interrupt (NVIC + CR2 enable bits) đúng</li>
+    <li>DMA (channel, TXDMAEN/RXDMAEN, transfer count) đúng</li>
+    <li>Slave datasheet đã đối chiếu (Mode, tốc độ tối đa, command set)</li>
+  </ul>
+</section>
+
+<!-- ================= 31 GLOSSARY ================= -->
+<section class="chapter" id="glossary" data-title="Glossary CPOL CPHA MOSI MISO SCLK CS FIFO DMA ISR NVIC MMIO shift register">
+  <div class="chapter-head"><div class="kicker">Chapter 31</div><h2>Glossary</h2></div>
+  <div class="table-wrap"><table>
+    <tr><th>Thuật ngữ</th><th>Định nghĩa</th><th>Liên quan</th></tr>
+    <tr><td>CPOL</td><td>Clock Polarity — mức idle của SCLK</td><td><a href="#cpolcpha">Ch.07</a></td></tr>
+    <tr><td>CPHA</td><td>Clock Phase — cạnh dùng để sample dữ liệu</td><td><a href="#cpolcpha">Ch.07</a></td></tr>
+    <tr><td>MOSI</td><td>Master Out Slave In</td><td><a href="#signals">Ch.03</a></td></tr>
+    <tr><td>MISO</td><td>Master In Slave Out</td><td><a href="#signals">Ch.03</a></td></tr>
+    <tr><td>SCLK</td><td>Serial Clock, do Master phát ra</td><td><a href="#clock">Ch.06</a></td></tr>
+    <tr><td>CS/SS/NSS</td><td>Chip Select / Slave Select — chọn Slave giao tiếp</td><td><a href="#cs">Ch.10</a></td></tr>
+    <tr><td>FIFO</td><td>Bộ đệm First-In-First-Out giữa CPU/DMA và Shift Register</td><td><a href="#peripheral">Ch.13</a></td></tr>
+    <tr><td>DMA</td><td>Direct Memory Access — phần cứng tự chuyển RAM↔peripheral không cần CPU</td><td><a href="#dma">Ch.18</a></td></tr>
+    <tr><td>ISR</td><td>Interrupt Service Routine — hàm CPU chạy khi có ngắt</td><td><a href="#interrupt">Ch.17</a></td></tr>
+    <tr><td>NVIC</td><td>Nested Vectored Interrupt Controller — quản lý ưu tiên ngắt trên ARM Cortex-M</td><td><a href="#interrupt">Ch.17</a></td></tr>
+    <tr><td>MMIO</td><td>Memory-Mapped I/O — ghi/đọc register qua địa chỉ bộ nhớ</td><td><a href="#registers">Ch.14</a></td></tr>
+    <tr><td>Shift Register</td><td>Dãy flip-flop dịch bit nối tiếp mỗi xung clock</td><td><a href="#shiftreg">Ch.05</a></td></tr>
+    <tr><td>Full Duplex</td><td>Truyền và nhận đồng thời trên 2 dây riêng</td><td><a href="#fullduplex">Ch.04</a></td></tr>
+    <tr><td>Transaction</td><td>1 phiên giao dịch SPI, ranh giới xác định bởi CS active liên tục</td><td><a href="#transaction">Ch.11</a></td></tr>
+    <tr><td>Frame</td><td>1 đơn vị dữ liệu truyền (thường 8/16-bit)</td><td><a href="#framesize">Ch.12</a></td></tr>
+    <tr><td>Baud Rate</td><td>Tần số SCLK (trong SPI, đồng nghĩa tốc độ clock)</td><td><a href="#clock">Ch.06</a></td></tr>
+    <tr><td>Prescaler</td><td>Bộ chia tần số từ PCLK ra SCLK</td><td><a href="#clock">Ch.06</a></td></tr>
+    <tr><td>MODF</td><td>Mode Fault — lỗi NSS hardware bị kéo sai khi đang Master</td><td><a href="#flags">Ch.15</a></td></tr>
+    <tr><td>OVR</td><td>Overrun — data RX mới đè lên data cũ chưa đọc</td><td><a href="#flags">Ch.15</a></td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 32 FINAL KNOWLEDGE MAP ================= -->
+<section class="chapter" id="learningmap" data-title="Final knowledge map SPI protocol hardware driver debug real hardware">
+  <div class="chapter-head"><div class="kicker">Chapter 32</div><h2>Final Knowledge Map</h2></div>
+  <div class="ascii">                         SPI
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+      Protocol         Hardware         Driver
+          │               │               │
+     CPOL/CPHA        Register         Polling
+     SPI Modes        FIFO             Interrupt (NVIC/ISR)
+     CS               Shift Register   DMA
+     Frame            Clock/Prescaler  MspInit (GPIO/Clock)
+          │               │               │
+          └───────────────┼───────────────┘
+                          │
+                       Debug
+                          │
+              ┌───────────┼───────────┐
+              │           │           │
+          Waveform     Register     Source Code
+          (Logic        (CR1/CR2/SR   (Call Graph,
+           Analyzer)     bit fields)   Case Studies)
+              │           │           │
+              └───────────┼───────────┘
+                          │
+                    Real Hardware
+              (MOSI / MISO / SCLK / CS
+               trên chân MCU thật)</div>
+
+  <div class="card important">
+    <div class="card-title">🎯 Năng lực đạt được</div>
+    Nhìn vào <span class="mono">spi_write(...)</span>, <span class="mono">SPI->CTRL</span>, <span class="mono">SPI->STATUS</span> bất kỳ,
+    bạn có thể tự trả lời: CPU đang làm gì → SPI peripheral đang làm gì → register/bit nào đang đổi → Clock tạo ra sao →
+    MOSI/MISO đang mang bit nào → CS đang trạng thái nào → nếu lỗi thì kiểm tra ở đâu trước.
+  </div>
+</section>
+
+</main>
+</div>
+
+<button id="backTop" aria-label="Về đầu trang" title="Về đầu trang">↑</button>
+
+<footer class="sitefoot">
+  <div><b>SPI MCU Knowledge Base</b> — Embedded Software Engineering</div>
+  <div>Protocol → Peripheral → Register → Driver → Hardware</div>
+  <div>Personal Technical Reference · Nguồn: STM32F0xx HAL/LL SPI Driver (PS-CPU/pscpu_s800)</div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- THEME ---------- */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeToggle');
+  var themeIcon = document.getElementById('themeIcon');
+  var themeLabel = document.getElementById('themeLabel');
+  function applyTheme(t){
+    if(t === 'dark'){ root.setAttribute('data-theme','dark'); themeIcon.textContent='☀'; themeLabel.textContent='Light'; }
+    else { root.setAttribute('data-theme','light'); themeIcon.textContent='🌙'; themeLabel.textContent='Dark'; }
+  }
+  var saved = null;
+  try { saved = localStorage.getItem('spi-kb-theme'); } catch(e){}
+  if(saved){ applyTheme(saved); }
+  else {
+    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+  }
+  themeBtn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    var next = cur === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('spi-kb-theme', next); } catch(e){}
+  });
+
+  /* ---------- MOBILE SIDEBAR ---------- */
+  var sidebar = document.getElementById('sidebar');
+  var menuToggle = document.getElementById('menuToggle');
+  menuToggle.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
+  document.querySelectorAll('nav.toc a').forEach(function(a){
+    a.addEventListener('click', function(){ sidebar.classList.remove('open'); });
+  });
+
+  /* ---------- ACTIVE SECTION HIGHLIGHT ---------- */
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main section.chapter[id]'));
+  var navLinks = {};
+  document.querySelectorAll('nav.toc a').forEach(function(a){
+    navLinks[a.getAttribute('href').substring(1)] = a;
+  });
+  if('IntersectionObserver' in window){
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        var id = entry.target.id;
+        var link = navLinks[id];
+        if(!link) return;
+        if(entry.isIntersecting){
+          Object.keys(navLinks).forEach(function(k){ navLinks[k].classList.remove('active'); });
+          link.classList.add('active');
+        }
+      });
+    }, {rootMargin: '-15% 0px -70% 0px', threshold: 0});
+    sections.forEach(function(s){ obs.observe(s); });
+  }
+
+  /* ---------- BACK TO TOP ---------- */
+  var backTop = document.getElementById('backTop');
+  window.addEventListener('scroll', function(){
+    backTop.classList.toggle('show', window.scrollY > 500);
+  });
+  backTop.addEventListener('click', function(){ window.scrollTo({top:0, behavior:'smooth'}); });
+
+  /* ---------- COPY CODE ---------- */
+  document.addEventListener('click', function(e){
+    if(e.target.classList && e.target.classList.contains('copy-btn')){
+      var block = e.target.closest('.codeblock');
+      var codeEl = block.querySelector('code');
+      var text = codeEl ? codeEl.textContent : '';
+      var done = function(){
+        var old = e.target.textContent;
+        e.target.textContent = 'Copied!';
+        setTimeout(function(){ e.target.textContent = old; }, 1200);
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch(err){}
+        document.body.removeChild(ta); done();
+      }
+    }
+  });
+
+  /* ---------- SEARCH ---------- */
+  var searchInput = document.getElementById('searchInput');
+  var searchClear = document.getElementById('searchClear');
+  var searchStatus = document.getElementById('searchStatus');
+  var content = document.getElementById('content');
+  var lastMarks = [];
+
+  function clearHighlights(){
+    lastMarks.forEach(function(mark){
+      var parent = mark.parentNode;
+      if(!parent) return;
+      parent.replaceChild(document.createTextNode(mark.textContent), mark);
+      parent.normalize();
+    });
+    lastMarks = [];
+  }
+
+  function highlightInSection(sectionEl, query){
+    var walker = document.createTreeWalker(sectionEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node){
+        if(!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        var p = node.parentNode;
+        if(p && (p.tagName === 'SCRIPT' || p.tagName === 'STYLE' || p.tagName === 'MARK')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var textNodes = [];
+    var n;
+    while((n = walker.nextNode())) textNodes.push(n);
+    var found = false;
+    var lowerQ = query.toLowerCase();
+    textNodes.forEach(function(node){
+      var text = node.nodeValue;
+      var lower = text.toLowerCase();
+      var idx = lower.indexOf(lowerQ);
+      if(idx === -1) return;
+      found = true;
+      var frag = document.createDocumentFragment();
+      var pos = 0;
+      while(idx !== -1){
+        frag.appendChild(document.createTextNode(text.substring(pos, idx)));
+        var mark = document.createElement('mark');
+        mark.className = 'hl';
+        mark.textContent = text.substring(idx, idx + query.length);
+        frag.appendChild(mark);
+        lastMarks.push(mark);
+        pos = idx + query.length;
+        idx = lower.indexOf(lowerQ, pos);
+      }
+      frag.appendChild(document.createTextNode(text.substring(pos)));
+      node.parentNode.replaceChild(frag, node);
+    });
+    return found;
+  }
+
+  function runSearch(){
+    var query = searchInput.value.trim();
+    clearHighlights();
+    var navA = document.querySelectorAll('nav.toc a');
+    navA.forEach(function(a){ a.classList.remove('dim','match'); });
+
+    if(query.length < 2){
+      searchStatus.textContent = '';
+      return;
+    }
+    var matchCount = 0;
+    var firstMatchEl = null;
+    sections.forEach(function(sec){
+      var haystack = (sec.getAttribute('data-title') || '') + ' ' + sec.textContent;
+      var isMatch = haystack.toLowerCase().indexOf(query.toLowerCase()) !== -1;
+      var link = navLinks[sec.id];
+      if(isMatch){
+        matchCount++;
+        highlightInSection(sec, query);
+        if(link) link.classList.add('match');
+        if(!firstMatchEl) firstMatchEl = sec;
+      } else {
+        if(link) link.classList.add('dim');
+      }
+    });
+    searchStatus.textContent = matchCount > 0
+      ? matchCount + ' chương chứa "' + query + '"'
+      : 'Không tìm thấy "' + query + '"';
+    if(firstMatchEl){
+      firstMatchEl.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+  }
+
+  var searchTimer = null;
+  searchInput.addEventListener('input', function(){
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 220);
+  });
+  searchClear.addEventListener('click', function(){
+    searchInput.value = '';
+    clearHighlights();
+    document.querySelectorAll('nav.toc a').forEach(function(a){ a.classList.remove('dim','match'); });
+    searchStatus.textContent = '';
+    searchInput.focus();
+  });
+})();
+</script>
+</body>
+</html>

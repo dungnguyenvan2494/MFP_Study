@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiến trúc Bộ nhớ MCU — Kho tri thức Kỹ thuật Chuyên sâu</title>
+<style>
+:root{
+  --bg:#0d1117; --bg-panel:#11161d; --bg-card:#161b22; --border:#262c36;
+  --text:#c9d1d9; --text-dim:#8b949e; --text-bright:#f0f6fc;
+  --accent:#58a6ff; --accent2:#79c0ff; --green:#3fb950; --yellow:#d29922;
+  --red:#f85149; --purple:#bc8cff; --orange:#ffa657;
+  --code-bg:#0a0e14; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --sidebar-w:280px; --header-h:60px;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; font-family:var(--sans); background:var(--bg); color:var(--text);
+  font-size:15px; line-height:1.65;
+}
+a{color:var(--accent); text-decoration:none;}
+a:hover{text-decoration:underline;}
+code{font-family:var(--mono); font-size:0.88em; background:#1a2029; color:var(--orange); padding:0.15em 0.4em; border-radius:4px;}
+
+/* ===== HEADER ===== */
+header.topbar{
+  position:fixed; top:0; left:0; right:0; height:var(--header-h);
+  background:var(--bg-panel); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; z-index:200; gap:14px;
+}
+header.topbar .brand{display:flex; align-items:center; gap:10px; font-weight:700; color:var(--text-bright); white-space:nowrap;}
+header.topbar .brand .chip{background:linear-gradient(135deg,var(--accent),var(--purple)); color:#04121f; font-size:11px; font-weight:800; padding:3px 7px; border-radius:5px; letter-spacing:0.5px;}
+#menuToggle{display:none; background:none; border:1px solid var(--border); color:var(--text); font-size:18px; padding:6px 10px; border-radius:6px; cursor:pointer;}
+.searchwrap{flex:1; max-width:520px; position:relative;}
+#searchInput{
+  width:100%; background:var(--code-bg); border:1px solid var(--border); color:var(--text);
+  padding:9px 14px 9px 34px; border-radius:8px; font-size:14px; outline:none;
+}
+#searchInput:focus{border-color:var(--accent);}
+.searchwrap::before{content:"⌕"; position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-dim); font-size:16px;}
+#searchMeta{font-size:12px; color:var(--text-dim); white-space:nowrap;}
+#searchResults{
+  position:absolute; top:44px; left:0; right:0; background:var(--bg-card); border:1px solid var(--border);
+  border-radius:8px; max-height:420px; overflow:auto; display:none; z-index:300; box-shadow:0 12px 30px rgba(0,0,0,0.5);
+}
+#searchResults .res-item{padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer;}
+#searchResults .res-item:hover{background:#1c2330;}
+#searchResults .res-item .res-title{color:var(--accent2); font-weight:600; font-size:13px;}
+#searchResults .res-item .res-snip{color:var(--text-dim); font-size:12.5px; margin-top:3px;}
+#searchResults mark{background:#3a3013; color:var(--yellow);}
+.learnmode-toggle{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-dim); white-space:nowrap; cursor:pointer; user-select:none;}
+.learnmode-toggle input{accent-color:var(--accent);}
+
+/* ===== LAYOUT ===== */
+.layout{display:flex; padding-top:var(--header-h);}
+nav.sidebar{
+  position:fixed; top:var(--header-h); left:0; bottom:0; width:var(--sidebar-w);
+  background:var(--bg-panel); border-right:1px solid var(--border); overflow-y:auto; z-index:150;
+  padding:14px 0 60px;
+}
+nav.sidebar .navgroup{margin-bottom:4px;}
+nav.sidebar .navgroup-title{
+  font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-dim);
+  padding:14px 18px 6px; font-weight:700;
+}
+nav.sidebar a.navlink{
+  display:block; padding:6px 18px 6px 26px; color:var(--text); font-size:13.5px;
+  border-left:2px solid transparent;
+}
+nav.sidebar a.navlink:hover{background:#1a2029; text-decoration:none; color:var(--accent2);}
+nav.sidebar a.navlink.active{border-left-color:var(--accent); background:#161d29; color:var(--accent2); font-weight:600;}
+main.content{margin-left:var(--sidebar-w); flex:1; min-width:0; padding:28px 40px 100px; max-width:1180px;}
+
+/* ===== DASHBOARD ===== */
+.dash-hero{padding:34px 0 10px;}
+.dash-hero h1{font-size:2.5em; margin:0 0 6px; color:var(--text-bright); letter-spacing:-0.5px;}
+.dash-hero p.sub{font-size:1.15em; color:var(--text-dim); margin:0 0 26px; max-width:760px;}
+.stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:36px;}
+.stat-card{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:18px; text-align:left;}
+.stat-card .stat-num{font-size:2em; font-weight:800; color:var(--accent2);}
+.stat-card .stat-label{font-size:12.5px; color:var(--text-dim); margin-top:2px; text-transform:uppercase; letter-spacing:0.5px;}
+
+/* ===== ROADMAP ===== */
+.roadmap{display:flex; flex-direction:column; gap:0; margin:20px 0 40px; max-width:520px;}
+.roadmap-node{
+  display:flex; align-items:center; gap:14px; padding:11px 16px; background:var(--bg-card);
+  border:1px solid var(--border); border-radius:10px; margin-bottom:2px; cursor:pointer; transition:0.15s;
+}
+.roadmap-node:hover{border-color:var(--accent); transform:translateX(4px);}
+.roadmap-node .num{
+  width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--purple));
+  color:#04121f; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12.5px; flex-shrink:0;
+}
+.roadmap-arrow{text-align:center; color:var(--border); font-size:14px; margin:-2px 0;}
+
+/* ===== SECTION / CARDS ===== */
+section.doc-section{padding-top:70px; margin-top:-70px;}
+h2.section-title{font-size:1.7em; color:var(--text-bright); border-bottom:1px solid var(--border); padding-bottom:10px; margin:44px 0 18px;}
+h3.sub-title{font-size:1.25em; color:var(--accent2); margin:28px 0 10px;}
+h4.mini-title{font-size:1.05em; color:var(--text-bright); margin:20px 0 8px;}
+.breadcrumb{font-size:12.5px; color:var(--text-dim); margin-bottom:6px;}
+.tag-row{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 14px;}
+.tag{font-size:11px; padding:3px 9px; border-radius:20px; font-weight:700; letter-spacing:0.3px;}
+.tag-arm{background:#132b42; color:#79c0ff;}
+.tag-vendor{background:#3a2a12; color:#ffa657;}
+.tag-concept{background:#2a1240; color:#d2a8ff;}
+.tag-verify{background:#3a1414; color:#ff9b93;}
+.tag-real{background:#0f3320; color:#56d364;}
+
+.card-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; margin:16px 0 26px;}
+.card{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:16px;}
+.card h4{margin:0 0 8px; color:var(--accent2); font-size:1em;}
+.card p{margin:4px 0; font-size:13px; color:var(--text-dim);}
+.card p b{color:var(--text);}
+
+/* ===== BOXES ===== */
+.box{border-radius:10px; padding:14px 18px; margin:16px 0; border-left:4px solid; font-size:14px;}
+.box .box-title{font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:6px; display:flex; align-items:center; gap:6px;}
+.box-def{background:#0f1a2c; border-color:var(--accent);}
+.box-def .box-title{color:var(--accent2);}
+.box-important{background:#241a06; border-color:var(--yellow);}
+.box-important .box-title{color:var(--yellow);}
+.box-warning{background:#2a1212; border-color:var(--red);}
+.box-warning .box-title{color:#ff9b93;}
+.box-deepdive{background:#1c1230; border-color:var(--purple);}
+.box-deepdive .box-title{color:var(--purple);}
+.box-debug{background:#0f2020; border-color:#2dd4bf;}
+.box-debug .box-title{color:#2dd4bf;}
+.box-kernel{background:#141a24; border-color:#6e7681;}
+.box-kernel .box-title{color:#a5adb8;}
+.box-example{background:#0f2417; border-color:var(--green);}
+.box-example .box-title{color:var(--green);}
+
+/* ===== CODE ===== */
+.codewrap{position:relative; margin:14px 0;}
+.codewrap .lang-badge{position:absolute; top:8px; right:44px; font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;}
+pre{background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:16px 16px 14px; overflow-x:auto; margin:0;}
+pre code{background:none; color:#e6edf3; padding:0; font-size:13px; line-height:1.55;}
+.copy-btn{
+  position:absolute; top:8px; right:8px; background:#20262f; border:1px solid var(--border); color:var(--text-dim);
+  font-size:11px; padding:4px 9px; border-radius:6px; cursor:pointer;
+}
+.copy-btn:hover{color:var(--text-bright); border-color:var(--accent);}
+.copy-btn.copied{color:var(--green); border-color:var(--green);}
+.tok-kw{color:#ff7b72;} .tok-str{color:#a5d6ff;} .tok-com{color:#8b949e; font-style:italic;} .tok-num{color:#79c0ff;} .tok-type{color:#ffa657;} .tok-fn{color:#d2a8ff;}
+
+/* ===== DIAGRAMS ===== */
+.diagram{
+  background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:18px;
+  font-family:var(--mono); font-size:12.6px; line-height:1.5; overflow-x:auto; white-space:pre; margin:16px 0; color:#c9d1d9;
+}
+.diagram .hl1{color:var(--accent2);} .diagram .hl2{color:var(--orange);} .diagram .hl3{color:var(--green);} .diagram .hl4{color:var(--purple);}
+
+/* ===== TABLES ===== */
+table.reftable{width:100%; border-collapse:collapse; margin:16px 0; font-size:13.5px;}
+table.reftable th{background:#1a2029; color:var(--accent2); text-align:left; padding:9px 12px; border:1px solid var(--border); font-size:12.5px; text-transform:uppercase; letter-spacing:0.4px;}
+table.reftable td{padding:9px 12px; border:1px solid var(--border); vertical-align:top;}
+table.reftable tr:nth-child(even) td{background:#12161d;}
+
+/* ===== COLLAPSIBLE ===== */
+details.collapse{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; margin:12px 0; padding:0;}
+details.collapse summary{padding:13px 16px; cursor:pointer; font-weight:600; color:var(--accent2); list-style:none; display:flex; justify-content:space-between; align-items:center;}
+details.collapse summary::-webkit-details-marker{display:none;}
+details.collapse summary::after{content:"▸"; transition:0.2s; color:var(--text-dim);}
+details.collapse[open] summary::after{transform:rotate(90deg);}
+details.collapse .collapse-body{padding:0 16px 16px; border-top:1px solid var(--border); padding-top:12px;}
+
+/* ===== QUIZ / LEARNING MODE ===== */
+.qa-item{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; margin:10px 0; overflow:hidden;}
+.qa-q{padding:13px 16px; cursor:pointer; font-weight:600; display:flex; justify-content:space-between; gap:10px;}
+.qa-q:hover{background:#1a2029;}
+.qa-q .qbadge{font-size:10px; background:#1a2029; color:var(--text-dim); padding:2px 8px; border-radius:12px; white-space:nowrap; height:fit-content;}
+.qa-a{padding:0 16px; max-height:0; overflow:hidden; transition:max-height 0.25s ease, padding 0.25s ease; color:var(--text-dim); font-size:13.8px; border-top:0 solid var(--border);}
+.qa-a.open{padding:12px 16px 16px; max-height:800px; border-top:1px solid var(--border);}
+body.learning-mode .qa-a{display:none;}
+body.learning-mode .qa-a.revealed{display:block; padding:12px 16px 16px; max-height:none;}
+.reveal-btn{display:none; margin:8px 16px 14px; background:#1a2029; border:1px solid var(--accent); color:var(--accent2); padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer;}
+body.learning-mode .reveal-btn{display:inline-block;}
+
+/* ===== LAB CARDS ===== */
+.lab-card{background:var(--bg-card); border:1px solid var(--border); border-radius:10px; margin:14px 0; overflow:hidden;}
+.lab-head{background:linear-gradient(90deg,#132030,#161b22); padding:12px 18px; display:flex; align-items:center; gap:12px;}
+.lab-num{font-family:var(--mono); font-weight:800; color:var(--accent2); font-size:13px; background:#0d1520; padding:3px 9px; border-radius:6px;}
+.lab-head h4{margin:0; color:var(--text-bright);}
+.lab-body{padding:6px 18px 18px;}
+.lab-body dt{color:var(--accent2); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:0.4px; margin-top:12px;}
+.lab-body dd{margin:4px 0 0; color:var(--text-dim); font-size:13.6px;}
+body.learning-mode .lab-body dd.lab-solution{display:none;}
+
+/* ===== BUG CARDS ===== */
+.bug-card{background:var(--bg-card); border:1px solid var(--border); border-left:4px solid var(--red); border-radius:8px; padding:14px 18px; margin:12px 0;}
+.bug-card h4{margin:0 0 8px; color:#ff9b93;}
+.bug-card dl{margin:0; display:grid; grid-template-columns:120px 1fr; gap:4px 12px; font-size:13.4px;}
+.bug-card dt{color:var(--text-dim); font-weight:700;}
+.bug-card dd{margin:0; color:var(--text);}
+
+/* ===== GLOSSARY ===== */
+.glossary-grid{columns:2; column-gap:28px;}
+@media(max-width:800px){.glossary-grid{columns:1;}}
+.gloss-entry{break-inside:avoid; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);}
+.gloss-entry dt{font-family:var(--mono); font-weight:800; color:var(--accent2); font-size:14px;}
+.gloss-entry dd{margin:4px 0 0; font-size:13px; color:var(--text-dim);}
+.gloss-entry dd a{font-size:12px;}
+
+/* ===== ARCH SELECTOR ===== */
+.arch-selector{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 20px;}
+.arch-btn{background:var(--bg-card); border:1px solid var(--border); color:var(--text); padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px;}
+.arch-btn.active{background:var(--accent); border-color:var(--accent); color:#04121f; font-weight:700;}
+.arch-panel{display:none;}
+.arch-panel.active{display:block;}
+
+/* ===== MISC ===== */
+.backtotop{position:fixed; bottom:24px; right:24px; background:var(--accent); color:#04121f; width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; opacity:0; pointer-events:none; transition:0.2s; z-index:180; box-shadow:0 6px 16px rgba(0,0,0,0.4); border:none;}
+.backtotop.show{opacity:1; pointer-events:auto;}
+.file-ref{font-family:var(--mono); font-size:12px; color:#56d364; background:#0f2015; padding:2px 8px; border-radius:5px; display:inline-block; margin:2px 0;}
+hr.sep{border:none; border-top:1px solid var(--border); margin:36px 0;}
+.crosslink-row{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0;}
+.crosslink{background:#132030; border:1px solid var(--border); color:var(--accent2); padding:5px 12px; border-radius:20px; font-size:12.5px;}
+::-webkit-scrollbar{width:10px; height:10px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:#2a323d; border-radius:6px;}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:980px){
+  nav.sidebar{transform:translateX(-100%); transition:transform 0.2s; box-shadow:10px 0 30px rgba(0,0,0,0.5);}
+  nav.sidebar.open{transform:translateX(0);}
+  main.content{margin-left:0; padding:22px 18px 100px;}
+  #menuToggle{display:block;}
+  .searchwrap{max-width:none;}
+  .learnmode-toggle span{display:none;}
+}
+@media(max-width:600px){
+  .dash-hero h1{font-size:1.7em;}
+  .glossary-grid{columns:1;}
+  header.topbar{gap:8px; padding:0 10px;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button id="menuToggle" aria-label="Toggle menu">☰</button>
+  <div class="brand"><span class="chip">MCU</span> Kho tri thức Kiến trúc Bộ nhớ</div>
+  <div class="searchwrap">
+    <input id="searchInput" type="text" placeholder="Tìm: DMA, VMA, HardFault, stack, volatile…" autocomplete="off">
+    <div id="searchResults"></div>
+  </div>
+  <span id="searchMeta"></span>
+  <label class="learnmode-toggle"><input type="checkbox" id="learningModeToggle"><span>Chế độ Học</span></label>
+</header>
+
+<div class="layout">
+<nav class="sidebar" id="sidebar">
+  <div class="navgroup">
+    <div class="navgroup-title">Bắt đầu</div>
+    <a class="navlink" href="#dashboard">Trang chủ</a>
+    <a class="navlink" href="#roadmap">Lộ trình học</a>
+    <a class="navlink" href="#project-context">Bối cảnh Project (PS-CPU)</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Kiến trúc</div>
+    <a class="navlink" href="#mcu-architecture">Tổng quan Kiến trúc MCU</a>
+    <a class="navlink" href="#arch-selector">Chọn Kiến trúc</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Nền tảng</div>
+    <a class="navlink" href="#fundamentals">01 · Nền tảng Memory</a>
+    <a class="navlink" href="#memory-map">02/03 · Memory Map</a>
+    <a class="navlink" href="#mmio">04 · MMIO</a>
+    <a class="navlink" href="#volatile">Volatile</a>
+    <a class="navlink" href="#cortex-m-model">05 · Memory Model Cortex-M</a>
+    <a class="navlink" href="#alignment">06 · Alignment</a>
+    <a class="navlink" href="#endianness">07 · Endianness</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Vùng Memory</div>
+    <a class="navlink" href="#flash">08 · Flash</a>
+    <a class="navlink" href="#sram">09 · SRAM</a>
+    <a class="navlink" href="#stack">10 · Stack</a>
+    <a class="navlink" href="#heap">11 · Heap</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Build & Boot</div>
+    <a class="navlink" href="#elf-linker">12 · ELF / Linker</a>
+    <a class="navlink" href="#linker-script">13 · Linker Script / VMA-LMA</a>
+    <a class="navlink" href="#startup">14 · Startup Code</a>
+    <a class="navlink" href="#vector-table">15 · Vector Table / VTOR</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Phần cứng nâng cao</div>
+    <a class="navlink" href="#dma">16 · DMA</a>
+    <a class="navlink" href="#cache">17 · Cache</a>
+    <a class="navlink" href="#mpu">18 · MPU</a>
+    <a class="navlink" href="#barrier">19 · Memory Barrier</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Debug</div>
+    <a class="navlink" href="#fault">20 · Memory Fault / HardFault</a>
+    <a class="navlink" href="#gdb">21 · Debug bằng GDB</a>
+    <a class="navlink" href="#source-walkthrough">Phân tích Source Code</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Thực hành</div>
+    <a class="navlink" href="#labs">Bài Lab Thực hành</a>
+    <a class="navlink" href="#bugs">Bug Memory Thường gặp</a>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Tra cứu</div>
+    <a class="navlink" href="#kernel-comparison">So sánh Linux Kernel</a>
+    <a class="navlink" href="#interview">Interview / Đào sâu</a>
+    <a class="navlink" href="#glossary">Thuật ngữ A-Z</a>
+    <a class="navlink" href="#cheatsheet">Cheat Sheet</a>
+    <a class="navlink" href="#final-diagram">Sơ đồ Tổng hợp</a>
+  </div>
+</nav>
+
+<main class="content" id="mainContent">
+<section class="doc-section" id="dashboard">
+  <div class="dash-hero">
+    <h1>Kiến trúc Bộ nhớ MCU</h1>
+    <p class="sub">Từ cách CPU truy cập memory đến Linker, DMA, Cache, MPU và Debug Fault — bám sát firmware thật STM32F030x8 (ARM Cortex‑M0) đang chạy production.</p>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-num">21</div><div class="stat-label">Lesson</div></div>
+    <div class="stat-card"><div class="stat-num">60+</div><div class="stat-label">Concept</div></div>
+    <div class="stat-card"><div class="stat-num">30+</div><div class="stat-label">Diagram</div></div>
+    <div class="stat-card"><div class="stat-num">40+</div><div class="stat-label">Ví dụ code</div></div>
+    <div class="stat-card"><div class="stat-num">10</div><div class="stat-label">Bài Lab</div></div>
+    <div class="stat-card"><div class="stat-num">15</div><div class="stat-label">Chủ đề Debug</div></div>
+    <div class="stat-card"><div class="stat-num">80+</div><div class="stat-label">Câu hỏi Interview</div></div>
+  </div>
+  <div class="box box-important">
+    <div class="box-title">⚡ Cách dùng tài liệu này</div>
+    Dùng sidebar hoặc ô search để nhảy tới bất kỳ chủ đề nào. Mỗi nhận định đều được gắn tag
+    <span class="tag tag-arm">Kiến trúc ARM</span> (đúng cho mọi chip Cortex‑M0),
+    <span class="tag tag-vendor">Đặc thù Vendor</span> (chỉ đúng cho STMicroelectronics/STM32F0),
+    <span class="tag tag-concept">Khái niệm</span> (mô hình tư duy đơn giản hóa), hoặc
+    <span class="tag tag-verify">Cần kiểm chứng</span> (suy luận, chưa xác nhận trực tiếp trong source).
+    Bằng chứng thật được trích dẫn dạng <span class="file-ref">file.c:line</span>. Bật
+    <b>Chế độ Học</b> (góc trên phải) để ẩn answer/solution và tự kiểm tra kiến thức.
+  </div>
+</section>
+
+<section class="doc-section" id="roadmap">
+  <h2 class="section-title">Lộ trình học</h2>
+  <p>Mỗi node có thể click để nhảy tới section tương ứng. Đọc từ trên xuống cho lần đầu; sau đó dùng sidebar để tra cứu lại.</p>
+  <div class="roadmap" id="roadmapList"></div>
+</section>
+
+<section class="doc-section" id="project-context">
+  <h2 class="section-title">Bối cảnh Project — firmware thật dùng xuyên suốt tài liệu</h2>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    Mọi ví dụ không-tổng-quát trong tài liệu này đều lấy từ <code>PS-CPU/pscpu_s800</code> trong repository
+    <code>source_mfp</code>: firmware sub-CPU quản lý nguồn ("PowerSubCPU") build cho
+    <b>STMicroelectronics STM32F030x8</b> (ARM Cortex‑M0, 64KB Flash, 8KB SRAM), toolchain <b>Keil MDK‑ARM</b>.
+    Nó giao tiếp với SoC chính ("CA72") qua I2C (chế độ slave) và có firmware IAP (In-Application-Programming)
+    đi kèm để cập nhật ngoài field.
+  </div>
+  <table class="reftable">
+    <tr><th>Thuộc tính</th><th>Giá trị</th><th>Bằng chứng</th></tr>
+    <tr><td>Core</td><td>ARM Cortex‑M0 (ARMv6‑M)</td><td class="file-ref">core_cm0.h</td></tr>
+    <tr><td>Flash</td><td>0x08000000, tổng 64KB (main app dùng 20KB)</td><td class="file-ref">stm32f030x8.h:452-453</td></tr>
+    <tr><td>SRAM</td><td>0x20000000, 8KB</td><td class="file-ref">stm32f030x8.h:454</td></tr>
+    <tr><td>Cache</td><td>Không có</td><td class="file-ref">core_cm0.h (không có register cache)</td></tr>
+    <tr><td>MPU</td><td>Không có (<code>__MPU_PRESENT = 0</code>)</td><td class="file-ref">stm32f030x8.h:68</td></tr>
+    <tr><td>Toolchain</td><td>Keil MDK-ARM / armcc / armlink</td><td class="file-ref">PowerSubCPU.uvprojx</td></tr>
+    <tr><td>Vùng Flash main app</td><td>0x08000000 – 0x08004FFF (20KB)</td><td class="file-ref">PowerSubCPU.uvprojx OCR_RVCT4</td></tr>
+    <tr><td>Vùng Flash IAP</td><td>0x08005000 – 0x08007FFF (12KB)</td><td class="file-ref">PowerSubCPU_iap.uvprojx OCR_RVCT4</td></tr>
+    <tr><td>Dùng DMA</td><td>Không (I2C chạy interrupt-driven)</td><td class="file-ref">grep: không có HAL_DMA_Init trong main/</td></tr>
+    <tr><td>Dùng Heap</td><td>Không (100% static + stack)</td><td class="file-ref">grep: không có malloc/free trong main/</td></tr>
+    <tr><td>HardFault handler</td><td><code>while(1){}</code> trống, không chẩn đoán</td><td class="file-ref">stm32f0xx_it.c:67-78</td></tr>
+  </table>
+  <div class="box box-important">
+    <div class="box-title">Phát hiện then chốt dùng xuyên suốt tài liệu</div>
+    Nhiều "tính năng MCU sách giáo khoa" (heap, DMA, cache, MPU, relocate VTOR, chẩn đoán fault) đã được đối
+    chiếu với source thật và phát hiện <b>không tồn tại hoặc không được dùng</b> trong firmware cụ thể này.
+    Điều này được nêu rõ ràng thay vì bịa ra — đây tự nó là một bài học quý về cách audit một codebase thật.
+  </div>
+</section>
+<section class="doc-section" id="mcu-architecture">
+  <h2 class="section-title">Tổng quan Kiến trúc MCU <span class="tag tag-concept">Khái niệm</span></h2>
+  <div class="diagram">CPU
+ │
+ ├── Bus / Interconnect (AHB/APB trên ARM Cortex-M)
+ │
+ ├── Flash            (vùng Code — execute-in-place)
+ │
+ ├── SRAM             (vùng Data — stack/heap/global)
+ │
+ ├── Peripheral        (MMIO — GPIO/UART/I2C/Timer…)
+ │
+ ├── DMA               (bus master thứ hai, tùy chọn)
+ │
+ └── System Control    (NVIC/SysTick/SCB — core-internal)</div>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    Một microcontroller tích hợp CPU core, Flash, SRAM và peripheral <b>trên cùng 1 die silicon</b>, tất cả
+    truy cập được qua một không gian địa chỉ phẳng, không dịch địa chỉ. Khác với application processor
+    (Cortex-A) chạy Linux, thông thường <b>không có MMU</b> — địa chỉ CPU tính ra chính là địa chỉ tới bus.
+  </div>
+  <div class="box box-important">
+    <div class="box-title">Vì sao quan trọng</div>
+    Mọi register peripheral, mọi byte RAM và mọi byte Flash đều truy cập được qua đúng 1 cơ chế duy nhất:
+    lệnh load/store với địa chỉ 32-bit. Đây là ý tưởng cốt lõi mà toàn bộ tài liệu này mở rộng ra.
+  </div>
+</section>
+
+<section class="doc-section" id="arch-selector">
+  <h2 class="section-title">Chọn Kiến trúc</h2>
+  <p>Hành vi memory-architecture khác nhau theo từng thế hệ core ARM. Chọn 1 dòng để xem đặc điểm thật của nó — không bao giờ giả định tính năng của core này áp dụng cho core khác.</p>
+  <div class="arch-selector" id="archSelector">
+    <button class="arch-btn active" data-arch="m0">Cortex-M0 / M0+</button>
+    <button class="arch-btn" data-arch="m3">Cortex-M3</button>
+    <button class="arch-btn" data-arch="m4">Cortex-M4</button>
+    <button class="arch-btn" data-arch="m7">Cortex-M7</button>
+    <button class="arch-btn" data-arch="m33">Cortex-M33</button>
+    <button class="arch-btn" data-arch="riscv">RISC-V (chung)</button>
+  </div>
+
+  <div class="arch-panel active" data-arch="m0">
+    <h4 class="mini-title">Cortex-M0 / M0+ <span class="tag tag-arm">Kiến trúc ARM: ARMv6-M</span></h4>
+    <table class="reftable">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Instruction set</td><td>Chỉ Thumb (không Thumb-2 mở rộng, không ARM 32-bit mode)</td></tr>
+      <tr><td>Bit-banding</td><td>ARMv6-M không định nghĩa</td></tr>
+      <tr><td>Exclusive access (LDREX/STREX)</td><td>Không có trên M0 thường; tùy chọn trên một số M0+</td></tr>
+      <tr><td>Unaligned access</td><td>Không hỗ trợ — access word/halfword phải aligned, ngược lại HardFault</td></tr>
+      <tr><td>Fault model</td><td>Chỉ có HardFault duy nhất — không BusFault/MemManageFault/UsageFault, không CFSR/MMFAR/BFAR</td></tr>
+      <tr><td>MPU</td><td>Tùy vendor; STM32F0 không tích hợp (<code>__MPU_PRESENT=0</code>)</td></tr>
+      <tr><td>Cache</td><td>ARMv6-M không định nghĩa</td></tr>
+      <tr><td>LDRD/STRD (double-word)</td><td>Không có</td></tr>
+      <tr><td>Ứng dụng điển hình</td><td>MCU điều khiển chi phí siêu thấp, công suất thấp (ví dụ tài liệu này: STM32F030x8)</td></tr>
+    </table>
+  </div>
+
+  <div class="arch-panel" data-arch="m3">
+    <h4 class="mini-title">Cortex-M3 <span class="tag tag-arm">Kiến trúc ARM: ARMv7-M</span></h4>
+    <table class="reftable">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Instruction set</td><td>Thumb-2 (trộn đầy đủ 16/32-bit)</td></tr>
+      <tr><td>Bit-banding</td><td>ARMv7-M có định nghĩa (vùng alias SRAM + peripheral)</td></tr>
+      <tr><td>Exclusive access</td><td>Có LDREX/STREX</td></tr>
+      <tr><td>Unaligned access</td><td>Hỗ trợ transparent cho hầu hết LDR/STR (có thể config để trap)</td></tr>
+      <tr><td>Fault model</td><td>Đầy đủ: MemManageFault, BusFault, UsageFault + CFSR/MMFAR/BFAR/HFSR</td></tr>
+      <tr><td>MPU</td><td>Tùy vendor, thường có (8 region)</td></tr>
+      <tr><td>Cache</td><td>Core ARMv7-M không tự định nghĩa (vendor có thể thêm)</td></tr>
+      <tr><td>Ứng dụng điển hình</td><td>MCU tầm trung cần cách ly fault chặt hơn</td></tr>
+    </table>
+  </div>
+
+  <div class="arch-panel" data-arch="m4">
+    <h4 class="mini-title">Cortex-M4 <span class="tag tag-arm">Kiến trúc ARM: ARMv7-M (+ mở rộng DSP/FPU)</span></h4>
+    <table class="reftable">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Instruction set</td><td>Thumb-2 + DSP extension, FPU đơn (tùy chọn)</td></tr>
+      <tr><td>Fault model</td><td>Đầy đủ ARMv7-M, giống M3</td></tr>
+      <tr><td>MPU</td><td>Tùy chọn, thường có</td></tr>
+      <tr><td>Cache</td><td>Core không định nghĩa; một số SoC vendor thêm cache nhỏ</td></tr>
+      <tr><td>Ứng dụng điển hình</td><td>Embedded nặng xử lý tín hiệu (audio, motor control)</td></tr>
+    </table>
+  </div>
+
+  <div class="arch-panel" data-arch="m7">
+    <h4 class="mini-title">Cortex-M7 <span class="tag tag-arm">Kiến trúc ARM: ARMv7-M (hiệu năng cao)</span></h4>
+    <table class="reftable">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Cache</td><td>I-Cache/D-Cache tùy chọn (vendor quyết định tích hợp; ví dụ STM32H7 <span class="tag tag-vendor">Đặc thù vendor</span>)</td></tr>
+      <tr><td>Cache coherency với DMA</td><td>Không tự động — software phải Clean/Invalidate D-Cache quanh DMA buffer</td></tr>
+      <tr><td>MPU</td><td>Tùy chọn, thường có; cũng dùng để đánh dấu DMA buffer non-cacheable</td></tr>
+      <tr><td>Pipeline</td><td>Superscalar, dual-issue — nhiều write-buffer hơn M0/M3, barrier quan trọng hơn</td></tr>
+      <tr><td>Ứng dụng điển hình</td><td>Điều khiển hiệu năng cao (motor control, DSP real-time)</td></tr>
+    </table>
+  </div>
+
+  <div class="arch-panel" data-arch="m33">
+    <h4 class="mini-title">Cortex-M33 <span class="tag tag-arm">Kiến trúc ARM: ARMv8-M</span></h4>
+    <table class="reftable">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Bảo mật</td><td>TrustZone-M — phân vùng memory Secure/Non-secure ở mức kiến trúc</td></tr>
+      <tr><td>MPU</td><td>Tùy chọn, có thể có MPU Secure và Non-secure riêng</td></tr>
+      <tr><td>Fault model</td><td>Mở rộng ARMv7-M thêm SecureFault</td></tr>
+      <tr><td>Ứng dụng điển hình</td><td>Thiết bị IoT cần domain bảo mật ép buộc bằng hardware</td></tr>
+    </table>
+  </div>
+
+  <div class="arch-panel" data-arch="riscv">
+    <h4 class="mini-title">RISC-V (hồ sơ embedded chung) <span class="tag tag-verify">Cần kiểm chứng — 1 họ kiến trúc, không phải 1 spec duy nhất</span></h4>
+    <table class="reftable">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Memory model</td><td>Load/store architecture, đánh địa chỉ physical phẳng tương tự trên implementation cấp microcontroller</td></tr>
+      <tr><td>MMU</td><td>Extension virtual memory Sv32/Sv39 tùy chọn cho RISC-V cấp application; core cấp microcontroller thường bỏ qua</td></tr>
+      <tr><td>PMP (Physical Memory Protection)</td><td>Tương đương MPU của RISC-V — kiểm tra permission theo region</td></tr>
+      <tr><td>Lưu ý</td><td>Tính năng chính xác khác nhau rất nhiều theo vendor/core (ví dụ SiFive vs ESP32-C3) — luôn kiểm tra manual của implementation cụ thể.</td></tr>
+    </table>
+  </div>
+
+  <div class="box box-warning">
+    <div class="box-title">Cảnh báo</div>
+    Không bao giờ giả định tính năng của MCU này (ví dụ "Cortex-M có bit-banding") áp dụng cho MCU khác
+    (Cortex-M0 thì không). Luôn tách rõ đảm bảo của <span class="tag tag-arm">kiến trúc ARM</span> khỏi
+    lựa chọn của <span class="tag tag-vendor">silicon vendor</span>.
+  </div>
+</section>
+<section class="doc-section" id="fundamentals">
+  <h2 class="section-title">01 · Nền tảng Memory</h2>
+
+  <h3 class="sub-title">Memory vs Register vs Cache vs Storage</h3>
+  <table class="reftable">
+    <tr><th>Khái niệm</th><th>Bản chất vật lý</th><th>Mục đích</th><th>Ai truy cập</th><th>Tốc độ</th></tr>
+    <tr><td>CPU Register</td><td>Flip-flop trong core, không có địa chỉ bus</td><td>Lưu operand cho ALU</td><td>Chỉ CPU, qua instruction</td><td>Nhanh nhất (1 cycle, không qua bus)</td></tr>
+    <tr><td>Cache</td><td>SRAM nhỏ giữa CPU và memory, có logic tag/index</td><td>Che giấu latency của memory chậm hơn</td><td>CPU (transparent)</td><td>Rất nhanh; <b>không có trên Cortex-M0</b></td></tr>
+    <tr><td>SRAM</td><td>Cell bistable 6-transistor</td><td>Working memory: stack, heap, global</td><td>CPU, DMA</td><td>Nhanh, không cần refresh</td></tr>
+    <tr><td>Flash</td><td>Floating-gate transistor</td><td>Lưu code + hằng số vĩnh viễn</td><td>CPU (đọc/execute), Flash controller (program/erase)</td><td>Đọc chậm hơn SRAM; ghi/xóa rất chậm</td></tr>
+    <tr><td>EEPROM</td><td>Tương tự Flash, xóa theo byte</td><td>Config nhỏ ghi lại được</td><td>CPU qua controller</td><td>Chậm, giới hạn số lần ghi</td></tr>
+    <tr><td>ROM (mask ROM)</td><td>Hard-wired lúc sản xuất</td><td>Bootloader vendor cố định (system memory)</td><td>CPU lúc boot</td><td>Chỉ đọc, cố định</td></tr>
+    <tr><td>"Storage" (nghĩa Linux: SD/eMMC)</td><td>Thiết bị ngoài qua protocol (SPI/SDIO)</td><td>File, dữ liệu lớn</td><td>Qua driver + DMA/controller — <b>không</b> load/store trực tiếp</td><td>Chậm nhất, có latency protocol</td></tr>
+  </table>
+  <div class="box box-important">
+    <div class="box-title">Phân biệt then chốt</div>
+    Register, Cache, SRAM, Flash và ROM đều <b>CPU truy cập được</b> — reach bằng <code>LDR</code>/<code>STR</code> trực tiếp.
+    "Storage" theo nghĩa Linux (ổ đĩa) thì <b>không</b> — CPU không thể dereference con trỏ vào thẻ SD;
+    phải qua giao thức command/response. Đây là lý do MCU hầu như không bao giờ "load filesystem vào RAM"
+    theo kiểu Linux load 1 chương trình.
+  </div>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa — "Memory" theo nghĩa hẹp của tài liệu này</div>
+    Memory = bất kỳ vùng CPU reach được bằng <code>LDR</code>/<code>STR</code> qua địa chỉ đi qua bus.
+    Bao gồm SRAM, Flash, <b>và cả register peripheral</b> — đây là nền tảng của Memory-Mapped I/O (xem section MMIO).
+  </div>
+
+  <h3 class="sub-title">Từ con trỏ C tới hiệu ứng hardware</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-type">uint32_t</span> *ptr = (<span class="tok-type">uint32_t</span> *)<span class="tok-num">0x20000000</span>;
+*ptr = <span class="tok-num">0x12345678</span>;</code></pre></div>
+  <div class="diagram">CPU
+ │
+ │ Address = 0x20000000
+ │ Data    = 0x12345678
+ │ Control = WRITE, size=WORD
+ ▼
+Bus / Interconnect (AHB)
+ │
+ ▼
+Address Decoder (hard-wired theo memory map của MCU)
+ │
+ ├── <span class="hl2">0x0800_0000–0x0801_FFFF? → Flash</span>        (không khớp)
+ ├── <span class="hl3">0x2000_0000–0x2000_1FFF? → SRAM</span>         ← KHỚP
+ └── <span class="hl4">0x4000_0000–...          → Peripheral</span>   (không khớp)
+ │
+ ▼
+SRAM Controller → mảng SRAM cell vật lý, offset 0 → ghi 4 byte</div>
+  <div class="box box-important">
+    <div class="box-title">Insight</div>
+    Một con trỏ hard-code như <code>0x20000000</code> "tự nhiên hoạt động" không phải phép màu của ngôn ngữ —
+    nó hoạt động vì vendor đã wire address decoder route đúng dải đó tới SRAM vật lý. Ghi vào 1 địa chỉ
+    decoder không nhận diện được (vùng unmapped/reserved) thường gây Bus/HardFault.
+  </div>
+
+  <h3 class="sub-title">MCU vs Linux: không MMU, không dịch địa chỉ</h3>
+  <div class="box box-kernel">
+    <div class="box-title">So sánh Kernel</div>
+    Trên Linux/Cortex-A, CPU tạo ra địa chỉ <i>virtual</i>, và MMU dịch nó thành địa chỉ physical trước khi
+    tới bus. Trên MCU thường (không MMU), <b>địa chỉ CPU tính ra CHÍNH LÀ địa chỉ physical trên bus</b> —
+    không có tầng dịch nào. Đây là điều chỉnh tư duy quan trọng nhất khi chuyển từ công việc kernel/driver
+    sang firmware MCU.
+  </div>
+</section>
+
+<section class="doc-section" id="memory-map">
+  <h2 class="section-title">02/03 · Memory Map</h2>
+
+  <h3 class="sub-title">Memory map chung của ARM Cortex-M <span class="tag tag-arm">Kiến trúc ARM</span></h3>
+  <div class="diagram">0x0000_0000 ┌────────────────────────────┐
+            │   Code region              │  Flash, or boot alias (System memory)
+0x2000_0000 ├────────────────────────────┤
+            │   SRAM region              │  On-chip RAM
+0x4000_0000 ├────────────────────────────┤
+            │   Peripheral region        │  All MMIO peripherals
+0x6000_0000 ├────────────────────────────┤
+            │   External RAM             │  (rare on small MCUs; STM32F030x8 has none)
+0xA000_0000 ├────────────────────────────┤
+            │   External Device          │  (rare on small MCUs)
+0xE000_0000 ├────────────────────────────┤
+            │   Private Peripheral Bus   │  NVIC, SysTick, SCB — core-internal, do ARM định nghĩa
+0xE010_0000 ├────────────────────────────┤
+            │   Vendor-specific / System │
+0xFFFF_FFFF └────────────────────────────┘</div>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    Layout 8 vùng này bắt buộc bởi <b>kiến trúc ARMv6-M</b> cho mọi chip Cortex-M0 bất kể vendor. NVIC/SysTick/SCB
+    luôn nằm tại <code>0xE000_0000</code> vì IP đó thuộc chính CPU core, không phải thứ vendor tự đặt.
+  </div>
+
+  <h3 class="sub-title">Memory map thật — STM32F030x8 <span class="tag tag-vendor">Đặc thù vendor</span> <span class="tag tag-real">Đã xác minh trong source</span></h3>
+  <div class="diagram">0x0000_0000 ┌─────────────────────────────┐
+            │ Alias (Flash/System memory) │  ← CPU luôn đọc vector table ở đây sau reset
+0x0800_0000 ├─────────────────────────────┤
+            │ <span class="hl2">FLASH_BASE</span> (64KB, biến thể x8)  │  vùng Code trong dải 0x0000_0000-0x1FFF_FFFF của ARM
+0x0800_FFFF ├─────────────────────────────┤  FLASH_BANK1_END
+            │        ... reserved ...      │
+0x1FFF_F7AC │ UID_BASE (Unique Device ID) │
+0x1FFF_F7CC │ FLASHSIZE_BASE               │
+0x1FFF_F800 │ OB_BASE (Option Bytes)       │
+            ├─────────────────────────────┤
+0x2000_0000 │ <span class="hl3">SRAM_BASE</span> (8KB)                │  vùng SRAM
+0x2000_1FFF ├─────────────────────────────┤
+0x4000_0000 │ <span class="hl4">APBPERIPH_BASE</span>                 │  vùng Peripheral (bus APB)
+            │  TIM3, TIM14, RTC, WWDG,     │
+            │  IWDG, SPI2, USART2, I2C1/2, │
+            │  PWR, SYSCFG, EXTI, ADC,     │
+            │  TIM1, SPI1, USART1,         │
+            │  TIM15/16/17, DBGMCU         │
+0x4002_0000 │ <span class="hl4">AHBPERIPH_BASE</span>                 │  vùng Peripheral (bus AHB — nhanh hơn)
+            │  DMA1 (+5 kênh), RCC,        │
+            │  FLASH_R_BASE (register ctrl),│
+            │  CRC                         │
+0x4800_0000 │ <span class="hl4">AHB2PERIPH_BASE</span>                │  vùng Peripheral (AHB2 — cho GPIO nhanh)
+            │  GPIOA, GPIOB, GPIOC,        │
+            │  GPIOD, GPIOF                │
+            ├─────────────────────────────┤
+0xE000_0000 │ Private Peripheral Bus       │  NVIC, SysTick, SCB — core-internal ARM
+0xE000_ED00 │  SCB->CFSR/HFSR/MMFAR/BFAR   │  ← Lưu ý: trên M0 chỉ có HFSR (xem section Fault)
+0xFFFF_FFFF └─────────────────────────────┘</div>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* stm32f030x8.h — real header, lines 452-507 */</span>
+<span class="tok-kw">#define</span> FLASH_BASE      ((<span class="tok-type">uint32_t</span>)<span class="tok-num">0x08000000U</span>)
+<span class="tok-kw">#define</span> FLASH_BANK1_END ((<span class="tok-type">uint32_t</span>)<span class="tok-num">0x0800FFFFU</span>)
+<span class="tok-kw">#define</span> SRAM_BASE       ((<span class="tok-type">uint32_t</span>)<span class="tok-num">0x20000000U</span>)
+<span class="tok-kw">#define</span> PERIPH_BASE     ((<span class="tok-type">uint32_t</span>)<span class="tok-num">0x40000000U</span>)
+
+<span class="tok-kw">#define</span> APBPERIPH_BASE   PERIPH_BASE                    <span class="tok-com">/* 0x4000_0000 */</span>
+<span class="tok-kw">#define</span> AHBPERIPH_BASE  (PERIPH_BASE + <span class="tok-num">0x00020000</span>)       <span class="tok-com">/* 0x4002_0000 */</span>
+<span class="tok-kw">#define</span> AHB2PERIPH_BASE (PERIPH_BASE + <span class="tok-num">0x08000000</span>)       <span class="tok-com">/* 0x4800_0000 */</span>
+
+<span class="tok-kw">#define</span> GPIOA_BASE (AHB2PERIPH_BASE + <span class="tok-num">0x00000000</span>)          <span class="tok-com">/* 0x4800_0000 */</span>
+<span class="tok-kw">#define</span> USART1_BASE (APBPERIPH_BASE + <span class="tok-num">0x00013800</span>)          <span class="tok-com">/* 0x4001_3800 */</span></code></pre></div>
+
+  <h3 class="sub-title">Vì sao GPIO nằm trên bus khác với USART</h3>
+  <div class="diagram">                     CPU (Cortex-M0 core)
+                          │
+                    AHB Bus Matrix
+                    ┌─────┴─────┬───────────────┐
+                    │           │               │
+              AHB peripherals  AHB2 peripherals  Bridge → APB
+              (DMA, RCC,       (GPIOA..F —       │
+               FLASH ctrl,      cần latency thấp  APB peripherals
+               CRC)             để toggle nhanh)  (TIM, USART, I2C, SPI...)
+              0x4002_xxxx       0x4800_xxxx        0x4000_xxxx</div>
+  <div class="box box-important">
+    <div class="box-title">Insight</div>
+    GPIO cần latency thấp để toggle pin nhanh, nên ST đặt nó trên nhánh AHB2 riêng. Bus mà 1 peripheral nằm
+    trên không chỉ là chi tiết kế toán địa chỉ — nó quyết định latency truy cập thật (APB thường thêm 1
+    cycle bridge mà AHB không có).
+  </div>
+
+  <h3 class="sub-title">Alias, remap và hành vi boot</h3>
+  <p><code>0x0000_0000</code> không phải memory vật lý riêng — cơ chế boot remap của STM32F0 khiến nó
+  <b>alias</b> cùng nội dung với Flash (<code>0x0800_0000</code>) hoặc bootloader System Memory, tùy chân
+  BOOT0, tại thời điểm reset. CPU luôn fetch vector table ban đầu từ <code>0x0000_0000</code>.</p>
+
+  <div class="box box-warning">
+    <div class="box-title">Cảnh báo — lỗi comment CMSIS thật tìm thấy trong source</div>
+    Header comment <code>SRAM_BASE</code> là "SRAM base address <b>in the alias region</b>" — boilerplate
+    copy từ template CMSIS Cortex-M3/M4 hỗ trợ <i>bit-banding</i>. <b>Cortex-M0 không có bit-banding</b>
+    (ARMv6-M không định nghĩa). Không bao giờ tin comment vendor header mù quáng — luôn verify với
+    architecture reference manual thật. <span class="file-ref">stm32f030x8.h:454</span>
+  </div>
+
+  <div class="crosslink-row">
+    <a class="crosslink" href="#mmio">→ MMIO</a>
+    <a class="crosslink" href="#flash">→ Flash</a>
+    <a class="crosslink" href="#sram">→ SRAM</a>
+    <a class="crosslink" href="#vector-table">→ Vector Table / VTOR</a>
+  </div>
+</section>
+<section class="doc-section" id="mmio">
+  <h2 class="section-title">04 · Memory-Mapped I/O (MMIO)</h2>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    MMIO là kỹ thuật phơi bày register hardware như địa chỉ trong cùng không gian với RAM/Flash, để lệnh
+    <code>LDR</code>/<code>STR</code> thông thường trở thành giao diện điều khiển hardware. ARM không có
+    "lệnh I/O" riêng — mọi thứ đều là memory access.
+  </div>
+  <div class="diagram">C Code
+  │  GPIOA->BSRR = pin;
+  ▼
+Con trỏ (struct member → offset)
+  │  offsetof(GPIO_TypeDef, BSRR) = 0x18
+  ▼
+Địa chỉ = GPIOA_BASE + 0x18 = 0x48000018
+  ▼
+Bus
+  ▼
+Address Decoder → khớp block GPIOA trên AHB2
+  ▼
+Register Peripheral (BSRR — logic tổ hợp, không phải storage)
+  ▼
+Hardware Logic → ODR latch cập nhật → điện áp pin vật lý đổi</div>
+
+  <h3 class="sub-title">Struct overlay thật — GPIO_TypeDef <span class="tag tag-vendor">Đặc thù vendor</span> <span class="tag tag-real">Đã xác minh trong source</span></h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* stm32f030x8.h lines 254-266 */</span>
+<span class="tok-kw">typedef struct</span>
+{
+  __IO <span class="tok-type">uint32_t</span> MODER;        <span class="tok-com">/* offset 0x00 */</span>
+  __IO <span class="tok-type">uint32_t</span> OTYPER;       <span class="tok-com">/* offset 0x04 */</span>
+  __IO <span class="tok-type">uint32_t</span> OSPEEDR;      <span class="tok-com">/* offset 0x08 */</span>
+  __IO <span class="tok-type">uint32_t</span> PUPDR;        <span class="tok-com">/* offset 0x0C */</span>
+  __IO <span class="tok-type">uint32_t</span> IDR;          <span class="tok-com">/* offset 0x10 — logically read-only */</span>
+  __IO <span class="tok-type">uint32_t</span> ODR;          <span class="tok-com">/* offset 0x14 */</span>
+  __IO <span class="tok-type">uint32_t</span> BSRR;         <span class="tok-com">/* offset 0x18 (header comment wrongly says 0x1A!) */</span>
+  __IO <span class="tok-type">uint32_t</span> LCKR;         <span class="tok-com">/* offset 0x1C */</span>
+  __IO <span class="tok-type">uint32_t</span> AFR[<span class="tok-num">2</span>];       <span class="tok-com">/* offset 0x20, 0x24 */</span>
+  __IO <span class="tok-type">uint32_t</span> BRR;          <span class="tok-com">/* offset 0x28 */</span>
+} GPIO_TypeDef;
+
+<span class="tok-kw">#define</span> GPIOA ((GPIO_TypeDef *) GPIOA_BASE)   <span class="tok-com">/* = (GPIO_TypeDef*)0x48000000 */</span></code></pre></div>
+  <div class="box box-warning">
+    <div class="box-title">Lỗi thật tìm thấy trong header</div>
+    Comment ghi BSRR ở offset "0x1A" — điều này <b>sai</b>. Tính toán struct layout
+    (0x00,0x04,0x08,0x0C,0x10,0x14 → tiếp theo là <b>0x18</b>) và Reference Manual thật đều xác nhận 0x18.
+    Đây là lỗi copy-paste cũ đã biết trong một số version CMSIS header. <span class="file-ref">stm32f030x8.h:262</span>
+  </div>
+
+  <h3 class="sub-title">Pattern truy cập register — bài học an toàn MMIO thật</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* stm32f0xx_hal_gpio.c lines 427-455 — real HAL source */</span>
+<span class="tok-kw">void</span> <span class="tok-fn">HAL_GPIO_WritePin</span>(GPIO_TypeDef* GPIOx, <span class="tok-type">uint16_t</span> GPIO_Pin, GPIO_PinState PinState)
+{
+  <span class="tok-kw">if</span> (PinState != GPIO_PIN_RESET) { GPIOx->BSRR = (<span class="tok-type">uint32_t</span>)GPIO_Pin; }  <span class="tok-com">/* write-1-to-set */</span>
+  <span class="tok-kw">else</span>                             { GPIOx->BRR  = (<span class="tok-type">uint32_t</span>)GPIO_Pin; }  <span class="tok-com">/* write-1-to-clear */</span>
+}
+
+<span class="tok-kw">void</span> <span class="tok-fn">HAL_GPIO_TogglePin</span>(GPIO_TypeDef* GPIOx, <span class="tok-type">uint16_t</span> GPIO_Pin)
+{
+  GPIOx->ODR ^= GPIO_Pin;   <span class="tok-com">/* READ-MODIFY-WRITE — NOT atomic! */</span>
+}</code></pre></div>
+  <table class="reftable">
+    <tr><th>Pattern</th><th>Bus transaction</th><th>Atomic?</th><th>An toàn với race ISR?</th></tr>
+    <tr><td><code>BSRR</code>/<code>BRR</code> (write-1-to-set/clear)</td><td>1 (chỉ ghi)</td><td>Có — hardware tự làm OR/AND nội bộ</td><td>Có</td></tr>
+    <tr><td><code>ODR ^= pin</code> (toggle)</td><td>2 (đọc rồi ghi)</td><td>Không</td><td><b>Không</b> — pattern bug tiềm ẩn thật nếu dùng từ cả ISR và main loop trên cùng port</td></tr>
+    <tr><td>Đọc <code>IDR</code></td><td>1 (đọc)</td><td>n/a</td><td>Read-only theo hành vi hardware dù kiểu struct là <code>__IO</code></td></tr>
+  </table>
+  <div class="box box-important">
+    <div class="box-title">Vì sao BSRR tồn tại</div>
+    Cortex-M0 <b>không có LDREX/STREX</b>. Read-modify-write trên <code>ODR</code> có thể mất 1 bit nếu ISR
+    đổi cùng register giữa lúc đọc và ghi. <code>BSRR</code>/<code>BRR</code> đẩy logic OR/AND-NOT vào
+    hardware để 1 lần ghi duy nhất atomic ở mức bus — không cần instruction atomic của CPU.
+  </div>
+
+  <h3 class="sub-title">Phân loại quyền register</h3>
+  <div class="card-grid">
+    <div class="card"><h4>Read-only</h4><p>Hardware tự đẩy giá trị mỗi cycle (ví dụ <code>IDR</code>). Ghi vào được chấp nhận cú pháp nhưng hardware bỏ qua.</p></div>
+    <div class="card"><h4>Write-only</h4><p>Đọc lại vô nghĩa/undefined (ví dụ <code>BSRR</code> trong thực tế).</p></div>
+    <div class="card"><h4>Read/Write</h4><p>Register lưu trữ bình thường (ví dụ <code>MODER</code>, <code>ODR</code>).</p></div>
+    <div class="card"><h4>Write-1-to-set (W1S)</h4><p>Ghi 1 để set bit; ghi 0 không tác động bit đó.</p></div>
+    <div class="card"><h4>Write-1-to-clear (W1C)</h4><p>Phổ biến cho cờ interrupt "pending" — ghi 1 để acknowledge/clear.</p></div>
+    <div class="card"><h4>Bit reserved</h4><p>Phải ghi đúng giá trị reset; không bao giờ giả định có thể dùng lại cho mục đích khác.</p></div>
+  </div>
+  <div class="crosslink-row">
+    <a class="crosslink" href="#volatile">→ Volatile</a>
+    <a class="crosslink" href="#barrier">→ Memory Barrier</a>
+    <a class="crosslink" href="#alignment">→ Alignment</a>
+  </div>
+</section>
+
+<section class="doc-section" id="volatile">
+  <h2 class="section-title">Volatile</h2>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    <code>volatile</code> báo cho compiler: mọi access ở mức source-code tới object này phải sinh ra đúng
+    1 load/store thật — không được loại bỏ, cache trong register qua nhiều access, gộp lại, hay sắp xếp lại
+    so với các volatile access khác.
+  </div>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* KHÔNG volatile — compiler có thể hoist việc đọc ra khỏi loop hoàn toàn */</span>
+<span class="tok-type">uint32_t</span> *reg = (<span class="tok-type">uint32_t</span>*)<span class="tok-num">0x48000010</span>;
+<span class="tok-kw">while</span> ((*reg & <span class="tok-num">1</span>) == <span class="tok-num">0</span>) { }   <span class="tok-com">/* có thể loop vô hạn HOẶC loop 0 vòng sau -O2 */</span>
+
+<span class="tok-com">/* CÓ volatile — mỗi vòng lặp đảm bảo 1 LDR mới */</span>
+<span class="tok-kw">volatile</span> <span class="tok-type">uint32_t</span> *reg2 = (<span class="tok-kw">volatile</span> <span class="tok-type">uint32_t</span>*)<span class="tok-num">0x48000010</span>;
+<span class="tok-kw">while</span> ((*reg2 & <span class="tok-num">1</span>) == <span class="tok-num">0</span>) { }</code></pre></div>
+  <div class="diagram">Không volatile:                          Có volatile:
+┌────────────┐                          ┌────────────┐
+│ C loop     │ đọc IDR                  │ C loop     │ đọc IDR
+└─────┬──────┘                          └─────┬──────┘
+      │ optimizer thấy không ghi trong loop     │ optimizer bị cấm loại bỏ
+      ▼ → gộp thành 1 lần đọc trước loop         ▼ → giữ N lần đọc = N vòng loop thật
+┌────────────┐                          ┌────────────┐
+│ 1 lần đọc  │  ← SAI cho hardware       │ N lần đọc  │  ← đúng: thấy trạng thái hardware sống
+└────────────┘                          └────────────┘</div>
+  <table class="reftable">
+    <tr><th>Khái niệm</th><th>Mục đích</th></tr>
+    <tr><td><code>volatile</code></td><td>Compiler phải thực hiện access như quan sát được (không loại bỏ/cache/gộp)</td></tr>
+    <tr><td>Compiler barrier (<code>asm volatile("":::"memory")</code>)</td><td>Chặn compiler sắp xếp lại/cache quanh điểm này — không đảm bảo ở mức CPU</td></tr>
+    <tr><td>CPU memory barrier (DMB/DSB/ISB)</td><td>Kiểm soát thứ tự/hoàn thành thật của bus transaction ở mức hardware</td></tr>
+    <tr><td>Atomic operation</td><td>Đảm bảo read-modify-write không thể chia nhỏ</td></tr>
+    <tr><td>Mutex</td><td>Đảm bảo loại trừ lẫn nhau giữa các context đồng thời</td></tr>
+  </table>
+  <div class="box box-warning">
+    <div class="box-title">Cực kỳ quan trọng — không nhầm lẫn những điều này</div>
+    <code>volatile</code> <b>không</b> đảm bảo thread-safety, atomicity, hay thứ tự giữa 2 biến volatile khác
+    nhau lúc runtime. Nó chỉ đảm bảo <i>mỗi access riêng lẻ có xảy ra</i>. Một counter <code>volatile</code>
+    tăng từ cả ISR và main loop vẫn có thể race — xem <code>HAL_GPIO_TogglePin</code> ở trên, field
+    <code>ODR</code> của nó hoàn toàn <code>volatile</code> nhưng <b>vẫn</b> không an toàn khi sửa đồng thời.
+  </div>
+  <div class="box box-debug">
+    <div class="box-title">Liên quan tới Debug</div>
+    "Chạy đúng ở Debug (-O0), sai ở Release (-O2/-O3)" là dấu hiệu mạnh nhất của thiếu <code>volatile</code>
+    trên code liên quan hardware — optimizer chỉ lộ bug ở mức optimization cao hơn, vì -O0 hiếm khi loại bỏ load.
+  </div>
+  <p>CMSIS bắt buộc điều này cho mọi register peripheral qua 3 macro (không bao giờ tùy chọn):</p>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* core_cm0.h lines 207-218 */</span>
+<span class="tok-kw">#define</span> __I     <span class="tok-kw">volatile const</span>   <span class="tok-com">/* chỉ đọc */</span>
+<span class="tok-kw">#define</span> __O     <span class="tok-kw">volatile</span>         <span class="tok-com">/* chỉ ghi */</span>
+<span class="tok-kw">#define</span> __IO    <span class="tok-kw">volatile</span>         <span class="tok-com">/* đọc/ghi */</span></code></pre></div>
+</section>
+
+<section class="doc-section" id="cortex-m-model">
+  <h2 class="section-title">05 · Memory Model ARM Cortex-M</h2>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa — Load/Store Architecture <span class="tag tag-arm">Kiến trúc ARM</span></div>
+    Core ARM không thể tính toán trực tiếp trên memory. Mọi thao tác trên dữ liệu memory cần tối thiểu 2 bước:
+    <code>LDR</code> vào register, tính toán, rồi có thể <code>STR</code> ngược lại. Không có instruction ARM
+    tương đương <code>ADD [mem], eax</code> của x86.
+  </div>
+  <div class="diagram">CPU (load/store core)
+ │
+ ├─ Register File (R0-R12, SP, LR, PC)  ← ALU chỉ thấy đây
+ │
+ └─ Load/Store Unit ──── Bus ──── Memory/Peripheral</div>
+  <p>Đây là nguyên nhân gốc rễ vì sao <code>ODR ^= pin</code> luôn ≥2 bus transaction — không phải lựa chọn
+  compiler, mà là giới hạn kiến trúc cứng. Không có instruction nào XOR trực tiếp memory trong 1 bus cycle.</p>
+
+  <h3 class="sub-title">Tách bạch sự thật do ARM quy định vs do vendor quy định</h3>
+  <table class="reftable">
+    <tr><th>Tính năng</th><th>Ai quy định</th><th>Bằng chứng</th></tr>
+    <tr><td>Load/store architecture, không có ALU op memory-to-memory</td><td><span class="tag tag-arm">ARM</span> (ARMv6-M ISA)</td><td>Cố định cho mọi Cortex-M0</td></tr>
+    <tr><td>Instruction set chỉ Thumb (không Thumb-2 đầy đủ, không ARM 32-bit mode)</td><td><span class="tag tag-arm">ARM</span></td><td>Directive <code>THUMB</code> trong startup_stm32f030x8.s:67</td></tr>
+    <tr><td>Layout address space 8 vùng</td><td><span class="tag tag-arm">ARM</span> (memory map ARMv6-M)</td><td>Xem section Memory Map</td></tr>
+    <tr><td>Không có LDREX/STREX</td><td><span class="tag tag-arm">ARM</span> (đặc điểm M0 thường)</td><td>—</td></tr>
+    <tr><td>Không có bit-banding</td><td><span class="tag tag-arm">ARM</span> (ARMv6-M không định nghĩa)</td><td>—</td></tr>
+    <tr><td>Không có LDRD/STRD (double-word)</td><td><span class="tag tag-arm">ARM</span></td><td>—</td></tr>
+    <tr><td>Flash tại 0x0800_0000, SRAM tại 0x2000_0000</td><td><span class="tag tag-vendor">Vendor (ST)</span></td><td>stm32f030x8.h</td></tr>
+    <tr><td>Chia peripheral APB/AHB/AHB2</td><td><span class="tag tag-vendor">Vendor (ST)</span></td><td>stm32f030x8.h</td></tr>
+    <tr><td>NVIC/SysTick/SCB tại 0xE000_xxxx</td><td><span class="tag tag-arm">ARM</span> (Private Peripheral Bus, core IP)</td><td>ARMv6-M spec</td></tr>
+    <tr><td>Danh sách IRQ cụ thể (WWDG, RTC, DMA1...)</td><td><span class="tag tag-vendor">Vendor (ST)</span></td><td>startup_stm32f030x8.s:93-122</td></tr>
+  </table>
+
+  <h3 class="sub-title">Kích thước access</h3>
+  <div class="codewrap"><span class="lang-badge">asm</span><button class="copy-btn">Copy</button>
+<pre><code>LDRB / STRB   → 1 byte  (8-bit)
+LDRH / STRH   → 2 byte  (16-bit, halfword)
+LDR  / STR    → 4 byte  (32-bit, word)
+<span class="tok-com">; LDRD/STRD (64-bit) KHÔNG có trên Cortex-M0 — compiler tách thành 2 LDR/STR</span></code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Insight — tự verify core lúc runtime</div>
+    Không cần tin tài liệu: đọc <code>SCB->CPUID</code> (0xE000ED00) lúc runtime trả về field Part Number
+    (0xC20 cho Cortex-M0) tự xác định đúng loại silicon.
+  </div>
+</section>
+
+<section class="doc-section" id="alignment">
+  <h2 class="section-title">06 · Alignment</h2>
+  <div class="box box-warning">
+    <div class="box-title">Sự thật đặc thù kiến trúc quan trọng</div>
+    <b>Cortex-M0 (ARMv6-M) YÊU CẦU access phải aligned</b> cho <code>LDR</code>/<code>STR</code> word/halfword —
+    unaligned access gây HardFault. <b>Cortex-M3/M4/M7 (ARMv7-M) hỗ trợ unaligned access transparent</b>
+    mặc định (chỉ chậm hơn, không fault). Không mang giả định giữa 2 dòng này qua nhau.
+  </div>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-type">uint8_t</span> buffer[<span class="tok-num">10</span>];
+<span class="tok-type">uint32_t</span> *p = (<span class="tok-type">uint32_t</span> *)&buffer[<span class="tok-num">1</span>];   <span class="tok-com">/* &buffer[1] KHÔNG aligned 4-byte! */</span>
+*p = <span class="tok-num">0x12345678</span>;                          <span class="tok-com">/* HardFault trên Cortex-M0 thật */</span></code></pre></div>
+  <div class="diagram">buffer[10] trong SRAM tại 0x2000_0100:
+Address: 0x0100 0x0101 0x0102 0x0103 0x0104 0x0105 ...
+         ┌────┬────┬────┬────┬────┬────┬
+         │ b0 │ b1 │ b2 │ b3 │ b4 │ b5 │
+         └────┴────┴────┴────┴────┴────┘
+                ▲
+                &buffer[1] = 0x2000_0101  ← KHÔNG chia hết cho 4 → STR ở đây FAULT trên M0</div>
+  <h3 class="sub-title">Cách viết an toàn</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-kw">void</span> <span class="tok-fn">safe_unaligned_write</span>(<span class="tok-type">uint8_t</span> *dst, <span class="tok-type">uint32_t</span> value)
+{
+    __builtin_memcpy(dst, &value, <span class="tok-kw">sizeof</span>(value));  <span class="tok-com">/* compiler sinh copy an toàn theo byte */</span>
+}</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Hệ quả fault model của Cortex-M0</div>
+    Trên M0, MỌI memory fault (unaligned access, địa chỉ không hợp lệ, v.v.) đều gộp thành 1
+    <b>HardFault</b> duy nhất — không có BusFault/MemManageFault/UsageFault riêng, không có CFSR/MMFAR/BFAR
+    (chỉ có trên ARMv7-M). Xem section Fault để biết hệ quả debug đầy đủ.
+  </div>
+</section>
+
+<section class="doc-section" id="endianness">
+  <h2 class="section-title">07 · Endianness</h2>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    STM32F030x8/Cortex-M0 là <b>little-endian</b> — byte có ý nghĩa thấp nhất (LSB) của 1 giá trị đa-byte
+    được lưu tại địa chỉ thấp nhất.
+  </div>
+  <div class="diagram">Lưu trữ Little-Endian của 0x12345678:
+Address       Data
+0x1000        78
+0x1001        56
+0x1002        34
+0x1003        12</div>
+  <h3 class="sub-title">Code thật — parse byte stream I2C an toàn, không phụ thuộc endian</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* km_i2c.c lines 631-634 — real code */</span>
+<span class="tok-kw">for</span>(i = <span class="tok-num">0</span> ; i < DATA_ARRAY_SIZE ; i++ ){
+    <span class="tok-com">/* 8bit data -> 32bit data */</span>
+    w_data |= (<span class="tok-type">uint32_t</span>)(i2c_info.rx_buf[i + DATA_ARRAY] << (i*<span class="tok-num">8</span>));
+}</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Vì sao quan trọng</div>
+    Loop này ghép giá trị 32-bit từ byte stream bằng shift tường minh — nó <b>đúng bất kể CPU endianness</b>
+    vì <code>&lt;&lt;</code> và <code>|=</code> thao tác trên giá trị số học, không phải memory layout. Đây
+    an toàn hơn <code>*(uint32_t*)rx_buf</code>, chỉ đúng nếu byte order của wire protocol tình cờ khớp CPU
+    endianness (ở đây có khớp, nhưng chỉ là trùng hợp).
+  </div>
+  <table class="reftable">
+    <tr><th>Cách viết</th><th>Portable qua endianness?</th><th>An toàn alignment?</th></tr>
+    <tr><td>Loop shift/OR thủ công (code thật ở trên)</td><td>Có</td><td>Có (chỉ byte access)</td></tr>
+    <tr><td>Ép kiểu <code>*(uint32_t*)ptr</code></td><td>Không — phụ thuộc CPU endianness khớp wire format</td><td>Không — có thể gây fault Alignment ở trên</td></tr>
+  </table>
+  <div class="box box-kernel">
+    <div class="box-title">So sánh Kernel</div>
+    Linux kernel đóng gói cùng ý tưởng thành helper chuẩn: <code>le32_to_cpu()</code>, <code>cpu_to_le32()</code>,
+    <code>get_unaligned_le32()</code> trong <code>include/linux/byteorder/</code>. Firmware MCU thường tự viết
+    lại thủ công theo từng driver, như đã thấy ở trên.
+  </div>
+</section>
+<section class="doc-section" id="flash">
+  <h2 class="section-title">08 · Flash</h2>
+  <div class="diagram">CPU
+ ↓  fetch instruction trực tiếp, không cần bước copy (Execute-In-Place)
+Flash Interface / Controller
+ ↓
+Flash Array (floating-gate cell)</div>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa — Execute-In-Place (XIP)</div>
+    Vì Flash nằm trực tiếp trong address space của CPU (0x0800_0000), CPU có thể fetch instruction
+    <b>trực tiếp từ Flash</b> — không có bước "load chương trình vào RAM" như process image của Linux.
+  </div>
+  <h3 class="sub-title">Vì sao Flash không ghi được bằng STR bình thường</h3>
+  <p>Flash cell là floating-gate transistor — đổi 1 bit cần bơm/rút electron qua lớp oxide cách điện ở điện áp
+  cao hơn vận hành (tunneling), mất từ microsecond tới millisecond, không phải 1 bus cycle. Một
+  <b>Flash Controller</b> riêng (<code>FLASH_R_BASE = 0x40022000</code>) nằm giữa CPU và mảng Flash.</p>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* stm32f0xx_hal_flash.c — chuỗi unlock thật */</span>
+HAL_StatusTypeDef <span class="tok-fn">HAL_FLASH_Unlock</span>(<span class="tok-kw">void</span>)
+{
+  <span class="tok-kw">if</span> (HAL_IS_BIT_SET(FLASH->CR, FLASH_CR_LOCK))
+  {
+    WRITE_REG(FLASH->KEYR, FLASH_KEY1);   <span class="tok-com">/* magic key 1, hằng số cố định */</span>
+    WRITE_REG(FLASH->KEYR, FLASH_KEY2);   <span class="tok-com">/* magic key 2, phải theo đúng thứ tự này */</span>
+  }
+  <span class="tok-kw">else</span> { <span class="tok-kw">return</span> HAL_ERROR; }
+}
+
+<span class="tok-kw">static void</span> <span class="tok-fn">FLASH_Program_HalfWord</span>(<span class="tok-type">uint32_t</span> Address, <span class="tok-type">uint16_t</span> Data)
+{
+  SET_BIT(FLASH->CR, FLASH_CR_PG);       <span class="tok-com">/* báo controller: sắp program */</span>
+  *(__IO <span class="tok-type">uint16_t</span>*)Address = Data;   <span class="tok-com">/* trông giống STRH bình thường — controller chặn và xử lý riêng */</span>
+}</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Giới hạn thật: chỉ program được granularity 16-bit</div>
+    Trên STM32F0, Flash controller chỉ hỗ trợ program <b>halfword (16-bit)</b> ở mức hardware.
+    <code>HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, ...)</code> nội bộ loop 2 lần, gọi
+    <code>FLASH_Program_HalfWord</code> tại <code>Address</code> và <code>Address+2</code>
+    <span class="file-ref">stm32f0xx_hal_flash.c:203-217</span>.
+  </div>
+  <h3 class="sub-title">Quy tắc erase-trước-program</h3>
+  <p>Bit Flash chỉ có thể đổi <code>1→0</code> lúc program; <b>erase</b> reset toàn bộ page/sector về lại
+  toàn <code>1</code>. Không thể đổi bit từ 0 lên 1 mà không erase page chứa nó trước.</p>
+  <h3 class="sub-title">Wait state / Flash latency</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* mx_init.c:140 — config thật */</span>
+HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1);</code></pre></div>
+  <div class="box box-warning">
+    <div class="box-title">Cảnh báo</div>
+    Tốc độ đọc Flash không theo kịp CPU clock cao trong 1 cycle — <code>FLASH_LATENCY</code> thêm wait-state.
+    Cấu hình latency thấp hơn yêu cầu thật của SYSCLK gây fetch instruction sai lệch — một dạng lỗi khó
+    đoán, cực khó chẩn đoán (không phải bug logic thông thường).
+  </div>
+
+  <h3 class="sub-title">Case study bootloader thật — layout Flash 2 firmware</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* entry.h:26, entry.c:159-172 — code thật */</span>
+<span class="tok-kw">#define</span> IAP_DEFAULT_ADD  <span class="tok-num">0x08005000</span>
+
+<span class="tok-kw">void</span> <span class="tok-fn">jump2iap</span>(<span class="tok-kw">void</span>)
+{
+    pFunction JumpToApplication;
+    <span class="tok-type">uint32_t</span> JumpAddress;
+    JumpAddress = *(__IO <span class="tok-type">uint32_t</span>*) (IAP_DEFAULT_ADD + <span class="tok-num">4</span>);   <span class="tok-com">/* Reset_Handler của IAP */</span>
+    JumpToApplication = (pFunction) JumpAddress;
+    __set_MSP(*(__IO <span class="tok-type">uint32_t</span>*) IAP_DEFAULT_ADD);              <span class="tok-com">/* __initial_sp của IAP */</span>
+    JumpToApplication();
+}</code></pre></div>
+  <div class="diagram">Flash vật lý (64KB, 0x08000000 - 0x0800FFFF)
+┌─────────────────────────────────────────────────────┐
+│ 0x0800_0000 - 0x0800_4FFF (20KB)                     │
+│   Ứng dụng MAIN (vector table + .text + .rodata)     │
+├─────────────────────────────────────────────────────┤
+│ 0x0800_5000 - 0x0800_7FFF (12KB)                     │
+│   Bootloader IAP — vector table riêng tại 0x08005000  │
+└─────────────────────────────────────────────────────┘
+0x08000000 + 0x5000 (size OCR_RVCT4 của main) = 0x08005000 = IAP_DEFAULT_ADD — khớp CHÍNH XÁC, xác nhận
+qua cấu hình linker thật, không phải trùng hợp.</div>
+  <div class="box box-important">
+    <div class="box-title">Vì sao firmware đang chạy không thể tự erase chính Flash page của nó</div>
+    Trong lúc erase, Flash controller không khả dụng để CPU fetch instruction từ cùng mảng đó — code đang
+    chạy phải nhảy sang 1 vùng Flash khác (IAP) trước khi erase page của main app.
+  </div>
+  <div class="crosslink-row">
+    <a class="crosslink" href="#elf-linker">→ ELF/Linker (OCR_RVCT4)</a>
+    <a class="crosslink" href="#vector-table">→ Vector Table (rủi ro jump2iap)</a>
+  </div>
+</section>
+
+<section class="doc-section" id="sram">
+  <h2 class="section-title">09 · SRAM</h2>
+  <div class="diagram">SRAM (8KB, 0x20000000 - 0x20001FFF)
+┌─────────────────────────────────────┐
+│ .data   (global đã khởi tạo)         │
+├─────────────────────────────────────┤
+│ .bss    (global khởi tạo = 0)        │  ← st_EventRecord[], nEventRecordIndex
+├─────────────────────────────────────┤
+│ Heap_Mem (512 byte — KHÔNG DÙNG, xem section Heap) │
+├─────────────────────────────────────┤
+│         (khoảng trống)                │
+├─────────────────────────────────────┤
+│ Stack_Mem (1024 byte)                 │
+└─────────────────────────────────────┘</div>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa — vì sao SRAM nhanh</div>
+    SRAM lưu 1 bit trong 1 latch bistable 6-transistor giữ bằng dòng điện hồi tiếp liên tục — chuyển mạch
+    ở mức nanosecond, không cần điện áp cao hay tunneling (khác Flash). Nó mất trạng thái ngay khi cắt VDD
+    (đây là nghĩa vật lý của "volatile memory", khác với keyword <code>volatile</code> trong C).
+  </div>
+  <h3 class="sub-title">Loại memory thứ 3 tìm thấy trong codebase này: RTC Backup Register</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* km_i2c.c dòng 74-78 — code thật */</span>
+<span class="tok-kw">static void</span> <span class="tok-fn">save_rtc_reg</span>(<span class="tok-kw">void</span>)
+{
+    *((<span class="tok-type">uint32_t</span>*)(RTC_BASE + RTC_TR_BKP)) = RTC->TR;
+    *((<span class="tok-type">uint32_t</span>*)(RTC_BASE + RTC_DR_BKP)) = RTC->DR;
+}</code></pre></div>
+  <table class="reftable">
+    <tr><th>Storage</th><th>Retention</th><th>Chi phí ghi</th><th>Ví dụ thật</th></tr>
+    <tr><td>SRAM</td><td>Mất khi cắt điện</td><td>1 cycle</td><td><code>st_EventRecord[]</code></td></tr>
+    <tr><td>Flash</td><td>Vĩnh viễn, không cần điện</td><td>µs–ms, giới hạn số lần ghi</td><td><code>.text</code>, firmware IAP</td></tr>
+    <tr><td>RTC Backup Register</td><td>Sống qua CPU reset (cần điện domain VBAT)</td><td>~1 cycle, write-protect nhẹ</td><td><code>save_rtc_reg()</code></td></tr>
+  </table>
+  <div class="box box-important">
+    <div class="box-title">Bug lịch sử thật, hiểu được nhờ bảng phân loại này</div>
+    Comment trong <code>km_i2c.c</code> ghi <code>save_rtc_reg()</code> không còn được gọi vì 1 fix
+    ("OP_BTS-44141") đã ngừng code cập nhật firmware re-init RTC — nghĩa là root cause thật là 1 subsystem
+    khác re-init domain RTC, không phải nhầm lẫn SRAM/Flash. Hiểu đúng bảng phân loại retention chính là
+    thứ giúp bạn chẩn đoán đúng loại báo cáo bug này.
+  </div>
+</section>
+
+<section class="doc-section" id="stack">
+  <h2 class="section-title">10 · Stack</h2>
+  <div class="diagram">Địa chỉ cao
+┌─────────────────┐
+│                 │
+│ Stack           │   grow XUỐNG
+│       ↓         │
+│                 │
+└─────────────────┘
+Địa chỉ thấp</div>
+  <div class="box box-def">
+    <div class="box-title">MSP vs PSP</div>
+    <b>MSP</b> (Main Stack Pointer): mặc định sau reset, và <i>luôn luôn</i> dùng trong exception/interrupt
+    handler. <b>PSP</b> (Process Stack Pointer): chỉ dùng khi thread mode chủ động chuyển sang nó — thường
+    do RTOS làm để mỗi task có stack riêng. <b>Firmware này không có RTOS (đã xác nhận: không FreeRTOS,
+    không <code>__set_PSP</code> ở đâu cả) → chỉ dùng MSP duy nhất</b>, cho cả main loop và mọi ISR, chia sẻ
+    chung 1 vùng 1024 byte.
+  </div>
+  <div class="codewrap"><span class="lang-badge">asm</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">; startup_stm32f030x8.s — giá trị thật</span>
+Stack_Size      EQU     <span class="tok-num">0x400</span>              <span class="tok-com">; 1024 byte</span>
+                AREA    STACK, NOINIT, READWRITE, ALIGN=<span class="tok-num">3</span>   <span class="tok-com">; align 8 byte (AAPCS)</span>
+Stack_Mem       SPACE   Stack_Size
+__initial_sp</code></pre></div>
+  <h3 class="sub-title">Trace thật — stack frame của 1 lời gọi hàm 7 tham số</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* km_i2c.c:274 — chữ ký thật, 7 tham số */</span>
+<span class="tok-kw">static void inline</span> <span class="tok-fn">change_state</span>(<span class="tok-type">int</span> next_state, <span class="tok-type">int</span>* comp, slave_transfer_t transfer,
+                                 <span class="tok-type">uint8_t</span>* buf, <span class="tok-type">uint16_t</span> size, control_t control, <span class="tok-type">int</span> is_manual_ack)</code></pre></div>
+  <p>Calling convention AAPCS: 4 tham số đầu qua R0-R3, 3 tham số còn lại caller phải đẩy lên stack.</p>
+  <div class="diagram">Exception Stack Frame (CPU HARDWARE tự động push khi có interrupt bất kỳ):
+        SP -= 32   (8 register × 4 byte)
+        [SP+28] = xPSR
+        [SP+24] = PC     ← địa chỉ instruction bị ngắt / gây fault
+        [SP+20] = LR
+        [SP+16] = R12
+        [SP+12] = R3
+        [SP+8]  = R2
+        [SP+4]  = R1
+        [SP+0]  = R0</div>
+  <div class="box box-important">
+    <div class="box-title">Vì sao quan trọng cho debug</div>
+    <code>[SP+24]</code> là thông tin hữu ích nhất để chẩn đoán HardFault trên Cortex-M0, vì không có
+    CFSR/MMFAR để tra (xem section Fault).
+  </div>
+  <div class="box box-warning">
+    <div class="box-title">Cảnh báo — rủi ro chia sẻ MSP</div>
+    Vì main loop và mọi ISR chia sẻ chung 1 stack 1024 byte, 1 ISR xảy ra đúng lúc main loop đang sâu trong
+    call stack của nó có thể overflow vào <code>.bss</code>/Heap — khó tái hiện hơn hệ thống RTOS có stack
+    riêng cho từng task, vì phụ thuộc đúng timing interrupt.
+  </div>
+  <div class="box box-debug">
+    <div class="box-title">Kỹ thuật debug — stack painting</div>
+    Điền <code>Stack_Mem</code> bằng 1 pattern biết trước (ví dụ <code>0xCC</code>) lúc startup, sau đó kiểm
+    tra còn bao nhiêu byte từ đáy vẫn giữ pattern đó — đo được high-water mark của stack mà không cần chờ
+    crash thật.
+  </div>
+</section>
+
+<section class="doc-section" id="heap">
+  <h2 class="section-title">11 · Heap</h2>
+  <table class="reftable">
+    <tr><th></th><th>Stack</th><th>Heap</th><th>Static/Global</th></tr>
+    <tr><td>Tốc độ</td><td>Nhanh (di chuyển SP)</td><td>Chậm hơn, tìm kiếm không xác định</td><td>Nhanh nhất (địa chỉ cố định)</td></tr>
+    <tr><td>Lifetime</td><td>Phạm vi hàm</td><td>Tới khi free thủ công</td><td>Toàn bộ chương trình</td></tr>
+    <tr><td>Mô hình cấp phát</td><td>Tự động</td><td><code>malloc</code>/<code>free</code></td><td>Compile-time / linker</td></tr>
+    <tr><td>Rủi ro</td><td>Overflow</td><td>Fragmentation, leak, không xác định</td><td>Không có (kích thước cố định)</td></tr>
+  </table>
+  <div class="codewrap"><span class="lang-badge">asm</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">; startup_stm32f030x8.s — giá trị thật</span>
+Heap_Size      EQU     <span class="tok-num">0x200</span>              <span class="tok-com">; 512 byte, đã cấp sẵn</span>
+                AREA    HEAP, NOINIT, READWRITE, ALIGN=<span class="tok-num">3</span>
+__heap_base
+Heap_Mem        SPACE   Heap_Size
+__heap_limit</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Phát hiện thật: firmware này chưa từng thực sự dùng heap</div>
+    Grep toàn repo <code>main/</code> với <code>malloc|free|calloc|realloc</code> trả về <b>0 kết quả</b>.
+    512 byte SRAM được hạ tầng startup cấp sẵn nhưng không code ứng dụng nào tiêu thụ — đây là lựa chọn
+    thiết kế chủ động và hợp lý cho firmware điều khiển nhỏ cần xác định (tránh fragmentation và latency cấp
+    phát không xác định), không phải thiếu sót. Tuy vậy đây là ứng viên hợp lệ để thu hồi SRAM (đặt
+    <code>Heap_Size EQU 0x0</code>) sau khi xác nhận không thư viện nào âm thầm cần nó.
+  </div>
+  <div class="box box-debug">
+    <div class="box-title">Cách <code>__user_initial_stackheap</code> cấp thông tin cho C library</div>
+    <code>R0</code>=đáy heap, <code>R1</code>=đỉnh stack, <code>R2</code>=giới hạn heap, <code>R3</code>=đáy
+    stack — 4 giá trị boundary mà ARM C runtime dùng để <code>malloc()</code> biết giới hạn hợp lệ, được
+    <code>__main</code> gọi 1 lần trước khi <code>main()</code> chạy (xem section Startup).
+  </div>
+</section>
+<section class="doc-section" id="elf-linker">
+  <h2 class="section-title">12 · ELF / Linker / Memory Layout</h2>
+  <div class="diagram">foo.c → Preprocessor → foo.i → Compiler → foo.s (assembly)
+  → Assembler → foo.o (object: có section, địa chỉ CÒN TƯƠNG ĐỐI)
+  → ... nhiều file .o khác ...
+  → LINKER (armlink) — gán địa chỉ TUYỆT ĐỐI CUỐI CÙNG theo linker script
+  → PowerSubCPU.axf (ELF: địa chỉ tuyệt đối, symbol table, debug info)
+  → fromelf/axf2bin → PowerSubCPU.bin / .hex (raw — không symbol, không debug info)</div>
+  <div class="box box-important">
+    <div class="box-title">Compiler vs Linker — ai quyết định gì</div>
+    <b>Compiler</b> chỉ biết "biến này thuộc <code>.data</code>". <b>Linker</b> quyết định địa chỉ tuyệt đối
+    cuối cùng, dựa trên memory map bạn cấu hình (Keil: <code>OnChipMemories</code> trong
+    <code>.uvprojx</code>; GCC: <code>MEMORY{}</code> trong file <code>.ld</code>).
+  </div>
+  <h3 class="sub-title">Cấu hình linker thật (Keil scatter, ẩn trong file project)</h3>
+  <div class="codewrap"><span class="lang-badge">shell</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com"># PowerSubCPU.uvprojx — giá trị thật, main app</span>
+OCR_RVCT4 (RO/Flash):  StartAddress=0x08000000  Size=0x5000   <span class="tok-com"># 20KB</span>
+OCR_RVCT9 (RW/SRAM):   StartAddress=0x20000000  Size=0x2000   <span class="tok-com"># 8KB (toàn bộ SRAM)</span>
+
+<span class="tok-com"># PowerSubCPU_iap.uvprojx — giá trị thật, firmware IAP</span>
+OCR_RVCT4 (RO/Flash):  StartAddress=0x08005000  Size=0x3000   <span class="tok-com"># 12KB</span>
+OCR_RVCT9 (RW/SRAM):   StartAddress=0x20000000  Size=0x200    <span class="tok-com"># 512B</span>
+OCR_RVCT10(RW/SRAM):   StartAddress=0x20000200  Size=0x1000   <span class="tok-com"># 4KB, có thể là vùng stack</span></code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Đã xác nhận, không phải trùng hợp</div>
+    <code>0x08000000 + 0x5000 = 0x08005000</code> — khớp chính xác với <code>IAP_DEFAULT_ADD</code> từ
+    section Flash. Giới hạn kích thước region của linker chính là thứ <b>cưỡng chế lúc build</b> đảm bảo main
+    app không bao giờ phình sang vùng Flash của IAP — 1 hàng rào build-time cho 1 ràng buộc thiết kế runtime.
+  </div>
+  <table class="reftable">
+    <tr><th>Section</th><th>Nội dung</th><th>Có trong file .bin?</th><th>Vị trí runtime</th></tr>
+    <tr><td><code>.text</code></td><td>Code đã compile</td><td>Có</td><td>Flash</td></tr>
+    <tr><td><code>.rodata</code></td><td>Dữ liệu <code>const</code>, string literal</td><td>Có</td><td>Flash</td></tr>
+    <tr><td><code>.data</code></td><td>Global khởi tạo ≠ 0</td><td>Có (bản copy LMA)</td><td>SRAM (copy lúc startup)</td></tr>
+    <tr><td><code>.bss</code></td><td>Global = 0 hoặc không init</td><td><b>Không</b> — chỉ ghi lại kích thước</td><td>SRAM (zero lúc startup)</td></tr>
+    <tr><td>Stack/Heap</td><td>Không có nội dung ban đầu (<code>NOINIT</code>)</td><td>Không</td><td>SRAM</td></tr>
+  </table>
+  <div class="box box-important">
+    <div class="box-title">Vì sao <code>.bin</code> nhỏ hơn "tổng RAM dùng"</div>
+    <code>st_EventRecord[] = {0}</code> rơi vào <code>.bss</code> (init toàn 0), nên file nạp chỉ ghi lại
+    "cấp N byte 0" — không phải các byte thật.
+  </div>
+</section>
+
+<section class="doc-section" id="linker-script">
+  <h2 class="section-title">13 · Linker Script — VMA vs LMA</h2>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    <b>LMA</b> (Load Memory Address): nơi dữ liệu thực sự nằm trong file nạp. <b>VMA</b> (Execution
+    Address): nơi CPU thực sự truy cập nó lúc runtime. Với <code>.text</code>/<code>.rodata</code>,
+    LMA == VMA (execute-in-place). Với <code>.data</code>, chúng <b>phải khác nhau</b>: giá trị reset cần
+    sống sót qua mất điện (Flash), nhưng giá trị runtime cần đọc/ghi nhanh (SRAM).
+  </div>
+  <div class="diagram">.data
+LMA (Flash, ví dụ 0x08004A00)
+ │  giá trị "1" lưu ở đây trong file .bin
+ ▼
+ │ copy do STARTUP CODE thực hiện, trước main()
+ ▼
+RAM (SRAM, ví dụ 0x20000010)
+ │
+ ▼
+VMA — đây là địa chỉ code C thực sự đọc/ghi lúc runtime</div>
+  <h3 class="sub-title">File scatter Keil tường minh, khớp config thật của project này</h3>
+  <div class="codewrap"><span class="lang-badge">linker</span><button class="copy-btn">Copy</button>
+<pre><code>LR_IROM1 <span class="tok-num">0x08000000</span> <span class="tok-num">0x00005000</span>  {    <span class="tok-com">; Load Region: khớp OCR_RVCT4</span>
+
+  ER_IROM1 <span class="tok-num">0x08000000</span> <span class="tok-num">0x00005000</span>  {  <span class="tok-com">; .text/.rodata — LMA == VMA</span>
+    *.o (RESET, +First)
+    .ANY (+RO)
+  }
+
+  RW_IRAM1 <span class="tok-num">0x20000000</span> <span class="tok-num">0x00002000</span>  {  <span class="tok-com">; .data/.bss — VMA trong SRAM, khớp OCR_RVCT9</span>
+    .ANY (+RW +ZI)
+  }
+}</code></pre></div>
+  <h3 class="sub-title">Tương đương GNU ld (cho project MCU dùng GCC)</h3>
+  <div class="codewrap"><span class="lang-badge">linker</span><button class="copy-btn">Copy</button>
+<pre><code>MEMORY
+{
+  FLASH (rx)  : ORIGIN = <span class="tok-num">0x08000000</span>, LENGTH = <span class="tok-num">20K</span>
+  RAM   (rwx) : ORIGIN = <span class="tok-num">0x20000000</span>, LENGTH = <span class="tok-num">8K</span>
+}
+SECTIONS
+{
+  .text : { *(.text*) *(.rodata*) } > FLASH
+  .data : {
+    _sdata = .;
+    *(.data*)
+    _edata = .;
+  } > RAM AT > FLASH
+  _sidata = LOADADDR(.data);
+  .bss : { _sbss = .; *(.bss*); _ebss = .; } > RAM
+}</code></pre></div>
+  <table class="reftable">
+    <tr><th>Thuật ngữ</th><th>Ý nghĩa</th></tr>
+    <tr><td>MEMORY</td><td>Khai báo các vùng memory vật lý mà linker được dùng</td></tr>
+    <tr><td>SECTIONS</td><td>Map các input section (.text, .data...) vào output region</td></tr>
+    <tr><td>ORIGIN / LENGTH</td><td>Địa chỉ base và kích thước region</td></tr>
+    <tr><td>VMA</td><td>Địa chỉ CPU dùng lúc runtime (Execution Address)</td></tr>
+    <tr><td>LMA</td><td>Địa chỉ trong file nạp (Load Address)</td></tr>
+    <tr><td>symbol (ví dụ <code>_sidata</code>, <code>Load$$RW_IRAM1$$Base</code>)</td><td>Marker linker tự sinh, startup code dùng</td></tr>
+    <tr><td>Alignment</td><td>Region/section được pad theo boundary yêu cầu (ví dụ 8 byte cho stack)</td></tr>
+  </table>
+  <div class="box box-warning">
+    <div class="box-title">Hệ quả của việc thiếu bước copy</div>
+    Nếu startup code quên copy <code>.data</code>, 1 biến như <code>version_major</code> sẽ đọc bất kỳ giá
+    trị rác nào còn trong SRAM — source C nhìn hoàn toàn đúng trong khi giá trị runtime sai. Đây là lý do
+    hiểu VMA≠LMA không chỉ là lý thuyết hàn lâm.
+  </div>
+</section>
+
+<section class="doc-section" id="startup">
+  <h2 class="section-title">14 · Trình tự Startup</h2>
+  <div class="diagram">RESET
+  ↓  CPU hardware (không phải code): SP ← [0x00000000], PC ← [0x00000004]
+Reset_Handler (startup_stm32f030x8.s:131-139)
+  ↓
+SystemInit()          ← CHỈ thao tác register RCC->. .data/.bss CHƯA sẵn sàng!
+  ↓
+__main (thư viện C runtime ARM — KHÔNG PHẢI main() của bạn)
+  ├─ __scatterload_copy       → copy .data từ Load$$...$$Base (Flash) sang Image$$...$$Base (SRAM)
+  ├─ __scatterload_zeroinit   → zero .bss
+  └─ BL main                  ← main() THẬT của bạn cuối cùng chạy, entry.c</div>
+  <div class="codewrap"><span class="lang-badge">asm</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">; startup_stm32f030x8.s:131-139 — code thật</span>
+Reset_Handler PROC
+                EXPORT  Reset_Handler [WEAK]
+        IMPORT  __main
+        IMPORT  SystemInit
+                LDR     R0, =SystemInit
+                BLX     R0
+                LDR     R0, =__main
+                BX      R0
+                ENDP</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Ràng buộc quan trọng, đã xác nhận</div>
+    <code>SystemInit()</code> chạy <b>trước khi</b> <code>.data</code>/<code>.bss</code> được khởi tạo. Đọc
+    source thật (<code>system_stm32f0xx.c:165-213</code>) xác nhận nó chỉ thao tác register <code>RCC-></code>
+    (MMIO) — không có bất kỳ tham chiếu tới biến global C nào. Đây là ràng buộc bắt buộc: bất kỳ hàm nào
+    được gọi trước khi <code>__main</code> hoàn tất tuyệt đối không được đọc/ghi biến global/static.
+  </div>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* system_stm32f0xx.c:165+ — code thật, CHỈ MMIO, không có global C nào */</span>
+<span class="tok-kw">void</span> <span class="tok-fn">SystemInit</span>(<span class="tok-kw">void</span>)
+{
+  RCC->CR |= (<span class="tok-type">uint32_t</span>)<span class="tok-num">0x00000001U</span>;
+  RCC->CFGR &= (<span class="tok-type">uint32_t</span>)<span class="tok-num">0x08FFB80CU</span>;
+  RCC->CR &= (<span class="tok-type">uint32_t</span>)<span class="tok-num">0xFEF6FFFFU</span>;
+  <span class="tok-com">/* ... mỗi dòng đều là RCC->something, không bao giờ là global */</span>
+}</code></pre></div>
+  <table class="reftable">
+    <tr><th>Thời điểm</th><th>Trạng thái SRAM</th></tr>
+    <tr><td>T0 — ngay sau reset</td><td>Hoàn toàn rác, bao gồm cả vùng <code>.data</code>/<code>.bss</code> tương lai</td></tr>
+    <tr><td>T1 — sau SystemInit(), trước __main</td><td>Vẫn rác — SystemInit không bao giờ đụng SRAM</td></tr>
+    <tr><td>T2 — sau __scatterload_copy</td><td><code>.data</code> đúng, <code>.bss</code> vẫn rác</td></tr>
+    <tr><td>T3 — sau __scatterload_zeroinit</td><td><code>.data</code> đúng, <code>.bss</code> = 0</td></tr>
+    <tr><td>T4 — dòng đầu main()</td><td>Điểm đầu tiên <b>mọi</b> global được đảm bảo đúng</td></tr>
+  </table>
+</section>
+
+<section class="doc-section" id="vector-table">
+  <h2 class="section-title">15 · Vector Table &amp; VTOR</h2>
+  <div class="diagram">Vector Table (__Vectors, startup_stm32f030x8.s:76-124)
+├── [0]  Initial SP           ← __initial_sp
+├── [1]  Reset_Handler
+├── [2]  NMI_Handler
+├── [3]  HardFault_Handler
+├── [4-10] Reserved
+├── [11] SVC_Handler
+├── [14] PendSV_Handler
+├── [15] SysTick_Handler
+└── [16+] IRQ: WWDG, RTC, FLASH, RCC, EXTI, DMA1_Ch1-5, ADC1, TIM1/3/14/15/16/17, I2C1/2, SPI1/2, USART1/2</div>
+  <div class="box box-def">
+    <div class="box-title">VTOR — Vector Table Offset Register</div>
+    <code>SCB->VTOR</code> (0xE000ED08) cho phép software relocate vector table sau boot. Mặc định sau reset
+    luôn là <code>0x00000000</code>. Bắt buộc cho thiết kế bootloader+application: application phải tự set
+    VTOR của chính nó sau khi được nhảy tới, nếu không interrupt vẫn dispatch qua table của bootloader.
+  </div>
+  <h3 class="sub-title">Snapshot linker thật thứ hai, đã xác nhận: IAP có vector table riêng</h3>
+  <div class="diagram">0x08000000 ─────────────────── 0x08004FFF │ 0x08005000 ─────────────── 0x08007FFF
+     Main app Flash (20KB)                 │      IAP Flash (12KB)
+     Vector table MAIN tại 0x08000000        │      Vector table IAP tại 0x08005000</div>
+  <div class="box box-warning">
+    <div class="box-title">Khoảng hở kiến trúc thật, đã xác nhận</div>
+    Grep toàn repo với <code>VTOR</code> trên mọi file <code>.c</code> trả về <b>0 kết quả</b> — VTOR
+    <b>không bao giờ</b> được set trong codebase này, ở cả 2 firmware. Vì <code>jump2iap()</code> nhảy
+    PC/SP trực tiếp mà không đụng VTOR, nếu bất kỳ interrupt NVIC nào còn enable đúng lúc chuyển giao, nó sẽ
+    dispatch qua vector table của <b>main app</b> (vẫn còn nguyên trong Flash lúc đó, chưa erase) dù CPU đang
+    chạy code IAP với <code>.data</code>/<code>.bss</code> của IAP — rủi ro tiềm ẩn thật, không phải giả định.
+  </div>
+  <h4 class="mini-title">Đề xuất fix (chưa có trong code hiện tại)</h4>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-kw">void</span> <span class="tok-fn">jump2iap_safer</span>(<span class="tok-kw">void</span>)
+{
+    __disable_irq();  <span class="tok-com">/* mask mọi interrupt trước khi chuyển quyền điều khiển */</span>
+    <span class="tok-com">/* ... logic jump hiện có ... */</span>
+    <span class="tok-com">/* main() của chính IAP, ngay sau boot, nên chạy:
+       SCB->VTOR = IAP_DEFAULT_ADD; __enable_irq(); */</span>
+}</code></pre></div>
+  <div class="crosslink-row">
+    <a class="crosslink" href="#fault">→ Fault (dispatch HardFault)</a>
+    <a class="crosslink" href="#barrier">→ Memory Barrier (đổi VTOR cần ISB)</a>
+  </div>
+</section>
+<section class="doc-section" id="dma">
+  <h2 class="section-title">16 · DMA</h2>
+  <div class="diagram">             ┌───────────┐
+             │    CPU    │
+             └─────┬─────┘
+                   │
+                   ▼
+             ┌───────────┐
+             │   Bus     │
+             └─────┬─────┘
+                   │
+          ┌────────┴────────┐
+          ▼                 ▼
+       Memory              DMA
+                              │
+                              ▼
+                         Peripheral</div>
+  <div class="box box-def">
+    <div class="box-title">Định nghĩa</div>
+    DMA là <b>bus master thứ hai, độc lập</b> — nó tự tạo ra địa chỉ bus và di chuyển dữ liệu mà không cần
+    instruction CPU cho từng byte. Cấu hình 1 lần qua descriptor (source, destination, count, direction);
+    sau đó tự chạy và chỉ raise 1 interrupt khi xong, thay vì 1 interrupt cho mỗi byte.
+  </div>
+  <div class="box box-important">
+    <div class="box-title">Phát hiện thật, đã xác nhận: firmware này không bao giờ dùng DMA</div>
+    Dù <code>DMA1_Channel1-5_IRQHandler</code> tồn tại trong vector table và <code>DMA1_BASE</code> được
+    định nghĩa đầy đủ trong CMSIS, grep <code>main/</code> với <code>HAL_DMA_Init|DMA_HandleTypeDef|
+    __HAL_RCC_DMA1_CLK_ENABLE</code> trả về 0 kết quả. Vector table liệt kê mọi IRQ mà <i>silicon</i> có
+    thể tạo ra, không phải những gì <i>ứng dụng</i> thực sự dùng — các handler đó vẫn là stub weak mặc định
+    <code>B .</code>. I2C ở đây interrupt-driven (tốc độ thấp, payload nhỏ, vai trò slave) — đúng trường hợp
+    overhead setup DMA lớn hơn lợi ích nó mang lại.
+  </div>
+  <table class="reftable">
+    <tr><th>Khái niệm</th><th>Ý nghĩa</th></tr>
+    <tr><td>Source / Destination</td><td>Register peripheral hoặc địa chỉ memory DMA đọc/ghi</td></tr>
+    <tr><td>Descriptor</td><td>Block cấu hình: địa chỉ, count, direction, increment mode</td></tr>
+    <tr><td>Buffer</td><td>Vùng memory DMA điền/rút dữ liệu</td></tr>
+    <tr><td>Burst</td><td>Nhiều transfer trong 1 lần được cấp bus</td></tr>
+    <tr><td>Alignment</td><td>DMA transfer thường hiệu quả nhất/yêu cầu aligned theo kích thước</td></tr>
+    <tr><td>Interrupt</td><td>Báo hiệu transfer-complete/half-complete/error, thay vì IRQ từng byte</td></tr>
+    <tr><td>Tương tác Cache</td><td>DMA bỏ qua hoàn toàn CPU cache — xem section Cache về bug coherency do điều này gây ra</td></tr>
+  </table>
+  <div class="box box-debug">
+    <div class="box-title">Bus arbitration</div>
+    CPU và DMA đều là bus master trên cùng bus AHB. 1 <b>bus arbiter</b> quyết định ai transaction trước khi
+    cả 2 cùng muốn 1 slave (ví dụ SRAM) đồng thời — trên bus đơn giản 1 layer (như MCU này), CPU có thể bị
+    stall vài cycle khi DMA đang active. Không mất dữ liệu; chỉ giảm hiệu năng tạm thời.
+  </div>
+</section>
+
+<section class="doc-section" id="cache">
+  <h2 class="section-title">17 · Cache</h2>
+  <div class="box box-warning">
+    <div class="box-title">Phát hiện thật, đã xác nhận: Cortex-M0 không có cache</div>
+    <code>SCB->CCR</code> trong <code>core_cm0.h</code> chỉ định nghĩa bit <code>STKALIGN</code> và
+    <code>UNALIGN_TRP</code> — không có bit enable <code>IC</code>/<code>DC</code> nào (chỉ xuất hiện trong
+    <code>core_cm7.h</code>). Đây là do kiến trúc, không phải thiếu config: Flash/SRAM on-chip của MCU này
+    đã đủ nhanh so với core 48MHz nên cache chỉ thêm chi phí mà không mang lợi ích.
+  </div>
+  <div class="diagram">CPU
+ │
+ ▼
+I-Cache / D-Cache   ← <b>KHÔNG TỒN TẠI</b> trên Cortex-M0 / MCU này
+ │
+ ▼
+RAM
+ ▲
+ │
+DMA</div>
+  <div class="box box-example">
+    <div class="box-title">Kịch bản bug cache-coherency <span class="tag tag-arm">Kiến trúc ARM — áp dụng cho Cortex-M7/H7/Cortex-A, KHÔNG áp dụng MCU này</span></div>
+    CPU ghi 1 buffer → D-Cache write-back giữ giá trị mới → RAM chưa được cập nhật → DMA đọc RAM trực tiếp
+    (bỏ qua cache) → DMA thấy giá trị <b>cũ</b>.
+  </div>
+  <table class="reftable">
+    <tr><th>Khái niệm</th><th>Ý nghĩa</th></tr>
+    <tr><td>Cache line</td><td>Đơn vị fetch/evict nhỏ nhất của cache (thường 32 byte trên ARM)</td></tr>
+    <tr><td>Hit / Miss</td><td>Dữ liệu đã có trong cache / phải fetch từ memory chậm hơn</td></tr>
+    <tr><td>Write-through</td><td>Mọi lần ghi cũng cập nhật memory thật ngay lập tức</td></tr>
+    <tr><td>Write-back</td><td>Ghi chỉ ở lại trong cache tới khi evict/clean — nhanh hơn nhưng rủi ro staleness</td></tr>
+    <tr><td>Clean</td><td>Ép nội dung cache xuống memory thật (trước khi DMA đọc)</td></tr>
+    <tr><td>Invalidate</td><td>Bỏ nội dung cache để lần đọc tiếp theo buộc phải fetch từ memory thật (sau khi DMA ghi)</td></tr>
+  </table>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* Minh họa cho chip CÓ cache (ví dụ STM32H7) — KHÔNG áp dụng STM32F030x8 */</span>
+<span class="tok-type">uint8_t</span> dma_tx_buffer[<span class="tok-num">64</span>] __attribute__((aligned(<span class="tok-num">32</span>)));
+<span class="tok-kw">void</span> <span class="tok-fn">safe_dma_send</span>(<span class="tok-kw">void</span>)
+{
+    memcpy(dma_tx_buffer, source_data, <span class="tok-num">64</span>);
+    SCB_CleanDCache_by_Addr((<span class="tok-type">uint32_t</span>*)dma_tx_buffer, <span class="tok-num">64</span>);  <span class="tok-com">/* flush trước khi DMA đọc */</span>
+    HAL_UART_Transmit_DMA(&huart1, dma_tx_buffer, <span class="tok-num">64</span>);
+}</code></pre></div>
+  <div class="box box-kernel">
+    <div class="box-title">So sánh Kernel</div>
+    <code>dma_map_single()</code>/<code>dma_sync_single_for_cpu/device()</code> và
+    <code>dma_alloc_coherent()</code> của Linux giải quyết đúng vấn đề này ở mức framework — code driver MCU
+    cần điều này phải tự gọi hàm clean/invalidate của CMSIS thủ công.
+  </div>
+</section>
+
+<section class="doc-section" id="mpu">
+  <h2 class="section-title">18 · MPU</h2>
+  <div class="box box-warning">
+    <div class="box-title">Phát hiện thật, đã xác nhận: MCU này hoàn toàn không có MPU</div>
+    <code>stm32f030x8.h:68</code> ghi rõ: <code>#define __MPU_PRESENT 0 /* STM32F0xx do not provide
+    MPU */</code>. Đây là chính ST xác nhận, không phải suy luận. Cortex-M0 thường hiếm khi được vendor nào
+    tích hợp MPU (phân khúc nhạy cảm chi phí); Cortex-M0+/M3/M4/M7 thường có, là 1 IP block <b>tùy chọn</b>.
+  </div>
+  <table class="reftable">
+    <tr><th></th><th>MPU</th><th>MMU</th></tr>
+    <tr><td>Dịch địa chỉ?</td><td>Không — cùng địa chỉ physical, chỉ kiểm tra permission</td><td>Có — virtual → physical</td></tr>
+    <tr><td>Mục đích chính</td><td>Kiểm tra permission theo region</td><td>Dịch địa chỉ + permission + virtual memory</td></tr>
+    <tr><td>Số region</td><td>Nhỏ, cố định (8-16), config tường minh</td><td>Page table — rất lớn, động</td></tr>
+    <tr><td>Trên MCU</td><td>Tùy chọn (M3/M4/M7/1 số M0+); không có trên chip này</td><td>Hầu như không bao giờ có</td></tr>
+    <tr><td>Trên Linux/Cortex-A</td><td>Ít dùng (MMU đã đủ)</td><td>Luôn có</td></tr>
+  </table>
+  <h3 class="sub-title">Bảng region MPU khái niệm <span class="tag tag-concept">Chỉ là ví dụ khái niệm — không phải config của chip này, vì nó không có MPU</span></h3>
+  <table class="reftable">
+    <tr><th>Region</th><th>Read</th><th>Write</th><th>Execute</th></tr>
+    <tr><td>Flash</td><td>✓</td><td>—</td><td>✓</td></tr>
+    <tr><td>SRAM</td><td>✓</td><td>✓</td><td>tùy config (thường XN)</td></tr>
+    <tr><td>Peripheral</td><td>✓</td><td>✓</td><td>—</td></tr>
+  </table>
+  <div class="box box-important">
+    <div class="box-title">Hệ quả thực tế cho firmware này</div>
+    Không có MPU nghĩa là <b>không có tường chắn hardware</b> giữa code, data, và stack: 1 con trỏ hỏng hoặc
+    stack overflow có thể corrupt âm thầm bất kỳ địa chỉ reach được. Mọi bảo vệ hiện có đều đặc thù peripheral
+    (Flash unlock key, RTC write-protect) — không bao giờ là guard chung ở mức CPU. Điều này càng làm tăng
+    tầm quan trọng thực tế của alignment cẩn thận, sizing stack hợp lý, và tính toán con trỏ có kỷ luật đã
+    nói ở các phần khác của tài liệu.
+  </div>
+</section>
+
+<section class="doc-section" id="barrier">
+  <h2 class="section-title">19 · Memory Barrier</h2>
+  <table class="reftable">
+    <tr><th>Barrier</th><th>Đảm bảo gì</th></tr>
+    <tr><td><b>DMB</b> (Data Memory Barrier)</td><td>Chỉ đảm bảo thứ tự tương đối — access trước DMB hoàn thành trước khi access sau nó <i>bắt đầu</i>; CPU vẫn có thể tiếp tục chạy instruction khác</td></tr>
+    <tr><td><b>DSB</b> (Data Synchronization Barrier)</td><td>Mạnh hơn — CPU dừng hoàn toàn tới khi mọi memory access trước đó <i>thực sự hoàn thành</i> tại đích</td></tr>
+    <tr><td><b>ISB</b> (Instruction Synchronization Barrier)</td><td>Flush pipeline — buộc fetch lại instruction tiếp theo; cần sau khi đổi VTOR/MPU/self-modifying code</td></tr>
+  </table>
+  <h3 class="sub-title">Cách dùng thật, đã xác nhận — code barrier duy nhất trong project này</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">/* core_cm0.h:730-737 — code thật, gọi qua HAL_NVIC_SystemReset()
+   từ km_extend_io.c:560 và 1180 */</span>
+__STATIC_INLINE <span class="tok-kw">void</span> <span class="tok-fn">NVIC_SystemReset</span>(<span class="tok-kw">void</span>)
+{
+  __DSB();                                    <span class="tok-com">/* (1) flush mọi memory op đang treo trước */</span>
+  SCB->AIRCR = ((<span class="tok-num">0x5FAUL</span> << SCB_AIRCR_VECTKEY_Pos) | SCB_AIRCR_SYSRESETREQ_Msk);
+  __DSB();                                    <span class="tok-com">/* (3) đảm bảo chính lệnh ghi này hoàn tất trước khi tiếp tục */</span>
+  <span class="tok-kw">for</span>(;;) { __NOP(); }
+}</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Vì sao cần cả 2 lệnh DSB</div>
+    (1) đảm bảo mọi transaction đang treo trước đó (ví dụ 1 lần ghi log cuối) thực sự tới đích trước khi
+    reset được yêu cầu. (3) đảm bảo CPU không tiếp tục chạy thêm instruction trong khoảng hở nhỏ giữa
+    "lệnh ghi được chấp nhận" và "reset logic thực sự phản ứng".
+  </div>
+  <div class="box box-important">
+    <div class="box-title">Bài học thực tế</div>
+    Hầu hết code firmware không bao giờ tự viết barrier — hàm CMSIS/HAL như <code>NVIC_SystemReset()</code>
+    đã tích hợp đúng barrier cần thiết. Barrier viết tay chỉ cần cho driver low-level tùy chỉnh chưa có hàm
+    chuẩn nào (ví dụ 1 DMA driver tự viết).
+  </div>
+  <div class="box box-warning">
+    <div class="box-title">volatile ≠ barrier</div>
+    <code>volatile</code> đảm bảo 1 access có xảy ra; nó không đảm bảo <i>thứ tự hoàn thành</i> của 2 access
+    volatile khác nhau ở mức hardware. Dùng barrier khi logic phụ thuộc A hoàn thành trước khi B được phát ra.
+  </div>
+  <div class="box box-kernel">
+    <div class="box-title">So sánh Kernel</div>
+    <code>dmb()</code>/<code>dsb()</code>/<code>isb()</code> của Linux (header barrier riêng theo arch) là
+    đúng cùng primitive ARM với cùng ý nghĩa; trên hệ SMP kernel cần thêm <code>smp_mb()</code>/v.v để lý
+    luận về những gì core khác quan sát — không liên quan trên MCU single-core này.
+  </div>
+</section>
+<section class="doc-section" id="fault">
+  <h2 class="section-title">20 · Memory Fault / HardFault</h2>
+  <div class="diagram">Truy cập Memory không hợp lệ
+        ↓
+BusFault / MemManageFault / UsageFault   ← chỉ có trên ARMv7-M (M3/M4/M7)
+        ↓
+HardFault                                 ← fault DUY NHẤT tồn tại trên Cortex-M0
+
+Quy trình debug:
+HardFault
+   ↓
+Đọc Fault Register (chỉ HFSR trên M0 — không CFSR/MMFAR/BFAR)
+   ↓
+Đọc Stacked Register (Exception Stack Frame)
+   ↓
+Tìm PC (stacked tại [SP+24])
+   ↓
+Disassemble tại địa chỉ đó
+   ↓
+Xác định memory access / địa chỉ không hợp lệ
+   ↓
+Trace ngược con trỏ về nguồn gốc
+   ↓
+Root Cause</div>
+  <div class="box box-warning">
+    <div class="box-title">Thực tế fault-register của Cortex-M0 <span class="tag tag-arm">Kiến trúc ARM</span></div>
+    <code>CFSR</code>, <code>MMFAR</code>, <code>BFAR</code> <b>không tồn tại trên Cortex-M0</b> (ARMv6-M) —
+    chỉ có trên ARMv7-M. Tất cả bạn có là <code>SCB->HFSR</code> (bit <code>VECTTBL</code> và
+    <code>FORCED</code>), gần như vô dụng để phân loại trên M0 vì <i>mọi</i> memory fault đều thành HardFault
+    theo định nghĩa. Exception Stack Frame là nguồn chẩn đoán chính, đáng tin cậy nhất trên core này.
+  </div>
+  <div class="box box-warning">
+    <div class="box-title">Phát hiện thật, đã xác nhận: firmware này không có chẩn đoán HardFault</div>
+    <code>stm32f0xx_it.c:67-78</code> — <code>HardFault_Handler</code> thật là template CubeMX trống: 1
+    <code>while(1){}</code> vô hạn, không có code giữa marker USER CODE. Nếu fault xảy ra ngoài field, hệ
+    thống chỉ đơn giản treo — không log, không LED, không trace — chỉ khôi phục được bằng cách cắm debugger
+    đúng thời điểm đó.
+  </div>
+  <h3 class="sub-title">1 HardFault handler thực chiến cho Cortex-M0 — đề xuất cải thiện</h3>
+  <div class="codewrap"><span class="lang-badge">asm</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-com">; thêm vào startup_stm32f030x8.s, hoặc override weak symbol từ 1 file .c</span>
+HardFault_Handler PROC
+                EXPORT  HardFault_Handler [WEAK]
+        IMPORT  HardFault_Handler_C
+                MOVS    R0, #<span class="tok-num">4</span>
+                MOV     R1, LR
+                ANDS    R0, R0, R1          <span class="tok-com">; test bit 2 của LR: MSP hay PSP?</span>
+                BEQ     UseMSP
+                MRS     R0, PSP
+                B       CallHandler
+UseMSP
+                MRS     R0, MSP             <span class="tok-com">; firmware này LUÔN dùng MSP</span>
+CallHandler
+                LDR     R1, =HardFault_Handler_C
+                BX      R1                   <span class="tok-com">; R0 = con trỏ tới Exception Stack Frame</span>
+                ENDP</code></pre></div>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-kw">typedef struct</span> { <span class="tok-type">uint32_t</span> R0,R1,R2,R3,R12,LR,PC,xPSR; } ExceptionStackFrame_t;
+
+<span class="tok-kw">volatile</span> ExceptionStackFrame_t *g_fault_frame;
+<span class="tok-kw">volatile</span> <span class="tok-type">uint32_t</span> g_fault_pc, g_fault_lr, g_fault_hfsr;
+
+<span class="tok-kw">void</span> <span class="tok-fn">HardFault_Handler_C</span>(<span class="tok-type">uint32_t</span> *stack_frame)
+{
+    g_fault_frame = (ExceptionStackFrame_t *)stack_frame;
+    g_fault_pc    = g_fault_frame->PC;      <span class="tok-com">/* địa chỉ instruction gây fault */</span>
+    g_fault_lr    = g_fault_frame->LR;      <span class="tok-com">/* caller, 1 tầng phía trên */</span>
+    g_fault_hfsr  = SCB->HFSR;
+    __disable_irq();
+    <span class="tok-kw">while</span> (<span class="tok-num">1</span>) { }   <span class="tok-com">/* treo an toàn — cắm debugger và đọc global ở trên */</span>
+}</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Vì sao dùng biến global <code>volatile</code>, không dùng local</div>
+    Nếu bạn cắm debugger <i>sau</i> khi fault xảy ra (không có breakpoint đặt trước), Register Window có thể
+    đã phản ánh context của chính vòng <code>while(1)</code>. Global trong <code>.bss</code>/<code>.data</code>
+    sống sót và đọc được qua Memory Window bất kể thời điểm halt chính xác (và phải là <code>volatile</code>
+    nếu không optimizer có thể loại bỏ — xem section Volatile).
+  </div>
+  <h3 class="sub-title">Áp dụng — bug alignment ở Lesson 6</h3>
+  <div class="codewrap"><span class="lang-badge">c</span><button class="copy-btn">Copy</button>
+<pre><code><span class="tok-kw">void</span> <span class="tok-fn">trigger_unaligned_fault</span>(<span class="tok-kw">void</span>)
+{
+    <span class="tok-kw">static</span> <span class="tok-type">uint8_t</span> buffer[<span class="tok-num">10</span>];
+    <span class="tok-type">uint32_t</span> *p = (<span class="tok-type">uint32_t</span> *)&buffer[<span class="tok-num">1</span>];
+    *p = <span class="tok-num">0x12345678</span>;   <span class="tok-com">/* HardFault trên Cortex-M0 thật */</span>
+}</code></pre></div>
+  <p>Với handler ở trên: <code>g_fault_pc</code> rơi đúng vào instruction <code>STR</code> gây fault (loại
+  fault này "precise" trên pipeline in-order đơn giản của Cortex-M0). Tra địa chỉ đó trong file
+  <code>.map</code> (hoặc dùng <code>info symbol</code> trong GDB) để trace ngược thẳng về
+  <code>trigger_unaligned_fault</code>.</p>
+  <div class="box box-deepdive">
+    <div class="box-title">Đào sâu — precise vs imprecise fault</div>
+    Fault "precise" khi CPU phát hiện chính xác tại instruction gây ra nó (như unaligned access trên M0).
+    Một số loại fault trên core phức tạp hơn có write buffer có thể "imprecise" — PC stacked có thể lệch vài
+    instruction so với nguyên nhân thật. Thiết kế in-order đơn giản của Cortex-M0 khiến hầu hết fault ở đây
+    precise, nhưng đây không phải đảm bảo chung cho mọi core ARM.
+  </div>
+</section>
+
+<section class="doc-section" id="gdb">
+  <h2 class="section-title">21 · Debug bằng GDB</h2>
+  <div class="diagram">GDB (client, PC)
+      │ GDB Remote Serial Protocol
+      ▼
+OpenOCD (server, PC) ──SWD (SWDIO/SWCLK)──► ST-Link ──► STM32F030x8
+                                                          Debug Access Port (DAP) — bus master độc lập
+                                                          THỨ BA, có thể halt CPU và đọc memory ngay cả
+                                                          khi CPU không thực thi gì</div>
+  <div class="codewrap"><span class="lang-badge">shell</span><button class="copy-btn">Copy</button>
+<pre><code>openocd -f interface/stlink.cfg -f target/stm32f0x.cfg
+arm-none-eabi-gdb PowerSubCPU.elf
+(gdb) target remote localhost:3333
+(gdb) monitor reset halt</code></pre></div>
+  <table class="reftable">
+    <tr><th>Command</th><th>Giải thích</th></tr>
+    <tr><td><code>info registers</code></td><td>Dump toàn bộ CPU register (R0-R12, SP, LR, PC, xPSR)</td></tr>
+    <tr><td><code>x/32wx 0x20000000</code></td><td>Xem 32 word (hex) bắt đầu từ địa chỉ — lệnh kiểm tra memory-map cơ bản nhất</td></tr>
+    <tr><td><code>x/16xb 0x20000000</code></td><td>Xem theo byte — lộ ra layout endianness thật</td></tr>
+    <tr><td><code>x/10i $pc</code></td><td>Disassemble 10 instruction bắt đầu từ PC</td></tr>
+    <tr><td><code>p variable</code> / <code>print/x $pc</code></td><td>In 1 biến hoặc register, tùy chọn dạng hex</td></tr>
+    <tr><td><code>watch variable</code></td><td>Hardware watchpoint — break khi giá trị đổi</td></tr>
+    <tr><td><code>bt</code></td><td>Backtrace — call stack</td></tr>
+    <tr><td><code>disassemble 0x08000130,+40</code></td><td>Disassemble 1 dải địa chỉ cụ thể</td></tr>
+    <tr><td><code>info symbol 0x08000144</code></td><td>Resolve địa chỉ thành <code>function+offset</code> — thay thế việc tự tra file <code>.map</code> thủ công</td></tr>
+    <tr><td><code>break HardFault_Handler_C</code></td><td>Breakpoint theo tên hàm, ví dụ fault handler tùy chỉnh ở trên</td></tr>
+    <tr><td><code>stepi</code> / <code>step</code></td><td>Single-step 1 instruction / 1 dòng source</td></tr>
+  </table>
+  <div class="codewrap"><span class="lang-badge">gdb</span><button class="copy-btn">Copy</button>
+<pre><code>(gdb) x/4xw 0x08000000
+0x8000000:  0x20002000  0x08000131  0x08000135  0x08000135
+<span class="tok-com"># 0x20002000 = __initial_sp (cuối 8KB SRAM); 0x08000131 = Reset_Handler (bit0=1 = marker Thumb)</span>
+
+(gdb) break HardFault_Handler_C
+(gdb) continue
+(gdb) print/x *stack_frame@8
+$1 = {0x0, 0x12345678, 0x0, 0x0, 0x0, 0x080001a5, 0x08000144, 0x21000000}
+<span class="tok-com">#                                           ↑LR         ↑PC          ↑xPSR</span>
+(gdb) info symbol 0x08000144
+trigger_unaligned_fault + 12 in section .text</code></pre></div>
+  <div class="box box-important">
+    <div class="box-title">Chi tiết Thumb bit-0</div>
+    Entry trong vector table lưu địa chỉ hàm với bit 0 = 1 (marker Thumb-mode cho branch). CPU tự lặng lẽ bỏ
+    bit đó khi thực sự fetch — <code>$pc</code> trong GDB luôn hiện địa chỉ chẵn. Đây không phải bug hay
+    off-by-one; đó là calling convention của ARM để chọn mode.
+  </div>
+  <div class="box box-warning">
+    <div class="box-title">Lưu ý</div>
+    Tra <code>info symbol</code>/<code>.map</code> chỉ đúng nếu <code>.elf</code>/<code>.map</code> đang load
+    khớp chính xác firmware đang nạp trên chip — main app và IAP là 2 build riêng với symbol table riêng
+    (xem section Vector Table).
+  </div>
+</section>
+
+<section class="doc-section" id="source-walkthrough">
+  <h2 class="section-title">Phân tích Source Code</h2>
+  <p>Mỗi case study theo trình tự: <b>File → Function → Register → Address → Bus transaction → Hiệu ứng Hardware</b>.</p>
+
+  <details class="collapse" open>
+    <summary>Case 1 — Ghi GPIO qua BSRR (atomic set/clear)</summary>
+    <div class="collapse-body">
+      <p><span class="file-ref">stm32f0xx_hal_gpio.c:427-441</span> → <code>HAL_GPIO_WritePin()</code> →
+      <code>GPIOx->BSRR</code> → <code>0x48000018</code> (base GPIOA + offset 0x18) → 1 lần ghi STR duy nhất →
+      logic hardware OR/AND-NOT cập nhật latch <code>ODR</code> → điện áp pin vật lý đổi ngay lập tức.</p>
+    </div>
+  </details>
+  <details class="collapse">
+    <summary>Case 2 — Chuỗi unlock/program Flash</summary>
+    <div class="collapse-body">
+      <p><span class="file-ref">stm32f0xx_hal_flash.c:497-509, 617-623</span> → <code>HAL_FLASH_Unlock()</code> →
+      <code>FLASH->KEYR</code> tại <code>FLASH_R_BASE=0x40022000</code> → 2 lần ghi liên tiếp (KEY1, KEY2) →
+      Flash Controller unlock <code>FLASH->CR.LOCK</code> → <code>STRH</code> tiếp theo vào address space
+      Flash bị chặn và xử lý như 1 program operation thật, không phải ghi thường.</p>
+    </div>
+  </details>
+  <details class="collapse">
+    <summary>Case 3 — jump2iap(): chuyển quyền điều khiển giữa 2 firmware</summary>
+    <div class="collapse-body">
+      <p><span class="file-ref">entry.c:159-172</span> → đọc <code>*(uint32_t*)(0x08005000)</code>
+      (<code>__initial_sp</code> của IAP) và <code>*(uint32_t*)(0x08005004)</code> (<code>Reset_Handler</code>
+      của IAP) → <code>__set_MSP()</code> ghi core register Main Stack Pointer → gọi hàm qua con trỏ nhảy PC
+      vào vùng Flash của IAP → CPU bắt đầu fetch 1 firmware image hoàn toàn khác từ cùng Flash vật lý.</p>
+    </div>
+  </details>
+  <details class="collapse">
+    <summary>Case 4 — Ghép byte stream I2C thành uint32_t</summary>
+    <div class="collapse-body">
+      <p><span class="file-ref">km_i2c.c:631-634</span> → <code>rx_buf[]</code> (byte I2C thô) → loop shift/OR
+      → <code>w_data</code> (số nguyên C hợp lệ) → ghi vào register peripheral (ví dụ RTC) qua con trỏ store
+      bình thường — không phụ thuộc endian theo cấu trúc, khác với đọc ép kiểu con trỏ thô.</p>
+    </div>
+  </details>
+  <details class="collapse">
+    <summary>Case 5 — Dùng barrier trong NVIC_SystemReset()</summary>
+    <div class="collapse-body">
+      <p><span class="file-ref">core_cm0.h:730-737</span>, gọi từ <span class="file-ref">km_extend_io.c:560,1180</span>
+      → <code>__DSB()</code> trước và sau khi ghi <code>SCB->AIRCR</code> (0xE000ED0C) với key reset-request →
+      đảm bảo transaction trước đó hoàn tất và chính reset request được commit đầy đủ trước khi CPU được phép
+      rơi vào vòng lặp an toàn cuối cùng.</p>
+    </div>
+  </details>
+</section>
+<section class="doc-section" id="labs">
+  <h2 class="section-title">Bài Lab Thực hành</h2>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 01</span><h4>Đọc Memory Map của MCU</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Tìm địa chỉ base Flash/SRAM/Peripheral trực tiếp từ reference manual và đối chiếu với CMSIS header.</dd>
+      <dt>Prerequisite</dt><dd>Section Memory Map</dd>
+      <dt>Bước thực hiện</dt><dd>Mở RM0360 (reference manual STM32F0x0), tìm bảng memory map. Mở <code>stm32f030x8.h</code> và tìm <code>FLASH_BASE</code>/<code>SRAM_BASE</code>/<code>PERIPH_BASE</code>.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Giá trị khớp chính xác: 0x08000000 / 0x20000000 / 0x40000000.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">Header là bản chuyển đổi trung thực dạng machine-readable của memory map trong datasheet.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 02</span><h4>Phân tích cấu hình Linker</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Đọc <code>PowerSubCPU.uvprojx</code> như file text và tìm <code>OCR_RVCT4</code>/<code>OCR_RVCT9</code>.</dd>
+      <dt>Bước thực hiện</dt><dd>Mở XML, tìm định nghĩa region RO (Flash) và RW (SRAM). Tính <code>0x08000000 + 0x5000</code> bằng tay.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Kết quả bằng <code>0x08005000</code> — chính xác <code>IAP_DEFAULT_ADD</code>.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">File <code>.uvprojx</code> của Keil CHÍNH LÀ 1 linker script, chỉ lưu dạng XML thay vì text DSL.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 03</span><h4>Kiểm tra .text / .data / .bss</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Xác nhận <code>st_EventRecord[] = {0}</code> rơi vào section nào.</dd>
+      <dt>Setup</dt><dd>Build project trong Keil; mở file <code>.map</code> sinh ra.</dd>
+      <dt>Bước thực hiện</dt><dd>Tìm symbol trong map; ghi lại section và địa chỉ của nó.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Nó xuất hiện dưới <code>.bss</code> (ZI data), không phải <code>.data</code>.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">Initializer toàn-zero luôn được đặt vào .bss bất kể cú pháp <code>= {0}</code> tường minh, tiết kiệm dung lượng Flash.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 04</span><h4>Phân tích Startup Code</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Chứng minh <code>SystemInit()</code> chạy trước khi <code>.data</code>/<code>.bss</code> sẵn sàng.</dd>
+      <dt>Bước thực hiện</dt><dd>Đặt breakpoint tại dòng đầu <code>SystemInit()</code>; kiểm tra địa chỉ memory của <code>st_EventRecord</code> (kỳ vọng rác). Đặt breakpoint thứ 2 tại dòng đầu <code>main()</code>; kiểm tra lại cùng địa chỉ đó.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Rác tại breakpoint 1, toàn 0 tại breakpoint 2.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">Không bao giờ đọc/ghi 1 global từ code chạy trước khi <code>__main</code> hoàn tất.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 05</span><h4>Đọc 1 Register GPIO</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Toggle 1 GPIO qua <code>BSRR</code> và quan sát register/pin đổi live.</dd>
+      <dt>Bước thực hiện</dt><dd>Ghi <code>GPIOA->BSRR = 0x20</code> qua Memory/Immediate window của debugger; kiểm tra <code>ODR</code> trước/sau; quan sát chính <code>BSRR</code> trở lại 0 sau đó.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Bit 5 của <code>ODR</code> set ngay lập tức; <code>BSRR</code> không giữ lại giá trị đã ghi.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">BSRR là write-only theo logic dù được khai báo <code>__IO</code>.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 06</span><h4>Tạo Stack Overflow</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Cố ý làm cạn stack 1024 byte bằng đệ quy không kiểm soát.</dd>
+      <dt>Setup</dt><dd><code>void recursive_danger(int depth){ uint8_t buf[64]; buf[0]=depth; if(depth>0) recursive_danger(depth-1); }</code></dd>
+      <dt>Bước thực hiện</dt><dd>Gọi với depth lớn; single-step và quan sát SP tiến gần đáy <code>Stack_Mem</code>.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Corrupt <code>.bss</code>/Heap kề bên, hoặc HardFault, trong khoảng 14 lần gọi đệ quy (1024/~70 byte).</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">Không có guard page trên MCU này — overflow corrupt âm thầm thay vì fault sạch (không có MPU).</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 07</span><h4>Tạo 1 HardFault có chủ đích</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Tái hiện fault unaligned-access từ section Alignment trên hardware thật.</dd>
+      <dt>Bước thực hiện</dt><dd>Flash và chạy <code>trigger_unaligned_fault()</code>; quan sát CPU vào <code>HardFault_Handler</code>.</dd>
+      <dt>Kết quả mong đợi</dt><dd>Chương trình treo trong handler (hiện đang trống).</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">Xác nhận thực nghiệm hành vi bắt buộc-alignment của Cortex-M0, không chỉ lý thuyết.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 08</span><h4>Debug HardFault</h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Implement và dùng <code>HardFault_Handler_C</code> tùy chỉnh từ section Fault.</dd>
+      <dt>Bước thực hiện</dt><dd>Thêm handler; chạy lại Lab 07; đọc <code>g_fault_pc</code>; tra qua <code>info symbol</code> (GDB) hoặc file <code>.map</code> (Keil).</dd>
+      <dt>Kết quả mong đợi</dt><dd><code>g_fault_pc</code> resolve về <code>trigger_unaligned_fault</code>.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">1 fault handler hoạt động biến 1 lần treo ngoài field không thể khôi phục thành chẩn đoán hành động được.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 09</span><h4>DMA Transfer <span class="tag tag-concept">Khái niệm — không có trong project này</span></h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Cấu hình 1 DMA transfer memory-to-peripheral cơ bản trên chip có DMA.</dd>
+      <dt>Bước thực hiện</dt><dd>Bật clock DMA1, cấu hình 1 channel (direction, increment, count), start nó, quan sát 1 interrupt hoàn tất thay vì N interrupt từng byte.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">DMA đánh đổi độ phức tạp setup để giảm tải CPU — chỉ đáng làm khi vượt 1 kích thước/tốc độ transfer nhất định.</dd>
+    </dl></div>
+  </div>
+
+  <div class="lab-card"><div class="lab-head"><span class="lab-num">LAB 10</span><h4>Bug DMA + Cache <span class="tag tag-concept">Khái niệm — cần core có cache (ví dụ STM32H7), không phải MCU này</span></h4></div>
+    <div class="lab-body"><dl>
+      <dt>Mục tiêu</dt><dd>Tái hiện bug cache-coherency kinh điển và fix bằng Clean/Invalidate.</dd>
+      <dt>Bước thực hiện</dt><dd>Ghi 1 buffer với D-Cache bật (write-back), start DMA đọc buffer đó mà chưa clean cache; quan sát dữ liệu cũ ở phía DMA. Thêm <code>SCB_CleanDCache_by_Addr()</code> và test lại.</dd>
+      <dt class="lab-solution">Bài học</dt><dd class="lab-solution">DMA không bao giờ thấy cache của CPU — coherency hoàn toàn là trách nhiệm software trừ khi platform có coherency hardware.</dd>
+    </dl></div>
+  </div>
+</section>
+
+<section class="doc-section" id="bugs">
+  <h2 class="section-title">Bug Memory Thường gặp</h2>
+
+  <div class="bug-card"><h4>Stack Overflow</h4><dl>
+    <dt>Triệu chứng</dt><dd>Global tự đổi giá trị không ai ghi rõ ràng; crash ngẫu nhiên khi interrupt tải nặng</dd>
+    <dt>Nguyên nhân</dt><dd>Đệ quy sâu/không kiểm soát hoặc buffer local lớn vượt vùng stack đã cấp</dd>
+    <dt>Phát hiện</dt><dd>Stack painting (điền 0xCC, kiểm tra high-water mark)</dd>
+    <dt>Debug</dt><dd>Kiểm tra SP gần đáy <code>Stack_Mem</code> trong debugger</dd>
+    <dt>Fix</dt><dd>Giảm đệ quy/kích thước buffer local, hoặc tăng <code>Stack_Size</code> trong file startup</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Heap Fragmentation</h4><dl>
+    <dt>Triệu chứng</dt><dd><code>malloc()</code> trả NULL dù tổng byte free có vẻ đủ</dd>
+    <dt>Nguyên nhân</dt><dd>Alloc/free lặp lại với kích thước khác nhau để lại block free không liên tục</dd>
+    <dt>Phát hiện</dt><dd>Theo dõi trạng thái free-list của allocator; test pattern alloc worst-case</dd>
+    <dt>Debug</dt><dd>Log kích thước/thứ tự alloc theo thời gian</dd>
+    <dt>Fix</dt><dd>Ưu tiên pool kích thước cố định/static allocation trên MCU nhỏ — project này tránh hoàn toàn heap</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Buffer Overflow</h4><dl>
+    <dt>Triệu chứng</dt><dd>Biến kề bên bị corrupt; đôi khi HardFault</dd>
+    <dt>Nguyên nhân</dt><dd>Ghi vượt quá cuối 1 array/buffer kích thước cố định</dd>
+    <dt>Phát hiện</dt><dd>Static analysis, build có bounds-check, canary byte</dd>
+    <dt>Debug</dt><dd>Watchpoint trên địa chỉ biến bị corrupt</dd>
+    <dt>Fix</dt><dd>Bounds-check mọi tính toán index/length trước khi ghi</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Use-After-Free <span class="tag tag-concept">Khái niệm — cần dùng heap, không có trong project này</span></h4><dl>
+    <dt>Triệu chứng</dt><dd>Corrupt ngắt quãng liên quan timing cấp phát</dd>
+    <dt>Nguyên nhân</dt><dd>Dereference con trỏ sau khi memory backing đã free và được dùng lại</dd>
+    <dt>Phát hiện</dt><dd>Poison memory đã free bằng pattern sentinel</dd>
+    <dt>Debug</dt><dd>Theo dõi call site alloc/free cho địa chỉ đang xét</dd>
+    <dt>Fix</dt><dd>Null hóa con trỏ sau free; tránh lưu con trỏ thô qua ranh giới ownership</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Con trỏ không hợp lệ / Null</h4><dl>
+    <dt>Triệu chứng</dt><dd>HardFault tại địa chỉ thấp hoặc rõ ràng không hợp lệ</dd>
+    <dt>Nguyên nhân</dt><dd>Dereference con trỏ chưa init hoặc đã bị invalidate trước đó</dd>
+    <dt>Phát hiện</dt><dd>Kiểm tra PC stacked/địa chỉ gây fault</dd>
+    <dt>Debug</dt><dd>Trace ngược qua LR/call stack để tìm ai đã truyền con trỏ hỏng</dd>
+    <dt>Fix</dt><dd>Khởi tạo con trỏ tường minh; validate trước dereference tại ranh giới trust</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Misaligned Access</h4><dl>
+    <dt>Triệu chứng</dt><dd>HardFault ngay lập tức trên Cortex-M0 (chỉ chậm âm thầm trên M3/M4/M7)</dd>
+    <dt>Nguyên nhân</dt><dd>Ép kiểu con trỏ byte sang kiểu rộng hơn tại offset không aligned</dd>
+    <dt>Phát hiện</dt><dd>Review code các phép ép kiểu con trỏ; warning alignment của compiler</dd>
+    <dt>Debug</dt><dd>PC stacked trỏ trực tiếp vào LDR/STR gây fault</dd>
+    <dt>Fix</dt><dd>Dùng <code>memcpy()</code> cho copy qua ranh giới thay vì ép kiểu con trỏ</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Bug DMA Buffer <span class="tag tag-concept">Khái niệm — không áp dụng project không dùng DMA này</span></h4><dl>
+    <dt>Triệu chứng</dt><dd>DMA transfer dữ liệu rác hoặc bị cắt ngắn</dd>
+    <dt>Nguyên nhân</dt><dd>Buffer sai kích thước/alignment so với descriptor DMA mong đợi, hoặc dùng lại trước khi transfer xong</dd>
+    <dt>Phát hiện</dt><dd>Kiểm tra count descriptor vs kích thước buffer thật; kiểm tra cờ hoàn tất trước khi dùng lại</dd>
+    <dt>Debug</dt><dd>Kiểm tra register status/count của DMA channel</dd>
+    <dt>Fix</dt><dd>Chờ interrupt/cờ hoàn tất trước khi đụng buffer lại</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Bug Cache Coherency <span class="tag tag-concept">Khái niệm — cần core có cache, N/A ở đây</span></h4><dl>
+    <dt>Triệu chứng</dt><dd>DMA gửi/nhận dữ liệu cũ dù logic đúng</dd>
+    <dt>Nguyên nhân</dt><dd>D-Cache write-back chưa flush trước khi DMA đọc, hoặc chưa invalidate trước khi CPU đọc dữ liệu DMA vừa ghi</dd>
+    <dt>Phát hiện</dt><dd>Tái hiện ổn định khi bật cache, biến mất khi tắt cache</dd>
+    <dt>Debug</dt><dd>So sánh nội dung buffer qua debugger read (bypass cache) vs CPU read</dd>
+    <dt>Fix</dt><dd>Clean trước khi DMA đọc, Invalidate trước khi CPU đọc (hoặc đánh dấu buffer non-cacheable qua MPU)</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Sai địa chỉ Linker / Sai vùng Memory</h4><dl>
+    <dt>Triệu chứng</dt><dd>Firmware chạy đúng trong debugger (load vào RAM) nhưng fail khi chạy độc lập từ Flash, hoặc chồng lấn vùng firmware khác</dd>
+    <dt>Nguyên nhân</dt><dd>Giá trị <code>ORIGIN</code>/<code>LENGTH</code> (hoặc Keil OCR_RVCT) sai</dd>
+    <dt>Phát hiện</dt><dd>So sánh địa chỉ đã link trong <code>.map</code> với memory map dự định</dd>
+    <dt>Debug</dt><dd>Đối chiếu ranh giới region với datasheet và firmware anh em (ví dụ IAP)</dd>
+    <dt>Fix</dt><dd>Sửa đúng định nghĩa region; tin vào lỗi "region overflow" của linker như lưới an toàn</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Vector Table (VTOR) sai / thiếu</h4><dl>
+    <dt>Triệu chứng</dt><dd>Interrupt dispatch tới handler sai sau khi jump bootloader→application</dd>
+    <dt>Nguyên nhân</dt><dd>VTOR vẫn trỏ vào vector table của firmware trước</dd>
+    <dt>Phát hiện</dt><dd>Đọc <code>SCB->VTOR</code> sau khi jump; so sánh với địa chỉ table thật của firmware mới</dd>
+    <dt>Debug</dt><dd>Xác nhận 1 ISR bất ngờ thực sự đến từ vector table nào</dd>
+    <dt>Fix</dt><dd>Set <code>SCB->VTOR</code> tường minh sớm trong <code>main()</code> của firmware mới, mask interrupt cho tới lúc đó</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Khởi tạo Startup sai</h4><dl>
+    <dt>Triệu chứng</dt><dd>Global có vẻ giá trị rác/tùy ý chỉ khi cold boot, không xảy ra khi chạy có debugger attach</dd>
+    <dt>Nguyên nhân</dt><dd>Code chạy trước khi <code>__scatterload</code> hoàn tất đụng vào 1 global (hoặc startup tùy chỉnh bỏ qua bước copy/zero)</dd>
+    <dt>Phát hiện</dt><dd>So sánh giá trị 1 global ngay trước vs sau <code>__main</code></dd>
+    <dt>Debug</dt><dd>Step qua <code>Reset_Handler</code>/<code>__main</code> từng instruction</dd>
+    <dt>Fix</dt><dd>Không bao giờ truy cập global từ <code>SystemInit()</code> hay bất kỳ thứ gì gọi trước khi <code>__main</code> xong</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Thiếu Memory Barrier</h4><dl>
+    <dt>Triệu chứng</dt><dd>Hành vi sai hiếm, phụ thuộc timing quanh việc ghi register có side-effect hardware (ví dụ reset, đổi clock)</dd>
+    <dt>Nguyên nhân</dt><dd>CPU được phép tiếp tục trước khi 1 lần ghi quan trọng thực sự hoàn thành tại đích</dd>
+    <dt>Phát hiện</dt><dd>Khó phát hiện chỉ bằng đọc code; thường chỉ lộ ra trên core nhanh/pipeline sâu hơn</dd>
+    <dt>Debug</dt><dd>So sánh hành vi có/không có DSB chèn quanh đoạn nghi ngờ</dd>
+    <dt>Fix</dt><dd>Thêm DSB (hoặc dùng hàm CMSIS/HAL đã tích hợp sẵn, như <code>NVIC_SystemReset()</code>)</dd>
+  </dl></div>
+
+  <div class="bug-card"><h4>Dùng Volatile sai</h4><dl>
+    <dt>Triệu chứng</dt><dd>"Chạy đúng Debug, sai Release"; loop polling không bao giờ exit hoặc exit ngay lập tức</dd>
+    <dt>Nguyên nhân</dt><dd>Thiếu <code>volatile</code> trên con trỏ/field struct liên quan hardware cho phép optimizer cache hoặc loại bỏ access</dd>
+    <dt>Phát hiện</dt><dd>So sánh disassembly ở <code>-O0</code> vs <code>-O2</code>/<code>-O3</code></dd>
+    <dt>Debug</dt><dd>Tìm 1 load lẽ ra phải lặp mỗi vòng loop nhưng chỉ xuất hiện 1 lần</dd>
+    <dt>Fix</dt><dd>Đánh dấu mọi con trỏ/field struct register hardware là <code>volatile</code> (macro <code>__IO</code>/<code>__I</code>/<code>__O</code> của CMSIS tự làm điều này)</dd>
+  </dl></div>
+</section>
+<section class="doc-section" id="kernel-comparison">
+  <h2 class="section-title">So sánh Linux Kernel</h2>
+  <div class="box box-warning">
+    <div class="box-title">Lưu ý</div>
+    Đây là <b>mapping khái niệm</b>, không phải khẳng định 2 cơ chế implement giống nhau.
+  </div>
+  <table class="reftable">
+    <tr><th>MCU</th><th>Linux Kernel</th><th>Khác biệt then chốt</th></tr>
+    <tr><td>Địa chỉ physical trực tiếp (không MMU)</td><td>MMIO qua <code>ioremap()</code> + địa chỉ virtual</td><td>Driver kernel nhận VA đã dịch; code MCU dùng trực tiếp địa chỉ physical</td></tr>
+    <tr><td>IRQ (NVIC, vector table cố định)</td><td>IRQ (GIC hoặc tương tự, framework irq_desc)</td><td>Kernel trừu tượng hóa routing/priority IRQ qua subsystem đầy đủ; vector table MCU chỉ là array tĩnh phẳng</td></tr>
+    <tr><td>DMA (setup descriptor thủ công theo HAL vendor)</td><td>Subsystem DMA Engine (<code>drivers/dma/</code>)</td><td>Kernel cung cấp API chung qua nhiều controller; code MCU nói trực tiếp với register</td></tr>
+    <tr><td>MPU (permission theo region, không dịch địa chỉ)</td><td>Khái niệm MMU/MPU (virtual memory + protection)</td><td>MMU thêm dịch địa chỉ và address space riêng mỗi process; MPU không bao giờ làm điều đó</td></tr>
+    <tr><td>Startup (Reset_Handler → SystemInit → __main → main)</td><td>Kernel startup (bootloader → start_kernel → init)</td><td>Startup kernel sâu hơn nhiều (setup arch, bring-up MMU, init subsystem)</td></tr>
+    <tr><td>Linker (Keil scatter / GCC .ld)</td><td>Linker kernel (vmlinux.lds.S)</td><td>Cùng khái niệm VMA/LMA; script kernel lớn hơn nhiều và version-control in-tree</td></tr>
+    <tr><td>Stack (1 MSP chia sẻ main+ISR, không RTOS ở đây)</td><td>Stack kernel per-task + IRQ stack tùy chọn</td><td>Kernel cách ly stack theo context; MCU này chia sẻ 1 stack duy nhất</td></tr>
+    <tr><td>Memory barrier (DMB/DSB/ISB qua CMSIS)</td><td>Memory barrier (<code>dmb()/dsb()/isb()</code>, thêm <code>smp_mb()</code> cho multi-core)</td><td>Cùng primitive ARM; kernel thêm biến thể SMP không liên quan trên MCU single-core</td></tr>
+    <tr><td>Xử lý fault (chỉ HardFault trên M0, không CFSR)</td><td>Kernel oops/panic (fault info đầy đủ, resolve symbol, log persistent tùy chọn)</td><td>Kernel tự động resolve symbol và có thể sống sót/report sau reboot; MCU cần debugger sống trừ khi bạn tự viết logging</td></tr>
+  </table>
+</section>
+
+<section class="doc-section" id="interview">
+  <h2 class="section-title">Câu hỏi Interview &amp; Đào sâu</h2>
+  <p>Click 1 câu hỏi để hiện answer. Ở <b>Chế độ Học</b>, answer ẩn tới khi bạn bấm Reveal.</p>
+
+  <h3 class="sub-title">Câu hỏi Interview</h3>
+  <div id="interviewList"></div>
+
+  <h3 class="sub-title">Câu hỏi Đào sâu</h3>
+  <div id="deepdiveList"></div>
+</section>
+
+<section class="doc-section" id="glossary">
+  <h2 class="section-title">Thuật ngữ A–Z</h2>
+  <dl class="glossary-grid" id="glossaryList"></dl>
+</section>
+
+<section class="doc-section" id="cheatsheet">
+  <h2 class="section-title">Kiến trúc Bộ nhớ MCU — Cheat Sheet</h2>
+  <table class="reftable">
+    <tr><th>Thuật ngữ</th><th>Nghĩa 1 dòng</th></tr>
+    <tr><td>Memory Map</td><td>Gán cố định dải địa chỉ cho Flash/SRAM/Peripheral/System</td></tr>
+    <tr><td>MMIO</td><td>Register hardware phơi bày như địa chỉ; LDR/STR = điều khiển hardware</td></tr>
+    <tr><td>Stack</td><td>Grow xuống từ <code>__initial_sp</code>; chứa local, register đã lưu, địa chỉ return</td></tr>
+    <tr><td>Heap</td><td>Vùng cấp phát động (<code>malloc</code>/<code>free</code>) — không dùng trong project này</td></tr>
+    <tr><td>.data</td><td>Global đã init (≠0); LMA ở Flash, VMA ở SRAM, copy lúc startup</td></tr>
+    <tr><td>.bss</td><td>Global zero/chưa init; chỉ có kích thước trong image, zero lúc startup</td></tr>
+    <tr><td>.text</td><td>Code đã compile; execute-in-place từ Flash</td></tr>
+    <tr><td>.rodata</td><td>Hằng số/string literal; nằm trong Flash, LMA=VMA</td></tr>
+    <tr><td>LMA</td><td>Load Memory Address — nơi dữ liệu nằm trong file nạp</td></tr>
+    <tr><td>VMA</td><td>Virtual/Execution Address — nơi CPU truy cập lúc runtime</td></tr>
+    <tr><td>DMA</td><td>Bus master độc lập di chuyển dữ liệu không cần CPU cho từng byte</td></tr>
+    <tr><td>Cache</td><td>Buffer nhanh giữa CPU và memory chậm hơn; không có trên Cortex-M0</td></tr>
+    <tr><td>MPU</td><td>Kiểm tra permission theo region, không dịch địa chỉ; không có trên MCU này</td></tr>
+    <tr><td>VTOR</td><td>Vector Table Offset Register — relocate vector table exception</td></tr>
+    <tr><td>HardFault</td><td>Exception fault catch-all; loại fault duy nhất trên Cortex-M0</td></tr>
+    <tr><td>CFSR</td><td>Configurable Fault Status Register — chỉ ARMv7-M, không trên M0</td></tr>
+    <tr><td>BFAR</td><td>Bus Fault Address Register — chỉ ARMv7-M, không trên M0</td></tr>
+    <tr><td>MMFAR</td><td>MemManage Fault Address Register — chỉ ARMv7-M, không trên M0</td></tr>
+    <tr><td>DMB</td><td>Data Memory Barrier — thứ tự tương đối của memory access</td></tr>
+    <tr><td>DSB</td><td>Data Synchronization Barrier — CPU dừng tới khi access trước hoàn tất</td></tr>
+    <tr><td>ISB</td><td>Instruction Synchronization Barrier — flush pipeline</td></tr>
+  </table>
+</section>
+
+<section class="doc-section" id="final-diagram">
+  <h2 class="section-title">Sơ đồ Kiến trúc Tổng hợp</h2>
+  <div class="diagram">                         MCU
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+             CPU                    DMA
+              │                       │
+              └───────────┬───────────┘
+                          │
+                    Bus / Interconnect
+                          │
+          ┌───────────────┼────────────────┐
+          │               │                │
+        Flash            SRAM         Peripheral
+          │               │                │
+          │       ┌───────┼───────┐        │
+          │       │       │       │        │
+          │     .data   .bss    Stack     │
+          │                       │        │
+          └──────────┬────────────┘        │
+                     │                     │
+                  Linker                  MMIO
+                     │                     │
+                  Startup               Register
+                     │                     │
+                     └─────────┬───────────┘
+                               │
+                            Firmware
+                               │
+                         Debug / Fault</div>
+  <div class="box box-important">
+    <div class="box-title">Lời kết</div>
+    Tài liệu này bám sát đầu-cuối 1 firmware thật (<code>PS-CPU/pscpu_s800</code>, STM32F030x8) và luôn nói rõ
+    khi 1 khái niệm là kiến trúc ARM chung, đặc thù silicon vendor, hay chỉ là mô hình khái niệm. Nhiều
+    "tính năng MCU sách giáo khoa" — heap, DMA, cache, MPU, relocate VTOR, chẩn đoán fault — đã được đối
+    chiếu với source thật và phát hiện không tồn tại, và điều đó được ghi rõ ràng thay vì bỏ qua.
+  </div>
+</section></main>
+</div>
+
+<button class="backtotop" id="backToTop" title="Back to top">↑</button>
+
+<script>
+/* ===================== DATA ===================== */
+const ROADMAP = [
+ ["01","Nền tảng","#fundamentals"],["02","Address Space","#fundamentals"],["03","Memory Map","#memory-map"],
+ ["04","MMIO","#mmio"],["05","Memory Model Cortex-M","#cortex-m-model"],["06","Alignment","#alignment"],
+ ["07","Endianness","#endianness"],["08","Flash","#flash"],["09","SRAM","#sram"],["10","Stack","#stack"],
+ ["11","Heap","#heap"],["12","ELF","#elf-linker"],["13","Linker Script","#linker-script"],
+ ["14","Startup","#startup"],["15","Vector Table","#vector-table"],["16","DMA","#dma"],["17","Cache","#cache"],
+ ["18","MPU","#mpu"],["19","Memory Barrier","#barrier"],["20","Fault","#fault"],["21","Debug","#gdb"]
+];
+
+const INTERVIEW_QA = [
+ ["Cơ bản","Vì sao 1 con trỏ hard-code như (uint32_t*)0x20000000 lại thực sự điều khiển được hardware?","Vì address decoder của vendor được wire lúc thiết kế silicon để route đúng dải địa chỉ đó tới 1 block vật lý (SRAM ở đây). Giá trị con trỏ vô nghĩa ngoài context của đúng wiring decoder trên chip đó."],
+ ["Cơ bản","Sự khác biệt giữa CPU register và peripheral register là gì, dù cả 2 đều gọi là 'register'?","CPU register nằm trong core, không có địa chỉ bus, chỉ reach được qua instruction (MOV/ADD). Peripheral register có địa chỉ bus, reach qua LDR/STR như 1 vị trí memory bình thường, và thường có side-effect hardware khi truy cập."],
+ ["MMIO","Vì sao phải dùng volatile cho register peripheral?","Nếu không, compiler có thể coi các access lặp lại là dư thừa và loại bỏ, cache, hoặc sắp xếp lại, vì nó giả định memory thường không đổi nếu không có ghi tường minh trong code path nhìn thấy được."],
+ ["MMIO","volatile có đảm bảo thread-safety hay atomicity không?","Không. Nó chỉ đảm bảo mỗi access thực sự xảy ra. Nó không ngăn race giữa ISR và main loop, cũng không làm 1 chuỗi read-modify-write trở nên không thể chia nhỏ."],
+ ["Alignment","Vì sao Cortex-M0 fault khi unaligned access còn Cortex-M4 mặc định không?","Đây là khác biệt ở mức kiến trúc ARM: ARMv6-M (M0) bắt buộc access phải aligned; ARMv7-M (M3/M4/M7) thêm hỗ trợ hardware để tự động tách unaligned access thành nhiều bus transfer aligned."],
+ ["Fault","Trên Cortex-M0, thông tin gì có sẵn khi HardFault xảy ra?","Chỉ có SCB->HFSR (rất thô) và Exception Stack Frame (R0-R3, R12, LR, PC, xPSR) do hardware tự push. Không có CFSR/MMFAR/BFAR — những thứ đó chỉ tồn tại trên core ARMv7-M."],
+ ["Fault","Vì sao dữ liệu chẩn đoán fault nên lưu vào global volatile thay vì local variable?","Debugger attach sau khi fault xảy ra (không qua breakpoint đặt trước) có thể đã quan sát context của chính handler; global trong .data/.bss tồn tại và đọc được qua memory window bất kể thời điểm halt chính xác, miễn là chúng volatile để optimizer không loại bỏ."],
+ ["Linker","Vì sao .data cần cả VMA và LMA còn .text thì không?","Vì .data phải giữ giá trị khởi tạo qua mất điện (chỉ Flash làm được) nhưng phải ghi được nhanh lúc runtime (chỉ SRAM làm hiệu quả) — cần 2 địa chỉ, 1 ở Flash (LMA) và 1 ở SRAM (VMA), để thỏa cả 2 ràng buộc đồng thời."],
+ ["Linker","Ai copy .data từ Flash sang SRAM, và khi nào?","Routine __main của ARM C runtime (cụ thể __scatterload_copy), trước khi gọi main() của bạn, dùng symbol linker tự sinh như Load$$RW_IRAM1$$Base / Image$$RW_IRAM1$$Base."],
+ ["Startup","Vì sao SystemInit() phải tránh đụng bất kỳ biến global C nào?","Vì nó chạy trước khi __main copy .data hoặc zero .bss — đọc global bất kỳ sẽ trả về rác, và ghi global bất kỳ sẽ bị ghi đè âm thầm ngay sau đó khi __scatterload_zeroinit chạy."],
+ ["DMA","Vì sao DMA là overkill cho giao tiếp I2C của project này?","I2C ở đây chạy tốc độ thấp, chế độ slave, vài byte mỗi transaction. Overhead setup descriptor của DMA vượt quá lợi ích cho transfer nhỏ chậm như vậy — xử lý byte bằng interrupt đơn giản và đủ dùng."],
+ ["Cache","Vì sao cache coherency không quan trọng trên MCU cụ thể này?","Vì Cortex-M0 hoàn toàn không có cache (xác nhận qua core_cm0.h không có bit control IC/DC) — vấn đề coherency đã mô tả (DMA bỏ qua write-back cache) cần cache tồn tại trước tiên."],
+ ["MPU","Khác biệt thực tế giữa MPU và MMU là gì?","MPU kiểm tra permission trên cùng địa chỉ physical CPU đã tạo ra — không bao giờ dịch địa chỉ. MMU dịch virtual sang physical ngoài việc kiểm tra permission, và là nền tảng cho process isolation và virtual memory trên hệ như Linux."],
+ ["Barrier","Khác biệt giữa DMB và DSB là gì?","DMB chỉ sắp thứ tự memory access tương đối với nhau nhưng cho phép CPU tiếp tục chạy instruction tiếp theo. DSB dừng hoàn toàn CPU tới khi mọi memory access trước đó thực sự hoàn thành vật lý."],
+ ["GDB","Marker bit-0 Thumb trong 1 entry vector table nghĩa là gì?","Bit 0 = 1 báo CPU vào Thumb execution state khi branch tới địa chỉ đó qua load từ vector table; CPU tự bỏ bit đó khi thực sự dùng giá trị làm địa chỉ fetch, nên PC luôn đọc là số chẵn."],
+];
+
+const DEEPDIVE_QA = [
+ ["Con trỏ giá trị 0x20000000 — có ý nghĩa gì trên chip khác với chip nó được compile cho không?","Không. Nó chỉ có ý nghĩa tương đối với wiring address decoder của đúng chip đó, mô tả trong memory map riêng của chip đó trong reference manual. Port code giữa các họ MCU cần verify lại từng địa chỉ hard-code."],
+ ["Nếu SRAM chỉ 8KB nhưng bạn ghi *(uint32_t*)0x20003000 (vượt ranh giới 8KB), vì sao đây không phải 'segfault' theo nghĩa Linux?","Không có MMU để sinh page fault. Address decoder route tới 1 vùng thật sự unmapped/reserved (khả năng Bus/HardFault) hoặc, trong thiết kế bệnh lý, có thể alias ngược vào memory hợp lệ — hành vi do architecture/vendor quy định, không phải khái niệm 'segfault' đồng nhất."],
+ ["Vì sao jump2iap() không thể đơn giản gọi SystemReset() thay vì tự set SP/PC?","Reset toàn hệ thống sẽ chạy lại logic boot ROM/remap và luôn rơi lại đúng Reset_Handler của main application (vì nội dung Flash và trạng thái chân BOOT không đổi) — không bao giờ tới được vùng firmware IAP. Tự set SP và PC là cách duy nhất cho phép nhảy sang 1 firmware image hoàn toàn khác, không thể reach được cách khác, trong cùng Flash vật lý."],
+ ["Nếu jump2iap() không bao giờ set VTOR, và IAP re-enable interrupt trước khi set VTOR của chính nó, khoảng hở rủi ro chính xác là gì?","Giữa lúc interrupt của IAP được re-enable và lúc IAP tường minh ghi SCB->VTOR, bất kỳ interrupt nào xảy ra sẽ dispatch qua địa chỉ vẫn còn trong VTOR — mặc định là 0x00000000, tức vector table của MAIN app (vẫn còn nguyên vật lý trong Flash, vì erase xảy ra sau). ISR đó sẽ chạy dùng nội dung SRAM hiện tại của IAP (đã bị ghi đè bằng layout .data/.bss của IAP) — 1 sự không khớp có thể corrupt state hoặc crash không đoán trước."],
+ ["Vì sao về mặt kiến trúc không thể có bit-banding trên Cortex-M0 dù vendor có muốn?","Bit-banding là tính năng address-aliasing được định nghĩa bởi spec kiến trúc ARMv7-M, implement bằng cách dành riêng dải địa chỉ alias cụ thể và logic decode nội bộ. ARMv6-M (kiến trúc của Cortex-M0) đơn giản không định nghĩa hay dành chỗ cho hành vi này ở mức ISA/memory-map — vendor không thể thêm nó mà không lệch khỏi việc là 1 implementation Cortex-M0 tuân thủ chuẩn."],
+ ["2 biến chia sẻ 1 cache line trên core có cache; DMA ghi buffer_A, và bạn invalidate cache line đó ngay sau khi CPU ghi (nhưng chưa clean) biến không liên quan flag_B trong cùng line — điều gì xảy ra với flag_B?","Invalidate bỏ nội dung cache line mà không ghi lại. Vì giá trị mới của flag_B chỉ tồn tại trong cache line đó (write-back) và chưa từng được clean xuống RAM, invalidate line đó âm thầm loại bỏ lần ghi flag_B của CPU — 1 bug corrupt chéo biến thật sự do cache-line sharing gây ra, không liên quan lỗi logic nào."],
+ ["Nếu __MPU_PRESENT=0 thực sự nghĩa là không có MPU hardware, bạn có thể đạt được 1 hình thức cách ly memory nào cho module nhạy cảm bảo mật chỉ bằng software không?","Không thể ở mức CPU-enforcement — không có MPU, không gì ngăn bất kỳ code nào đọc/ghi bất kỳ địa chỉ bus reach được. Convention software (chỉ access qua API định nghĩa, kỷ luật code review) có thể giảm access vô ý nhưng không ngăn được access cố ý hoặc do bug như cách kiểm tra permission hardware làm; cách ly thật cần silicon khác (ví dụ Cortex-M0+/M33 có MPU, hoặc TrustZone-M)."],
+ ["Vì firmware này chia sẻ 1 stack MSP giữa main loop và mọi ISR, bạn sẽ giới hạn chặt worst-case stack usage như thế nào thay vì đoán mò?","Cộng tĩnh call chain sâu nhất có thể: độ sâu call lồng sâu nhất của main loop tại đúng thời điểm 1 interrupt có thể xảy ra, cộng call chain lồng sâu nhất của chính ISR đó, cộng 1 Exception Stack Frame (32 byte) cho mỗi mức interrupt lồng có thể (tail-chain hoặc nested IRQ). Report stack-usage do compiler sinh (ví dụ -fstack-usage) theo từng hàm, kết hợp call-graph, làm điều này khả thi thay vì đoán mò."],
+];
+
+const GLOSSARY = [
+ ["Address","Định danh số CPU đặt lên bus để chọn 1 vị trí memory/peripheral.","#fundamentals"],
+ ["Address Space","Toàn bộ dải địa chỉ CPU có thể tạo ra (0x00000000-0xFFFFFFFF trên core 32-bit).","#memory-map"],
+ ["Alignment","Yêu cầu 1 access N-byte phải bắt đầu tại địa chỉ chia hết cho N.","#alignment"],
+ ["AAPCS","Calling convention chuẩn của ARM (dùng register, alignment stack) mà compiler tuân theo.","#stack"],
+ ["Bit-banding","Tính năng address-aliasing chỉ có trên ARMv7-M cho set/clear 1 bit atomic; không có trên ARMv6-M.","#cortex-m-model"],
+ ["BSRR","GPIO Bit Set/Reset Register — register write-1-to-set atomic trên GPIO STM32.","#mmio"],
+ ["Bus","Tập hợp dây (address/data/control) kết nối CPU, memory và peripheral.","#fundamentals"],
+ ["Bus Master","Thiết bị có thể tự tạo địa chỉ bus (CPU, DMA, Debug Access Port).","#dma"],
+ ["CFSR","Configurable Fault Status Register — chỉ ARMv7-M, không có trên Cortex-M0.","#fault"],
+ ["Cache","Memory nhỏ nhanh giữa CPU và memory chậm hơn; không có trên Cortex-M0.","#cache"],
+ ["Cache Line","Đơn vị fetch/evict nhỏ nhất của cache, thường 32 byte.","#cache"],
+ ["Cortex-M0","Core ARMv6-M: chỉ Thumb, không MPU mặc định, không cache, alignment bắt buộc, chỉ 1 HardFault.","#cortex-m-model"],
+ ["DMA","Direct Memory Access — bus master thứ 2 di chuyển dữ liệu không cần CPU cho từng byte.","#dma"],
+ ["DMB","Data Memory Barrier — sắp thứ tự memory access tương đối với nhau.","#barrier"],
+ ["DSB","Data Synchronization Barrier — dừng CPU tới khi access trước hoàn tất.","#barrier"],
+ ["ELF","Executable and Linkable Format — container output của linker có symbol và debug info.","#elf-linker"],
+ ["Endianness","Quy ước thứ tự byte cho giá trị đa-byte trong memory.","#endianness"],
+ ["Exception Stack Frame","8 register (R0-R3,R12,LR,PC,xPSR) hardware tự push khi vào exception.","#stack"],
+ ["Execute-In-Place (XIP)","Chạy code trực tiếp từ Flash không cần copy vào RAM trước.","#flash"],
+ ["Flash","Memory floating-gate non-volatile chứa code và hằng số.","#flash"],
+ ["HardFault","Exception fault catch-all; loại fault duy nhất tồn tại trên Cortex-M0.","#fault"],
+ ["HFSR","Hard Fault Status Register — có trên mọi Cortex-M, nhưng rất thô trên M0.","#fault"],
+ ["Heap","Vùng cấp phát động quản lý bởi malloc/free.","#heap"],
+ ["ISB","Instruction Synchronization Barrier — flush pipeline.","#barrier"],
+ ["IRQ","Interrupt Request — sự kiện hardware bất đồng bộ route qua NVIC.","#vector-table"],
+ ["LDREX/STREX","Cặp load/store exclusive cho atomic operation; không có trên Cortex-M0 thường.","#cortex-m-model"],
+ ["LMA","Load Memory Address — nơi dữ liệu 1 section thực sự nằm trong image nạp.","#linker-script"],
+ ["Little-Endian","Thứ tự byte nơi byte ít ý nghĩa nhất lưu tại địa chỉ thấp nhất.","#endianness"],
+ ["MMFAR","MemManage Fault Address Register — chỉ ARMv7-M, không có trên Cortex-M0.","#fault"],
+ ["MMIO","Memory-Mapped I/O — register hardware phơi bày như địa chỉ memory thông thường.","#mmio"],
+ ["MPU","Memory Protection Unit — kiểm tra permission theo region, không dịch địa chỉ.","#mpu"],
+ ["MSP","Main Stack Pointer — stack pointer mặc định, luôn dùng trong exception handler.","#stack"],
+ ["NVIC","Nested Vectored Interrupt Controller — hardware interrupt core-internal của ARM.","#vector-table"],
+ ["PSP","Process Stack Pointer — stack pointer thay thế, thường dùng per-task bởi RTOS.","#stack"],
+ ["Reserved Bits","Bit register hành vi undefined nếu ghi sai; phải giữ đúng giá trị reset.","#mmio"],
+ ["SCB","System Control Block — register core-internal gồm VTOR, HFSR, CCR, AIRCR.","#vector-table"],
+ ["SRAM","Static RAM — working memory nhanh, volatile, xây từ latch transistor bistable.","#sram"],
+ ["Stack","Vùng LIFO cho local, register đã lưu và địa chỉ return; grow xuống.","#stack"],
+ ["Thumb","Encoding instruction gọn của ARM; mode duy nhất Cortex-M0 hỗ trợ.","#cortex-m-model"],
+ ["Unaligned Access","1 memory access có địa chỉ không phải bội số của kích thước nó.","#alignment"],
+ ["VMA","Virtual/Execution Memory Address — nơi CPU thực sự truy cập dữ liệu lúc runtime.","#linker-script"],
+ ["Volatile","Qualifier C buộc mọi access ở mức source phải sinh ra 1 load/store thật.","#volatile"],
+ ["VTOR","Vector Table Offset Register — relocate vector table exception sau boot.","#vector-table"],
+ ["Write-1-to-Clear (W1C)","Convention register nơi ghi 1 vào 1 bit sẽ clear nó (thường cờ interrupt).","#mmio"],
+ ["Write-1-to-Set (W1S)","Convention register nơi ghi 1 vào 1 bit sẽ set nó, 0 không tác động (ví dụ BSRR).","#mmio"],
+];
+
+/* ===================== RENDER: ROADMAP ===================== */
+function renderRoadmap(){
+  const el = document.getElementById('roadmapList');
+  let html = '';
+  ROADMAP.forEach((n,i)=>{
+    html += `<div class="roadmap-node" data-href="${n[2]}"><span class="num">${n[0]}</span><span>${n[1]}</span></div>`;
+    if(i < ROADMAP.length-1) html += '<div class="roadmap-arrow">↓</div>';
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.roadmap-node').forEach(node=>{
+    node.addEventListener('click', ()=>{ location.hash = node.dataset.href; });
+  });
+}
+
+/* ===================== RENDER: Q&A ===================== */
+function renderQA(containerId, data, prefix){
+  const el = document.getElementById(containerId);
+  let html = '';
+  data.forEach((item,i)=>{
+    const id = prefix+i;
+    if(item.length === 3){
+      html += `<div class="qa-item"><div class="qa-q" data-id="${id}"><span>${item[1]}</span><span class="qbadge">${item[0]}</span></div>
+        <div class="qa-a" id="${id}">${item[2]}</div>
+        <button class="reveal-btn" data-id="${id}">Hiện answer</button></div>`;
+    } else {
+      html += `<div class="qa-item"><div class="qa-q" data-id="${id}"><span>${item[0]}</span></div>
+        <div class="qa-a" id="${id}">${item[1]}</div>
+        <button class="reveal-btn" data-id="${id}">Hiện answer</button></div>`;
+    }
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.qa-q').forEach(q=>{
+    q.addEventListener('click', ()=>{
+      const a = document.getElementById(q.dataset.id);
+      if(document.body.classList.contains('learning-mode')){
+        a.classList.toggle('revealed');
+      } else {
+        a.classList.toggle('open');
+      }
+    });
+  });
+  el.querySelectorAll('.reveal-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      document.getElementById(btn.dataset.id).classList.toggle('revealed');
+    });
+  });
+}
+
+/* ===================== RENDER: GLOSSARY ===================== */
+function renderGlossary(){
+  const el = document.getElementById('glossaryList');
+  let html = '';
+  GLOSSARY.sort((a,b)=>a[0].localeCompare(b[0])).forEach(g=>{
+    html += `<div class="gloss-entry"><dt>${g[0]}</dt><dd>${g[1]} <a href="${g[2]}">→ tới section</a></dd></div>`;
+  });
+  el.innerHTML = html;
+}
+
+/* ===================== COPY BUTTONS ===================== */
+function initCopyButtons(){
+  document.querySelectorAll('.copy-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const pre = btn.parentElement.querySelector('pre code');
+      const text = pre.innerText;
+      navigator.clipboard.writeText(text).then(()=>{
+        btn.textContent = 'Đã copy!'; btn.classList.add('copied');
+        setTimeout(()=>{ btn.textContent='Copy'; btn.classList.remove('copied'); }, 1500);
+      }).catch(()=>{
+        const ta = document.createElement('textarea'); ta.value = text;
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        btn.textContent = 'Đã copy!'; setTimeout(()=>{ btn.textContent='Copy'; }, 1500);
+      });
+    });
+  });
+}
+
+/* ===================== MOBILE SIDEBAR ===================== */
+document.getElementById('menuToggle').addEventListener('click', ()=>{
+  document.getElementById('sidebar').classList.toggle('open');
+});
+document.querySelectorAll('nav.sidebar a.navlink').forEach(a=>{
+  a.addEventListener('click', ()=>{ document.getElementById('sidebar').classList.remove('open'); });
+});
+
+/* ===================== SCROLLSPY ===================== */
+const sections = Array.from(document.querySelectorAll('section.doc-section[id]'));
+const navLinks = Array.from(document.querySelectorAll('nav.sidebar a.navlink'));
+function updateActiveLink(){
+  let currentId = sections[0] ? sections[0].id : '';
+  const scrollPos = window.scrollY + 100;
+  for(const sec of sections){
+    if(sec.offsetTop <= scrollPos) currentId = sec.id;
+  }
+  navLinks.forEach(a=>{
+    a.classList.toggle('active', a.getAttribute('href') === '#'+currentId);
+  });
+}
+window.addEventListener('scroll', updateActiveLink);
+
+/* ===================== BACK TO TOP ===================== */
+const backBtn = document.getElementById('backToTop');
+window.addEventListener('scroll', ()=>{
+  backBtn.classList.toggle('show', window.scrollY > 400);
+});
+backBtn.addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
+
+/* ===================== LEARNING MODE ===================== */
+document.getElementById('learningModeToggle').addEventListener('change', (e)=>{
+  document.body.classList.toggle('learning-mode', e.target.checked);
+});
+
+/* ===================== ARCHITECTURE SELECTOR ===================== */
+document.querySelectorAll('.arch-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.arch-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.arch-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.arch-panel[data-arch="${btn.dataset.arch}"]`).classList.add('active');
+  });
+});
+
+/* ===================== SEARCH ===================== */
+let searchIndex = [];
+function buildSearchIndex(){
+  sections.forEach(sec=>{
+    const title = (sec.querySelector('h2') ? sec.querySelector('h2').innerText : sec.id);
+    const text = sec.innerText;
+    searchIndex.push({id: sec.id, title: title, text: text});
+  });
+}
+function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+const searchMeta = document.getElementById('searchMeta');
+searchInput.addEventListener('input', ()=>{
+  const q = searchInput.value.trim();
+  if(q.length < 2){ searchResults.style.display='none'; searchMeta.textContent=''; return; }
+  const re = new RegExp(escapeRegExp(q), 'i');
+  const matches = searchIndex.filter(item => re.test(item.text));
+  searchMeta.textContent = matches.length + ' kết quả';
+  if(matches.length === 0){ searchResults.style.display='none'; return; }
+  let html = '';
+  matches.slice(0,20).forEach(m=>{
+    const idx = m.text.search(re);
+    const start = Math.max(0, idx-40);
+    const snippet = m.text.substring(start, idx+80).replace(/\s+/g,' ');
+    const hl = snippet.replace(re, match=>`<mark>${match}</mark>`);
+    html += `<div class="res-item" data-href="#${m.id}"><div class="res-title">${m.title}</div><div class="res-snip">…${hl}…</div></div>`;
+  });
+  searchResults.innerHTML = html;
+  searchResults.style.display = 'block';
+  searchResults.querySelectorAll('.res-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      location.hash = item.dataset.href;
+      searchResults.style.display = 'none';
+      searchInput.value = '';
+      searchMeta.textContent = '';
+    });
+  });
+});
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('.searchwrap')) searchResults.style.display = 'none';
+});
+
+/* ===================== INIT ===================== */
+renderRoadmap();
+renderQA('interviewList', INTERVIEW_QA, 'iv');
+renderQA('deepdiveList', DEEPDIVE_QA, 'dd');
+renderGlossary();
+initCopyButtons();
+buildSearchIndex();
+updateActiveLink();
+</script>
+</body>
+</html>

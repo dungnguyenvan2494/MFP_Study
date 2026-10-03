@@ -1,0 +1,2534 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreeRTOS Task Management — Interactive Learning Portal</title>
+<style>
+/* ========================================
+   DESIGN TOKENS
+======================================== */
+:root[data-theme="dark"]{
+  --bg:#0B1120; --surface:#111827; --surface2:#172033; --border:#253247;
+  --text:#E5E7EB; --muted:#94A3B8;
+  --primary:#38BDF8; --secondary:#818CF8;
+  --success:#34D399; --warning:#FBBF24; --danger:#FB7185;
+  --running:#38BDF8; --ready:#34D399; --blocked:#FBBF24; --suspended:#FB7185;
+  --kernel:#A78BFA; --scheduler:#818CF8; --tick:#F97316; --cpu:#38BDF8;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+:root[data-theme="light"]{
+  --bg:#F8FAFC; --surface:#FFFFFF; --surface2:#F1F5F9; --border:#E2E8F0;
+  --text:#0F172A; --muted:#64748B;
+  --primary:#0284C7; --secondary:#4F46E5;
+  --success:#059669; --warning:#B45309; --danger:#BE123C;
+  --running:#0284C7; --ready:#059669; --blocked:#B45309; --suspended:#BE123C;
+  --kernel:#7C3AED; --scheduler:#4F46E5; --tick:#C2410C; --cpu:#0284C7;
+  --shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+/* ========================================
+   RESET
+======================================== */
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{animation-duration:.001ms !important; transition-duration:.001ms !important} }
+body{margin:0}
+h1,h2,h3,h4,p,ul,ol,figure{margin:0}
+ul{padding:0;list-style:none}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+code,pre{font-family:"SF Mono",SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace}
+img,svg{display:block;max-width:100%}
+/* ========================================
+   GLOBAL
+======================================== */
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.65; font-size:16px;
+  -webkit-font-smoothing:antialiased;
+}
+.container{max-width:1180px;margin:0 auto;padding:0 24px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--primary)}
+.muted{color:var(--muted)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:99px;border:1px solid var(--border)}
+.badge-source{color:var(--success);border-color:var(--success)}
+.badge-explanation{color:var(--primary);border-color:var(--primary)}
+.badge-example{color:var(--secondary);border-color:var(--secondary)}
+.badge-inference{color:var(--warning);border-color:var(--warning)}
+.pill{display:inline-flex;align-items:center;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-size:13px;font-weight:600}
+/* ========================================
+   HEADER
+======================================== */
+.topbar{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--border);backdrop-filter:blur(6px)}
+.topbar-inner{max-width:1440px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:20px}
+.brand{display:flex;flex-direction:column;line-height:1.2;flex-shrink:0}
+.brand-title{font-weight:800;font-size:15px;letter-spacing:.02em}
+.brand-sub{font-size:11px;color:var(--muted)}
+.topbar-search{flex:1;max-width:420px;min-width:0;position:relative}
+.topbar-search input{width:100%;padding:9px 14px 9px 36px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px}
+.topbar-search input:focus{outline:2px solid var(--primary);outline-offset:1px}
+.topbar-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted)}
+.search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);max-height:60vh;overflow:auto;display:none;z-index:60}
+.search-results.open{display:block}
+.search-results a{display:block;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.search-results a:last-child{border-bottom:none}
+.search-results a:hover,.search-results a:focus{background:var(--surface2)}
+.search-results .sr-section{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.topbar-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+.icon-btn{width:36px;height:36px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;background:var(--surface)}
+.icon-btn:hover{background:var(--surface2)}
+.icon-btn svg{width:18px;height:18px}
+.progress-chip{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:0 4px}
+.progress-track{width:70px;height:6px;border-radius:99px;background:var(--surface2);overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));width:0%;transition:width .3s ease}
+.mobile-menu-btn{display:none}
+/* ========================================
+   LAYOUT
+======================================== */
+.app-shell{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1440px;margin:0 auto}
+.sidebar{position:sticky;top:57px;align-self:start;height:calc(100vh - 57px);overflow-y:auto;padding:24px 12px 40px;border-right:1px solid var(--border)}
+.nav-group{margin-bottom:22px}
+.nav-group-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 12px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13.5px;color:var(--text)}
+.nav-item:hover{background:var(--surface2)}
+.nav-item.active{background:var(--surface2);color:var(--primary);font-weight:600}
+.nav-num{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;width:20px;flex-shrink:0}
+.nav-item.active .nav-num{color:var(--primary)}
+.nav-dot{margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--border);flex-shrink:0}
+.nav-dot.done{background:var(--success)}
+.content{min-width:0;padding:0 40px 100px}
+.section-block{max-width:840px;margin:0 auto;padding-top:64px;scroll-margin-top:76px}
+.section-block:first-of-type{padding-top:36px}
+.section-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:28px}
+.section-num{font-size:13px;font-weight:800;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-head h2{font-size:26px;font-weight:800;letter-spacing:-.01em}
+.section-head .eyebrow{display:block;margin-bottom:4px}
+.section-body > * + *{margin-top:18px}
+.section-body h3{font-size:16px;font-weight:700;margin-top:30px;display:flex;align-items:center;gap:10px}
+.section-body h4{font-size:14px;font-weight:700;margin-top:22px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.section-body p{color:var(--text)}
+.section-body ul,.section-body ol{padding-left:22px}
+.section-body li{margin:6px 0}
+.section-body ul{list-style:disc}
+.section-body ol{list-style:decimal}
+.callout{border:1px solid var(--border);border-left:3px solid var(--primary);background:var(--surface);border-radius:0 10px 10px 0;padding:14px 18px}
+.callout.quote{border-left-color:var(--success)}
+.callout.quote p{font-style:italic;color:var(--muted)}
+.callout.infer{border-left-color:var(--warning)}
+.callout-label{display:block;margin-bottom:6px}
+.analogy{background:var(--surface2);border-radius:10px;padding:16px 18px;border:1px solid var(--border)}
+hr.rule{border:none;border-top:1px solid var(--border);margin:36px 0}
+/* ========================================
+   CARDS
+======================================== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;min-width:0}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.api-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.api-card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.api-card-head code{font-weight:700;color:var(--primary);font-size:14.5px}
+.api-card-body{padding:16px 18px}
+.api-card-body dt{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:12px}
+.api-card-body dt:first-child{margin-top:0}
+.api-card-body dd{margin:4px 0 0 0}
+.state-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:99px;font-size:12.5px;font-weight:700}
+.state-chip::before{content:"";width:8px;height:8px;border-radius:50%}
+.state-chip.running{color:var(--running);background:color-mix(in srgb, var(--running) 15%, transparent)}
+.state-chip.running::before{background:var(--running)}
+.state-chip.ready{color:var(--ready);background:color-mix(in srgb, var(--ready) 15%, transparent)}
+.state-chip.ready::before{background:var(--ready)}
+.state-chip.blocked{color:var(--blocked);background:color-mix(in srgb, var(--blocked) 15%, transparent)}
+.state-chip.blocked::before{background:var(--blocked)}
+.state-chip.suspended{color:var(--suspended);background:color-mix(in srgb, var(--suspended) 15%, transparent)}
+.state-chip.suspended::before{background:var(--suspended)}
+.mistake-list{display:grid;gap:10px}
+.mistake-item{display:grid;grid-template-columns:1fr 1fr;gap:14px;border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--surface)}
+.mistake-item .wrong{color:var(--danger)}
+.mistake-item .right{color:var(--success)}
+.mistake-item .lbl{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:3px;opacity:.8}
+/* ========================================
+   CODE BLOCK
+======================================== */
+.code-wrap{position:relative;background:#0A0E17;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+:root[data-theme="light"] .code-wrap{background:#0F172A}
+.code-wrap .code-head{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.08)}
+.code-wrap .code-lang{font-size:11px;color:#94A3B8;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.copy-btn{font-size:11px;font-weight:700;color:#CBD5E1;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:4px 9px}
+.copy-btn:hover{background:rgba(255,255,255,.08)}
+.copy-btn.copied{color:var(--success);border-color:var(--success)}
+.code-scroll{overflow-x:auto}
+.code-wrap pre{margin:0;padding:14px 0;font-size:13px;line-height:1.65;color:#E2E8F0;display:flex}
+.code-wrap .lines{user-select:none;text-align:right;padding:0 12px;color:#475569;flex-shrink:0}
+.code-wrap code{padding:0 18px 0 4px;white-space:pre}
+.tok-kw{color:#C084FC}.tok-type{color:#38BDF8}.tok-fn{color:#FBBF24}.tok-str{color:#34D399}.tok-com{color:#64748B;font-style:italic}.tok-num{color:#F97316}
+/* ========================================
+   DIAGRAM SYSTEM
+======================================== */
+.diagram-fig{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:20px}
+.diagram-fig figcaption{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:center}
+.diagram-fig svg text{fill:var(--text);font-family:inherit}
+.diagram-fig svg .lbl{fill:var(--muted);font-size:11px}
+.diagram-fig svg .node-line{stroke:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.state-node{cursor:pointer;transition:filter .15s ease}
+.state-node:hover,.state-node:focus{filter:brightness(1.15)}
+.state-node:focus{outline:2px solid var(--primary);outline-offset:2px}
+.state-panel{margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:16px 18px;background:var(--surface2);display:none}
+.state-panel.open{display:block}
+.state-panel h4{margin-top:0;text-transform:none;letter-spacing:0}
+.toggle-row{display:flex;gap:8px;margin:14px 0}
+.toggle-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600}
+.toggle-btn.active{background:var(--primary);color:#04121F;border-color:var(--primary)}
+.ladder{display:flex;flex-direction:column-reverse;gap:6px;max-width:340px}
+.ladder-rung{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2)}
+.ladder-rung .lv{font-weight:800;font-variant-numeric:tabular-nums;width:26px}
+.ladder-rung.hi{border-color:var(--danger);background:color-mix(in srgb, var(--danger) 10%, var(--surface2))}
+.ladder-rung.lo{border-color:var(--muted)}
+/* ========================================
+   TIMELINE
+======================================== */
+.tl-wrap{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:20px}
+.tl-scroll{overflow-x:auto;padding-bottom:6px}
+.tl{min-width:560px}
+.tl-axis{display:flex;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:8px;font-variant-numeric:tabular-nums}
+.tl-axis span{flex:1;text-align:left}
+.tl-lane{display:flex;align-items:center;gap:10px;margin:7px 0}
+.tl-lane-label{width:96px;flex-shrink:0;font-size:12.5px;font-weight:600;text-align:right;padding-right:6px}
+.tl-track{position:relative;flex:1;height:26px;background:var(--surface2);border-radius:6px;overflow:visible}
+.tl-seg{position:absolute;top:0;height:100%;border-radius:5px;cursor:default}
+.tl-seg[data-state="running"]{background:var(--running)}
+.tl-seg[data-state="ready"]{background:repeating-linear-gradient(45deg, color-mix(in srgb, var(--ready) 55%, transparent) 0 6px, color-mix(in srgb, var(--ready) 30%, transparent) 6px 12px)}
+.tl-seg[data-state="blocked"]{background:color-mix(in srgb, var(--blocked) 35%, transparent)}
+.tl-seg[data-state="idle"]{background:repeating-linear-gradient(135deg, var(--border) 0 6px, transparent 6px 12px)}
+.tl-seg[title]{position:relative}
+.tl-marker{position:absolute;top:-18px;transform:translateX(-50%);font-size:10px;color:var(--tick)}
+.tl-tick{position:absolute;top:0;bottom:0;width:1px;background:var(--border)}
+.tl-tooltip{position:absolute;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:var(--shadow);white-space:nowrap;pointer-events:none;display:none;top:-8px}
+.tl-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:12px;color:var(--muted)}
+.tl-legend span{display:inline-flex;align-items:center;gap:6px}
+.tl-legend i{width:14px;height:10px;border-radius:3px;display:inline-block}
+.tl-controls{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.tl-controls button{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-weight:600;font-size:13px}
+.tl-controls button:hover{background:var(--border)}
+.tl-controls .now{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);margin-left:auto}
+.tl-readout{margin-top:12px;font-size:13px;min-height:20px;color:var(--muted)}
+.tl-readout b{color:var(--text)}
+/* ========================================
+   QUIZ
+======================================== */
+.quiz-toolbar{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.quiz-toolbar select{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text)}
+.quiz-score{margin-left:auto;font-weight:700}
+.quiz-q{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+.quiz-q .qtype{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.quiz-q .qtext{font-weight:600;margin:8px 0 12px}
+.quiz-opts{display:grid;gap:8px}
+.quiz-opt{text-align:left;border:1px solid var(--border);border-radius:8px;padding:10px 14px;background:var(--surface2);font-size:14px}
+.quiz-opt:hover{border-color:var(--primary)}
+.quiz-opt.correct{border-color:var(--success);background:color-mix(in srgb, var(--success) 15%, var(--surface2));color:var(--success)}
+.quiz-opt.wrong{border-color:var(--danger);background:color-mix(in srgb, var(--danger) 15%, var(--surface2));color:var(--danger)}
+.quiz-opt:disabled{cursor:default}
+.quiz-explain{margin-top:10px;font-size:13.5px;color:var(--muted);display:none}
+.quiz-explain.show{display:block}
+/* ========================================
+   LAB
+======================================== */
+.lab-card{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:20px 22px;margin-bottom:18px}
+.lab-card h3{margin-top:0}
+.lab-meta{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
+.lab-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.lab-solution summary{cursor:pointer;font-weight:700;color:var(--primary);padding:8px 0;list-style:none}
+.lab-solution summary::-webkit-details-marker{display:none}
+.lab-solution summary::before{content:"▸ ";display:inline-block}
+.lab-solution[open] summary::before{content:"▾ "}
+.debug-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.debug-card{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:14px 16px;cursor:pointer}
+.debug-card:hover{border-color:var(--danger)}
+.debug-card h4{margin:0;font-size:14px;color:var(--danger)}
+.debug-panel{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:13.5px}
+.debug-panel.open{display:block}
+.debug-panel dt{font-weight:700;font-size:12px;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.debug-panel dt:first-child{margin-top:0}
+.glossary-search{width:100%;max-width:320px;padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);margin-bottom:18px}
+.gloss-letter{font-size:13px;font-weight:800;color:var(--primary);margin-top:20px}
+.gloss-item{padding:10px 0;border-bottom:1px solid var(--border)}
+.gloss-item dt{font-weight:700}
+.gloss-item dd{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+.cheat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.cheat-card{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:16px 18px}
+.cheat-card h4{margin-top:0;color:var(--primary);text-transform:none;letter-spacing:0;font-size:14px}
+.top20{columns:1;gap:20px}
+@media(min-width:700px){.top20{columns:2}}
+.top20 li{break-inside:avoid;font-size:13.5px;margin:6px 0}
+/* ========================================
+   RESPONSIVE
+======================================== */
+@media(max-width:980px){
+  .app-shell{grid-template-columns:1fr}
+  .sidebar{position:fixed;top:57px;left:0;bottom:0;width:280px;background:var(--bg);z-index:80;transform:translateX(-100%);transition:transform .2s ease;box-shadow:var(--shadow)}
+  .sidebar.open{transform:translateX(0)}
+  .mobile-menu-btn{display:flex}
+  .content{padding:0 18px 80px}
+  .topbar-search{max-width:none}
+  .lab-grid{grid-template-columns:1fr}
+  .mistake-item{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .section-head h2{font-size:21px}
+  .card-grid{grid-template-columns:1fr}
+  .tl-lane-label{width:70px;font-size:11px}
+  .card{max-width:100% !important}
+  table{display:block;overflow-x:auto;white-space:nowrap}
+  table td,table th{white-space:normal}
+  .topbar-inner{gap:8px;padding:10px 12px}
+  .brand{flex-shrink:1;min-width:0}
+  .brand-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;font-size:13px}
+  .brand-sub{display:none}
+  .progress-track{width:40px}
+  .progress-chip{gap:5px}
+  .topbar-search input{padding:9px 10px 9px 32px;font-size:13px}
+}
+
+.tl-scroll {
+  width: 100%;
+  height: 200px;
+  max-width: none;
+  overflow-x: auto;
+}
+
+.tl {
+  width: 100%;
+  min-width: 1100px;
+  max-width: none;
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <button class="icon-btn mobile-menu-btn" id="menuBtn" aria-label="Mở menu" aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="brand">
+      <span class="brand-title">FreeRTOS · Task Management</span>
+      <span class="brand-sub">Chapter 4 Interactive Portal</span>
+    </div>
+    <div class="topbar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Tìm: Task, TCB, Priority, vTaskDelay..." aria-label="Tìm kiếm nội dung" autocomplete="off">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+    <div class="topbar-actions">
+      <div class="progress-chip">
+        <span class="progress-track"><span class="progress-fill" id="progressFill"></span></span>
+        <span id="progressLabel">0%</span>
+      </div>
+      <button class="icon-btn" id="themeBtn" aria-label="Đổi giao diện sáng/tối">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 109 9 9 9 0 11-9-9z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<div class="app-shell">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục">
+  <div class="nav-group">
+    <div class="nav-group-title">Overview</div>
+    <a class="nav-item" data-nav href="#hero"><span class="nav-num">·</span>Giới thiệu<span class="nav-dot"></span></a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Core Concepts</div>
+    <a class="nav-item" data-nav href="#s01"><span class="nav-num">01</span>RTOS Fundamentals<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s02"><span class="nav-num">02</span>What Is a Task?<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s03"><span class="nav-num">03</span>Task Function<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s04"><span class="nav-num">04</span>Task States<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s05"><span class="nav-num">05</span>Task Creation<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s06"><span class="nav-num">06</span>Task Parameters<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s07"><span class="nav-num">07</span>Task Priority<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s08"><span class="nav-num">08</span>Tick &amp; Scheduler<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s09"><span class="nav-num">09</span>vTaskDelay()<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s10"><span class="nav-num">10</span>vTaskDelayUntil()<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s11"><span class="nav-num">11</span>Blocking<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s12"><span class="nav-num">12</span>Idle Task<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s13"><span class="nav-num">13</span>Priority Change<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s14"><span class="nav-num">14</span>Task Deletion<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s15"><span class="nav-num">15</span>TLS &amp; Reentrancy<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s16"><span class="nav-num">16</span>Scheduling Algorithms<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s17"><span class="nav-num">17</span>Preemption<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s18"><span class="nav-num">18</span>Time Slicing<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s19"><span class="nav-num">19</span>Cooperative Scheduling<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#s20"><span class="nav-num">20</span>Complete Scheduler Flow<span class="nav-dot"></span></a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Practice</div>
+    <a class="nav-item" data-nav href="#lab-timeline"><span class="nav-num">21</span>Timeline Lab<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#lab-scheduler"><span class="nav-num">22</span>Scheduler Lab<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#debugging"><span class="nav-num">23</span>Debugging<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#interview"><span class="nav-num">24</span>Interview<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#quiz"><span class="nav-num">25</span>Quiz<span class="nav-dot"></span></a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-title">Reference</div>
+    <a class="nav-item" data-nav href="#cheatsheet"><span class="nav-num">26</span>Cheat Sheet<span class="nav-dot"></span></a>
+    <a class="nav-item" data-nav href="#glossary"><span class="nav-num">27</span>Glossary<span class="nav-dot"></span></a>
+  </div>
+</nav>
+<main class="content" id="content">
+<section class="section-block" id="hero" style="padding-top:20px">
+  <div style="text-align:left;max-width:720px">
+    <span class="eyebrow">FreeRTOS Documentation · Chapter 4</span>
+    <h1 style="font-size:44px;line-height:1.08;font-weight:800;letter-spacing:-.02em;margin-top:10px">Task Management</h1>
+    <p style="font-size:17px;color:var(--muted);margin-top:16px;max-width:600px">Hiểu cách kernel tạo, lập lịch, tạm dừng, khôi phục và thực thi các task — từ khái niệm nền tảng đến khả năng tự đọc source code và trace hành vi scheduler thực tế.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+      <span class="pill">Chapter 4</span>
+      <span class="pill">Task Management</span>
+      <span class="pill">Scheduler</span>
+      <span class="pill">48 Pages</span>
+      <span class="pill">20 Lessons</span>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:26px;flex-wrap:wrap">
+      <a href="#s01" class="pill" style="background:var(--primary);color:#04121F;border-color:var(--primary);font-weight:700">Bắt đầu học →</a>
+      <a href="#quiz" class="pill">Làm Quiz</a>
+      <a href="#cheatsheet" class="pill">Cheat Sheet</a>
+    </div>
+  </div>
+
+  <figure class="diagram-fig" style="margin-top:40px">
+    <svg viewBox="0 0 640 500" role="img" aria-labelledby="heroDiagTitle">
+      <title id="heroDiagTitle">Kiến trúc tổng quan: Application đến Task States</title>
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+      <!-- column x=150 (left flow), x=490 (branch) -->
+      <g font-size="13" font-weight="700" text-anchor="middle">
+        <rect x="70" y="10" width="220" height="46" rx="10" fill="var(--surface2)" stroke="var(--border)"/>
+        <text x="180" y="38">APPLICATION</text>
+
+        <rect x="70" y="86" width="220" height="46" rx="10" fill="var(--surface2)" stroke="var(--secondary)"/>
+        <text x="180" y="114" fill="var(--secondary)">Task Function</text>
+
+        <rect x="70" y="162" width="220" height="46" rx="10" fill="var(--surface2)" stroke="var(--secondary)"/>
+        <text x="180" y="190" fill="var(--secondary)">Task (Instance)</text>
+
+        <rect x="70" y="238" width="220" height="46" rx="10" fill="var(--surface2)" stroke="var(--kernel)"/>
+        <text x="180" y="266" fill="var(--kernel)">TCB + Stack</text>
+
+        <rect x="70" y="314" width="220" height="46" rx="10" fill="var(--surface2)" stroke="var(--scheduler)"/>
+        <text x="180" y="342" fill="var(--scheduler)">Scheduler</text>
+
+        <rect x="10" y="410" width="140" height="46" rx="10" fill="var(--surface2)" stroke="var(--ready)"/>
+        <text x="80" y="438" fill="var(--ready)">Ready</text>
+
+        <rect x="210" y="410" width="140" height="46" rx="10" fill="var(--surface2)" stroke="var(--running)"/>
+        <text x="280" y="438" fill="var(--running)">Running</text>
+
+        <rect x="410" y="238" width="200" height="46" rx="10" fill="var(--surface2)" stroke="var(--blocked)"/>
+        <text x="510" y="266" fill="var(--blocked)">Blocked</text>
+
+        <rect x="410" y="314" width="200" height="46" rx="10" fill="var(--surface2)" stroke="var(--suspended)"/>
+        <text x="510" y="342" fill="var(--suspended)">Suspended</text>
+      </g>
+      <g stroke="var(--muted)" stroke-width="1.6" fill="none" marker-end="url(#ah)">
+        <path d="M180 56 L180 86"/>
+        <path d="M180 132 L180 162"/>
+        <path d="M180 208 L180 238"/>
+        <path d="M180 284 L180 314"/>
+        <path d="M160 360 L90 410"/>
+        <path d="M210 360 L270 410"/>
+        <path d="M150 433 L210 433"/>
+        <path d="M280 410 C 280 380, 450 300, 460 284" />
+        <path d="M280 456 C 320 480, 420 340, 460 342" />
+      </g>
+      <g font-size="10.5" fill="var(--muted)">
+        <text x="184" y="431" text-anchor="middle">chọn</text>
+        <text x="465" y="330">block / wait</text>
+        <text x="440" y="410">suspend</text>
+      </g>
+    </svg>
+    <figcaption>Hình 0 — Từ code ứng dụng đến các trạng thái task do scheduler quản lý. Sơ đồ chi tiết đầy đủ 4 trạng thái + 8 chuyển đổi ở Lesson 04.</figcaption>
+  </figure>
+</section>
+<section class="section-block" id="s01">
+  <div class="section-head">
+    <div class="section-num">01</div>
+    <div><span class="eyebrow">Core Concept</span><h2>RTOS Fundamentals</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-explanation">EXPLANATION</span>
+    <p>Trước khi học Task Management, bạn cần hiểu vấn đề mà RTOS giải quyết. Một CPU chỉ có <strong>một bộ thanh ghi</strong> và <strong>một con trỏ lệnh (Program Counter)</strong> — nghĩa là tại một thời điểm, nó chỉ thực thi được đúng một dòng lệnh. Mọi cảm giác "chạy nhiều việc cùng lúc" đều là ảo giác được tạo ra bằng cách chuyển đổi rất nhanh giữa các công việc.</p>
+
+    <h3>Bare-metal: một vòng lặp, mọi thứ tuần tự</h3>
+    <p>Trong lập trình bare-metal cổ điển, toàn bộ chương trình thường là một hàm <code>main()</code> gọi tuần tự các hàm xử lý bên trong một vòng lặp <code>while(1)</code> lớn. Nếu một hàm xử lý cảm biến mất 40ms để chạy xong, thì trong 40ms đó, phần code xử lý giao tiếp mạng hay đèn LED đều phải chờ.</p>
+    <div class="card-grid">
+      <div class="card">
+        <h4 style="margin-top:0;color:var(--muted)">Bare-metal</h4>
+        <div class="code-wrap" style="margin-top:10px"><div class="code-scroll"><pre><code class="tok-fn">main</code><span> {
+  init();
+  <span class="tok-kw">while</span>(1) {
+    readSensor();   <span class="tok-com">// 40ms</span>
+    updateControl(); <span class="tok-com">// 5ms</span>
+    sendNetwork();  <span class="tok-com">// 15ms</span>
+    blinkLED();     <span class="tok-com">// 1ms</span>
+  }
+}</span></pre></div></div>
+        <p style="margin-top:10px;font-size:13.5px">Mọi việc phải đợi theo hàng — nếu <code>sendNetwork()</code> bị treo (chờ mạng), <code>blinkLED()</code> không bao giờ chạy được nữa.</p>
+      </div>
+      <div class="card">
+        <h4 style="margin-top:0;color:var(--muted)">Với RTOS</h4>
+        <p style="font-size:13.5px">Mỗi công việc trở thành một <strong>task</strong> độc lập. <strong>Scheduler</strong> — một thành phần của kernel — đứng giữa CPU và các task, quyết định tại mỗi thời điểm task nào được chạy, dựa trên <strong>priority</strong> và trạng thái sẵn sàng của từng task.</p>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <span class="pill" style="font-size:12px">Sensor Task</span>
+          <span class="pill" style="font-size:12px">Control Task</span>
+          <span class="pill" style="font-size:12px">Network Task</span>
+          <span class="pill" style="font-size:12px">LED Task</span>
+        </div>
+        <p style="margin-top:10px;font-size:13.5px">Network Task bị chờ mạng (Blocked) không còn chặn LED Task chạy — <strong>Scheduler</strong> đơn giản chuyển CPU sang task khác đang Ready.</p>
+      </div>
+    </div>
+
+    <h3>Vì sao RTOS tồn tại?</h3>
+    <p>Giả sử hệ thống của bạn cần: đọc cảm biến mỗi 20ms, xử lý điều khiển mỗi 10ms, và gửi log mỗi 500ms — với các mốc thời gian <strong>không được lệch quá nhiều</strong> (real-time). Không có RTOS, bạn phải tự tay chia nhỏ code, dùng cờ (flag) và kiểm tra thời gian thủ công ở khắp nơi, code nhanh chóng rối rắm khi số lượng công việc tăng. Có RTOS, mỗi việc là một task riêng biệt, scheduler xử lý toàn bộ việc chia thời gian CPU dựa trên priority và tick, giúp code từng task đơn giản như thể nó "sở hữu" CPU một mình.</p>
+
+    <h3>Liên hệ CPU / RAM / Scheduler</h3>
+    <p>Một CPU lõi đơn (single-core) — như trên nhiều nền tảng embedded — tại một thời điểm chỉ thực thi <strong>một</strong> dòng lệnh của <strong>một</strong> task. RAM lưu trữ code, dữ liệu, và quan trọng nhất với chương này: <strong>stack riêng của từng task</strong> cùng <strong>Task Control Block (TCB)</strong> — cấu trúc dữ liệu kernel dùng để theo dõi từng task. Scheduler là đoạn code kernel chạy định kỳ (thường tại tick interrupt) hoặc khi có sự kiện, để quyết định lại xem task nào nên chiếm CPU tiếp theo.</p>
+
+    <div class="callout">
+      <span class="callout-label badge badge-inference">INFERENCE</span>
+      <p style="font-style:normal;color:var(--text)">Nội dung so sánh bare-metal vs RTOS ở trên là kiến thức nền RTOS phổ quát, được trình bày để chuẩn bị bối cảnh trước khi vào Chapter 4 — bản thân đoạn này không phải trích dẫn trực tiếp từ tài liệu Chapter 4.</p>
+    </div>
+
+    <h4>Tự kiểm tra nhanh</h4>
+    <p style="font-size:14px">❓ Nếu CPU chỉ chạy được một lệnh tại một thời điểm, "đa nhiệm" (multitasking) thực chất là gì? — <span class="muted">Gợi ý: xem lại phần "ảo giác" ở đầu bài, rồi qua Lesson 04 để thấy scheduler tạo ảo giác đó bằng cách nào.</span></p>
+  </div>
+</section>
+<section class="section-block" id="s02">
+  <div class="section-head">
+    <div class="section-num">02</div>
+    <div><span class="eyebrow">Core Concept</span><h2>What Is a Task?</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Theo tài liệu Chapter 4 (mục "Tasks"), một task trong FreeRTOS được viết như một hàm C thông thường, nhưng với một ràng buộc quan trọng: nó phải chứa một <strong>vòng lặp vô hạn</strong> và <strong>không bao giờ được return</strong>. Nếu logic bên trong thực sự cần kết thúc, task phải tự xóa chính nó bằng <code>vTaskDelete()</code> (xem Lesson 14) thay vì thoát khỏi hàm bằng <code>return</code>.</p>
+
+    <div class="code-wrap"><div class="code-head"><span class="code-lang">C</span><button class="copy-btn" data-copy>Copy</button></div><div class="code-scroll"><pre><code><span class="tok-type">void</span> <span class="tok-fn">vTaskFunction</span>( <span class="tok-type">void</span> *pvParameters )
+{
+    <span class="tok-kw">for</span>( ;; )
+    {
+        <span class="tok-com">// … thực hiện công việc của task …</span>
+    }
+    <span class="tok-com">// KHÔNG BAO GIỜ chạy tới đây — không được return</span>
+}</code></pre></div></div>
+
+    <h3>Phân biệt: Task Function vs Task (Instance)</h3>
+    <p>Đây là một trong những nhầm lẫn phổ biến nhất của người mới học. <strong>Task Function</strong> là đoạn code C bạn viết — một bản thiết kế. <strong>Task (instance)</strong> là một thực thể cụ thể mà kernel tạo ra khi bạn gọi <code>xTaskCreate()</code>, với TCB và stack riêng.</p>
+    <div class="analogy">
+      <strong>Ví dụ đời thường:</strong> hãy nghĩ <code>vTaskFunction()</code> giống như một <strong>bản vẽ thiết kế nhà</strong> (blueprint). Từ MỘT bản vẽ, bạn có thể xây ra ba căn nhà cụ thể: <code>SensorTaskA</code>, <code>SensorTaskB</code>, <code>SensorTaskC</code> — mỗi căn nhà là một task instance độc lập, có địa chỉ (TCB) và nội thất (stack) riêng, dù dùng chung một bản vẽ.</p>
+    </div>
+
+    <h4>Ví dụ C — cùng một hàm, ba task instance</h4>
+    <div class="code-wrap"><div class="code-head"><span class="code-lang">C</span><button class="copy-btn" data-copy>Copy</button></div><div class="code-scroll"><pre><code>xTaskCreate( vTaskFunction, <span class="tok-str">"SensorA"</span>, 1000, (<span class="tok-type">void</span>*)<span class="tok-str">"Sensor A"</span>, 1, NULL );
+xTaskCreate( vTaskFunction, <span class="tok-str">"SensorB"</span>, 1000, (<span class="tok-type">void</span>*)<span class="tok-str">"Sensor B"</span>, 1, NULL );
+xTaskCreate( vTaskFunction, <span class="tok-str">"SensorC"</span>, 1000, (<span class="tok-type">void</span>*)<span class="tok-str">"Sensor C"</span>, 1, NULL );</code></pre></div></div>
+    <p style="font-size:13.5px" class="muted">Ba task này chạy cùng một đoạn code (<code>vTaskFunction</code>), nhưng là ba thực thể độc lập trong scheduler — mỗi cái có tham số <code>pvParameters</code>, TCB và stack riêng, và có thể ở ba trạng thái khác nhau tại cùng một thời điểm.</p>
+
+    <div class="mistake-list" style="margin-top:20px">
+      <div class="mistake-item">
+        <div><span class="lbl wrong">Nhầm lẫn</span>Nghĩ "một hàm = một task"</div>
+        <div><span class="lbl right">Chính xác</span>Một hàm có thể sinh ra nhiều task instance độc lập</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="section-block" id="s03">
+  <div class="section-head">
+    <div class="section-num">03</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Task Function</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Prototype bắt buộc của mọi task function:</p>
+    <div class="code-wrap"><div class="code-scroll"><pre><code><span class="tok-type">void</span> <span class="tok-fn">vTaskFunction</span>( <span class="tok-type">void</span> *pvParameters );</code></pre></div></div>
+    <p>Tham số <code>pvParameters</code> là một con trỏ <code>void*</code> tự do — kernel không quan tâm nó trỏ tới gì, chỉ truyền nguyên vẹn giá trị bạn đưa vào <code>xTaskCreate()</code> tới đúng instance đó khi task chạy lần đầu. Đây là cách phổ biến để một hàm chung phân biệt "tôi là bản instance nào".</p>
+
+    <h3>Cạm bẫy: biến <code>static</code> bên trong task function</h3>
+    <p>Một biến khai báo bình thường bên trong task function (ví dụ <code>long lStackVariable;</code>) nằm trên <strong>stack riêng của từng instance</strong> — hoàn toàn độc lập. Nhưng nếu bạn khai báo <code>static long lSharedVariable;</code> bên trong cùng hàm đó, biến này chỉ được linker cấp phát <strong>một lần duy nhất</strong> và bị <strong>mọi instance dùng chung</strong> — kể cả khi ba task chạy từ cùng một <code>vTaskFunction()</code> nhưng là ba TCB khác nhau.</p>
+    <div class="code-wrap"><div class="code-scroll"><pre><code><span class="tok-type">void</span> <span class="tok-fn">vTaskFunction</span>( <span class="tok-type">void</span> *pvParameters )
+{
+    <span class="tok-type">long</span> lStackVariable;        <span class="tok-com">// riêng cho mỗi instance (trên stack)</span>
+    <span class="tok-kw">static</span> <span class="tok-type">long</span> lSharedVariable; <span class="tok-com">// DÙNG CHUNG giữa mọi instance!</span>
+    <span class="tok-kw">for</span>( ;; ) { <span class="tok-com">/* ... */</span> }
+}</code></pre></div></div>
+    <div class="callout infer">
+      <span class="callout-label badge badge-inference">INFERENCE</span>
+      <p style="font-style:normal;color:var(--text)">Đây là hệ quả trực tiếp của ngữ nghĩa <code>static</code> trong C (được cấp phát tĩnh bởi linker, không phải theo từng lời gọi hàm) áp dụng vào bối cảnh multitasking — tài liệu Chapter 4 nêu rõ cảnh báo này ở phần Listing tương ứng, nhưng phần diễn giải "vì sao nguy hiểm khi nhiều task chạy song song" là suy luận mở rộng của khoá học.</p>
+    </div>
+
+    <h3>Ba loại ví dụ minh hoạ</h3>
+    <div class="card-grid">
+      <div class="card"><h4 style="margin-top:0;color:var(--muted)">Đời thực</h4><p style="font-size:13.5px">Giống ba nhân viên dùng chung một cuốn sổ tay hướng dẫn công việc (code), nhưng nếu họ viết ghi chú lên MỘT tấm bảng chung (biến static) thay vì sổ tay riêng của mình (biến local/stack), ghi chú của người này sẽ xoá mất ghi chú người kia.</p></div>
+      <div class="card"><h4 style="margin-top:0;color:var(--muted)">C code</h4><p style="font-size:13.5px">Xem ví dụ code phía trên: <code>lStackVariable</code> an toàn, <code>lSharedVariable</code> nguy hiểm.</p></div>
+      <div class="card"><h4 style="margin-top:0;color:var(--muted)">CPU Timeline</h4><p style="font-size:13.5px">Task A ghi <code>lSharedVariable = 1</code> → bị context-switch → Task B ghi <code>lSharedVariable = 99</code> → context-switch về Task A → Task A đọc lại thấy <strong>99</strong>, không phải 1 như nó vừa ghi.</p></div>
+    </div>
+  </div>
+</section>
+<section class="section-block" id="s04">
+  <div class="section-head">
+    <div class="section-num">04</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Task States</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Tài liệu mô tả một task tại bất kỳ thời điểm nào cũng ở một trong các trạng thái sau. Một task đang thực thi trên CPU gọi là <strong>Running</strong>; mọi task không phải Running được gộp vào một siêu-trạng thái gọi là <code>Not Running</code> — <code>Not Running</code> <strong>không phải</strong> "task đã dừng", mà chỉ đơn giản là "hiện không chiếm CPU". Bên trong <code>Not Running</code>, tài liệu chia tiếp thành <strong>Ready</strong>, <strong>Blocked</strong> và <strong>Suspended</strong>.</p>
+
+    <figure class="diagram-fig">
+      <svg viewBox="0 0 620 460" role="img" aria-labelledby="stateDiagTitle">
+        <title id="stateDiagTitle">Sơ đồ 4 trạng thái task và các chuyển đổi chính</title>
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+            <path d="M0 0L10 5L0 10z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+        <g fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ah2)">
+          <path d="M120,205 C170,140 210,90 250,65"/>
+          <path d="M260,80 C220,140 170,175 135,205" stroke-dasharray="0"/>
+          <path d="M270,95 C230,180 170,270 130,335"/>
+          <path d="M95,330 L95,225"/>
+          <path d="M345,80 C410,140 445,190 470,235"/>
+          <path d="M470,250 C400,320 260,300 175,225"/>
+        </g>
+        <g font-size="10.5" fill="var(--muted)" text-anchor="middle">
+          <text x="205" y="118">chọn (Ready→Running)</text>
+          <text x="150" y="150">preempt/yield</text>
+          <text x="275" y="220">vTaskDelay() / wait event</text>
+          <text x="55" y="278">event / timeout</text>
+          <text x="440" y="150">vTaskSuspend()</text>
+          <text x="320" y="330">vTaskResume()</text>
+        </g>
+        <g font-size="13.5" font-weight="700" text-anchor="middle">
+          <g class="state-node" tabindex="0" role="button" data-state="running" aria-label="Xem chi tiết trạng thái Running">
+            <rect x="220" y="20" width="160" height="54" rx="10" fill="color-mix(in srgb, var(--running) 16%, var(--surface))" stroke="var(--running)" stroke-width="1.6"/>
+            <text x="300" y="53" fill="var(--running)">RUNNING</text>
+          </g>
+          <g class="state-node" tabindex="0" role="button" data-state="ready" aria-label="Xem chi tiết trạng thái Ready">
+            <rect x="20" y="180" width="150" height="54" rx="10" fill="color-mix(in srgb, var(--ready) 16%, var(--surface))" stroke="var(--ready)" stroke-width="1.6"/>
+            <text x="95" y="213" fill="var(--ready)">READY</text>
+          </g>
+          <g class="state-node" tabindex="0" role="button" data-state="blocked" aria-label="Xem chi tiết trạng thái Blocked">
+            <rect x="20" y="335" width="150" height="54" rx="10" fill="color-mix(in srgb, var(--blocked) 16%, var(--surface))" stroke="var(--blocked)" stroke-width="1.6"/>
+            <text x="95" y="368" fill="var(--blocked)">BLOCKED</text>
+          </g>
+          <g class="state-node" tabindex="0" role="button" data-state="suspended" aria-label="Xem chi tiết trạng thái Suspended">
+            <rect x="400" y="230" width="170" height="54" rx="10" fill="color-mix(in srgb, var(--suspended) 16%, var(--surface))" stroke="var(--suspended)" stroke-width="1.6"/>
+            <text x="485" y="263" fill="var(--suspended)">SUSPENDED</text>
+          </g>
+        </g>
+        <rect x="0" y="120" width="230" height="290" rx="14" fill="none" stroke="var(--border)" stroke-dasharray="4 4"/>
+        <text x="10" y="112" font-size="10.5" fill="var(--muted)" font-weight="700">"NOT RUNNING" (siêu-trạng thái)</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--running)"></i>Running — đang chiếm CPU</span>
+        <span><i style="background:var(--ready)"></i>Ready — sẵn sàng, chờ lượt</span>
+        <span><i style="background:var(--blocked)"></i>Blocked — chờ sự kiện/timeout</span>
+        <span><i style="background:var(--suspended)"></i>Suspended — bị treo thủ công</span>
+      </div>
+      <figcaption>Hình 4.1 — Nhấp vào từng trạng thái để xem chi tiết. Click hoặc nhấn Enter/Space khi focus bằng bàn phím.</figcaption>
+    </figure>
+
+    <div class="state-panel" id="statePanel" aria-live="polite"></div>
+
+    <h3>Bảng đầy đủ 8 chuyển đổi trạng thái</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:6px 8px">Từ → Đến</th><th style="padding:6px 8px">Nguyên nhân</th></tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip ready">Ready</span> → <span class="state-chip running">Running</span></td><td style="padding:6px 8px">Scheduler chọn task priority cao nhất trong Ready</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip running">Running</span> → <span class="state-chip ready">Ready</span></td><td style="padding:6px 8px">Bị preempt bởi task priority cao hơn, hoặc hết time slice (cùng priority)</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip running">Running</span> → <span class="state-chip blocked">Blocked</span></td><td style="padding:6px 8px"><code>vTaskDelay()</code>, chờ queue/semaphore, hoặc API blocking khác</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip blocked">Blocked</span> → <span class="state-chip ready">Ready</span></td><td style="padding:6px 8px">Sự kiện đến hoặc hết thời gian timeout</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip running">Running</span> → <span class="state-chip suspended">Suspended</span></td><td style="padding:6px 8px"><code>vTaskSuspend()</code></td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip ready">Ready</span> → <span class="state-chip suspended">Suspended</span></td><td style="padding:6px 8px"><code>vTaskSuspend()</code> gọi lên một task đang Ready (không nhất thiết phải Running)</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span class="state-chip blocked">Blocked</span> → <span class="state-chip suspended">Suspended</span></td><td style="padding:6px 8px"><code>vTaskSuspend()</code> gọi lên một task đang chờ (Blocked)</td></tr>
+        <tr><td style="padding:6px 8px"><span class="state-chip suspended">Suspended</span> → <span class="state-chip ready">Ready</span></td><td style="padding:6px 8px"><code>vTaskResume()</code> / <code>xTaskResumeFromISR()</code></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:13px" class="muted">Ví dụ cụ thể (Example 4.9 trong tài liệu): hai task chuyển đổi Ready ⇄ Running qua lại — nếu một trong hai gọi <code>vTaskDelay()</code>, nó rời khỏi chu trình đó để vào Blocked, trong khi task còn lại chiếm Running liên tục cho tới khi có tranh chấp priority khác; Suspended hoàn toàn tách biệt, không tự động quay lại nếu không có lệnh resume rõ ràng.</p>
+  </div>
+</section>
+<section class="section-block" id="s05">
+  <div class="section-head">
+    <div class="section-num">05</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Task Creation</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Tài liệu liệt kê 6 API tạo task: <code>xTaskCreate()</code>, <code>xTaskCreateStatic()</code>, <code>xTaskCreateRestricted()</code>, <code>xTaskCreateRestrictedStatic()</code>, <code>xTaskCreateAffinitySet()</code>, <code>xTaskCreateStaticAffinitySet()</code>. Hai API đầu tiên là phổ biến nhất và là trọng tâm của chương.</p>
+
+    <h3>Task Control Block (TCB)</h3>
+    <div class="card" style="max-width:360px">
+      <div style="font-weight:800;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:10px;color:var(--kernel)">Task Control Block</div>
+      <ul style="list-style:none;padding:0;font-size:13.5px;display:grid;gap:7px">
+        <li>Task State <span class="muted">(Running/Ready/Blocked/Suspended)</span></li>
+        <li>Priority</li>
+        <li>Stack Pointer</li>
+        <li>Task Handle</li>
+        <li>Scheduling Information</li>
+        <li>Other Kernel Metadata</li>
+      </ul>
+    </div>
+    <h4>Vì sao kernel cần TCB?</h4>
+    <p>CPU chỉ có một bộ thanh ghi vật lý. Khi scheduler chuyển từ task A sang task B, nó phải cất giữ toàn bộ ngữ cảnh (register, stack pointer...) của A vào đâu đó để khôi phục chính xác sau này — TCB cùng vùng stack riêng chính là "hồ sơ lưu trữ" đó cho từng task.</p>
+    <div class="callout infer"><span class="callout-label badge badge-inference">INFERENCE</span><p style="font-style:normal;color:var(--text)">Danh sách field TCB ở trên là các trường khái niệm mà tài liệu và kiến trúc TCB/Stack ngụ ý (Chapter 3-4) — không khẳng định đây là toàn bộ struct nội bộ thật của kernel, vốn có thể có thêm nhiều field khác không được tài liệu mô tả đầy đủ.</p></div>
+
+    <h3>Luồng tạo task</h3>
+    <div class="toggle-row">
+      <button class="toggle-btn active" data-toggle="creation" data-value="dynamic">Show Dynamic Allocation</button>
+      <button class="toggle-btn" data-toggle="creation" data-value="static">Show Static Allocation</button>
+    </div>
+    <figure class="diagram-fig">
+      <svg viewBox="0 0 620 380" role="img" aria-labelledby="createDiagTitle">
+        <title id="createDiagTitle">Luồng tạo task từ lời gọi API đến khi vào Ready</title>
+        <defs><marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+        <g stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ah3)" fill="none">
+          <path d="M310,58 L310,88"/>
+          <path d="M310,142 L310,172"/>
+          <path d="M310,226 L310,256"/>
+          <path d="M310,310 L310,340"/>
+        </g>
+        <g font-size="13" font-weight="700" text-anchor="middle">
+          <rect x="190" y="8" width="240" height="50" rx="10" fill="var(--surface2)" stroke="var(--secondary)"/>
+          <text x="310" y="38" fill="var(--secondary)" id="createStepApi">xTaskCreate()</text>
+          <rect x="190" y="92" width="240" height="50" rx="10" fill="var(--surface2)" stroke="var(--kernel)"/>
+          <text x="310" y="122" fill="var(--kernel)" id="createStepAlloc">Allocate TCB + Stack (Heap)</text>
+          <rect x="190" y="176" width="240" height="50" rx="10" fill="var(--surface2)" stroke="var(--kernel)"/>
+          <text x="310" y="206" fill="var(--kernel)">Initialize Task Context</text>
+          <rect x="190" y="260" width="240" height="50" rx="10" fill="var(--surface2)" stroke="var(--scheduler)"/>
+          <text x="310" y="290" fill="var(--scheduler)">Set Priority</text>
+          <rect x="150" y="344" width="320" height="34" rx="8" fill="color-mix(in srgb, var(--ready) 18%, var(--surface))" stroke="var(--ready)"/>
+          <text x="310" y="367" fill="var(--ready)" font-size="12.5">Insert into Ready List → Task Ready</text>
+        </g>
+      </svg>
+      <figcaption id="createCaption">Hình 5.1 — Dynamic: <code>xTaskCreate()</code> tự cấp phát TCB + Stack từ heap FreeRTOS.</figcaption>
+    </figure>
+    <p style="font-size:13px" class="muted" id="createNote">Chế độ <strong>Dynamic</strong>: bộ nhớ TCB và Stack được lấy từ heap FreeRTOS tại thời điểm gọi hàm — tiện lợi nhưng phụ thuộc heap còn đủ chỗ hay không.</p>
+
+    <h4>Ví dụ code — Dynamic vs Static</h4>
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge badge-source" style="margin-bottom:8px">SOURCE</span>
+        <div class="code-wrap" style="margin-top:8px"><div class="code-scroll"><pre><code>xTaskCreate(
+    vTaskCode,
+    <span class="tok-str">"NAME"</span>,
+    STACK_SIZE,
+    NULL,
+    tskIDLE_PRIORITY,
+    &amp;xHandle
+);</code></pre></div></div>
+      </div>
+      <div class="card">
+        <span class="badge badge-source" style="margin-bottom:8px">SOURCE</span>
+        <div class="code-wrap" style="margin-top:8px"><div class="code-scroll"><pre><code><span class="tok-kw">static</span> StaticTask_t xTaskBuffer;
+<span class="tok-kw">static</span> StackType_t xStack[STACK_SIZE];
+
+xTaskCreateStatic(
+    vTaskCode, <span class="tok-str">"NAME"</span>, STACK_SIZE,
+    NULL, tskIDLE_PRIORITY,
+    xStack, &amp;xTaskBuffer
+);</code></pre></div></div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="callout-label badge badge-explanation">EXPLANATION</span>
+      <p style="font-style:normal;color:var(--text)">Điểm quan trọng dễ bị hiểu lầm: <code>xTaskCreate()</code> chỉ đưa task vào <strong>Ready</strong>, chờ scheduler chọn — nó KHÔNG chạy ngay lập tức, kể cả khi gọi từ bên trong <code>main()</code> trước khi <code>vTaskStartScheduler()</code> được gọi.</p>
+    </div>
+  </div>
+</section>
+<section class="section-block" id="s06">
+  <div class="section-head">
+    <div class="section-num">06</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Task Parameters</h2></div>
+  </div>
+  <div class="section-body">
+    <p><code>xTaskCreate()</code> nhận các tham số: task function, tên (debug only), <strong>stack depth</strong>, <code>pvParameters</code>, priority, và con trỏ ra <code>TaskHandle_t</code>. Tham số dễ gây lỗi nhất là stack depth.</p>
+
+    <span class="badge badge-source">SOURCE</span>
+    <h3>Cạm bẫy: <code>usStackDepth</code> tính theo WORD, không phải BYTE</h3>
+    <p><code>usStackDepth</code> <strong>không phải</strong> số byte bạn muốn cấp cho stack — nó là số <strong>word</strong>. Trên CPU 32-bit, 1 word = 4 byte.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px">
+      <thead><tr style="border-bottom:1px solid var(--border);text-align:left"><th style="padding:6px">usStackDepth truyền vào</th><th style="padding:6px">Bộ nhớ thực tế cấp (32-bit)</th></tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">1000</td><td style="padding:6px"><strong>4000 byte</strong></td></tr>
+        <tr><td style="padding:6px">128</td><td style="padding:6px">512 byte</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)">Nếu bạn nhầm tưởng <code>usStackDepth=1000</code> là 1000 byte và đặt số quá nhỏ để "tiết kiệm RAM", stack thực tế cấp có thể lớn hơn dự tính 4 lần trên vi điều khiển 32-bit — hoặc ngược lại, nếu bạn "quy đổi ngược" sai và đặt số quá nhỏ, stack sẽ không đủ và dẫn tới <strong>stack overflow</strong> âm thầm (Lesson 23 — Debugging).</p></div>
+
+    <h4><code>configSTACK_DEPTH_TYPE</code></h4>
+    <span class="badge badge-source">SOURCE</span>
+    <p style="margin-top:8px">Loại dữ liệu của tham số stack depth có thể cấu hình qua <code>configSTACK_DEPTH_TYPE</code> (mặc định thường là <code>uint16_t</code>). Nếu hệ thống của bạn cần stack lớn hơn giới hạn của <code>uint16_t</code> cho phép, bạn cần định nghĩa lại macro này thành một kiểu rộng hơn (ví dụ <code>uint32_t</code>), nếu không giá trị truyền vào có thể bị tràn (overflow) âm thầm.</p>
+
+    <h4><code>pvParameters</code> — liên hệ ngược Lesson 02</h4>
+    <p>Đây chính là cơ chế giúp nhiều task instance dùng chung một task function nhưng vẫn hành xử khác nhau — mỗi lần gọi <code>xTaskCreate()</code> bạn truyền một giá trị <code>pvParameters</code> khác nhau (ví dụ tên cảm biến, số ID, con trỏ cấu hình...).</p>
+
+    <div class="mistake-list">
+      <div class="mistake-item">
+        <div><span class="lbl wrong">Sai</span><code>xTaskCreate(fn,"T",1000,...)</code> nghĩ là 1000 byte</div>
+        <div><span class="lbl right">Đúng</span>1000 word = 4000 byte trên CPU 32-bit</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="section-block" id="s07">
+  <div class="section-head">
+    <div class="section-num">07</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Task Priority</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Quy tắc cốt lõi: mỗi task được gán một số nguyên priority, từ <code>0</code> (thấp nhất) đến <code>configMAX_PRIORITIES − 1</code> (cao nhất). Tại bất kỳ thời điểm nào có nhiều hơn một task đang <strong>Ready</strong>, scheduler <strong>luôn</strong> chọn task Ready có priority cao nhất để chạy.</p>
+
+    <figure class="diagram-fig">
+      <div class="ladder" aria-hidden="false">
+        <div class="ladder-rung hi"><span class="lv">3</span>Highest — luôn thắng nếu Ready</div>
+        <div class="ladder-rung"><span class="lv">2</span></div>
+        <div class="ladder-rung"><span class="lv">1</span></div>
+        <div class="ladder-rung lo"><span class="lv">0</span>Lowest — Idle Task nằm ở đây</div>
+      </div>
+      <figcaption>Hình 7.1 — Priority càng cao, mức ưu tiên lập lịch càng lớn — nhưng chỉ có ý nghĩa <strong>khi so sánh giữa các task đang Ready</strong>.</figcaption>
+    </figure>
+
+    <h3>Ví dụ chi tiết: hai task liên tục, khác priority</h3>
+    <div class="code-wrap"><div class="code-scroll"><pre><code>xTaskCreate( vTaskFunction, <span class="tok-str">"Task 1"</span>, 1000, <span class="tok-str">"Task 1 "</span>, 1, NULL );
+xTaskCreate( vTaskFunction, <span class="tok-str">"Task 2"</span>, 1000, <span class="tok-str">"Task 2 "</span>, 2, NULL );</code></pre></div></div>
+    <div class="tl-wrap"><div id="tlPriorityDemo"></div></div>
+    <p>Task 2 (priority 2) chiếm CPU liên tục vì nó không bao giờ gọi bất kỳ API blocking nào — Task 1 (priority 1) chỉ ở Ready, không bao giờ được scheduler chọn, vì luôn có một task priority cao hơn đang sẵn sàng.</p>
+
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)">Đây KHÔNG phải lỗi của scheduler — đây chính xác là hành vi được thiết kế. Priority chỉ quyết định "ai thắng khi có tranh chấp giữa các task Ready"; nó không tự động đảm bảo công bằng thời gian CPU. Muốn Task 1 có cơ hội chạy, Task 2 phải chủ động nhường CPU (ví dụ gọi <code>vTaskDelay()</code> — xem Lesson 09).</p></div>
+
+    <h4>Tự kiểm tra</h4>
+    <p style="font-size:14px">❓ Task A priority=1 đang Blocked, Task B priority=3 đang Ready. Ai chạy? — <span class="muted">Đáp: Task B — vì Task A không Ready nên không tham gia tranh chấp.</span></p>
+  </div>
+</section>
+<section class="section-block" id="s08">
+  <div class="section-head">
+    <div class="section-num">08</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Tick &amp; Scheduler</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Tick là một <strong>ngắt phần cứng định kỳ</strong> (periodic hardware timer interrupt). Tần số của nó được cấu hình qua <code>configTICK_RATE_HZ</code> — ví dụ 1000 nghĩa là 1 tick mỗi 1ms. Mỗi lần tick xảy ra, kernel <strong>xem xét lại</strong> việc lập lịch: kiểm tra xem có task nào đang Blocked vừa hết hạn timeout hay không, và (khi bật time slicing) quyết định có nên đổi task cùng priority hay không.</p>
+
+    <div class="code-wrap"><div class="code-scroll"><pre><code>TickType_t xTaskGetTickCount( <span class="tok-type">void</span> );
+TickType_t pdMS_TO_TICKS( TickType_t xTimeInMs );</code></pre></div></div>
+    <p><code>pdMS_TO_TICKS()</code> luôn được dùng để chuyển mili-giây sang số tick tương ứng với <code>configTICK_RATE_HZ</code> hiện tại — tài liệu khuyến nghị luôn dùng macro này thay vì tự tính tay, để code không bị hỏng nếu sau này đổi giá trị <code>configTICK_RATE_HZ</code>.</p>
+
+    <h3>Scheduler quyết định điều gì tại mỗi lần được gọi?</h3>
+    <ol style="font-size:14.5px">
+      <li>Task nào đang <strong>Ready</strong>?</li>
+      <li>Trong số đó, ai <strong>priority cao nhất</strong>?</li>
+      <li>Nếu có nhiều task cùng priority cao nhất, có <strong>time slicing</strong> không? (Lesson 18)</li>
+    </ol>
+    <p class="muted" style="font-size:13px">Sơ đồ quyết định đầy đủ của scheduler — bao gồm cả trường hợp round-robin cùng priority — được trình bày chi tiết ở Lesson 20 (Complete Scheduler Flow).</p>
+
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)">Tick <strong>không phải</strong> là thứ duy nhất kích hoạt scheduler — một ISR gọi API đánh thức task, hoặc chính task gọi API blocking/yield, cũng khiến scheduler được đánh giá lại ngay lập tức (xem Lesson 17 — Preemption).</p></div>
+  </div>
+</section>
+<section class="section-block" id="s09">
+  <div class="section-head">
+    <div class="section-num">09</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>vTaskDelay()</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p><code>vTaskDelay()</code> chuyển task gọi nó từ Running sang Blocked trong một số tick chỉ định, giải phóng CPU cho task khác thay vì giữ CPU bận (polling).</p>
+
+    <div class="api-card">
+      <div class="api-card-head"><code>vTaskDelay()</code><span class="badge badge-source">SOURCE</span></div>
+      <dl class="api-card-body">
+        <dt>Purpose</dt><dd>Đưa task hiện tại vào Blocked trong khoảng thời gian tương đối, tính từ lúc gọi.</dd>
+        <dt>Prototype</dt><dd><code>void vTaskDelay( TickType_t xTicksToDelay );</code></dd>
+        <dt>Parameters</dt><dd><code>xTicksToDelay</code> — số tick cần chờ (dùng <code>pdMS_TO_TICKS()</code> để đổi từ ms).</dd>
+        <dt>Return Value</dt><dd>Không có (void).</dd>
+        <dt>State Transition</dt><dd><span class="state-chip running">Running</span> → <span class="state-chip blocked">Blocked</span> → (hết hạn) → <span class="state-chip ready">Ready</span></dd>
+        <dt>Important Note</dt><dd>Thời gian delay tính <strong>tương đối</strong> từ lúc gọi — nếu thân task tốn thời gian thay đổi mỗi vòng lặp, chu kỳ tổng sẽ trôi dần (drift). Xem Lesson 10 để so sánh với <code>vTaskDelayUntil()</code>.</dd>
+      </dl>
+    </div>
+
+    <figure class="tl-wrap" style="margin-top:20px"><div id="tlDelayDemo"></div>
+      <figcaption style="margin-top:10px;font-size:12.5px;color:var(--muted)">Hình 9.1 — Running → gọi vTaskDelay(100ms) → Blocked → mỗi tick kernel kiểm tra hạn → hết hạn → Ready → Scheduler chọn lại → Running.</figcaption>
+    </figure>
+
+    <div class="analogy"><strong>Ví dụ đời thường:</strong> giống việc bạn tự nói "việc này cần vải khô, tôi cất sang bên, quay lại sau 10 phút" rồi chủ động rời bàn làm việc — thay vì đứng đó chờ vô ích.</div>
+  </div>
+</section>
+<section class="section-block" id="s10">
+  <div class="section-head">
+    <div class="section-num">10</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>vTaskDelayUntil()</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Vấn đề của <code>vTaskDelay()</code>: nếu thân task (đọc cảm biến, in log...) tốn thời gian thực thi thay đổi mỗi vòng, vì delay luôn tính từ lúc gọi, chu kỳ tổng sẽ trôi dần thay vì cố định. <code>vTaskDelayUntil()</code> giải quyết bằng cách tính theo <strong>mốc tuyệt đối</strong>.</p>
+
+    <div class="api-card">
+      <div class="api-card-head"><code>vTaskDelayUntil()</code><span class="badge badge-source">SOURCE</span></div>
+      <dl class="api-card-body">
+        <dt>Prototype</dt><dd><code>void vTaskDelayUntil( TickType_t *pxPreviousWakeTime, TickType_t xTimeIncrement );</code></dd>
+        <dt>Parameters</dt><dd><code>pxPreviousWakeTime</code> — con trỏ biến lưu mốc thức dậy trước đó (được kernel tự cập nhật); <code>xTimeIncrement</code> — chu kỳ mong muốn tính bằng tick.</dd>
+        <dt>State Transition</dt><dd>Giống <code>vTaskDelay()</code>: Running → Blocked → Ready, nhưng mốc thức dậy kế tiếp = mốc trước + chu kỳ cố định, không phụ thuộc thời điểm gọi.</dd>
+        <dt>Important Note</dt><dd>Vẫn không đảm bảo <em>chạy ngay đúng</em> mốc đó nếu một task priority cao hơn đang chiếm CPU — chỉ đảm bảo mốc <em>thức dậy (Ready)</em> không bị trôi.</dd>
+      </dl>
+    </div>
+
+    <div class="toggle-row">
+      <button class="toggle-btn active" data-toggle="delaycmp" data-value="delay">vTaskDelay() — có drift</button>
+      <button class="toggle-btn" data-toggle="delaycmp" data-value="delayuntil">vTaskDelayUntil() — cố định</button>
+    </div>
+    <figure class="tl-wrap"><div id="tlDelayUntilDemo"></div>
+      <figcaption id="delayCmpCaption" style="margin-top:10px;font-size:12.5px;color:var(--muted)">Với vTaskDelay(): thời gian thực thi thay đổi mỗi vòng khiến chu kỳ tổng trôi dần.</figcaption>
+    </figure>
+
+    <div class="mistake-list">
+      <div class="mistake-item">
+        <div><span class="lbl wrong">Nhầm lẫn</span>Dùng vTaskDelay() cho task cần chu kỳ chính xác (ví dụ lấy mẫu 10ms)</div>
+        <div><span class="lbl right">Đúng</span>Dùng vTaskDelayUntil() khi cần giữ nhịp cố định, tránh trôi tích luỹ</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="section-block" id="s11">
+  <div class="section-head">
+    <div class="section-num">11</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Blocking vs Polling</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Tài liệu trình bày hai cách một task chờ dữ liệu sẵn sàng: <strong>polling</strong> (vòng lặp kiểm tra cờ liên tục) và <strong>blocking</strong> (gọi API blocking như <code>vTaskDelay()</code> hoặc chờ queue/semaphore).</p>
+    <div class="card-grid">
+      <div class="card">
+        <h4 style="margin-top:0;color:var(--danger)">Polling</h4>
+        <div class="code-wrap" style="margin-top:8px"><div class="code-scroll"><pre><code><span class="tok-kw">for</span>( ulCount = 0; ulCount &lt; 5; ulCount++ )
+{
+    <span class="tok-kw">while</span>( !ucDataReady ) { <span class="tok-com">/* bận chờ */</span> }
+    <span class="tok-fn">processData</span>();
+}</code></pre></div></div>
+      </div>
+      <div class="card">
+        <h4 style="margin-top:0;color:var(--success)">Blocking</h4>
+        <div class="code-wrap" style="margin-top:8px"><div class="code-scroll"><pre><code>vTaskDelay( pdMS_TO_TICKS(100) );
+<span class="tok-fn">processData</span>();</code></pre></div></div>
+      </div>
+    </div>
+    <figure class="tl-wrap"><div id="tlBlockingDemo"></div>
+      <figcaption style="margin-top:10px;font-size:12.5px;color:var(--muted)">Hình 11.1 — Task A polling chiếm CPU 100% dù không làm việc có ích, khiến Task B (priority thấp hơn) không bao giờ được chạy; Task A blocking nhường CPU ngay, cho Task B cơ hội thực thi.</figcaption>
+    </figure>
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)">Khi một task polling, nó vẫn ở trạng thái <span class="state-chip running">Running</span> — CPU bị coi là "bận" dù không làm việc có ích. Blocking chủ động nhường CPU bằng cách chuyển sang <span class="state-chip blocked">Blocked</span>, cho phép task khác — kể cả priority thấp hơn — có cơ hội chạy.</p></div>
+  </div>
+</section>
+<section class="section-block" id="s12">
+  <div class="section-head">
+    <div class="section-num">12</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Idle Task</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Tài liệu nêu rõ luôn phải có ít nhất một task sẵn sàng chạy tại mọi thời điểm — nếu tất cả task ứng dụng đều Blocked hoặc Suspended, CPU vẫn cần thực thi <em>cái gì đó</em>. Kernel tự động tạo <strong>Idle Task</strong> ở <strong>priority 0</strong> (thấp nhất có thể) để lấp đầy khoảng trống đó.</p>
+
+    <figure class="diagram-fig">
+      <svg viewBox="0 0 600 220" role="img" aria-labelledby="idleDiagTitle">
+        <title id="idleDiagTitle">Idle Task chạy khi không còn task ứng dụng nào Ready</title>
+        <defs><marker id="ah4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+        <g font-size="12.5" font-weight="700" text-anchor="middle">
+          <rect x="15" y="15" width="150" height="42" rx="8" fill="var(--surface2)" stroke="var(--blocked)"/><text x="90" y="41" fill="var(--blocked)">Task A: Blocked</text>
+          <rect x="15" y="70" width="150" height="42" rx="8" fill="var(--surface2)" stroke="var(--blocked)"/><text x="90" y="96" fill="var(--blocked)">Task B: Blocked</text>
+          <rect x="15" y="125" width="150" height="42" rx="8" fill="var(--surface2)" stroke="var(--blocked)"/><text x="90" y="151" fill="var(--blocked)">Task C: Blocked</text>
+        </g>
+        <g stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ah4)" fill="none">
+          <path d="M165,36 C 260,90 340,90 400,90"/>
+          <path d="M165,91 L400,91"/>
+          <path d="M165,146 C 260,92 340,92 400,91"/>
+        </g>
+        <text x="290" y="72" font-size="10.5" fill="var(--muted)">không còn task nào Ready</text>
+        <g font-size="13" font-weight="700" text-anchor="middle">
+          <rect x="410" y="66" width="170" height="50" rx="10" fill="color-mix(in srgb, var(--running) 16%, var(--surface))" stroke="var(--running)"/>
+          <text x="495" y="96" fill="var(--running)">IDLE TASK chạy</text>
+        </g>
+        <text x="495" y="140" font-size="11" fill="var(--muted)" text-anchor="middle">priority = 0 (thấp nhất)</text>
+      </svg>
+      <figcaption>Hình 12.1 — Idle Task là "lưới an toàn" cuối cùng, luôn tồn tại và có priority thấp nhất để không bao giờ chặn task ứng dụng thật.</figcaption>
+    </figure>
+
+    <h3>Idle Task Hook</h3>
+    <div class="code-wrap"><div class="code-scroll"><pre><code><span class="tok-type">void</span> <span class="tok-fn">vApplicationIdleHook</span>( <span class="tok-type">void</span> )
+{
+    <span class="tok-com">// được gọi tự động mỗi vòng lặp Idle Task</span>
+    <span class="tok-com">// (yêu cầu configUSE_IDLE_HOOK == 1)</span>
+}</code></pre></div></div>
+    <p>Ba công dụng phổ biến: đưa CPU vào chế độ tiết kiệm điện (low-power), đo mức tải nhàn rỗi qua bộ đếm, hoặc thực hiện việc dọn dẹp nền nhẹ nhàng.</p>
+
+    <div class="callout"><span class="callout-label badge badge-inference">INFERENCE</span><p style="font-style:normal;color:var(--text)">Idle Task hook có thể được gọi rất nhiều lần giữa hai lần task ứng dụng chạy (hàng triệu lần nếu hệ thống rảnh lâu) — con số cụ thể phụ thuộc tốc độ CPU thực tế, không phải hằng số cố định trong tài liệu.</p></div>
+
+    <h4>2 quy tắc bắt buộc khi viết Idle Hook</h4>
+    <div class="mistake-list">
+      <div class="mistake-item"><div><span class="lbl wrong">Sai</span>Gọi <code>vTaskDelay()</code> hoặc bất kỳ API blocking nào bên trong hook</div><div><span class="lbl right">Đúng</span>Hook phải luôn trả về nhanh, không bao giờ block</div></div>
+      <div class="mistake-item"><div><span class="lbl wrong">Sai</span>Gọi <code>vTaskDelete()</code> bên trong hook</div><div><span class="lbl right">Đúng</span>Không xoá task từ trong chính vòng lặp dọn dẹp của Idle Task</div></div>
+    </div>
+    <figure class="tl-wrap"><div id="tlIdleDemo"></div>
+      <figcaption style="margin-top:10px;font-size:12.5px;color:var(--muted)">Hình 12.2 — Ba task lần lượt Blocked, Idle Task lấp đầy khoảng trống cho tới khi có task ứng dụng Ready trở lại.</figcaption>
+    </figure>
+  </div>
+</section>
+<section class="section-block" id="s13">
+  <div class="section-head">
+    <div class="section-num">13</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Priority Change (Runtime)</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <div class="card-grid">
+      <div class="api-card"><div class="api-card-head"><code>vTaskPrioritySet()</code></div><dl class="api-card-body">
+        <dt>Prototype</dt><dd><code>void vTaskPrioritySet( TaskHandle_t xTask, UBaseType_t uxNewPriority );</code></dd>
+        <dt>Parameters</dt><dd><code>xTask</code>=NULL nghĩa là "task đang gọi hàm này tự đổi priority của chính nó".</dd>
+        <dt>Note</dt><dd>Nếu priority mới thấp hơn một task khác đang Ready, scheduler có thể preempt ngay lập tức.</dd>
+      </dl></div>
+      <div class="api-card"><div class="api-card-head"><code>uxTaskPriorityGet()</code></div><dl class="api-card-body">
+        <dt>Prototype</dt><dd><code>UBaseType_t uxTaskPriorityGet( TaskHandle_t xTask );</code></dd>
+        <dt>Return</dt><dd>Giá trị priority hiện tại của task.</dd>
+      </dl></div>
+    </div>
+
+    <h3>Task Handle — vì sao cần?</h3>
+    <p>Handle là "địa chỉ tham chiếu" tới một task instance cụ thể, được trả về qua tham số cuối của <code>xTaskCreate()</code>. Nếu task cần đổi priority của <strong>chính nó</strong>, không cần lưu handle — dùng <code>NULL</code> là đủ.</p>
+    <div class="code-wrap"><div class="code-scroll"><pre><code>TaskHandle_t xHandle = NULL;
+xTaskCreate( vTaskCode, <span class="tok-str">"NAME"</span>, 1000, NULL, 1, &amp;xHandle );
+<span class="tok-com">// sau đó, ở nơi khác:</span>
+vTaskPrioritySet( xHandle, 3 );  <span class="tok-com">// nâng priority runtime</span></code></pre></div></div>
+
+    <figure class="tl-wrap"><div id="tlPriorityChangeDemo"></div>
+      <figcaption style="margin-top:10px;font-size:12.5px;color:var(--muted)">Hình 13.1 — Task A ở priority thấp; ngay khi <code>vTaskPrioritySet()</code> nâng priority vượt task đang Running, scheduler đánh giá lại và preempt ngay lập tức.</figcaption>
+    </figure>
+  </div>
+</section>
+<section class="section-block" id="s14">
+  <div class="section-head">
+    <div class="section-num">14</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Task Deletion</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <div class="api-card"><div class="api-card-head"><code>vTaskDelete()</code></div><dl class="api-card-body">
+      <dt>Prototype</dt><dd><code>void vTaskDelete( TaskHandle_t xTaskToDelete );</code></dd>
+      <dt>Parameters</dt><dd><code>NULL</code> = task tự xoá chính nó.</dd>
+      <dt>Important Note</dt><dd>Không nên gọi tuỳ tiện lên một task chưa chắc đã sẵn sàng dừng — dữ liệu/tài nguyên nó đang giữ (nếu có) sẽ không được dọn theo logic ứng dụng.</dd>
+    </dl></div>
+
+    <h3>Ai dọn dẹp bộ nhớ sau khi xoá?</h3>
+    <p>Đây là điểm dễ hiểu lầm nhất: <code>vTaskDelete()</code> <strong>không</strong> giải phóng heap ngay lập tức nếu task được tạo bằng cấp phát động (<code>xTaskCreate()</code>). Theo tài liệu, việc giải phóng bộ nhớ kernel đã cấp cho TCB và Stack là trách nhiệm của <strong>Idle Task</strong>, thực hiện ở lượt chạy kế tiếp của nó.</p>
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)">Hệ quả trực tiếp: nếu Idle Task không bao giờ được chạy (ví dụ một task priority cao chiếm CPU vĩnh viễn — Lesson 07), bộ nhớ của các task đã xoá sẽ không bao giờ được giải phóng — rò rỉ bộ nhớ dần dần dù code "đã gọi vTaskDelete() đúng cách".</p></div>
+
+    <figure class="diagram-fig">
+      <svg viewBox="0 0 600 200" role="img" aria-labelledby="delDiagTitle">
+        <title id="delDiagTitle">Luồng xoá task và dọn bộ nhớ</title>
+        <defs><marker id="ah5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+        <g stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ah5)" fill="none">
+          <path d="M140,40 L200,40"/><path d="M330,40 L390,40"/>
+          <path d="M480,64 L480,100"/>
+        </g>
+        <g font-size="12.5" font-weight="700" text-anchor="middle">
+          <rect x="10" y="17" width="130" height="46" rx="8" fill="var(--surface2)" stroke="var(--running)"/><text x="75" y="45" fill="var(--running)">Task Running</text>
+          <rect x="200" y="17" width="130" height="46" rx="8" fill="var(--surface2)" stroke="var(--danger)"/><text x="265" y="45" fill="var(--danger)">vTaskDelete()</text>
+          <rect x="390" y="17" width="180" height="46" rx="8" fill="var(--surface2)" stroke="var(--muted)"/><text x="480" y="45" fill="var(--muted)">Gỡ khỏi mọi list</text>
+          <rect x="390" y="106" width="180" height="46" rx="8" fill="color-mix(in srgb, var(--kernel) 16%, var(--surface))" stroke="var(--kernel)"/><text x="480" y="134" fill="var(--kernel)">Idle Task: free heap</text>
+        </g>
+      </svg>
+      <figcaption>Hình 14.1 — Task bị xoá khỏi mọi danh sách (Ready/Blocked/Suspended) ngay lập tức; heap chỉ được thu hồi khi Idle Task chạy lượt kế tiếp.</figcaption>
+    </figure>
+  </div>
+</section>
+<section class="section-block" id="s15">
+  <div class="section-head">
+    <div class="section-num">15</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Thread Local Storage &amp; Reentrancy</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Một hàm <strong>reentrant</strong> có thể được nhiều task gọi "cùng lúc" (xen kẽ do context switch) mà không gây lỗi dữ liệu, vì nó không phụ thuộc trạng thái dùng chung nào ngoài stack/tham số riêng của lần gọi đó. Một hàm <strong>non-reentrant</strong> thường dùng biến <code>static</code> hoặc toàn cục dùng chung giữa mọi lần gọi.</p>
+
+    <h4>Ví dụ kinh điển: <code>errno</code></h4>
+    <p>Nếu <code>errno</code> là một biến toàn cục dùng chung: Task A gọi <code>strtol()</code> bị lỗi, ghi <code>errno</code>, nhưng trước khi Task A kịp đọc lại <code>errno</code>, Task B cũng ghi đè giá trị khác — Task A đọc nhầm lỗi của Task B.</p>
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)">Giải pháp: mỗi task cần một bản sao <code>errno</code> riêng, lưu trong Thread Local Storage (TLS) của chính TCB task đó, thay vì một vùng nhớ toàn cục dùng chung.</p></div>
+
+    <h4>Hai cơ chế TLS được tài liệu đề cập</h4>
+    <ol>
+      <li><code>configUSE_C_RUNTIME_TLS_SUPPORT</code> / <code>configUSE_NEWLIB_REENTRANT</code> / <code>configUSE_PICOLIBC_TLS</code> — tích hợp với C runtime (newlib, picolibc) để tự động cấp context reentrant riêng cho mỗi task.</li>
+      <li>TLS pointer thủ công qua API kernel:</li>
+    </ol>
+    <div class="code-wrap"><div class="code-scroll"><pre><code><span class="tok-type">void</span> vTaskSetThreadLocalStoragePointer( TaskHandle_t xTaskToSet, BaseType_t xIndex, <span class="tok-type">void</span> *pvValue );
+<span class="tok-type">void</span> *pvTaskGetThreadLocalStoragePointer( TaskHandle_t xTaskToQuery, BaseType_t xIndex );</code></pre></div></div>
+    <p style="font-size:13.5px" class="muted">Mỗi task có một mảng con trỏ <code>void*</code> tự do trong TCB của nó — bạn tự quyết định lưu gì vào đó (bộ đếm riêng, con trỏ cấu hình riêng...).</p>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px">
+      <thead><tr style="border-bottom:1px solid var(--border);text-align:left"><th style="padding:6px">Reentrant</th><th style="padding:6px">Non-reentrant</th></tr></thead>
+      <tbody><tr><td style="padding:6px">Chỉ dùng biến local/stack, hoặc TLS riêng từng task</td><td style="padding:6px">Dùng biến static/global dùng chung giữa mọi task</td></tr></tbody>
+    </table>
+  </div>
+</section>
+<section class="section-block" id="s16">
+  <div class="section-head">
+    <div class="section-num">16</div>
+    <div><span class="eyebrow">Core Concept</span><h2>Scheduling Algorithms</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Ba hằng số cấu hình quyết định "triết lý" lập lịch của toàn hệ thống:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+      <thead><tr style="border-bottom:1px solid var(--border);text-align:left"><th style="padding:6px">Macro</th><th style="padding:6px">Ý nghĩa</th></tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>configUSE_PREEMPTION</code></td><td style="padding:6px">1 = cho phép preemption; 0 = cooperative</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>configUSE_TIME_SLICING</code></td><td style="padding:6px">1 = chia thời gian round-robin giữa các task cùng priority</td></tr>
+        <tr><td style="padding:6px"><code>configUSE_TICKLESS_IDLE</code></td><td style="padding:6px">1 = tắt tick khi hệ thống rảnh để tiết kiệm điện</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Bảng cấu hình 3 chế độ (Table 5 trong tài liệu)</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px">
+      <thead><tr style="border-bottom:1px solid var(--border);text-align:left">
+        <th style="padding:6px">Chế độ</th><th style="padding:6px">PREEMPTION</th><th style="padding:6px">TIME_SLICING</th><th style="padding:6px">Cùng priority?</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">Preemptive + Time Slicing<br><span class="muted">(mặc định)</span></td><td style="padding:6px">1</td><td style="padding:6px">1</td><td style="padding:6px">Round-robin mỗi tick</td></tr>
+        <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">Preemptive, không Time Slicing</td><td style="padding:6px">1</td><td style="padding:6px">0</td><td style="padding:6px">Một task chạy liên tục tới khi tự yield/block</td></tr>
+        <tr><td style="padding:6px">Cooperative</td><td style="padding:6px">0</td><td style="padding:6px">—</td><td style="padding:6px">Không tự động chuyển; phải gọi <code>taskYIELD()</code></td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:13px">"Preemptive + Time Slicing" là chế độ mặc định mà hầu hết ứng dụng FreeRTOS sử dụng. Ba lesson tiếp theo (17-19) trình bày chi tiết từng chế độ.</p>
+  </div>
+</section>
+<section class="section-block" id="s17">
+  <div class="section-head">
+    <div class="section-num">17</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Preemption</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Preemptive scheduling nghĩa là: bất cứ khi nào một task priority cao hơn chuyển sang Ready, scheduler <strong>ngay lập tức</strong> tước CPU khỏi task priority thấp hơn đang Running, dù task đó chưa hoàn thành công việc.</p>
+    <div class="callout"><span class="callout-label badge badge-explanation">EXPLANATION</span><p style="font-style:normal;color:var(--text)"><strong>Từ khoá quan trọng: "ngay lập tức".</strong> Preemption có thể xảy ra tại <em>bất kỳ thời điểm nào</em> — không chỉ tại tick interrupt. Một ISR gọi API đánh thức một task priority cao (ví dụ giải phóng semaphore) có thể kích hoạt preemption ngay khi ISR kết thúc, không cần chờ tick kế tiếp.</p></div>
+
+    <figure class="tl-wrap"><div id="tlPreemptDemo"></div>
+      <figcaption style="margin-top:10px;font-size:12.5px;color:var(--muted)">Hình 17.1 — Task priority thấp đang Running; ngay khi Task priority cao chuyển sang Ready (do ISR hoặc timeout), nó bị preempt lập tức, không cần đợi tick kế tiếp.</figcaption>
+    </figure>
+
+    <p>Vì scheduler đánh giá lại ngay khi có thay đổi, <code>vTaskPrioritySet()</code> được gọi để nâng priority một task đang Ready lên cao hơn task đang Running cũng khiến preemption xảy ra <strong>ngay lập tức</strong> (xem lại Lesson 13).</p>
+  </div>
+</section>
+<section class="section-block" id="s18">
+  <div class="section-head">
+    <div class="section-num">18</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Time Slicing</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Time Slicing chỉ có ý nghĩa khi <strong>từ hai task cùng priority trở lên</strong> đang Ready đồng thời. Khi bật (<code>configUSE_TIME_SLICING=1</code>), mỗi tick scheduler sẽ luân phiên (round-robin) giữa các task đó, thay vì để một task chiếm giữ liên tục.</p>
+    <div class="callout"><span class="callout-label badge badge-source">SOURCE</span><p style="font-style:normal;color:var(--text)">Tài liệu lưu ý: round-robin <strong>không</strong> đảm bảo chia đều tuyệt đối 50/50 nếu số lượng tick giữa các sự kiện khác không đồng đều — nó chỉ đảm bảo mỗi task cùng priority lần lượt được cấp một "lượt" CPU.</p></div>
+
+    <div class="toggle-row">
+      <button class="toggle-btn active" data-toggle="slicing" data-value="on">Time Slicing ON</button>
+      <button class="toggle-btn" data-toggle="slicing" data-value="off">Time Slicing OFF</button>
+    </div>
+    <figure class="tl-wrap"><div id="tlSlicingDemo"></div>
+      <figcaption id="slicingCaption" style="margin-top:10px;font-size:12.5px;color:var(--muted)">ON: A và B (cùng priority) xen kẽ đều đặn mỗi tick — A → B → A → B...</figcaption>
+    </figure>
+
+    <p style="font-size:13px" class="muted"><code>configIDLE_SHOULD_YIELD</code>: khi bật, nếu có một task ứng dụng khác cũng ở priority 0 (Idle) đang Ready, Idle Task sẽ nhường lượt của nó sớm hơn thay vì dùng hết time slice — tránh Idle Task "ăn hết" một tick trọn vẹn của một task ứng dụng cùng priority thấp nhất.</p>
+  </div>
+</section>
+<section class="section-block" id="s19">
+  <div class="section-head">
+    <div class="section-num">19</div>
+    <div><span class="eyebrow">Core Concept · Flagship Diagram</span><h2>Cooperative Scheduling</h2></div>
+  </div>
+  <div class="section-body">
+    <span class="badge badge-source">SOURCE</span>
+    <p>Khi <code>configUSE_PREEMPTION=0</code>, kernel <strong>không</strong> tự động tước CPU khỏi task đang Running, bất kể có task priority cao hơn chuyển sang Ready hay không. Task đang Running phải <strong>chủ động</strong> nhường CPU bằng cách gọi <code>taskYIELD()</code>, hoặc tự block (vTaskDelay, chờ queue...).</p>
+
+    <figure class="diagram-fig">
+      <svg viewBox="0 0 600 160" role="img" aria-labelledby="coopDiagTitle">
+        <title id="coopDiagTitle">Chuỗi taskYIELD() giữa các task cooperative</title>
+        <defs><marker id="ah6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+        <g stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ah6)" fill="none">
+          <path d="M175,55 L225,55"/><path d="M400,55 L450,55"/>
+        </g>
+        <g font-size="12.5" font-weight="700" text-anchor="middle">
+          <rect x="15" y="32" width="160" height="46" rx="8" fill="color-mix(in srgb, var(--running) 16%, var(--surface))" stroke="var(--running)"/><text x="95" y="60" fill="var(--running)">Task 1 Running</text>
+          <rect x="225" y="32" width="160" height="46" rx="8" fill="color-mix(in srgb, var(--running) 16%, var(--surface))" stroke="var(--running)"/><text x="305" y="60" fill="var(--running)">Task 2 Running</text>
+          <rect x="450" y="32" width="140" height="46" rx="8" fill="color-mix(in srgb, var(--running) 16%, var(--surface))" stroke="var(--running)"/><text x="520" y="60" fill="var(--running)">Task 3 Running</text>
+        </g>
+        <text x="200" y="45" font-size="10" fill="var(--muted)" text-anchor="middle">taskYIELD()</text>
+        <text x="425" y="45" font-size="10" fill="var(--muted)" text-anchor="middle">taskYIELD()</text>
+        <text x="300" y="110" font-size="12" fill="var(--muted)" text-anchor="middle">OS không tự cưỡng chế preempt — task tự nguyện nhường CPU</text>
+      </svg>
+      <figcaption>Hình 19.1 — Với cooperative scheduling, mỗi task chỉ nhường CPU khi chính nó chủ động gọi taskYIELD() hoặc tự block.</figcaption>
+    </figure>
+
+    <h3>Đánh đổi</h3>
+    <p>Với preemptive, nếu Task 1 đang thao tác một cấu trúc dữ liệu dùng chung và bị ngắt giữa chừng bởi task priority cao hơn, dữ liệu có thể ở trạng thái dở dang nếu không có cơ chế bảo vệ (mutex/critical section). Với cooperative, bạn tự kiểm soát chính xác thời điểm nhường CPU nên tránh được kiểu lỗi đó — nhưng đổi lại, đáp ứng thời gian thực (real-time responsiveness) kém hơn vì một task có thể giữ CPU rất lâu nếu quên gọi <code>taskYIELD()</code>.</p>
+    <div class="mistake-list"><div class="mistake-item"><div><span class="lbl wrong">Sai</span>Quên gọi taskYIELD() → toàn hệ thống treo, các task khác không bao giờ chạy</div><div><span class="lbl right">Đúng</span>Luôn đảm bảo mọi vòng lặp trong task cooperative có điểm nhường CPU rõ ràng</div></div></div>
+  </div>
+</section>
+<section class="section-block" id="s20">
+  <div class="section-head">
+    <div class="section-num">20</div>
+    <div><span class="eyebrow">Core Concept · 2 Flagship Diagrams</span><h2>Complete Scheduler Flow</h2></div>
+  </div>
+  <div class="section-body">
+    <p>Lesson này gộp lại toàn bộ logic từ Lesson 04–19 thành hai sơ đồ tổng: <strong>quy trình quyết định của scheduler</strong> mỗi khi nó được gọi, và <strong>vòng đời thực thi hoàn chỉnh</strong> của một task từ lúc tạo tới lúc bị xoá.</p>
+
+    <h3>Sơ đồ 1 — Scheduler Decision Flow</h3>
+    <figure class="diagram-fig">
+      <figure class="diagram-fig">
+  <svg
+    viewBox="0 0 720 700"
+    role="img"
+    aria-labelledby="decDiagTitle decDiagDesc"
+  >
+
+    <title id="decDiagTitle">
+      Quy trình ra quyết định của scheduler
+    </title>
+
+    <desc id="decDiagDesc">
+      Scheduler kiểm tra Ready list, tìm task có priority cao nhất,
+      xử lý trường hợp nhiều task cùng priority và quyết định
+      round-robin hoặc tiếp tục task hiện tại.
+    </desc>
+
+    <!-- =====================================================
+         ARROW
+         ===================================================== -->
+    <defs>
+      <marker
+        id="schedulerArrow"
+        viewBox="0 0 10 10"
+        refX="8"
+        refY="5"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto"
+      >
+        <path
+          d="M 0 0 L 10 5 L 0 10 Z"
+          fill="var(--muted)"
+        />
+      </marker>
+    </defs>
+
+
+    <!-- =====================================================
+         CONNECTING LINES
+         ===================================================== -->
+    <g
+      fill="none"
+      stroke="var(--muted)"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      marker-end="url(#schedulerArrow)"
+    >
+
+      <!-- ALL TASKS → Ready check -->
+      <path d="M 360 58 L 360 88"/>
+
+      <!-- Ready check → Decision -->
+      <path d="M 360 148 L 360 178"/>
+
+      <!-- Decision → Find highest priority -->
+      <path d="M 360 258 L 360 288"/>
+
+      <!-- Decision → Idle -->
+      <path d="M 420 218 L 535 218"/>
+
+      <!-- Highest priority → Multiple priority decision -->
+      <path d="M 360 352 L 360 382"/>
+
+      <!-- Multiple priority → Run task -->
+      <path d="M 435 418 L 535 418"/>
+
+      <!-- Multiple priority → Time slicing -->
+      <path d="M 360 454 L 360 484"/>
+
+      <!-- Time slicing → Round robin -->
+      <path d="M 435 520 L 535 520"/>
+
+      <!-- Time slicing → Continue current task -->
+      <path d="M 285 520 L 285 570"/>
+
+    </g>
+
+
+    <!-- =====================================================
+         MAIN NODES
+         ===================================================== -->
+    <g
+      font-size="12"
+      font-weight="700"
+      text-anchor="middle"
+    >
+
+      <!-- ===================================================
+           ALL TASKS
+           =================================================== -->
+      <rect
+        x="260"
+        y="18"
+        width="200"
+        height="40"
+        rx="9"
+        fill="var(--surface2)"
+        stroke="var(--muted)"
+      />
+
+      <text
+        x="360"
+        y="43"
+        fill="var(--text)"
+      >
+        ALL TASKS
+      </text>
+
+
+      <!-- ===================================================
+           READY CHECK
+           =================================================== -->
+      <rect
+        x="220"
+        y="88"
+        width="280"
+        height="60"
+        rx="9"
+        fill="var(--surface2)"
+        stroke="var(--scheduler)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="360"
+        y="115"
+        fill="var(--scheduler)"
+        font-size="13"
+      >
+        Task nào đang Ready?
+      </text>
+
+      <text
+        x="360"
+        y="136"
+        fill="var(--muted)"
+        font-size="10.5"
+        font-weight="400"
+      >
+        (quét toàn bộ Ready list)
+      </text>
+
+
+      <!-- ===================================================
+           DECISION 1
+           =================================================== -->
+      <polygon
+        points="360,178 425,218 360,258 295,218"
+        fill="var(--surface2)"
+        stroke="var(--muted)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="360"
+        y="214"
+        font-size="11"
+        fill="var(--text)"
+      >
+        Có task nào
+      </text>
+
+      <text
+        x="360"
+        y="229"
+        font-size="11"
+        fill="var(--text)"
+      >
+        đang Ready?
+      </text>
+
+
+      <!-- ===================================================
+           IDLE TASK
+           =================================================== -->
+      <rect
+        x="535"
+        y="190"
+        width="145"
+        height="56"
+        rx="9"
+        fill="color-mix(in srgb, var(--running) 16%, var(--surface))"
+        stroke="var(--running)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="607"
+        y="224"
+        fill="var(--running)"
+        font-size="11"
+      >
+        Chạy Idle Task
+      </text>
+
+
+      <!-- ===================================================
+           FIND HIGHEST PRIORITY
+           =================================================== -->
+      <rect
+        x="220"
+        y="288"
+        width="280"
+        height="64"
+        rx="9"
+        fill="var(--surface2)"
+        stroke="var(--scheduler)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="360"
+        y="315"
+        fill="var(--scheduler)"
+        font-size="12.5"
+      >
+        Tìm priority cao nhất
+      </text>
+
+      <text
+        x="360"
+        y="337"
+        fill="var(--scheduler)"
+        font-size="12.5"
+      >
+        trong Ready
+      </text>
+
+
+      <!-- ===================================================
+           DECISION 2
+           =================================================== -->
+      <polygon
+        points="360,382 435,418 360,454 285,418"
+        fill="var(--surface2)"
+        stroke="var(--muted)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="360"
+        y="414"
+        font-size="10.5"
+        fill="var(--text)"
+      >
+        Nhiều task cùng
+      </text>
+
+      <text
+        x="360"
+        y="429"
+        font-size="10.5"
+        fill="var(--text)"
+      >
+        priority cao nhất?
+      </text>
+
+
+      <!-- ===================================================
+           RUN TASK
+           =================================================== -->
+      <rect
+        x="535"
+        y="390"
+        width="145"
+        height="56"
+        rx="9"
+        fill="color-mix(in srgb, var(--running) 16%, var(--surface))"
+        stroke="var(--running)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="607"
+        y="415"
+        fill="var(--running)"
+        font-size="11"
+      >
+        Chạy task đó
+      </text>
+
+      <text
+        x="607"
+        y="432"
+        fill="var(--running)"
+        font-size="11"
+      >
+        ngay lập tức
+      </text>
+
+
+      <!-- ===================================================
+           TIME SLICING DECISION
+           =================================================== -->
+      <polygon
+        points="360,484 435,520 360,556 285,520"
+        fill="var(--surface2)"
+        stroke="var(--muted)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="360"
+        y="516"
+        font-size="10"
+        fill="var(--text)"
+      >
+        configUSE_
+      </text>
+
+      <text
+        x="360"
+        y="531"
+        font-size="10"
+        fill="var(--text)"
+      >
+        TIME_SLICING = 1?
+      </text>
+
+
+      <!-- ===================================================
+           ROUND ROBIN
+           =================================================== -->
+      <rect
+        x="535"
+        y="492"
+        width="145"
+        height="56"
+        rx="9"
+        fill="color-mix(in srgb, var(--ready) 16%, var(--surface))"
+        stroke="var(--ready)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="607"
+        y="517"
+        fill="var(--ready)"
+        font-size="10.5"
+      >
+        Round-robin:
+      </text>
+
+      <text
+        x="607"
+        y="534"
+        fill="var(--ready)"
+        font-size="10.5"
+      >
+        đổi mỗi tick
+      </text>
+
+
+      <!-- ===================================================
+           CONTINUE CURRENT TASK
+           =================================================== -->
+      <rect
+        x="120"
+        y="570"
+        width="330"
+        height="58"
+        rx="9"
+        fill="color-mix(in srgb, var(--running) 16%, var(--surface))"
+        stroke="var(--running)"
+        stroke-width="1.5"
+      />
+
+      <text
+        x="285"
+        y="596"
+        fill="var(--running)"
+        font-size="11"
+      >
+        Task hiện tại tiếp tục
+      </text>
+
+      <text
+        x="285"
+        y="615"
+        fill="var(--running)"
+        font-size="11"
+      >
+        chạy tới khi tự block / yield
+      </text>
+
+    </g>
+
+
+    <!-- =====================================================
+         BRANCH LABELS
+         ===================================================== -->
+    <g
+      font-size="10.5"
+      font-weight="600"
+      fill="var(--muted)"
+    >
+
+      <!-- Decision 1 -->
+      <text
+        x="480"
+        y="210"
+        text-anchor="middle"
+      >
+        Không
+      </text>
+
+      <text
+        x="375"
+        y="275"
+        text-anchor="start"
+      >
+        Có
+      </text>
+
+
+      <!-- Decision 2 -->
+      <text
+        x="480"
+        y="411"
+        text-anchor="middle"
+      >
+        Không
+      </text>
+
+      <text
+        x="375"
+        y="375"
+        text-anchor="start"
+      >
+        Có
+      </text>
+
+
+      <!-- Time slicing -->
+      <text
+        x="480"
+        y="512"
+        text-anchor="middle"
+      >
+        Có
+      </text>
+
+      <text
+        x="270"
+        y="565"
+        text-anchor="end"
+      >
+        Không
+      </text>
+
+    </g>
+
+  </svg>
+</figure>
+      <figcaption>Hình 20.1 — Đây là logic mà mọi lời gọi scheduler (tick, ISR đánh thức task, task tự block/yield) đều đi qua để quyết định "ai chạy tiếp theo".</figcaption>
+    </figure>
+
+    <h3>Sơ đồ 2 — Complete Task Execution Flow</h3>
+    <figure class="diagram-fig">
+      <svg viewBox="0 0 560 520" role="img" aria-labelledby="masterDiagTitle">
+        <title id="masterDiagTitle">Vòng đời hoàn chỉnh của một task</title>
+        <defs><marker id="ah8" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+        <g stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#ah8)">
+          <path d="M200,42 L200,66"/>
+          <path d="M200,112 L200,136"/>
+          <path d="M200,182 L200,206"/>
+          <path d="M200,252 L200,276"/>
+          <path d="M200,322 L200,346"/>
+          <path d="M170,392 L110,416"/>
+          <path d="M230,392 L400,416"/>
+          <path d="M110,462 C 110,500 300,500 340,462" />
+          <path d="M400,462 C 400,500 300,500 250,462" />
+        </g>
+        <g font-size="11.5" font-weight="700" text-anchor="middle">
+          <rect x="100" y="6" width="200" height="36" rx="8" fill="var(--surface2)" stroke="var(--muted)"/><text x="200" y="29">Application</text>
+          <rect x="100" y="76" width="200" height="36" rx="8" fill="var(--surface2)" stroke="var(--secondary)"/><text x="200" y="99" fill="var(--secondary)">Task Function → Task Created</text>
+          <rect x="100" y="146" width="200" height="36" rx="8" fill="var(--surface2)" stroke="var(--kernel)"/><text x="200" y="169" fill="var(--kernel)">TCB + Stack</text>
+          <rect x="80" y="216" width="240" height="36" rx="8" fill="color-mix(in srgb, var(--ready) 16%, var(--surface))" stroke="var(--ready)"/><text x="200" y="239" fill="var(--ready)">Ready</text>
+          <rect x="80" y="286" width="240" height="36" rx="8" fill="var(--surface2)" stroke="var(--scheduler)"/><text x="200" y="309" fill="var(--scheduler)">Scheduler</text>
+          <rect x="80" y="356" width="240" height="36" rx="8" fill="color-mix(in srgb, var(--running) 16%, var(--surface))" stroke="var(--running)"/><text x="200" y="379" fill="var(--running)">Running</text>
+          <rect x="30" y="426" width="150" height="36" rx="8" fill="color-mix(in srgb, var(--blocked) 16%, var(--surface))" stroke="var(--blocked)"/><text x="105" y="449" fill="var(--blocked)">Blocked</text>
+          <rect x="330" y="426" width="150" height="36" rx="8" fill="color-mix(in srgb, var(--suspended) 16%, var(--surface))" stroke="var(--suspended)"/><text x="405" y="449" fill="var(--suspended)">Suspended</text>
+        </g>
+        <g font-size="10" fill="var(--muted)" text-anchor="middle">
+          <text x="130" y="410">block</text><text x="290" y="410">suspend</text>
+          <text x="225" y="490">event/timeout hoặc resume → quay lại Ready</text>
+        </g>
+        <rect x="0" y="0" width="0" height="0"/>
+      </svg>
+      <figcaption>Hình 20.2 — Vòng lặp trung tâm: Ready ⇄ Scheduler ⇄ Running lặp lại liên tục trong suốt vòng đời task, với hai lối rẽ tạm thời Blocked/Suspended luôn quay trở lại Ready.</figcaption>
+    </figure>
+
+    <div class="callout"><span class="callout-label badge badge-inference">INFERENCE</span><p style="font-style:normal;color:var(--text)">Hai sơ đồ trên là bản tổng hợp trực quan do khoá học xây dựng dựa trên các cơ chế đã được tài liệu mô tả rải rác qua các mục 4.3–4.12, không phải một hình duy nhất được sao chép nguyên văn từ tài liệu.</p></div>
+  </div>
+</section>
+<section class="section-block" id="lab-timeline">
+  <div class="section-head">
+    <div class="section-num">21</div>
+    <div><span class="eyebrow">Practice · Flagship Diagram</span><h2>Timeline Lab — 200ms Multi-Task Scenario</h2></div>
+  </div>
+  <div class="section-body">
+    <p>Kịch bản: <strong>ControlTask</strong> (priority 3, chu kỳ 10ms), <strong>SensorTask</strong> (priority 2, chu kỳ 50ms), <strong>LoggerTask</strong> (priority 1, chu kỳ 100ms), và <strong>IdleTask</strong> (priority 0) lấp mọi khoảng trống. Lịch chạy dưới đây được <strong>tính toán</strong> từ đúng quy tắc priority + Ready/Blocked đã học — không phải dữ liệu bịa.</p>
+    <div class="tl-wrap">
+      <div class="tl-controls">
+        <button id="labPlay">▶ Start</button>
+        <button id="labPause">⏸ Pause</button>
+        <button id="labReset">↻ Reset</button>
+        <span class="now">t = <b id="labNow">0</b> ms</span>
+      </div>
+      <div id="tlFinalScenario"></div>
+      <div class="tl-readout" id="labReadout">Nhấn Start để xem playhead di chuyển qua từng sự kiện.</div>
+    </div>
+    <span class="badge badge-inference" style="margin-top:14px;display:inline-flex">INFERENCE</span>
+    <p style="font-size:13px" class="muted">Thời gian thực thi cụ thể (Control=2ms, Sensor=8ms, Logger=16ms mỗi chu kỳ) là giả định minh hoạ của khoá học để tính lịch chạy — bản thân quy tắc lập lịch (priority + Ready/Blocked + tick) áp dụng đúng theo tài liệu Chapter 4.</p>
+  </div>
+</section>
+<section class="section-block" id="lab-scheduler">
+  <div class="section-head">
+    <div class="section-num">22</div>
+    <div><span class="eyebrow">Practice</span><h2>Scheduler Lab</h2></div>
+  </div>
+  <div class="section-body">
+    <p>Task A = priority 1, Task B = priority 2, Task C = priority 3. Cả ba đều Ready. Nhấn nút bên dưới để xem scheduler chọn ai, rồi mô phỏng Task C block để thấy quyền điều khiển chuyển giao.</p>
+    <div class="card" style="max-width:420px">
+      <div id="schedLabState" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <span class="state-chip ready" id="chipA">A · Ready</span>
+        <span class="state-chip ready" id="chipB">B · Ready</span>
+        <span class="state-chip ready" id="chipC">C · Ready</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="toggle-btn" id="schedRun">▶ Run Scheduler</button>
+        <button class="toggle-btn" id="schedBlockC">Task C → Blocked</button>
+        <button class="toggle-btn" id="schedReset">↻ Reset</button>
+      </div>
+      <p class="tl-readout" id="schedReadout" style="margin-top:14px">Chưa chạy scheduler.</p>
+    </div>
+  </div>
+</section>
+<section class="section-block" id="debugging">
+  <div class="section-head">
+    <div class="section-num">23</div>
+    <div><span class="eyebrow">Practice</span><h2>Debugging Dashboard</h2></div>
+  </div>
+  <div class="section-body">
+    <p>Nhấp vào từng vấn đề để xem nguyên nhân thường gặp và cách kiểm tra.</p>
+    <div class="debug-grid" id="debugGrid"></div>
+  </div>
+</section>
+<section class="section-block" id="interview">
+  <div class="section-head">
+    <div class="section-num">24</div>
+    <div><span class="eyebrow">Practice</span><h2>Interview Questions</h2></div>
+  </div>
+  <div class="section-body" id="interviewBody">
+    <p>Nhấp vào từng câu để mở đáp án. Được nhóm theo ba cấp độ.</p>
+  </div>
+</section>
+<section class="section-block" id="quiz">
+  <div class="section-head">
+    <div class="section-num">25</div>
+    <div><span class="eyebrow">Practice</span><h2>Quiz</h2></div>
+  </div>
+  <div class="section-body">
+    <div class="quiz-toolbar">
+      <select id="quizFilter">
+        <option value="all">Tất cả (30 câu)</option>
+        <option value="mcq">Trắc nghiệm</option>
+        <option value="tf">Đúng / Sai</option>
+        <option value="trace">Code / Timeline Tracing</option>
+        <option value="reason">Scheduler Reasoning</option>
+      </select>
+      <span class="quiz-score">Điểm: <span id="quizScore">0</span>/<span id="quizTotal">30</span></span>
+    </div>
+    <div id="quizList"></div>
+  </div>
+</section>
+<section class="section-block" id="cheatsheet">
+  <div class="section-head">
+    <div class="section-num">26</div>
+    <div><span class="eyebrow">Reference</span><h2>Cheat Sheet</h2></div>
+  </div>
+  <div class="section-body">
+    <div class="cheat-grid">
+      <div class="cheat-card"><h4>Task Lifecycle</h4><p style="font-size:13px">Created → Ready → Running → (Blocked / Suspended) → Ready → ...</p></div>
+      <div class="cheat-card"><h4>Priority</h4><p style="font-size:13px">Priority cao hơn → luôn thắng <em>khi</em> cùng đang Ready. Không đảm bảo tổng thời gian CPU nhiều hơn.</p></div>
+      <div class="cheat-card"><h4>Delay</h4><p style="font-size:13px">vTaskDelay() → Blocked → Timeout → Ready. vTaskDelayUntil() giữ mốc tuyệt đối, tránh trôi.</p></div>
+      <div class="cheat-card"><h4>Preemption</h4><p style="font-size:13px">Task priority cao hơn Ready → Switch ngay lập tức, bất kỳ thời điểm nào.</p></div>
+      <div class="cheat-card"><h4>Time Slicing</h4><p style="font-size:13px">Cùng priority + nhiều task Ready + time slicing bật → CPU chia đều theo tick.</p></div>
+      <div class="cheat-card"><h4>Cooperative</h4><p style="font-size:13px">Task phải chủ động yield/block — OS không tự tước CPU.</p></div>
+      <div class="cheat-card"><h4>Idle Task</h4><p style="font-size:13px">Priority 0, luôn tồn tại, dọn heap sau vTaskDelete().</p></div>
+      <div class="cheat-card"><h4>API nhanh</h4><p style="font-size:13px"><code>xTaskCreate · vTaskDelay · vTaskDelayUntil · vTaskPrioritySet · vTaskDelete · taskYIELD</code></p></div>
+    </div>
+
+    <h3>Top 20 Điều Cần Nhớ</h3>
+    <ol class="top20">
+      <li>Task function phải có vòng lặp vô hạn, không được return.</li>
+      <li>Stack depth tính theo word, không phải byte.</li>
+      <li>xTaskCreate() chỉ đưa vào Ready, không chạy ngay.</li>
+      <li>Chỉ 1 task Running tại 1 thời điểm trên mỗi lõi CPU.</li>
+      <li>Ready ≠ Running.</li>
+      <li>Blocked ≠ Suspended.</li>
+      <li>vTaskDelay() giải phóng CPU, không giữ CPU bận.</li>
+      <li>vTaskDelayUntil() tránh trôi chu kỳ.</li>
+      <li>Priority cao chỉ thắng khi đang Ready.</li>
+      <li>Priority cao không đồng nghĩa tổng CPU nhiều hơn.</li>
+      <li>Idle Task luôn tồn tại, priority thấp nhất.</li>
+      <li>Idle Task dọn bộ nhớ sau vTaskDelete().</li>
+      <li>Không gọi API blocking trong Idle Hook.</li>
+      <li>Time slicing chỉ áp dụng khi cùng priority.</li>
+      <li>Không time slicing + cùng priority = một task có thể chiếm CPU liên tục.</li>
+      <li>Preemption có thể xảy ra bất kỳ lúc nào, không chỉ tại tick.</li>
+      <li>Cooperative scheduling cần task tự nhường CPU.</li>
+      <li>TLS tránh xung đột biến toàn cục giữa các task.</li>
+      <li>Config macro quyết định triết lý lập lịch toàn hệ thống.</li>
+      <li>Đọc timeline luôn cần: trạng thái — ưu tiên — sự kiện kích hoạt.</li>
+    </ol>
+
+    <h3>Top 20 Lỗi Người Mới Học Thường Gặp</h3>
+    <ol class="top20">
+      <li>Nhầm đơn vị stack (byte thay vì word).</li>
+      <li>Tưởng xTaskCreate() chạy task ngay lập tức.</li>
+      <li>Dùng polling thay vì blocking API.</li>
+      <li>Nghĩ Ready = Running.</li>
+      <li>Nghĩ Blocked = Suspended.</li>
+      <li>Nghĩ vTaskDelay() giữ CPU bận.</li>
+      <li>Nghĩ priority cao luôn được chạy dù đang Blocked.</li>
+      <li>Nghĩ cùng priority luôn chia đều 50/50.</li>
+      <li>Nhầm time slicing với preemption.</li>
+      <li>Nghĩ tick là thứ duy nhất kích hoạt scheduler.</li>
+      <li>Viết code nặng trong ISR như trong task thường.</li>
+      <li>Nhầm taskYIELD() với vTaskDelay().</li>
+      <li>Dùng vTaskDelay() khi cần chu kỳ chính xác.</li>
+      <li>Gọi API blocking trong vApplicationIdleHook().</li>
+      <li>Quên rằng vTaskDelete() không giải phóng heap ngay.</li>
+      <li>Dùng biến static/global chia sẻ giữa nhiều task.</li>
+      <li>Đặt stack quá nhỏ mà không kiểm tra overflow.</li>
+      <li>Tin cooperative "an toàn hơn" mà quên phải tự yield.</li>
+      <li>Không phân biệt task function với task instance.</li>
+      <li>Kết luận hành vi hệ thống chỉ từ priority, bỏ qua trạng thái hiện tại.</li>
+    </ol>
+  </div>
+</section>
+<section class="section-block" id="glossary">
+  <div class="section-head">
+    <div class="section-num">27</div>
+    <div><span class="eyebrow">Reference</span><h2>Glossary</h2></div>
+  </div>
+  <div class="section-body">
+    <input type="text" class="glossary-search" id="glossarySearch" placeholder="Lọc thuật ngữ..." aria-label="Lọc glossary">
+    <div id="glossaryList"></div>
+  </div>
+</section>
+<section class="section-block" id="closing" style="padding-bottom:60px">
+  <div class="card" style="text-align:center;padding:40px 24px">
+    <span class="eyebrow">FreeRTOS · Task Management</span>
+    <h2 style="margin-top:10px;font-size:24px">Bạn đã hiểu được:</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;max-width:640px;margin:20px auto 0;text-align:left;font-size:13.5px">
+      <div>✓ Task</div><div>✓ TCB</div><div>✓ Task states</div><div>✓ Task creation</div>
+      <div>✓ Priority</div><div>✓ Tick</div><div>✓ Delay</div><div>✓ Blocking</div>
+      <div>✓ Idle task</div><div>✓ Preemption</div><div>✓ Time slicing</div><div>✓ Cooperative scheduling</div>
+      <div>✓ Task deletion</div><div>✓ Scheduler decision flow</div>
+    </div>
+    <hr class="rule" style="max-width:400px;margin:28px auto">
+    <h3 style="margin-bottom:8px">Học tiếp theo?</h3>
+    <p class="muted" style="max-width:520px;margin:0 auto;font-size:13.5px">Tài liệu Chapter 4 không nêu tên chương kế tiếp trong bộ giáo trình gốc — nếu bạn có trọn bộ tài liệu, hãy tiếp tục theo đúng thứ tự chương kế tiếp trong bộ giáo trình đó (thường các chương sau sẽ mở rộng sang cơ chế giao tiếp/đồng bộ giữa các task như Queue, Semaphore, Mutex — nhưng đây chỉ là dự đoán hợp lý, không phải thông tin xác nhận từ Chapter 4).</p>
+  </div>
+</section>
+</main>
+</div>
+<script>
+// ================================
+// STATE
+// ================================
+const THEME_KEY = 'frtos_theme';
+const PROGRESS_KEY = 'frtos_progress_v1';
+const QUIZ_KEY = 'frtos_quiz_v1';
+const SECTION_IDS = ['hero','s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11','s12','s13','s14','s15','s16','s17','s18','s19','s20','lab-timeline','lab-scheduler','debugging','interview','quiz','cheatsheet','glossary'];
+let visited = new Set(JSON.parse(localStorage.getItem(PROGRESS_KEY) || '[]'));
+let quizScoreState = JSON.parse(localStorage.getItem(QUIZ_KEY) || '{}');
+
+function saveVisited(){ try{ localStorage.setItem(PROGRESS_KEY, JSON.stringify([...visited])); }catch(e){} }
+function saveQuiz(){ try{ localStorage.setItem(QUIZ_KEY, JSON.stringify(quizScoreState)); }catch(e){} }
+
+function updateProgressUI(){
+  const total = SECTION_IDS.length + 30; // 30 quiz questions counted toward progress too
+  const quizDone = Object.keys(quizScoreState).length;
+  const pct = Math.min(100, Math.round(((visited.size + quizDone) / total) * 100));
+  const fill = document.getElementById('progressFill');
+  const label = document.getElementById('progressLabel');
+  if(fill) fill.style.width = pct + '%';
+  if(label) label.textContent = pct + '%';
+  document.querySelectorAll('.nav-item').forEach(a=>{
+    const id = a.getAttribute('href').slice(1);
+    const dot = a.querySelector('.nav-dot');
+    if(dot) dot.classList.toggle('done', visited.has(id));
+  });
+}
+// ================================
+// QUIZ DATA (30 câu)
+// ================================
+const QUIZ = [
+{id:1,type:'mcq',q:'Task Function phải có kiểu trả về là gì?',options:['int','void','BaseType_t','TaskHandle_t'],correct:1,explain:'Task function luôn là void, và không bao giờ được return.'},
+{id:2,type:'mcq',q:'usStackDepth trong xTaskCreate() tính theo đơn vị nào?',options:['Byte','Word','Kilobyte','Bit'],correct:1,explain:'Tính theo word — trên CPU 32-bit, 1 word = 4 byte.'},
+{id:3,type:'mcq',q:'API nào tạo task với bộ nhớ tĩnh do người dùng cấp?',options:['xTaskCreate()','xTaskCreateStatic()','vTaskCreate()','xTaskInit()'],correct:1,explain:'xTaskCreateStatic() nhận StaticTask_t và mảng stack do bạn khai báo sẵn.'},
+{id:4,type:'mcq',q:'Task đang thực thi trên CPU ở trạng thái nào?',options:['Ready','Running','Blocked','Suspended'],correct:1,explain:'Running = đang chiếm CPU.'},
+{id:5,type:'mcq',q:'Hàm nào đưa task vào Blocked trong X tick?',options:['vTaskDelay(X)','taskYIELD()','vTaskSuspend()','vTaskDelete()'],correct:0,explain:'vTaskDelay(X) block tương đối X tick.'},
+{id:6,type:'mcq',q:'Hàm nào giữ chu kỳ tuyệt đối, tránh trôi?',options:['vTaskDelay()','vTaskDelayUntil()','taskYIELD()','vTaskResume()'],correct:1,explain:'vTaskDelayUntil() tính theo mốc tuyệt đối, không cộng dồn từ lúc gọi.'},
+{id:7,type:'mcq',q:'Priority mặc định của Idle Task là?',options:['configMAX_PRIORITIES-1','1','0 (thấp nhất)','Không cố định'],correct:2,explain:'Idle Task luôn ở priority 0, thấp nhất có thể.'},
+{id:8,type:'mcq',q:'Macro nào bật Idle Hook?',options:['configUSE_IDLE_HOOK','configUSE_TICK_HOOK','configUSE_TIMERS','configIDLE_SHOULD_YIELD'],correct:0,explain:'configUSE_IDLE_HOOK=1 để vApplicationIdleHook() được gọi.'},
+{id:9,type:'mcq',q:'Hàm nào đổi priority runtime của một task?',options:['uxTaskPriorityGet()','vTaskPrioritySet()','vTaskDelete()','xTaskCreate()'],correct:1,explain:'vTaskPrioritySet(handle, newPriority).'},
+{id:10,type:'mcq',q:'Ai chịu trách nhiệm giải phóng heap sau vTaskDelete() (task dynamic)?',options:['Task tự giải phóng','Idle Task','Scheduler ngay lập tức','Không ai cả'],correct:1,explain:'Idle Task dọn bộ nhớ ở lượt chạy kế tiếp của nó.'},
+{id:11,type:'mcq',q:'Macro nào tắt time slicing?',options:['configUSE_TIME_SLICING=0','configUSE_PREEMPTION=0','configUSE_TICKLESS_IDLE=1','configMAX_PRIORITIES=0'],correct:0,explain:'configUSE_TIME_SLICING=0 tắt round-robin cùng priority.'},
+{id:12,type:'mcq',q:'Hàm nào để task tự nhường CPU mà không vào Blocked?',options:['vTaskDelay(0)','taskYIELD()','vTaskSuspend(NULL)','vTaskDelete(NULL)'],correct:1,explain:'taskYIELD() nhường CPU nhưng task vẫn Ready ngay, không Blocked.'},
+{id:13,type:'mcq',q:'xTaskCreate() trả về khi nào so với lúc task mới chạy lần đầu?',options:['Sau khi task chạy xong','Ngay khi task được thêm vào Ready, trước khi nó chạy','Không bao giờ trả về','Chỉ trả về nếu priority thấp'],correct:1,explain:'xTaskCreate() chỉ đưa vào Ready rồi trả về ngay cho code gọi.'},
+{id:14,type:'mcq',q:'vTaskDelete(NULL) nghĩa là gì?',options:['Lỗi cú pháp','Task tự xoá chính nó','Xoá tất cả task','Không làm gì'],correct:1,explain:'NULL = "task đang gọi hàm này".'},
+{id:15,type:'mcq',q:'configTICK_RATE_HZ ảnh hưởng gì?',options:['Số task tối đa','Độ phân giải thời gian nhỏ nhất của hệ thống','Kích thước stack','Số priority tối đa'],correct:1,explain:'Tick rate quyết định 1 tick = bao nhiêu ms.'},
+{id:16,type:'tf',q:'Task priority cao hơn luôn chiếm tổng thời gian CPU nhiều hơn.',options:['Đúng','Sai'],correct:1,explain:'Sai — phụ thuộc nó ở Ready hay Blocked, không chỉ số priority.'},
+{id:17,type:'tf',q:'Ready và Running là cùng một trạng thái.',options:['Đúng','Sai'],correct:1,explain:'Sai — Ready là "sẵn sàng", Running là "đang thực sự chạy".'},
+{id:18,type:'tf',q:'Idle Task chỉ chạy khi không còn task ứng dụng nào Ready.',options:['Đúng','Sai'],correct:0,explain:'Đúng.'},
+{id:19,type:'tf',q:'vTaskDelay() giữ CPU bận trong suốt thời gian delay.',options:['Đúng','Sai'],correct:1,explain:'Sai — task vào Blocked, nhường CPU.'},
+{id:20,type:'tf',q:'Time slicing chỉ ảnh hưởng các task cùng priority.',options:['Đúng','Sai'],correct:0,explain:'Đúng.'},
+{id:21,type:'tf',q:'Có thể tạo task mà không cần stack riêng.',options:['Đúng','Sai'],correct:1,explain:'Sai — mọi task đều cần một vùng stack riêng.'},
+{id:22,type:'tf',q:'Cooperative scheduling không cần task tự nhường CPU.',options:['Đúng','Sai'],correct:1,explain:'Sai — task PHẢI tự yield/block, OS không tự tước CPU.'},
+{id:23,type:'tf',q:'Preemption chỉ có thể xảy ra tại tick interrupt.',options:['Đúng','Sai'],correct:1,explain:'Sai — có thể xảy ra bất kỳ lúc nào (vd: ISR đánh thức task).'},
+{id:24,type:'tf',q:'Suspended task có thể tự động quay lại Ready khi hết một khoảng thời gian.',options:['Đúng','Sai'],correct:1,explain:'Sai — phải có vTaskResume()/xTaskResumeFromISR() rõ ràng.'},
+{id:25,type:'trace',q:'xTaskCreate(fn,"T",128,NULL,1,NULL) — stack cấp bao nhiêu byte trên CPU 32-bit?',options:['128 byte','512 byte','256 byte','1024 byte'],correct:1,explain:'128 word × 4 byte = 512 byte.'},
+{id:26,type:'trace',q:'Task A(pri 2) và B(pri 1) đều Ready lúc t=0, preemptive không time-slicing. Ai chạy từ t=0?',options:['A','B','Cả hai xen kẽ','Idle'],correct:0,explain:'A có priority cao hơn nên thắng.'},
+{id:27,type:'trace',q:'Tiếp câu trên: A gọi vTaskDelay(10) tại t=5. Ai chạy từ t=5?',options:['A','B','Idle','Không ai'],correct:1,explain:'A vào Blocked, B là Ready duy nhất còn lại.'},
+{id:28,type:'trace',q:'A quay lại Ready ở t=15 (hết delay). Điều gì xảy ra ngay lập tức?',options:['A chờ đến tick kế tiếp','A preempt B ngay vì priority cao hơn','B tiếp tục chạy đến hết','Idle chạy'],correct:1,explain:'Preemption xảy ra ngay khi A chuyển sang Ready.'},
+{id:29,type:'reason',q:'Vì sao "cùng priority + không time slicing" dễ gây lỗi logic cho người mới?',options:['Vì scheduler bị lỗi','Vì họ tưởng CPU tự động chia đều, trong khi một task có thể chiếm liên tục tới khi tự block','Vì priority không có tác dụng','Vì Idle Task luôn chạy trước'],correct:1,explain:'Nhiều người giả định round-robin mặc định mà quên time slicing cần được bật.'},
+{id:30,type:'reason',q:'Tại sao đọc timeline cần cả 3 yếu tố: trạng thái — ưu tiên — sự kiện kích hoạt?',options:['Vì tài liệu yêu cầu vậy','Vì chỉ priority không giải thích được TẠI SAO một transition xảy ra tại đúng thời điểm đó','Vì mỗi task có màu khác nhau','Vì tick luôn cố định'],correct:1,explain:'Priority chỉ quyết định ai thắng khi tranh chấp — cần biết trạng thái + sự kiện để biết khi nào tranh chấp xảy ra.'}
+];
+// ================================
+// DEBUGGING DATA (9 issues)
+// ================================
+const DEBUG_ISSUES = [
+{title:'TASK NEVER RUNS',symptoms:'Task được tạo nhưng không bao giờ thấy log/hành vi của nó.',cause:'Priority thấp hơn một task khác luôn Ready; hoặc task bị kẹt ở Blocked/Suspended.',check:'In uxTaskPriorityGet() của mọi task; kiểm tra task có đang chờ semaphore/queue không bao giờ được cấp.',fix:'Tăng priority hợp lý hoặc đảm bảo điều kiện đánh thức thực sự xảy ra.'},
+{title:'TASK STARVATION',symptoms:'Task priority thấp gần như không bao giờ được CPU.',cause:'Một task priority cao hơn không bao giờ block (continuous loop).',check:'Xem task priority cao có gọi API blocking định kỳ không.',fix:'Thêm vTaskDelay()/blocking API vào task priority cao, hoặc dùng time slicing nếu cùng priority.'},
+{title:'CPU 100%',symptoms:'CPU luôn bận dù hệ thống có vẻ "không làm gì".',cause:'Một task polling bằng vòng lặp rỗng thay vì blocking.',check:'Tìm các vòng while(...) không có vTaskDelay/blocking bên trong.',fix:'Thay polling bằng blocking API (semaphore, queue, vTaskDelay).'},
+{title:'TASK NEVER WAKES',symptoms:'Task Blocked mãi mãi, không bao giờ trở lại Ready.',cause:'Điều kiện đánh thức (semaphore give, timeout) không bao giờ xảy ra.',check:'Kiểm tra ISR/task khác có thực sự gọi give tương ứng; kiểm tra timeout có phải portMAX_DELAY.',fix:'Sửa logic phát tín hiệu, hoặc đặt timeout hữu hạn thay vì chờ vô hạn.'},
+{title:'WRONG PRIORITY',symptoms:'Task quan trọng bị trễ, task ít quan trọng chạy trước.',cause:'Gán priority không phản ánh đúng độ khẩn cấp thực tế.',check:'Liệt kê toàn bộ priority hệ thống, so với yêu cầu thời gian thực từng task.',fix:'Sắp xếp lại priority theo mức độ khẩn cấp/tần suất thực tế.'},
+{title:'UNEXPECTED SWITCH',symptoms:'Task bị đổi giữa chừng dù "đang priority cao nhất".',cause:'Một ISR/task khác vừa nâng priority của task khác, hoặc time slicing đang bật.',check:'Rà soát mọi lời gọi vTaskPrioritySet(); kiểm tra configUSE_TIME_SLICING.',fix:'Xác nhận đây là hành vi mong muốn, hoặc tắt time slicing/kiểm soát priority chặt hơn.'},
+{title:'STACK PROBLEM',symptoms:'Crash ngẫu nhiên, biến bị thay đổi giá trị bất thường, hoặc treo tại vị trí không liên quan.',cause:'Stack depth đặt quá nhỏ (đặc biệt nếu nhầm byte↔word), gây stack overflow.',check:'Bật configCHECK_FOR_STACK_OVERFLOW, dùng uxTaskGetStackHighWaterMark().',fix:'Tăng usStackDepth, xác nhận lại đơn vị word/byte.'},
+{title:'TASK DELETED (nhưng heap không giảm)',symptoms:'Gọi vTaskDelete() nhưng bộ nhớ heap trống dường như không tăng lại ngay.',cause:'Idle Task chưa được chạy để dọn dẹp.',check:'Kiểm tra Idle Task có đang bị đói CPU (starvation) không.',fix:'Đảm bảo hệ thống luôn dành thời gian cho Idle Task chạy.'},
+{title:'IDLE NEVER RUNS',symptoms:'vApplicationIdleHook() không bao giờ được gọi.',cause:'Một hoặc nhiều task ứng dụng luôn có mặt trong Ready, không bao giờ nhường CPU.',check:'Kiểm tra toàn bộ task ứng dụng có định kỳ block hay không.',fix:'Thêm điểm block/yield hợp lý cho các task priority cao/liên tục.'}
+];
+// ================================
+// INTERVIEW DATA
+// ================================
+const INTERVIEW = {beginner:[
+['Task khác gì một hàm C bình thường?','Task có TCB + stack riêng, chạy vòng lặp vô hạn, được scheduler tạm dừng/tiếp tục độc lập; hàm C thường chạy xong rồi trả quyền điều khiển.'],
+['TCB lưu những gì?','Trạng thái, priority, stack pointer, handle, thông tin lập lịch và một số kernel metadata khác.'],
+['Kể tên 4 trạng thái chính của task.','Running, Ready, Blocked, Suspended.'],
+['Khác biệt xTaskCreate() và xTaskCreateStatic()?','Dynamic dùng heap tự động; Static dùng bộ nhớ do người dùng cấp sẵn (StaticTask_t + mảng stack).'],
+['usStackDepth tính theo đơn vị gì?','Word — không phải byte.'],
+['vTaskDelay() làm gì với task gọi nó?','Chuyển sang Blocked trong số tick chỉ định, nhường CPU.'],
+['Vì sao polling lãng phí CPU?','CPU vẫn ở Running 100% dù không làm việc có ích, chặn các task priority thấp hơn.'],
+['Idle Task là gì?','Task priority thấp nhất do kernel tự tạo, chạy khi không còn task nào khác Ready.'],
+['Priority cao hơn có luôn được chạy trước không?','Chỉ khi đang Ready — nếu Blocked/Suspended thì task priority thấp hơn vẫn chạy bình thường.'],
+['vTaskDelete(NULL) làm gì?','Task tự xoá chính nó.']
+],intermediate:[
+['So sánh vTaskDelay() và vTaskDelayUntil()?','vTaskDelay tính tương đối, dễ trôi chu kỳ; vTaskDelayUntil tính theo mốc tuyệt đối, giữ nhịp cố định.'],
+['Preemptive+time-slicing khác preemptive không time-slicing ở điểm nào?','Khác nhau khi CÙNG priority: có time-slicing thì chia round-robin, không thì một task chạy liên tục tới khi tự block.'],
+['Cooperative scheduling yêu cầu gì ở lập trình viên?','Phải chủ động gọi taskYIELD() hoặc block — không có preemption tự động.'],
+['Rủi ro lớn nhất khi viết sai vApplicationIdleHook()?','Gọi API blocking bên trong, cản trở Idle Task dọn bộ nhớ của task đã xoá.'],
+['vTaskPrioritySet() lên task đang Running có khiến nó dừng ngay không?','Chỉ nếu priority mới thấp hơn một task khác đang Ready; nếu không, nó vẫn tiếp tục chạy.'],
+['Vì sao vTaskDelete() không giải phóng heap ngay?','Việc dọn dẹp được giao cho Idle Task ở lượt chạy kế tiếp, không thực hiện đồng bộ ngay trong lời gọi.'],
+['TLS giải quyết vấn đề gì với errno?','Cấp mỗi task một bản sao errno riêng, tránh việc các task ghi đè lẫn nhau lên một biến toàn cục dùng chung.'],
+['taskYIELD() khác vTaskDelay(0) thế nào?','taskYIELD() không đưa task vào Blocked (vẫn Ready ngay); vTaskDelay với tham số >0 sẽ Blocked trong khoảng tick xác định.'],
+['Điều gì xảy ra nếu task priority cao chạy vòng lặp vô hạn không bao giờ block?','Nó chiếm CPU liên tục, gây đói (starvation) cho mọi task priority thấp hơn kể cả Idle Task.'],
+['configTICK_RATE_HZ ảnh hưởng gì đến độ chính xác của vTaskDelay()?','Đây là đơn vị thời gian nhỏ nhất hệ thống phân biệt được — Hz thấp thì delay thô, Hz cao thì chính xác hơn nhưng tốn overhead xử lý ngắt nhiều hơn.']
+],advanced:[
+['Vì sao "priority cao hơn" không đồng nghĩa "chạy nhiều hơn về tổng thời gian CPU"?','Vì priority chỉ quyết định ai thắng khi tranh chấp lúc cùng Ready — nếu task priority cao dành phần lớn thời gian Blocked, tổng CPU nó dùng có thể ít hơn task priority thấp nhưng luôn Ready.'],
+['Trong hệ 3 task cùng priority với time slicing, nếu một task Blocked giữa time slice của nó, điều gì xảy ra với phần thời gian còn lại?','Phần thời gian còn lại không được giữ lại cho task đó — scheduler chuyển ngay sang task Ready kế tiếp trong vòng round-robin.'],
+['Trace TCB từ xTaskCreate() đến khi task chạy lần đầu.','Cấp phát TCB+Stack → khởi tạo các field TCB → giả lập một stack frame ban đầu → thêm vào Ready list → scheduler chọn → context switch vào task function.'],
+['Vì sao stack quá nhỏ có thể gây lỗi khó debug thay vì crash ngay?','Overflow có thể ghi đè lên vùng nhớ kế cận (TCB của chính nó hoặc dữ liệu khác) mà không gây lỗi truy cập ngay — triệu chứng xuất hiện muộn, ở nơi không liên quan.'],
+['So sánh chi phí context switch giữa preemptive-with-time-slicing và cooperative.','Preemptive-with-time-slicing có nhiều context switch hơn (mỗi tick có thể đổi, cộng thêm khi có sự kiện priority cao hơn) đổi lại đáp ứng tốt hơn; cooperative ít context switch hơn nhưng đánh đổi bằng độ trễ xử lý sự kiện có thể cao hơn.'],
+['Vì sao preemption có thể xảy ra "at any time", không chỉ tại tick?','Vì bất kỳ sự kiện nào làm một task priority cao hơn chuyển sang Ready — ví dụ ISR gọi hàm đánh thức task — có thể kích hoạt đánh giá lại scheduler ngay lập tức, không cần chờ tick kế tiếp.'],
+['Nếu một task Suspended rồi bị xoá trong khi đang Suspended, trình tự dọn dẹp có gì khác so với xoá một task đang Ready?','Cơ chế tổng quát giống nhau — TCB được gỡ khỏi bất kỳ danh sách nào đang giữ nó (Suspended list thay vì Ready list), rồi đánh dấu cho Idle Task dọn nếu là dynamic.'],
+['Giải thích vì sao vTaskDelayUntil() vẫn có thể bị trễ nếu hệ thống quá tải.','Nếu tại thời điểm đánh thức, task priority cao hơn vẫn đang Running, task dùng vTaskDelayUntil() phải chờ ở Ready cho đến khi được scheduler chọn — hàm chỉ đảm bảo điểm đánh thức (wake tick) không trôi, không đảm bảo thời điểm thực sự được Running.'],
+['Nếu hai task cùng priority nhưng một task luôn gọi taskYIELD() ngay khi vào Running, hành vi hệ thống thay đổi thế nào so với round-robin bình thường?','Task đó tự nguyện nhường ngay lập tức thay vì dùng hết time slice của nó, hiệu quả giống như nó nhận ít thời gian CPU hơn task kia trong cùng chu kỳ round-robin, dù cùng priority.'],
+['Tại sao kernel phải "giả lập" một ngắt đã xảy ra khi khởi tạo stack ban đầu cho một task mới tạo?','Vì cơ chế context-switch được thiết kế thống nhất dựa trên việc phục hồi ngữ cảnh từ một stack frame đã lưu — tạo sẵn một frame giả cho task mới giúp scheduler dùng chung một đoạn code phục hồi cho cả task mới lẫn task đã từng chạy.']
+]};
+// ================================
+// GLOSSARY DATA
+// ================================
+const GLOSSARY = [
+['API','Application Programming Interface — các hàm kernel cung cấp cho ứng dụng gọi (xTaskCreate, vTaskDelay...).'],
+['Blocked','Trạng thái task đang chờ một sự kiện hoặc hết thời gian timeout; không tiêu tốn CPU.'],
+['Context Switch','Hành động kernel lưu ngữ cảnh task đang Running và phục hồi ngữ cảnh task khác.'],
+['Cooperative Scheduling','Chế độ lập lịch mà task phải chủ động nhường CPU (yield/block), OS không tự tước CPU.'],
+['Idle Hook','Hàm callback do người dùng viết, được Idle Task gọi mỗi vòng lặp.'],
+['Idle Task','Task priority thấp nhất, kernel tự tạo, chạy khi không còn task nào khác Ready.'],
+['Preemption','Kernel tước CPU khỏi task đang Running để nhường cho task priority cao hơn vừa Ready.'],
+['Priority','Số nguyên biểu thị mức ưu tiên lập lịch của một task.'],
+['pvParameters','Con trỏ void* truyền vào task lúc tạo, giúp phân biệt các instance dùng chung một task function.'],
+['Ready','Trạng thái task sẵn sàng chạy nhưng chưa được scheduler chọn.'],
+['Reentrancy','Tính chất của một hàm có thể được gọi an toàn từ nhiều task xen kẽ mà không gây lỗi dữ liệu.'],
+['Running','Trạng thái task đang thực sự chiếm CPU.'],
+['Scheduler','Thành phần kernel quyết định task nào được chạy tại mỗi thời điểm.'],
+['Stack','Vùng nhớ riêng của mỗi task, lưu biến cục bộ và ngữ cảnh context switch.'],
+['Suspended','Trạng thái task bị tạm dừng thủ công, chỉ quay lại Ready khi có lệnh resume rõ ràng.'],
+['Task','Một đơn vị thực thi độc lập trong FreeRTOS, có TCB và stack riêng.'],
+['TCB (Task Control Block)','Cấu trúc dữ liệu kernel dùng để theo dõi trạng thái, priority, stack pointer... của một task.'],
+['Thread Local Storage (TLS)','Vùng lưu trữ riêng cho mỗi task, tránh xung đột khi nhiều task cùng dùng chung một biến static/global.'],
+['Tick','Ngắt phần cứng định kỳ dùng để đo thời gian và đánh giá lại việc lập lịch.'],
+['Time Slicing','Cơ chế chia đều CPU theo tick giữa các task cùng priority đang Ready.']
+];
+// ================================
+// STATE-DIAGRAM PANEL CONTENT
+// ================================
+const STATE_INFO = {
+running:{title:'RUNNING',color:'running',body:'<p>Task hiện đang thực sự chiếm CPU và thực thi lệnh.</p><dl><dt style="font-weight:700;margin-top:8px">Tiêu tốn CPU?</dt><dd>Có — 100%.</dd><dt style="font-weight:700;margin-top:8px">Có thể có nhiều task Running cùng lúc?</dt><dd>Không — chỉ 1 task/lõi CPU.</dd></dl>'},
+ready:{title:'READY',color:'ready',body:'<p>Task sẵn sàng chạy nhưng chưa được scheduler chọn.</p><dl><dt style="font-weight:700;margin-top:8px">Nguyên nhân điển hình</dt><dd>Vừa được tạo, vừa hết Blocked/Suspended, hoặc bị preempt.</dd><dt style="font-weight:700;margin-top:8px">Tiêu tốn CPU?</dt><dd>Không.</dd></dl>'},
+blocked:{title:'BLOCKED',color:'blocked',body:'<p>Task đang chờ một sự kiện hoặc timeout.</p><dl><dt style="font-weight:700;margin-top:8px">Nguyên nhân thường gặp</dt><dd>vTaskDelay() · chờ Queue · chờ Semaphore · chờ sự kiện</dd><dt style="font-weight:700;margin-top:8px">Tiêu tốn CPU?</dt><dd>Không.</dd><dt style="font-weight:700;margin-top:8px">Scheduler có thể chạy task Ready khác không?</dt><dd>Có.</dd></dl>'},
+suspended:{title:'SUSPENDED',color:'suspended',body:'<p>Task bị tạm dừng thủ công bằng vTaskSuspend(), tách biệt hoàn toàn khỏi lập lịch.</p><dl><dt style="font-weight:700;margin-top:8px">Quay lại Ready khi nào?</dt><dd>Chỉ khi có lệnh vTaskResume()/xTaskResumeFromISR() rõ ràng — không tự động theo thời gian.</dd></dl>'}
+};
+// ================================
+// SEARCH INDEX
+// ================================
+const SEARCH_INDEX = [
+{id:'hero',title:'Giới thiệu',section:'Overview',kw:'chapter 4 overview intro'},
+{id:'s01',title:'01 · RTOS Fundamentals',section:'Core',kw:'bare-metal rtos scheduler cpu'},
+{id:'s02',title:'02 · What Is a Task?',section:'Core',kw:'task task function task instance blueprint'},
+{id:'s03',title:'03 · Task Function',section:'Core',kw:'pvParameters static shared variable reentrancy'},
+{id:'s04',title:'04 · Task States',section:'Core',kw:'ready running blocked suspended not running state machine'},
+{id:'s05',title:'05 · Task Creation',section:'Core',kw:'tcb xtaskcreate xtaskcreatestatic dynamic static'},
+{id:'s06',title:'06 · Task Parameters',section:'Core',kw:'stack depth word byte configstack_depth_type'},
+{id:'s07',title:'07 · Task Priority',section:'Core',kw:'priority ladder highest lowest configmax_priorities'},
+{id:'s08',title:'08 · Tick & Scheduler',section:'Core',kw:'tick interrupt configtick_rate_hz pdms_to_ticks'},
+{id:'s09',title:'09 · vTaskDelay()',section:'Core',kw:'vtaskdelay blocking timeline'},
+{id:'s10',title:'10 · vTaskDelayUntil()',section:'Core',kw:'vtaskdelayuntil drift periodic'},
+{id:'s11',title:'11 · Blocking vs Polling',section:'Core',kw:'polling blocking cpu utilization'},
+{id:'s12',title:'12 · Idle Task',section:'Core',kw:'idle task idle hook vapplicationidlehook'},
+{id:'s13',title:'13 · Priority Change',section:'Core',kw:'vtaskpriorityset uxtaskpriorityget taskhandle_t'},
+{id:'s14',title:'14 · Task Deletion',section:'Core',kw:'vtaskdelete heap cleanup idle task'},
+{id:'s15',title:'15 · TLS & Reentrancy',section:'Core',kw:'thread local storage errno reentrant'},
+{id:'s16',title:'16 · Scheduling Algorithms',section:'Core',kw:'configuse_preemption configuse_time_slicing table'},
+{id:'s17',title:'17 · Preemption',section:'Core',kw:'preemptive preemption isr any time'},
+{id:'s18',title:'18 · Time Slicing',section:'Core',kw:'time slicing round robin configidle_should_yield'},
+{id:'s19',title:'19 · Cooperative Scheduling',section:'Core',kw:'cooperative taskyield'},
+{id:'s20',title:'20 · Complete Scheduler Flow',section:'Core',kw:'scheduler decision flow master diagram'},
+{id:'lab-timeline',title:'21 · Timeline Lab',section:'Practice',kw:'200ms control sensor logger idle simulation'},
+{id:'lab-scheduler',title:'22 · Scheduler Lab',section:'Practice',kw:'run scheduler task a b c'},
+{id:'debugging',title:'23 · Debugging',section:'Practice',kw:'starvation stack overflow idle never runs'},
+{id:'interview',title:'24 · Interview Questions',section:'Practice',kw:'interview questions beginner advanced'},
+{id:'quiz',title:'25 · Quiz',section:'Practice',kw:'quiz questions multiple choice'},
+{id:'cheatsheet',title:'26 · Cheat Sheet',section:'Reference',kw:'cheat sheet top 20 summary'},
+{id:'glossary',title:'27 · Glossary',section:'Reference',kw:'glossary terms definitions'}
+];
+
+// ================================
+// TIMELINE RENDERER (generic)
+// ================================
+function renderTimeline(containerId, cfg){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const duration = cfg.duration;
+  const stepLabel = cfg.stepLabel || Math.max(10, Math.round(duration/10));
+  let axisHtml = '<div class="tl-axis">';
+  for(let t=0;t<=duration;t+=stepLabel){ axisHtml += `<span style="flex:0 0 ${ (stepLabel/duration*100).toFixed(3) }%">${t}ms</span>`; }
+  axisHtml += '</div>';
+  let lanesHtml = '';
+  cfg.lanes.forEach(lane=>{
+    let segHtml = '';
+    cfg.segments.filter(s=>s.lane===lane.key).forEach(s=>{
+      const left = (s.start/duration*100).toFixed(3);
+      const width = ((s.end-s.start)/duration*100).toFixed(3);
+      const title = s.title || `${s.start}-${s.end}ms · ${lane.label} · ${s.state}`;
+      segHtml += `<div class="tl-seg" data-state="${s.state}" style="left:${left}%;width:${width}%" title="${title.replace(/"/g,'&quot;')}"></div>`;
+    });
+    lanesHtml += `<div class="tl-lane"><div class="tl-lane-label">${lane.label}</div><div class="tl-track" id="${containerId}_${lane.key}">${segHtml}</div></div>`;
+  });
+  el.innerHTML = `<div class="tl-scroll"><div class="tl">${axisHtml}${lanesHtml}</div></div>` +
+    `<div class="tl-legend">
+      <span><i style="background:var(--running)"></i>Running</span>
+      <span><i style="background:repeating-linear-gradient(45deg,var(--ready) 0 3px,transparent 3px 6px)"></i>Ready (chờ lượt)</span>
+      <span><i style="background:color-mix(in srgb, var(--blocked) 45%, transparent)"></i>Blocked</span>
+      <span><i style="background:repeating-linear-gradient(135deg,var(--border) 0 3px,transparent 3px 6px)"></i>Idle</span>
+    </div>`;
+}
+
+// Simple discrete scheduler simulator (priority-based, periodic tasks, absolute wake scheduling)
+function simulateSchedule(tasks, duration){
+  const st = tasks.map(t=>({...t, nextWake:0, remaining:0}));
+  const perMs = [];
+  for(let t=0;t<duration;t++){
+    st.forEach(task=>{
+      if(t===task.nextWake){ task.remaining = task.exec; task.nextWake += task.period; }
+    });
+    const ready = st.filter(t=>t.remaining>0).sort((a,b)=>b.pri-a.pri);
+    const winner = ready[0];
+    perMs.push(winner ? winner.key : 'idle');
+    if(winner) winner.remaining -= 1;
+  }
+  // compress into segments
+  const segs = [];
+  let curr = perMs[0], start=0;
+  for(let t=1;t<=duration;t++){
+    if(t===duration || perMs[t]!==curr){
+      segs.push({lane:curr,start,end:t,state: curr==='idle'?'idle':'running'});
+      curr = perMs[t]; start = t;
+    }
+  }
+  return segs;
+}
+
+// ================================
+// TIMELINE DATA + INIT
+// ================================
+function initTimelines(){
+  // Lesson 07 — priority demo (Task1 pri1 continuous, Task2 pri2 continuous, never block)
+  renderTimeline('tlPriorityDemo', {duration:60, stepLabel:10,
+    lanes:[{key:'t1',label:'Task 1 (pri 1)'},{key:'t2',label:'Task 2 (pri 2)'}],
+    segments:[
+      {lane:'t1',start:0,end:60,state:'ready',title:'Task 1 luôn Ready nhưng không bao giờ được chọn'},
+      {lane:'t2',start:0,end:60,state:'running',title:'Task 2 chiếm CPU liên tục — priority cao hơn, không bao giờ block'}
+    ]});
+  // Lesson 09 — vTaskDelay timeline
+  renderTimeline('tlDelayDemo', {duration:240, stepLabel:40,
+    lanes:[{key:'task',label:'Task'}],
+    segments:[
+      {lane:'task',start:0,end:20,state:'running',title:'0-20ms: Running — gọi vTaskDelay(100ms) ở cuối'},
+      {lane:'task',start:20,end:120,state:'blocked',title:'20-120ms: Blocked — chờ hết 100ms'},
+      {lane:'task',start:120,end:140,state:'running',title:'120ms: hết hạn → Ready → Scheduler chọn → Running'},
+      {lane:'task',start:140,end:240,state:'blocked',title:'140-240ms: Blocked — chu kỳ delay kế tiếp'}
+    ]});
+  renderDelayCmp('delay');
+  // Lesson 11 — polling vs blocking
+  renderTimeline('tlBlockingDemo', {duration:60, stepLabel:10,
+    lanes:[{key:'a',label:'Task A'},{key:'b',label:'Task B (pri thấp)'}],
+    segments:[
+      {lane:'a',start:0,end:60,state:'running',title:'Task A polling — chiếm Running 100% dù không làm việc có ích'},
+      {lane:'b',start:0,end:60,state:'ready',title:'Task B không bao giờ được chạy vì A không bao giờ Blocked'}
+    ]});
+  // Lesson 12 — idle demo
+  renderTimeline('tlIdleDemo', {duration:60, stepLabel:10,
+    lanes:[{key:'a',label:'Task A'},{key:'b',label:'Task B'},{key:'c',label:'Task C'},{key:'idle',label:'Idle Task'}],
+    segments:[
+      {lane:'a',start:0,end:15,state:'running'},{lane:'a',start:15,end:60,state:'blocked'},
+      {lane:'b',start:15,end:30,state:'running'},{lane:'b',start:30,end:60,state:'blocked'},{lane:'b',start:0,end:15,state:'ready'},
+      {lane:'c',start:30,end:45,state:'running'},{lane:'c',start:45,end:60,state:'blocked'},{lane:'c',start:0,end:30,state:'ready'},
+      {lane:'idle',start:45,end:60,state:'running',title:'Không còn task ứng dụng nào Ready — Idle Task chạy'}
+    ]});
+  // Lesson 13 — priority change
+  renderTimeline('tlPriorityChangeDemo', {duration:60, stepLabel:10,
+    lanes:[{key:'a',label:'Task A'},{key:'b',label:'Task B (pri cao)'}],
+    segments:[
+      {lane:'a',start:0,end:60,state:'ready',title:'A priority thấp, luôn Ready'},
+      {lane:'b',start:0,end:30,state:'running',title:'B chạy vì priority cao hơn'},
+      {lane:'a',start:30,end:31,state:'running',title:'t=30ms: vTaskPrioritySet nâng A vượt B → preempt ngay'},
+      {lane:'b',start:30,end:60,state:'ready',title:'B bị đẩy về Ready ngay lập tức'}
+    ]});
+  // Lesson 17 — preemption
+  renderTimeline('tlPreemptDemo', {duration:60, stepLabel:10,
+    lanes:[{key:'lo',label:'Task (pri thấp)'},{key:'hi',label:'Task (pri cao)'}],
+    segments:[
+      {lane:'lo',start:0,end:35,state:'running'},
+      {lane:'hi',start:0,end:35,state:'blocked',title:'Chờ ISR/sự kiện'},
+      {lane:'hi',start:35,end:50,state:'running',title:'ISR đánh thức — preempt NGAY, không chờ tick'},
+      {lane:'lo',start:35,end:60,state:'ready'},
+      {lane:'hi',start:50,end:60,state:'blocked'},
+      {lane:'lo',start:50,end:60,state:'running'}
+    ]});
+  renderSlicing('on');
+  renderFinalScenario();
+}
+
+function renderDelayCmp(mode){
+  const cap = document.getElementById('delayCmpCaption');
+  if(mode==='delay'){
+    renderTimeline('tlDelayUntilDemo', {duration:400,stepLabel:50,
+      lanes:[{key:'run',label:'Task'}],
+      segments:[
+        {lane:'run',start:0,end:20,state:'running',title:'Chu kỳ 1: 20ms thực thi'},
+        {lane:'run',start:20,end:120,state:'blocked'},
+        {lane:'run',start:120,end:150,state:'running',title:'Chu kỳ 2: 30ms thực thi (dài hơn) → mốc kế tiếp trôi thêm 10ms'},
+        {lane:'run',start:150,end:250,state:'blocked'},
+        {lane:'run',start:250,end:265,state:'running',title:'Chu kỳ 3: 15ms — mốc tiếp tục trôi tích luỹ'},
+        {lane:'run',start:265,end:365,state:'blocked'}
+      ]});
+    if(cap) cap.textContent = 'vTaskDelay(): mốc bắt đầu mỗi chu kỳ trôi dần theo thời gian thực thi thực tế của thân task.';
+  } else {
+    renderTimeline('tlDelayUntilDemo', {duration:400,stepLabel:50,
+      lanes:[{key:'run',label:'Task'}],
+      segments:[
+        {lane:'run',start:0,end:20,state:'running'},
+        {lane:'run',start:20,end:100,state:'blocked'},
+        {lane:'run',start:100,end:130,state:'running',title:'Chu kỳ 2 vẫn bắt đầu đúng mốc 100ms dù chu kỳ 1 dài hơn'},
+        {lane:'run',start:130,end:200,state:'blocked'},
+        {lane:'run',start:200,end:215,state:'running',title:'Chu kỳ 3 vẫn bắt đầu đúng mốc 200ms'},
+        {lane:'run',start:215,end:300,state:'blocked'}
+      ]});
+    if(cap) cap.textContent = 'vTaskDelayUntil(): mốc bắt đầu mỗi chu kỳ luôn cố định (0, 100, 200...), không phụ thuộc thời gian thực thi.';
+  }
+}
+function renderSlicing(mode){
+  const cap = document.getElementById('slicingCaption');
+  if(mode==='on'){
+    renderTimeline('tlSlicingDemo',{duration:40,stepLabel:10,
+      lanes:[{key:'a',label:'Task A (pri x)'},{key:'b',label:'Task B (pri x)'}],
+      segments:[
+        {lane:'a',start:0,end:10,state:'running'},{lane:'b',start:0,end:10,state:'ready'},
+        {lane:'b',start:10,end:20,state:'running'},{lane:'a',start:10,end:20,state:'ready'},
+        {lane:'a',start:20,end:30,state:'running'},{lane:'b',start:20,end:30,state:'ready'},
+        {lane:'b',start:30,end:40,state:'running'},{lane:'a',start:30,end:40,state:'ready'}
+      ]});
+    if(cap) cap.textContent = 'ON: A và B (cùng priority) xen kẽ đều đặn mỗi tick — A → B → A → B...';
+  } else {
+    renderTimeline('tlSlicingDemo',{duration:40,stepLabel:10,
+      lanes:[{key:'a',label:'Task A (pri x)'},{key:'b',label:'Task B (pri x)'}],
+      segments:[
+        {lane:'a',start:0,end:40,state:'running',title:'A chiếm CPU liên tục vì không có time slicing và không tự block'},
+        {lane:'b',start:0,end:40,state:'ready'}
+      ]});
+    if(cap) cap.textContent = 'OFF: A chạy liên tục cho tới khi tự block/yield — B không bao giờ được chọn dù cùng priority.';
+  }
+}
+
+let finalScenarioSegs = null, labTimer=null, labT=0;
+function renderFinalScenario(){
+  const tasks = [
+    {key:'control',label:'ControlTask (pri 3)',pri:3,period:10,exec:2},
+    {key:'sensor',label:'SensorTask (pri 2)',pri:2,period:50,exec:8},
+    {key:'logger',label:'LoggerTask (pri 1)',pri:1,period:100,exec:16}
+  ];
+  const allSegs = [];
+  ['control','sensor','logger'].forEach(k=>{
+    const t = tasks.find(x=>x.key===k);
+    for(let start=0; start<200; start+=t.period){ allSegs.push({lane:k,start,end:Math.min(start+t.exec,200),state:'running',title:`${t.label} thực thi ${t.exec}ms`}); }
+  });
+  // idle lane = simulated gaps
+  const sim = simulateSchedule(tasks.map(t=>({key:t.key,pri:t.pri,period:t.period,exec:t.exec})),200);
+  finalScenarioSegs = sim;
+  sim.filter(s=>s.lane==='idle').forEach(s=> allSegs.push({lane:'idle',start:s.start,end:s.end,state:'idle',title:`Idle Task ${s.start}-${s.end}ms`}));
+  renderTimeline('tlFinalScenario', {duration:200, stepLabel:20,
+    lanes:[{key:'control',label:'Control (P3)'},{key:'sensor',label:'Sensor (P2)'},{key:'logger',label:'Logger (P1)'},{key:'idle',label:'Idle (P0)'}],
+    segments: allSegs});
+}
+function labPlayheadSetup(){
+  const wraps = document.querySelectorAll('#tlFinalScenario .tl-track');
+  wraps.forEach(w=>{ if(!w.querySelector('.tl-final-playhead')){ const ph=document.createElement('div'); ph.className='tl-final-playhead'; ph.style.cssText='position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--tick);left:0;pointer-events:none'; w.appendChild(ph); } });
+}
+function labSetPlayhead(t){
+  document.querySelectorAll('#tlFinalScenario .tl-track .tl-final-playhead').forEach(ph=>{ ph.style.left = (t/200*100)+'%'; });
+  document.getElementById('labNow').textContent = t;
+  const seg = finalScenarioSegs && finalScenarioSegs.find(s=> t>=s.start && t<s.end);
+  const readout = document.getElementById('labReadout');
+  if(readout && seg){
+    const nameMap={control:'ControlTask (priority 3)',sensor:'SensorTask (priority 2)',logger:'LoggerTask (priority 1)',idle:'Idle Task (priority 0)'};
+    readout.innerHTML = `t=<b>${t}ms</b> — đang chạy: <b>${nameMap[seg.lane]}</b>. Lý do: ${seg.lane==='idle' ? 'không còn task ứng dụng nào Ready lúc này' : 'priority cao nhất trong số các task đang Ready tại thời điểm này'}.`;
+  }
+}
+function initLabControls(){
+  labPlayheadSetup();
+  document.getElementById('labPlay').addEventListener('click',()=>{
+    if(labTimer) return;
+    labTimer = setInterval(()=>{
+      labT += 2; if(labT>200){ labT=200; clearInterval(labTimer); labTimer=null; }
+      labSetPlayhead(labT);
+    },70);
+  });
+  document.getElementById('labPause').addEventListener('click',()=>{ if(labTimer){clearInterval(labTimer);labTimer=null;} });
+  document.getElementById('labReset').addEventListener('click',()=>{ if(labTimer){clearInterval(labTimer);labTimer=null;} labT=0; labSetPlayhead(0); });
+  labSetPlayhead(0);
+}
+
+// ================================
+// SCHEDULER LAB (Task A/B/C)
+// ================================
+function initSchedulerLab(){
+  const state = {A:'ready',B:'ready',C:'ready'};
+  const chip = k=>document.getElementById('chip'+k);
+  function render(){
+    ['A','B','C'].forEach(k=>{ const el=chip(k); el.className='state-chip '+state[k]; el.textContent=k+' · '+state[k].charAt(0).toUpperCase()+state[k].slice(1); });
+  }
+  function readout(msg){ document.getElementById('schedReadout').textContent = msg; }
+  document.getElementById('schedRun').addEventListener('click',()=>{
+    const pri = {A:1,B:2,C:3};
+    const readyTasks = Object.keys(state).filter(k=>state[k]!=='blocked');
+    const winner = readyTasks.sort((a,b)=>pri[b]-pri[a])[0];
+    Object.keys(state).forEach(k=>{ if(state[k]!=='blocked') state[k] = (k===winner)?'running':'ready'; });
+    render();
+    readout(`Scheduler chọn Task ${winner} (priority ${pri[winner]} — cao nhất trong số các task Ready).`);
+  });
+  document.getElementById('schedBlockC').addEventListener('click',()=>{
+    if(state.C==='blocked'){ state.C='ready'; readout('Task C quay lại Ready. Nhấn "Run Scheduler" để xem lại quyết định.'); render(); return; }
+    state.C='blocked';
+    const pri={A:1,B:2};
+    const readyTasks = Object.keys(pri).filter(k=>state[k]!=='blocked');
+    const winner = readyTasks.sort((a,b)=>pri[b]-pri[a])[0];
+    Object.keys(state).forEach(k=>{ if(k!=='C') state[k] = (k===winner)?'running':'ready'; });
+    render();
+    readout(`Task C → Blocked. Scheduler chuyển ngay: Task ${winner} → Running (cao nhất trong số còn Ready).`);
+  });
+  document.getElementById('schedReset').addEventListener('click',()=>{ state.A='ready';state.B='ready';state.C='ready'; render(); readout('Đã reset — chưa chạy scheduler.'); });
+  render();
+}
+// ================================
+// THEME
+// ================================
+function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY);
+  const theme = saved || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeBtn').addEventListener('click',()=>{
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur==='dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+  });
+}
+// ================================
+// NAVIGATION
+// ================================
+function initNav(){
+  const sidebar = document.getElementById('sidebar');
+  const menuBtn = document.getElementById('menuBtn');
+  menuBtn.addEventListener('click',()=>{
+    const open = sidebar.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', open?'true':'false');
+  });
+  document.querySelectorAll('.nav-item').forEach(a=>{
+    a.addEventListener('click',()=>{ sidebar.classList.remove('open'); });
+  });
+  const navItems = [...document.querySelectorAll('.nav-item')];
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      const id = entry.target.id;
+      if(entry.isIntersecting){
+        navItems.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+id));
+        if(!visited.has(id)){ visited.add(id); saveVisited(); updateProgressUI(); }
+      }
+    });
+  }, {rootMargin:'-40% 0px -55% 0px', threshold:0});
+  SECTION_IDS.forEach(id=>{ const el=document.getElementById(id); if(el) obs.observe(el); });
+}
+// ================================
+// SEARCH
+// ================================
+function initSearch(){
+  const input = document.getElementById('searchInput');
+  const results = document.getElementById('searchResults');
+  function run(){
+    const q = input.value.trim().toLowerCase();
+    if(!q){ results.classList.remove('open'); results.innerHTML=''; return; }
+    const hits = SEARCH_INDEX.filter(item => item.title.toLowerCase().includes(q) || item.kw.includes(q));
+    if(!hits.length){ results.innerHTML = '<div style="padding:12px 14px;font-size:13px" class="muted">Không tìm thấy kết quả.</div>'; results.classList.add('open'); return; }
+    results.innerHTML = hits.slice(0,12).map(h=>`<a href="#${h.id}"><span class="sr-section">${h.section}</span><br>${h.title}</a>`).join('');
+    results.classList.add('open');
+  }
+  input.addEventListener('input', run);
+  input.addEventListener('focus', run);
+  results.addEventListener('click',()=>{ results.classList.remove('open'); input.value=''; });
+  document.addEventListener('click',(e)=>{ if(!e.target.closest('.topbar-search')) results.classList.remove('open'); });
+}
+// ================================
+// STATE DIAGRAM CLICK (Lesson 04)
+// ================================
+function initStateDiagram(){
+  const panel = document.getElementById('statePanel');
+  document.querySelectorAll('.state-node').forEach(node=>{
+    function open(){
+      const key = node.getAttribute('data-state');
+      const info = STATE_INFO[key];
+      panel.innerHTML = `<span class="state-chip ${info.color}">${info.title}</span>${info.body}`;
+      panel.classList.add('open');
+    }
+    node.addEventListener('click', open);
+    node.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); open(); } });
+  });
+}
+// ================================
+// TOGGLE BUTTONS (creation / delaycmp / slicing)
+// ================================
+function initToggles(){
+  document.querySelectorAll('.toggle-btn[data-toggle]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const group = btn.getAttribute('data-toggle');
+      const value = btn.getAttribute('data-value');
+      document.querySelectorAll(`.toggle-btn[data-toggle="${group}"]`).forEach(b=>b.classList.toggle('active', b===btn));
+      if(group==='creation'){
+        const apiEl = document.getElementById('createStepApi');
+        const allocEl = document.getElementById('createStepAlloc');
+        const capEl = document.getElementById('createCaption');
+        const noteEl = document.getElementById('createNote');
+        if(value==='dynamic'){
+          apiEl.textContent = 'xTaskCreate()';
+          allocEl.textContent = 'Allocate TCB + Stack (Heap)';
+          capEl.innerHTML = 'Hình 5.1 — Dynamic: <code>xTaskCreate()</code> tự cấp phát TCB + Stack từ heap FreeRTOS.';
+          noteEl.innerHTML = 'Chế độ <strong>Dynamic</strong>: bộ nhớ TCB và Stack được lấy từ heap FreeRTOS tại thời điểm gọi hàm — tiện lợi nhưng phụ thuộc heap còn đủ chỗ hay không.';
+        } else {
+          apiEl.textContent = 'xTaskCreateStatic()';
+          allocEl.textContent = 'StaticTask_t + Stack Buffer';
+          capEl.innerHTML = 'Hình 5.1 — Static: <code>xTaskCreateStatic()</code> dùng StaticTask_t + mảng stack do chính ứng dụng khai báo sẵn.';
+          noteEl.innerHTML = 'Chế độ <strong>Static</strong>: không dùng heap — bộ nhớ được cấp tĩnh tại compile-time, tránh rủi ro hết heap runtime nhưng cần tính toán trước kích thước.';
+        }
+      }
+      if(group==='delaycmp'){ renderDelayCmp(value); }
+      if(group==='slicing'){ renderSlicing(value); }
+    });
+  });
+}
+// ================================
+// COPY BUTTONS
+// ================================
+function initCopyButtons(){
+  document.querySelectorAll('.copy-btn[data-copy]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const code = btn.closest('.code-wrap').querySelector('code');
+      const text = code ? code.textContent : '';
+      try{ await navigator.clipboard.writeText(text); btn.textContent='Copied'; btn.classList.add('copied'); setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},1500); }catch(e){}
+    });
+  });
+}
+// ================================
+// QUIZ
+// ================================
+function renderQuiz(filter){
+  const list = document.getElementById('quizList');
+  const filtered = QUIZ.filter(q => filter==='all' || q.type===filter);
+  list.innerHTML = filtered.map(q=>{
+    const typeLabel = {mcq:'Trắc nghiệm',tf:'Đúng / Sai',trace:'Code / Timeline Tracing',reason:'Scheduler Reasoning'}[q.type];
+    const already = quizScoreState[q.id];
+    const optsHtml = q.options.map((opt,i)=>{
+      let cls='quiz-opt';
+      let dis='';
+      if(already!==undefined){ dis='disabled'; if(i===q.correct) cls+=' correct'; else if(i===already && already!==q.correct) cls+=' wrong'; }
+      return `<button class="${cls}" data-qid="${q.id}" data-i="${i}" ${dis}>${opt}</button>`;
+    }).join('');
+    return `<div class="quiz-q" id="quizq_${q.id}">
+      <span class="qtype">${typeLabel} · Câu ${q.id}</span>
+      <div class="qtext">${q.q}</div>
+      <div class="quiz-opts">${optsHtml}</div>
+      <div class="quiz-explain ${already!==undefined?'show':''}" id="explain_${q.id}">${already!==undefined ? '💡 '+q.explain : ''}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.quiz-opt').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const qid = +btn.getAttribute('data-qid');
+      const i = +btn.getAttribute('data-i');
+      const q = QUIZ.find(x=>x.id===qid);
+      if(quizScoreState[qid]!==undefined) return;
+      quizScoreState[qid] = i;
+      saveQuiz();
+      renderQuiz(document.getElementById('quizFilter').value);
+      updateQuizScore();
+      updateProgressUI();
+      document.getElementById('quizq_'+qid).scrollIntoView({block:'nearest',behavior:'smooth'});
+    });
+  });
+}
+function updateQuizScore(){
+  const correct = Object.keys(quizScoreState).filter(k=> quizScoreState[k] === QUIZ.find(q=>q.id===+k).correct).length;
+  document.getElementById('quizScore').textContent = correct;
+  document.getElementById('quizTotal').textContent = QUIZ.length;
+}
+function initQuiz(){
+  document.getElementById('quizFilter').addEventListener('change', e=> renderQuiz(e.target.value));
+  renderQuiz('all');
+  updateQuizScore();
+}
+// ================================
+// DEBUGGING DASHBOARD
+// ================================
+function initDebugging(){
+  const grid = document.getElementById('debugGrid');
+  grid.innerHTML = DEBUG_ISSUES.map((d,i)=>`
+    <div class="debug-card" data-i="${i}">
+      <h4>${d.title}</h4>
+      <div class="debug-panel" id="debugPanel${i}">
+        <dl style="margin:0">
+          <dt>Symptoms</dt><dd>${d.symptoms}</dd>
+          <dt>Possible Cause</dt><dd>${d.cause}</dd>
+          <dt>What to Check</dt><dd>${d.check}</dd>
+          <dt>Fix</dt><dd>${d.fix}</dd>
+        </dl>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('.debug-card').forEach(card=>{
+    card.addEventListener('click',()=>{
+      const panel = card.querySelector('.debug-panel');
+      panel.classList.toggle('open');
+    });
+  });
+}
+// ================================
+// INTERVIEW
+// ================================
+function initInterview(){
+  const body = document.getElementById('interviewBody');
+  const groups = [['beginner','Cơ bản'],['intermediate','Trung cấp'],['advanced','Nâng cao']];
+  let html = '<p>Nhấp vào từng câu để mở đáp án. Được nhóm theo ba cấp độ.</p>';
+  groups.forEach(([key,label])=>{
+    html += `<h3>${label}</h3>`;
+    INTERVIEW[key].forEach(([q,a],idx)=>{
+      html += `<details class="lab-solution" style="border-bottom:1px solid var(--border);padding:10px 0"><summary>${idx+1}. ${q}</summary><p style="margin-top:8px;color:var(--muted);font-size:13.5px">${a}</p></details>`;
+    });
+  });
+  body.innerHTML = html;
+}
+// ================================
+// GLOSSARY
+// ================================
+function renderGlossary(filter){
+  const list = document.getElementById('glossaryList');
+  const f = (filter||'').toLowerCase();
+  const filtered = GLOSSARY.filter(([term,def])=> !f || term.toLowerCase().includes(f) || def.toLowerCase().includes(f));
+  let lastLetter = '';
+  let html = '';
+  filtered.forEach(([term,def])=>{
+    const letter = term[0].toUpperCase();
+    if(letter!==lastLetter){ html += `<div class="gloss-letter">${letter}</div>`; lastLetter = letter; }
+    html += `<div class="gloss-item"><dt>${term}</dt><dd>${def}</dd></div>`;
+  });
+  list.innerHTML = html || '<p class="muted">Không tìm thấy thuật ngữ phù hợp.</p>';
+}
+function initGlossary(){
+  document.getElementById('glossarySearch').addEventListener('input', e=> renderGlossary(e.target.value));
+  renderGlossary('');
+}
+// ================================
+// INIT ALL
+// ================================
+document.addEventListener('DOMContentLoaded', ()=>{
+  initTheme();
+  initNav();
+  initSearch();
+  initStateDiagram();
+  initToggles();
+  initTimelines();
+  initLabControls();
+  initSchedulerLab();
+  initQuiz();
+  initDebugging();
+  initInterview();
+  initGlossary();
+  initCopyButtons();
+  updateProgressUI();
+});
+</script>
+</body>
+</html>

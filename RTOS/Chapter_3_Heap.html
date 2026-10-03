@@ -1,0 +1,2458 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FreeRTOS — Heap Memory Management | Interactive Learning Portal</title>
+<style>
+/* =========================================================
+   VARIABLES
+   ========================================================= */
+:root{
+  --bg:#0f172a;
+  --sidebar:#111827;
+  --card:#1e293b;
+  --card2:#243244;
+  --primary:#38bdf8;
+  --secondary:#818cf8;
+  --success:#34d399;
+  --warning:#fbbf24;
+  --danger:#fb7185;
+  --text:#e5e7eb;
+  --muted:#94a3b8;
+  --code-bg:#020617;
+  --border:#334155;
+  --radius:10px;
+  --header-h:64px;
+  --sidebar-w:280px;
+}
+[data-theme="light"]{
+  --bg:#f4f6fb;
+  --sidebar:#ffffff;
+  --card:#ffffff;
+  --card2:#eef2f9;
+  --primary:#0369a1;
+  --secondary:#4338ca;
+  --success:#047857;
+  --warning:#92400e;
+  --danger:#be123c;
+  --text:#0f172a;
+  --muted:#475569;
+  --code-bg:#0f172a;
+  --border:#dbe2ee;
+}
+
+/* =========================================================
+   RESET
+   ========================================================= */
+*,*::before,*::after{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.65;
+  font-size:16px;
+  transition:background .2s ease,color .2s ease;
+}
+h1,h2,h3,h4{line-height:1.25;margin:0 0 .6em 0;font-weight:700;}
+p{margin:0 0 1em 0;}
+a{color:var(--primary);}
+ul,ol{padding-left:1.4em;}
+img,svg{max-width:100%;}
+button{font-family:inherit;cursor:pointer;}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+table{border-collapse:collapse;width:100%;}
+
+/* =========================================================
+   LAYOUT
+   ========================================================= */
+.app-body{display:flex;min-height:calc(100vh - var(--header-h));margin-top:var(--header-h);}
+.main-content{flex:1;min-width:0;padding:32px clamp(16px,4vw,48px) 96px;max-width:1100px;margin:0 auto;}
+.section{scroll-margin-top:calc(var(--header-h) + 12px);margin-bottom:64px;}
+.section-divider{border:none;border-top:1px solid var(--border);margin:48px 0;}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+.top-header{
+  position:fixed;top:0;left:0;right:0;height:var(--header-h);
+  background:var(--sidebar);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;z-index:1000;gap:12px;
+}
+.header-left{display:flex;align-items:center;gap:12px;min-width:0;}
+.hamburger{display:none;background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);width:38px;height:38px;align-items:center;justify-content:center;font-size:18px;}
+.brand{display:flex;flex-direction:column;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.brand-title{font-weight:800;font-size:15px;letter-spacing:.3px;}
+.brand-sub{font-size:11px;color:var(--muted);}
+.header-right{display:flex;align-items:center;gap:10px;}
+.search-wrap{position:relative;}
+#searchInput{
+  background:var(--card2);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px 8px 34px;border-radius:8px;font-size:13px;width:180px;transition:width .2s;
+}
+#searchInput:focus{width:260px;}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none;}
+.search-results{
+  position:absolute;top:calc(100% + 6px);left:0;width:320px;max-height:360px;overflow:auto;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.4);
+  display:none;z-index:1200;
+}
+.search-results.show{display:block;}
+.search-result-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;}
+.search-result-item:last-child{border-bottom:none;}
+.search-result-item:hover,.search-result-item:focus{background:var(--card2);}
+.search-result-item small{display:block;color:var(--muted);margin-top:2px;}
+.icon-btn{
+  background:var(--card2);border:1px solid var(--border);color:var(--text);
+  width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.progress-pill{
+  display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);
+  padding:6px 12px;border-radius:20px;font-size:12px;color:var(--muted);white-space:nowrap;
+}
+.progress-pill .bar{width:60px;height:6px;background:var(--border);border-radius:4px;overflow:hidden;}
+.progress-pill .bar-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));width:0%;transition:width .3s;}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);
+  position:sticky;top:var(--header-h);height:calc(100vh - var(--header-h));overflow-y:auto;padding:20px 0 40px;
+}
+.sidebar-group{margin-bottom:6px;}
+.sidebar-group-label{
+  font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+  padding:14px 20px 6px;font-weight:700;
+}
+.nav-link{
+  display:flex;align-items:center;gap:10px;padding:9px 20px;color:var(--muted);text-decoration:none;
+  font-size:13.5px;border-left:3px solid transparent;transition:background .15s,color .15s;
+}
+.nav-link .num{
+  font-size:10px;font-weight:700;color:var(--muted);background:var(--card2);
+  border-radius:5px;padding:1px 5px;min-width:20px;text-align:center;
+}
+.nav-link:hover{background:var(--card2);color:var(--text);}
+.nav-link.active{color:var(--primary);border-left-color:var(--primary);background:var(--card2);font-weight:600;}
+.nav-link.active .num{background:var(--primary);color:#04121f;}
+.nav-link .done-mark{margin-left:auto;color:var(--success);font-size:12px;}
+
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;}
+
+/* =========================================================
+   HERO
+   ========================================================= */
+.hero{
+  background:linear-gradient(160deg,var(--card) 0%,var(--card2) 100%);
+  border:1px solid var(--border);border-radius:16px;padding:clamp(24px,5vw,48px);margin-bottom:32px;
+}
+.hero-eyebrow{color:var(--primary);font-weight:700;letter-spacing:.15em;font-size:12px;text-transform:uppercase;margin-bottom:10px;}
+.hero h1{font-size:clamp(28px,5vw,44px);margin-bottom:12px;}
+.hero h1 span{color:var(--primary);}
+.hero-desc{color:var(--muted);font-size:16px;max-width:640px;}
+.hero-stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px;}
+.hero-stat{
+  background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;
+  display:flex;align-items:center;gap:8px;color:var(--muted);
+}
+.hero-stat b{color:var(--text);}
+
+.arch-diagram{
+  margin-top:32px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:28px;
+  overflow-x:auto;
+}
+.arch-tree{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:640px;font-size:13px;}
+.arch-node{
+  border:1px solid var(--border);background:var(--card);border-radius:8px;padding:8px 18px;font-weight:600;text-align:center;
+}
+.arch-node.root{background:var(--primary);color:#04121f;border-color:var(--primary);}
+.arch-node.flash{background:var(--card2);}
+.arch-node.ram{background:var(--card2);}
+.arch-node.dyn{background:var(--secondary);color:#0b0b1f;border-color:var(--secondary);}
+.arch-row{display:flex;gap:40px;}
+.arch-row.wide{gap:24px;flex-wrap:wrap;justify-content:center;}
+.arch-branch{width:1px;height:22px;background:var(--border);}
+.arch-hbranch{display:flex;align-items:center;}
+.arch-hbranch .line{height:1px;background:var(--border);flex:1;}
+.heap-family{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.heap-chip{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--primary);}
+
+/* =========================================================
+   ROADMAP
+   ========================================================= */
+.roadmap{display:flex;flex-wrap:wrap;gap:14px;}
+.roadmap-node{
+  flex:1 1 200px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;
+  text-decoration:none;color:var(--text);display:flex;gap:12px;align-items:flex-start;transition:transform .15s,border-color .15s;
+}
+.roadmap-node:hover{transform:translateY(-3px);border-color:var(--primary);}
+.roadmap-num{
+  font-weight:800;font-size:18px;color:var(--primary);background:var(--card2);
+  border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.roadmap-node strong{display:block;font-size:14px;}
+.roadmap-node span{font-size:12px;color:var(--muted);}
+
+/* =========================================================
+   LESSON HEADER / CARDS
+   ========================================================= */
+.lesson-header{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.lesson-number{
+  font-size:13px;font-weight:800;color:#04121f;background:var(--primary);
+  border-radius:8px;padding:6px 12px;letter-spacing:.05em;
+}
+.lesson-header h2{margin:0;font-size:clamp(22px,3vw,28px);}
+.lesson-sub{color:var(--muted);font-size:14px;margin-top:-10px;margin-bottom:22px;}
+
+.mini-toc{
+  background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13px;
+}
+.mini-toc-title{font-weight:700;color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.06em;margin-bottom:8px;}
+.mini-toc ol{margin:0;padding-left:1.2em;columns:2;gap:20px;}
+.mini-toc li{margin-bottom:4px;break-inside:avoid;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:20px;}
+.card h3{font-size:16px;color:var(--primary);margin-bottom:10px;}
+.card h4{font-size:14px;margin-bottom:6px;}
+
+/* =========================================================
+   BADGES / CALLOUT BOXES
+   ========================================================= */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;padding:3px 9px;border-radius:20px;margin-bottom:10px;
+}
+.badge-source{background:rgba(56,189,248,.15);color:var(--primary);border:1px solid rgba(56,189,248,.35);}
+.badge-explain{background:rgba(129,140,248,.15);color:var(--secondary);border:1px solid rgba(129,140,248,.35);}
+.badge-infer{background:rgba(148,163,184,.15);color:var(--muted);border:1px solid rgba(148,163,184,.35);}
+.badge-example{background:rgba(52,211,153,.15);color:var(--success);border:1px solid rgba(52,211,153,.35);}
+.badge-important{background:rgba(251,191,36,.15);color:var(--warning);border:1px solid rgba(251,191,36,.35);}
+.badge-warning{background:rgba(251,113,133,.15);color:var(--danger);border:1px solid rgba(251,113,133,.35);}
+.badge-code{background:rgba(2,6,23,.5);color:var(--text);border:1px solid var(--border);}
+
+.infobox{border-radius:12px;padding:16px 18px;margin:16px 0;border:1px solid var(--border);background:var(--card2);}
+.infobox-title{font-weight:800;font-size:13px;display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.infobox.concept{border-left:4px solid var(--primary);}
+.infobox.important{border-left:4px solid var(--warning);}
+.infobox.warning{border-left:4px solid var(--danger);}
+.infobox.beginner{border-left:4px solid var(--success);}
+.infobox.concept .infobox-title{color:var(--primary);}
+.infobox.important .infobox-title{color:var(--warning);}
+.infobox.warning .infobox-title{color:var(--danger);}
+.infobox.beginner .infobox-title{color:var(--success);}
+.infobox p:last-child{margin-bottom:0;}
+
+/* =========================================================
+   CODE BLOCKS
+   ========================================================= */
+.code-block{
+  background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:16px 0;
+}
+.code-block-header{
+  display:flex;align-items:center;justify-content:space-between;padding:8px 14px;
+  background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);
+}
+.code-block-header .fname{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;color:var(--text);}
+.copy-btn{
+  background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:11px;
+  padding:4px 10px;border-radius:6px;display:flex;align-items:center;gap:5px;
+}
+.copy-btn.copied{color:var(--success);border-color:var(--success);}
+.code-block pre{margin:0;padding:14px 0;overflow-x:auto;counter-reset:line;}
+.code-block code{
+  font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:13px;color:#dbeafe;
+  display:block;
+}
+.code-block .cl{display:block;padding:0 16px 0 54px;position:relative;white-space:pre;}
+.code-block .cl::before{
+  counter-increment:line;content:counter(line);position:absolute;left:0;width:40px;text-align:right;color:#475569;
+  padding-right:12px;user-select:none;
+}
+.tok-kw{color:#f472b6;}
+.tok-type{color:#38bdf8;}
+.tok-str{color:#fbbf24;}
+.tok-com{color:#64748b;font-style:italic;}
+.tok-fn{color:#a5b4fc;}
+.tok-num{color:#34d399;}
+
+/* =========================================================
+   DIAGRAMS
+   ========================================================= */
+.diagram{
+  background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:18px;margin:16px 0;overflow-x:auto;
+}
+.diagram-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;font-weight:700;}
+.mem-bar{display:flex;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--border);min-width:520px;}
+.mem-seg{
+  display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;color:#04121f;
+  border-right:1px solid rgba(0,0,0,.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px;
+}
+.mem-seg:last-child{border-right:none;}
+.seg-free{background:#1e293b;color:var(--muted);border:1px dashed var(--border);}
+[data-theme="light"] .seg-free{background:#e2e8f0;}
+.seg-tcb{background:#fbbf24;}
+.seg-stack{background:#fb923c;}
+.seg-queue{background:#f87171;}
+.seg-user{background:#a3e635;}
+.seg-meta{background:#94a3b8;}
+.seg-used{background:#818cf8;color:#fff;}
+.seg-coalesced{background:#34d399;color:#04121f;}
+.mem-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12px;color:var(--muted);}
+.mem-legend span{display:flex;align-items:center;gap:6px;}
+.mem-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;}
+
+.ascii{
+  background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:16px;
+  font-family:"SFMono-Regular",Consolas,monospace;font-size:12.5px;color:#cbd5e1;overflow-x:auto;white-space:pre;line-height:1.5;
+}
+
+.flow{display:flex;flex-direction:column;align-items:center;gap:0;margin:20px 0;}
+.flow-node{
+  background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;
+  text-align:center;min-width:200px;
+}
+.flow-node.clickable{cursor:pointer;transition:border-color .15s;}
+.flow-node.clickable:hover{border-color:var(--primary);}
+.flow-arrow{color:var(--muted);font-size:16px;line-height:1;padding:4px 0;}
+.flow-detail{
+  display:none;background:var(--card);border:1px solid var(--primary);border-radius:10px;padding:14px 18px;
+  margin:6px 0 10px;font-size:13px;max-width:480px;
+}
+.flow-detail.show{display:block;}
+.flow-detail dl{margin:0;}
+.flow-detail dt{font-weight:700;color:var(--primary);font-size:11px;text-transform:uppercase;margin-top:8px;}
+.flow-detail dd{margin:2px 0 0;color:var(--text);}
+
+/* heap_1 / heap_2 / heap_4 interactive */
+.interactive-panel{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:18px;margin:16px 0;}
+.panel-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.btn{
+  background:var(--primary);color:#04121f;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;
+}
+.btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border);}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.panel-note{font-size:13px;color:var(--muted);margin-top:10px;}
+.blocks-row{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+.free-chip{
+  background:var(--card2);border:2px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;
+  min-width:64px;text-align:center;
+}
+.free-chip.selected{border-color:var(--success);background:rgba(52,211,153,.15);color:var(--success);}
+.free-chip.request{border-color:var(--primary);background:rgba(56,189,248,.15);color:var(--primary);}
+
+/* =========================================================
+   TABLES
+   ========================================================= */
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin:16px 0;}
+table.cmp{min-width:720px;}
+table.cmp th,table.cmp td{padding:12px 14px;border-bottom:1px solid var(--border);text-align:left;font-size:13.5px;}
+table.cmp thead th{background:var(--card2);color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.04em;}
+table.cmp tbody tr:hover{background:var(--card2);}
+table.cmp tbody tr:last-child td{border-bottom:none;}
+.pill{padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:700;display:inline-block;}
+.pill-yes{background:rgba(52,211,153,.15);color:var(--success);}
+.pill-no{background:rgba(251,113,133,.15);color:var(--danger);}
+.pill-partial{background:rgba(251,191,36,.15);color:var(--warning);}
+
+/* =========================================================
+   API CARDS
+   ========================================================= */
+.api-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+.api-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;}
+.api-card h4{font-family:"SFMono-Regular",Consolas,monospace;color:var(--primary);font-size:14.5px;margin-bottom:6px;}
+.api-card .proto{
+  background:var(--code-bg);border-radius:6px;padding:8px 10px;font-family:"SFMono-Regular",Consolas,monospace;
+  font-size:11.5px;color:#dbeafe;margin:8px 0;overflow-x:auto;
+}
+.api-card dl{font-size:12.5px;margin:8px 0 0;}
+.api-card dt{font-weight:700;color:var(--muted);text-transform:uppercase;font-size:10.5px;margin-top:8px;}
+.api-card dd{margin:2px 0 0;}
+
+/* =========================================================
+   DEBUG DASHBOARD
+   ========================================================= */
+.debug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.debug-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:left;
+  color:var(--text);width:100%;
+}
+.debug-card:hover{border-color:var(--primary);}
+.debug-card .dc-icon{font-size:22px;margin-bottom:8px;}
+.debug-card h4{margin-bottom:4px;font-size:14px;}
+.debug-card p{margin:0;font-size:12px;color:var(--muted);}
+.debug-detail{display:none;margin-top:14px;}
+.debug-detail.show{display:block;}
+.debug-detail dt{font-weight:700;color:var(--primary);font-size:11px;text-transform:uppercase;margin-top:10px;}
+.debug-detail dd{margin:2px 0 0;font-size:13px;}
+
+/* =========================================================
+   LABS
+   ========================================================= */
+.lab-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
+.lab-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;}
+.lab-top h4{margin:0;font-size:16px;}
+.diff{font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;text-transform:uppercase;}
+.diff-beginner{background:rgba(52,211,153,.15);color:var(--success);}
+.diff-intermediate{background:rgba(251,191,36,.15);color:var(--warning);}
+.diff-advanced{background:rgba(251,113,133,.15);color:var(--danger);}
+.lab-check{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin-top:10px;}
+
+/* =========================================================
+   QUIZ
+   ========================================================= */
+.quiz-progress{display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:13px;color:var(--muted);}
+.quiz-progress .bar{flex:1;height:8px;background:var(--card2);border-radius:6px;overflow:hidden;}
+.quiz-progress .bar-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));width:0%;transition:width .2s;}
+.quiz-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:14px;}
+.quiz-q{font-weight:700;margin-bottom:10px;font-size:14.5px;}
+.quiz-type{font-size:10.5px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;letter-spacing:.05em;}
+.quiz-opt{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+  margin-bottom:8px;cursor:pointer;font-size:13.5px;transition:border-color .15s,background .15s;
+}
+.quiz-opt:hover{border-color:var(--primary);}
+.quiz-opt input{accent-color:var(--primary);}
+.quiz-item.correct{border-color:var(--success);}
+.quiz-item.incorrect{border-color:var(--danger);}
+.quiz-opt.right-answer{border-color:var(--success);background:rgba(52,211,153,.1);}
+.quiz-opt.wrong-answer{border-color:var(--danger);background:rgba(251,113,133,.1);}
+.quiz-explain{display:none;margin-top:10px;font-size:12.5px;color:var(--muted);background:var(--card2);border-radius:8px;padding:10px 12px;}
+.quiz-explain.show{display:block;}
+.quiz-result{
+  background:var(--card);border:2px solid var(--primary);border-radius:14px;padding:28px;text-align:center;margin-top:20px;
+  display:none;
+}
+.quiz-result.show{display:block;}
+.quiz-result .score{font-size:42px;font-weight:800;color:var(--primary);}
+.quiz-result .pct{font-size:16px;color:var(--muted);margin-top:4px;}
+.quiz-result .verdict{margin-top:10px;font-weight:700;font-size:15px;}
+
+/* =========================================================
+   GLOSSARY / CHEATSHEET
+   ========================================================= */
+.glossary-nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;}
+.glossary-nav a{
+  background:var(--card2);border:1px solid var(--border);border-radius:6px;width:30px;height:30px;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;text-decoration:none;color:var(--text);
+}
+.gloss-letter{font-size:20px;color:var(--primary);margin:24px 0 8px;font-weight:800;}
+.gloss-term{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;}
+.gloss-term dt{font-weight:700;font-family:"SFMono-Regular",Consolas,monospace;font-size:13.5px;color:var(--primary);}
+.gloss-term dd{margin:4px 0 0;font-size:13px;color:var(--muted);}
+
+.cheat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+.cheat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+.cheat-card .cfn{font-family:"SFMono-Regular",Consolas,monospace;color:var(--primary);font-weight:700;font-size:13.5px;}
+.cheat-arrow{color:var(--muted);margin:4px 0;}
+.cheat-card .cdesc{font-size:13px;}
+
+/* =========================================================
+   BACK TO TOP / FOOTER
+   ========================================================= */
+.back-to-top{
+  position:fixed;bottom:24px;right:24px;width:44px;height:44px;border-radius:50%;
+  background:var(--primary);color:#04121f;border:none;font-size:18px;display:none;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:800;
+}
+.back-to-top.show{display:flex;}
+.site-footer{text-align:center;color:var(--muted);font-size:12.5px;padding:32px 16px;border-top:1px solid var(--border);}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width:960px){
+  .sidebar{position:fixed;left:-300px;top:var(--header-h);height:calc(100vh - var(--header-h));z-index:950;transition:left .2s;box-shadow:0 0 40px rgba(0,0,0,.4);}
+  .sidebar.open{left:0;}
+  .sidebar-overlay.show{display:block;}
+  .hamburger{display:flex;}
+  #searchInput{width:120px;}
+  #searchInput:focus{width:160px;}
+  .brand-sub{display:none;}
+}
+@media (max-width:640px){
+  .progress-pill{display:none;}
+  .mini-toc ol{columns:1;}
+  .api-grid,.debug-grid,.cheat-grid{grid-template-columns:1fr;}
+}
+
+/* =========================================================
+   MEMORY ARCHITECTURE
+   ========================================================= */
+
+.memory-architecture{
+  margin-top:32px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:26px 28px 32px;
+  overflow-x:auto;
+}
+
+
+/* =========================================================
+   MAIN TREE
+   ========================================================= */
+
+.memory-tree{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+
+  /*
+   * Large enough so that heap_1 ... heap_5
+   * always stay on one row.
+   */
+  min-width:900px;
+
+  font-size:13px;
+}
+
+
+/* =========================================================
+   VERTICAL LINE
+   ========================================================= */
+
+.memory-vline{
+  width:1px;
+  height:22px;
+
+  background:var(--border);
+
+  flex-shrink:0;
+}
+
+.root-line{
+  height:24px;
+}
+
+
+/* =========================================================
+   ROOT
+   ========================================================= */
+
+.memory-root{
+  min-width:135px;
+
+  padding:10px 22px;
+
+  border-radius:9px;
+
+  box-shadow:
+    0 5px 16px rgba(56,189,248,.12);
+}
+
+
+/* =========================================================
+   FLASH + RAM
+   ========================================================= */
+
+.memory-main{
+  position:relative;
+
+  display:grid;
+
+  /*
+   * FLASH       RAM
+   * 160px       600px
+   */
+  grid-template-columns:160px 600px;
+
+  column-gap:55px;
+
+  width:815px;
+}
+
+
+/*
+ * Horizontal bus from MCU MEMORY
+ *
+ *        ────────┬────────
+ *                │
+ *             FLASH   RAM
+ */
+
+.memory-main::before{
+  content:"";
+
+  position:absolute;
+
+  top:0;
+
+  left:80px;
+  right:300px;
+
+  height:1px;
+
+  background:var(--border);
+}
+
+
+/* =========================================================
+   FLASH / RAM BRANCH
+   ========================================================= */
+
+.memory-branch{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+
+/* =========================================================
+   FLASH / RAM NODE
+   ========================================================= */
+
+.memory-architecture .arch-node.flash,
+.memory-architecture .arch-node.ram{
+
+  min-width:78px;
+
+  padding:9px 18px;
+
+  background:var(--card2);
+
+  border-color:var(--border);
+
+  box-shadow:
+    0 3px 10px rgba(0,0,0,.10);
+}
+
+
+/* =========================================================
+   PROGRAM CODE / STATIC MEMORY
+   ========================================================= */
+
+.memory-child{
+  min-width:125px;
+
+  padding:8px 16px;
+
+  background:var(--card);
+
+  border:1px solid var(--border);
+
+  border-radius:8px;
+
+  font-size:12.5px;
+  font-weight:600;
+
+  text-align:center;
+}
+
+
+/* =========================================================
+   RAM CONTENT
+   ========================================================= */
+
+.ram-content{
+  display:flex;
+
+  align-items:flex-start;
+  justify-content:center;
+
+  gap:42px;
+
+  width:100%;
+}
+
+
+/* =========================================================
+   MEMORY GROUP
+   ========================================================= */
+
+.memory-group{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+
+/* Static */
+
+.static-memory{
+  width:180px;
+}
+
+
+/* Dynamic */
+
+.dynamic-memory{
+  width:380px;
+}
+
+
+/* =========================================================
+   STATIC ITEMS
+   ========================================================= */
+
+.static-items{
+  display:flex;
+
+  align-items:center;
+  justify-content:center;
+
+  gap:7px;
+}
+
+
+.memory-chip{
+  padding:5px 10px;
+
+  background:var(--card2);
+
+  border:1px solid var(--border);
+
+  border-radius:6px;
+
+  color:var(--muted);
+
+  font-size:10.5px;
+  font-weight:700;
+
+  white-space:nowrap;
+}
+
+
+/* =========================================================
+   DYNAMIC MEMORY
+   ========================================================= */
+
+.memory-architecture .arch-node.dyn{
+
+  min-width:145px;
+
+  padding:9px 18px;
+
+  background:var(--secondary);
+
+  color:#0b0b1f;
+
+  border-color:var(--secondary);
+
+  box-shadow:
+    0 5px 16px rgba(129,140,248,.15);
+}
+
+
+/* =========================================================
+   FREERTOS HEAP API
+   ========================================================= */
+
+.freertos-heap{
+  min-width:170px;
+
+  padding:8px 18px;
+
+  background:var(--card2);
+
+  border:1px solid var(--primary);
+
+  border-radius:8px;
+
+  color:var(--primary);
+
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace;
+
+  font-size:11.5px;
+  font-weight:600;
+
+  text-align:center;
+}
+
+
+/* =========================================================
+   HEAP FAMILY
+   ========================================================= */
+
+.heap-family{
+
+  /*
+   * IMPORTANT:
+   * Never wrap heap_1 ... heap_5.
+   */
+  display:flex;
+
+  flex-direction:row;
+  flex-wrap:nowrap;
+
+  align-items:center;
+  justify-content:center;
+
+  gap:8px;
+
+  width:100%;
+}
+
+
+.heap-chip{
+
+  min-width:52px;
+
+  padding:6px 10px;
+
+  box-sizing:border-box;
+
+  background:var(--card);
+
+  border:1px solid var(--border);
+
+  border-radius:7px;
+
+  color:var(--primary);
+
+  font-size:11px;
+  font-weight:700;
+
+  text-align:center;
+
+  white-space:nowrap;
+
+  transition:
+    border-color .15s,
+    background .15s,
+    transform .15s;
+}
+
+
+.heap-chip:hover{
+  border-color:var(--primary);
+
+  background:var(--card2);
+
+  transform:translateY(-2px);
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media(max-width:900px){
+
+  .memory-tree{
+    min-width:850px;
+  }
+
+  .memory-main{
+    width:760px;
+
+    grid-template-columns:150px 570px;
+
+    column-gap:40px;
+  }
+
+  .dynamic-memory{
+    width:350px;
+  }
+
+  .ram-content{
+    gap:30px;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- =========================================================
+     HEADER
+     ========================================================= -->
+<header class="top-header">
+  <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Mở menu điều hướng">☰</button>
+    <div class="brand">
+      <span class="brand-title">FreeRTOS · Heap Memory Management</span>
+      <span class="brand-sub">Interactive Learning Portal — Chapter 3</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="search-wrap">
+      <span class="search-icon">🔎</span>
+      <input type="text" id="searchInput" placeholder="Tìm concept, API, heap..." aria-label="Tìm kiếm nội dung">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+    <div class="progress-pill" id="headerProgress" title="Tiến độ học tập">
+      <span id="progressText">0%</span>
+      <span class="bar"><span class="bar-fill" id="progressBarFill"></span></span>
+    </div>
+    <button class="icon-btn" id="themeToggle" aria-label="Chuyển giao diện sáng/tối">🌙</button>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="app-body">
+<!-- =========================================================
+     SIDEBAR
+     ========================================================= -->
+<nav class="sidebar" id="sidebar" aria-label="Điều hướng bài học">
+  <div class="sidebar-group">
+    <div class="sidebar-group-label">Bắt đầu</div>
+    <a class="nav-link" data-target="overview"><span class="num">00</span>Overview</a>
+    <a class="nav-link" data-target="rtos-basics"><span class="num">01</span>RTOS Fundamentals</a>
+  </div>
+  <div class="sidebar-group">
+    <div class="sidebar-group-label">Memory Concepts</div>
+    <a class="nav-link" data-target="memory-intro"><span class="num">02</span>3.1 Introduction</a>
+    <a class="nav-link" data-target="static-dynamic"><span class="num">03</span>Static vs Dynamic</a>
+    <a class="nav-link" data-target="pvportmalloc"><span class="num">04</span>pvPortMalloc / vPortFree</a>
+  </div>
+  <div class="sidebar-group">
+    <div class="sidebar-group-label">5 Heap Implementations</div>
+    <a class="nav-link" data-target="heap1"><span class="num">05</span>heap_1</a>
+    <a class="nav-link" data-target="heap2"><span class="num">06</span>heap_2</a>
+    <a class="nav-link" data-target="heap3"><span class="num">07</span>heap_3</a>
+    <a class="nav-link" data-target="heap4"><span class="num">08</span>heap_4</a>
+    <a class="nav-link" data-target="heap5"><span class="num">09</span>heap_5</a>
+  </div>
+  <div class="sidebar-group">
+    <div class="sidebar-group-label">Nâng cao</div>
+    <a class="nav-link" data-target="statistics"><span class="num">10</span>Heap Statistics</a>
+    <a class="nav-link" data-target="static-alloc"><span class="num">11</span>Static Allocation</a>
+    <a class="nav-link" data-target="debugging"><span class="num">12</span>Debugging</a>
+    <a class="nav-link" data-target="source-trace"><span class="num">13</span>Source Code Trace</a>
+  </div>
+  <div class="sidebar-group">
+    <div class="sidebar-group-label">Tham khảo</div>
+    <a class="nav-link" data-target="comparison"><span class="num">⇄</span>So sánh 5 Heap</a>
+    <a class="nav-link" data-target="apicards"><span class="num">🔧</span>API Reference</a>
+    <a class="nav-link" data-target="labs"><span class="num">14</span>Practical Labs</a>
+    <a class="nav-link" data-target="quiz"><span class="num">15</span>Quiz (30 câu)</a>
+    <a class="nav-link" data-target="glossary"><span class="num">📖</span>Glossary</a>
+    <a class="nav-link" data-target="cheatsheet"><span class="num">📋</span>Cheat Sheet</a>
+  </div>
+</nav>
+
+<!-- =========================================================
+     MAIN CONTENT
+     ========================================================= -->
+<main class="main-content">
+
+  <!-- ============================= OVERVIEW / HERO ============================= -->
+  <section class="section" id="overview">
+    <div class="hero">
+      <div class="hero-eyebrow">FreeRTOS Book · Chapter 3</div>
+      <h1>Heap <span>Memory Management</span></h1>
+      <p class="hero-desc">Hiểu cách FreeRTOS cấp phát, quản lý và giải phóng RAM — từ kiến thức RTOS nền tảng cho người mới hoàn toàn, đến mức có thể tự đọc và trace source code <code>heap_1.c</code> … <code>heap_5.c</code>.</p>
+      <div class="hero-stats">
+        <div class="hero-stat">📄 <b>16 trang</b>&nbsp;PDF gốc</div>
+        <div class="hero-stat">🧩 <b>5</b>&nbsp;cách hiện thực heap</div>
+        <div class="hero-stat">⚙️ <b>Static + Dynamic</b>&nbsp;Allocation</div>
+        <div class="hero-stat">🔬 <b>Source-code</b>&nbsp;analysis</div>
+      </div>
+
+      <div class="arch-diagram memory-architecture">
+  <div class="diagram-label">Memory Architecture Overview</div>
+
+  <div class="memory-tree">
+
+    <!-- ================= MCU MEMORY ================= -->
+    <div class="arch-node root memory-root">
+      MCU MEMORY
+    </div>
+
+    <div class="memory-vline root-line"></div>
+
+
+    <!-- ================= FLASH + RAM ================= -->
+    <div class="memory-main">
+
+      <!-- FLASH -->
+      <div class="memory-branch flash-branch">
+
+        <div class="arch-node flash">
+          FLASH
+        </div>
+
+        <div class="memory-vline"></div>
+
+        <div class="arch-node memory-child">
+          Program Code
+        </div>
+
+      </div>
+
+
+      <!-- RAM -->
+      <div class="memory-branch ram-branch">
+
+        <div class="arch-node ram">
+          RAM
+        </div>
+
+        <div class="memory-vline"></div>
+
+
+        <!-- ================= RAM CONTENT ================= -->
+        <div class="ram-content">
+
+          <!-- STATIC MEMORY -->
+          <div class="memory-group static-memory">
+
+            <div class="arch-node memory-child">
+              Static Memory
+            </div>
+
+            <div class="memory-vline"></div>
+
+            <div class="static-items">
+
+              <div class="memory-chip">
+                Global
+              </div>
+
+              <div class="memory-chip">
+                TCB
+              </div>
+
+              <div class="memory-chip">
+                Stack
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- DYNAMIC MEMORY -->
+          <div class="memory-group dynamic-memory">
+
+            <div class="arch-node dyn">
+              Dynamic Memory
+            </div>
+
+            <div class="memory-vline"></div>
+
+
+            <!-- FREERTOS HEAP API -->
+            <div class="arch-node freertos-heap">
+              FreeRTOS Heap API
+            </div>
+
+            <div class="memory-vline"></div>
+
+
+            <!-- HEAP IMPLEMENTATIONS -->
+            <div class="heap-family">
+
+              <div class="heap-chip">heap_1</div>
+              <div class="heap-chip">heap_2</div>
+              <div class="heap-chip">heap_3</div>
+              <div class="heap-chip">heap_4</div>
+              <div class="heap-chip">heap_5</div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+</div>
+    </div>
+
+    <div class="card">
+      <h3>Learning Roadmap</h3>
+      <p style="color:var(--muted);font-size:13.5px;">Click vào từng bước để đi thẳng tới bài học tương ứng.</p>
+      <div class="roadmap" id="roadmap"></div>
+    </div>
+
+    <div class="infobox important">
+      <div class="infobox-title">⚠ IMPORTANT — Nguồn nội dung</div>
+      <p>Toàn bộ nội dung có nhãn <span class="badge badge-source" style="margin:0 2px;">SOURCE</span> được trích trực tiếp / diễn giải sát nghĩa từ file PDF <b>“RTOS Chapter 3 – Heap Memory Management”</b> (16 trang) do bạn cung cấp. Nội dung có nhãn <span class="badge badge-explain" style="margin:0 2px;">EXPLANATION</span> là phần giải thích thêm cho người mới. Nội dung có nhãn <span class="badge badge-infer" style="margin:0 2px;">INFERENCE</span> là kiến thức FreeRTOS/embedded tổng quát, <b>không nằm trong PDF gốc</b> — dùng để bạn có bức tranh đầy đủ hơn (ví dụ: phần Debugging, Source Trace chi tiết), nhưng cần đối chiếu thêm với source code thật khi áp dụng.</p>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON 01 — RTOS BASICS ============================= -->
+  <section class="section" id="rtos-basics">
+    <div class="lesson-header"><span class="lesson-number">LESSON 01</span><h2>RTOS Memory Fundamentals (Crash Course)</h2></div>
+    <p class="lesson-sub">Kiến thức nền — không lấy từ PDF Chapter 3, dùng để người chưa biết gì về RTOS có thể theo kịp các lesson sau.</p>
+
+    <div class="mini-toc">
+      <div class="mini-toc-title">On this page</div>
+      <ol>
+        <li>RTOS là gì? Khác bare-metal ra sao?</li>
+        <li>Task, Scheduler, Task Stack</li>
+        <li>TCB & Kernel Object</li>
+        <li>Vì sao RTOS cần cấp RAM cho task</li>
+        <li>Code / Stack / Heap / Global memory</li>
+        <li>Static vs Dynamic allocation (tổng quan)</li>
+        <li>Determinism, Fragmentation, Exhaustion</li>
+        <li>Sơ đồ RAM tổng quát</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <h3>1 &amp; 2. RTOS là gì, khác bare-metal ra sao?</h3>
+      <p><b>RTOS (Real-Time Operating System)</b> là một hệ điều hành nhỏ, chuyên dụng, chia sẻ một CPU cho nhiều "luồng công việc" (task) sao cho việc chuyển đổi giữa chúng xảy ra trong thời gian <b>có thể dự đoán được</b>. Một camera IP (như CV25) cần đồng thời đọc cảm biến ảnh, encode video, nghe lệnh network, nháy LED — RTOS giúp viết mỗi việc thành một task riêng, rồi tự lo việc luân phiên chạy chúng.</p>
+      <div class="table-wrap">
+        <table class="cmp">
+          <thead><tr><th></th><th>Bare-metal</th><th>RTOS</th></tr></thead>
+          <tbody>
+            <tr><td>Cấu trúc code</td><td>1 vòng lặp <code>while(1)</code> xử lý tuần tự</td><td>Nhiều task độc lập, RTOS lo lịch chạy</td></tr>
+            <tr><td>Ngắt</td><td>Tự quản lý toàn bộ</td><td>Có cơ chế đồng bộ (semaphore, queue) ISR↔task</td></tr>
+            <tr><td>Bộ nhớ</td><td>Tự cấp phát tĩnh</td><td>Có thể cấp phát động (heap) hoặc tĩnh</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <h3>3–7. Task, Scheduler, Task Stack, TCB, Kernel Object</h3>
+      <p><b>Task</b> = một hàm C chạy độc lập, có <b>stack riêng</b>, được RTOS coi như một luồng thực thi ảo. <b>Scheduler</b> = lõi RTOS quyết định "task nào chạy trên CPU lúc này", được gọi định kỳ qua tick interrupt, khi task chủ động nhường CPU, hoặc khi ISR đánh thức một task priority cao hơn.</p>
+      <p><b>Task stack</b>: mỗi task cần vùng nhớ riêng lưu biến local, địa chỉ trả về, và toàn bộ ngữ cảnh CPU khi bị tạm dừng giữa chừng — nếu dùng chung 1 stack như bare-metal, các task sẽ ghi đè lẫn nhau.</p>
+      <p><b>TCB (Task Control Block)</b>: struct mà RTOS dùng để "ghi nhớ mọi thứ về một task" — con trỏ đỉnh stack, priority, trạng thái... Mỗi lần gọi <code>xTaskCreate()</code>, RTOS cấp phát cho <b>2 thứ</b>: TCB + stack.</p>
+      <p><b>Kernel object</b>: các cấu trúc RTOS quản lý để task/ISR đồng bộ — queue, semaphore, mutex, event group, timer; task cũng là một kernel object. Mỗi object cần bộ nhớ riêng để lưu trạng thái.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <h3>8–10. Vì sao cần cấp RAM cho task? Vùng nhớ nào?</h3>
+      <p>TCB, stack, queue buffer đều là dữ liệu — phải nằm ở đâu đó trong RAM. RTOS có 2 lựa chọn: cấp phát <b>tĩnh</b> (biến global/static, biết trước lúc compile) hoặc <b>động</b> (lúc runtime, "xin" một vùng RAM). Khi tạo 1 task, cần ít nhất <b>TCB</b> và <b>Stack</b>.</p>
+      <div class="diagram">
+        <div class="diagram-label">Phân biệt vùng nhớ</div>
+        <div class="ascii">FLASH (không đổi lúc runtime)
+  +---- Code (.text)
+  +---- Read-only data (.rodata)
+
+RAM (thay đổi lúc runtime)
+  +---- Global/static data (.data, .bss)
+  +---- Heap        &lt;- vùng cấp phát động
+  +---- Stack        &lt;- ngữ cảnh hàm/task
+  +---- Free RAM</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <h3>11–12. Static vs Dynamic, Determinism / Fragmentation / Exhaustion</h3>
+      <div class="table-wrap">
+        <table class="cmp">
+          <thead><tr><th></th><th>Static allocation</th><th>Dynamic allocation</th></tr></thead>
+          <tbody>
+            <tr><td>Khi cấp phát</td><td>Compile / link time</td><td>Runtime</td></tr>
+            <tr><td>Kích thước</td><td>Cố định, biết trước</td><td>Thay đổi theo yêu cầu runtime</td></tr>
+            <tr><td>Ai quản lý</td><td>Compiler + linker</td><td>Bộ heap allocator lúc runtime</td></tr>
+            <tr><td>Giải phóng</td><td>Không cần (vĩnh viễn)</td><td>Có thể free() để dùng lại</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="infobox concept">
+        <div class="infobox-title">💡 CONCEPT — 4 khái niệm cốt lõi</div>
+        <p><b>Deterministic</b>: một thao tác luôn mất cùng khoảng thời gian (hoặc có giới hạn trên biết trước), bất kể trạng thái hệ thống — sống còn với hệ real-time có deadline. <b>Fragmentation</b>: tổng bộ nhớ trống đủ, nhưng bị chia rải rác thành nhiều mảnh không liền kề, không mảnh nào đủ lớn cho yêu cầu mới. <b>Memory exhaustion</b>: hết RAM để cấp phát thêm — dễ xảy ra hơn nhiều trên MCU (vài trăm KB) so với PC. <b>Execution time</b> của mọi API (kể cả cấp phát) ảnh hưởng trực tiếp tới độ trễ phản hồi hệ thống.</p>
+      </div>
+    </div>
+
+    <div class="infobox beginner">
+      <div class="infobox-title">🎓 QUICK CHECK</div>
+      <p><b>1.</b> Nếu tổng free heap là 500 byte nhưng chia thành 5 mảnh 100-byte rời rạc, bạn có cấp phát được 1 block 200-byte không? <i>(Không — đây chính là fragmentation.)</i><br>
+      <b>2.</b> Mỗi lần <code>xTaskCreate()</code> cần bao nhiêu vùng RAM tối thiểu? <i>(2: TCB + Stack.)</i></p>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON 02 — 3.1 INTRODUCTION ============================= -->
+  <section class="section" id="memory-intro">
+    <div class="lesson-header"><span class="lesson-number">LESSON 02</span><h2>3.1 Introduction</h2></div>
+    <p class="lesson-sub">PDF trang 1–2 · Vì sao FreeRTOS không dùng thẳng malloc()/free() chuẩn.</p>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE — trang 1</span>
+      <h3>Scope &amp; Prerequisites</h3>
+      <p>Chương này giả định người đọc đã quen: các giai đoạn compile/link của C project, khái niệm stack/heap, hàm chuẩn <code>malloc()</code>/<code>free()</code>. Chapter 3 sẽ nói về: (1) khi nào FreeRTOS cấp RAM, (2) 5 sơ đồ cấp phát bộ nhớ ví dụ, (3) nên chọn sơ đồ nào.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE — trang 1</span>
+      <h3>Switching Between Static &amp; Dynamic</h3>
+      <p>Kernel object (task, queue, semaphore, event group) có thể tạo bằng bộ nhớ cấp phát <b>tĩnh</b> hoặc <b>động</b>. API tạo bằng static chỉ khả dụng khi <code>configSUPPORT_STATIC_ALLOCATION = 1</code>. API tạo bằng dynamic chỉ khả dụng khi <code>configSUPPORT_DYNAMIC_ALLOCATION</code> là <code>1</code> hoặc <b>để trống (undefined)</b>. Cả hai có thể cùng bật.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE — trang 1–2</span>
+      <h3>Vì sao malloc()/free() chuẩn có thể không phù hợp?</h3>
+      <ul>
+        <li>Không phải lúc nào cũng có sẵn trên hệ thống nhúng nhỏ.</li>
+        <li>Cài đặt có thể khá lớn, tốn code space.</li>
+        <li>Hiếm khi thread-safe.</li>
+        <li>Không deterministic — thời gian thực thi thay đổi giữa các lần gọi.</li>
+        <li>Có thể suffer fragmentation.</li>
+        <li>Có thể làm phức tạp cấu hình linker.</li>
+        <li>Có thể gây lỗi khó debug nếu heap "tràn" vào vùng nhớ biến khác.</li>
+      </ul>
+      <div class="infobox concept">
+        <div class="infobox-title">💡 EXPLANATION</div>
+        <p>Đây là lý do FreeRTOS tách hẳn allocation ra khỏi core kernel — gọi là <b>portable layer</b>. FreeRTOS gọi <code>pvPortMalloc()</code>/<code>vPortFree()</code> thay vì <code>malloc()</code>/<code>free()</code> — cùng prototype, nhưng bạn chọn được cách hiện thực (hoặc tự viết) phù hợp với MCU của mình.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE — trang 2</span>
+      <h3>Options for Dynamic Memory Allocation</h3>
+      <p>Phiên bản FreeRTOS cũ dùng "memory pools" (đã bị loại bỏ vì lãng phí RAM trên hệ rất nhỏ). Ngày nay FreeRTOS coi allocation là một phần của <b>portable layer</b>, không phải core codebase — vì mỗi hệ nhúng có yêu cầu allocation/timing khác nhau. FreeRTOS cung cấp <b>5 cách hiện thực ví dụ</b>: <code>heap_1.c</code>, <code>heap_2.c</code>, <code>heap_3.c</code>, <code>heap_4.c</code>, <code>heap_5.c</code>, nằm trong <code>FreeRTOS/Source/portable/MemMang</code>.</p>
+      <div class="diagram">
+        <div class="diagram-label">Kiến trúc Portable Layer</div>
+        <div class="ascii">Application code
+      │  xTaskCreate(), xQueueCreate() ...
+      ▼
+FreeRTOS kernel (core codebase)
+      │  cần RAM cho TCB / stack / queue buffer
+      ▼
+pvPortMalloc()   ◄── Portable layer (đổi được: heap_1..5 hoặc tự viết)
+      │
+      ▼
+configTOTAL_HEAP_SIZE bytes (mảng RAM tĩnh chứa "heap")</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= STATIC VS DYNAMIC (dedicated) ============================= -->
+  <section class="section" id="static-dynamic">
+    <div class="lesson-header"><span class="lesson-number">LESSON 03</span><h2>Static vs Dynamic — So sánh trực quan</h2></div>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th>STATIC</th><th>DYNAMIC</th></tr></thead>
+        <tbody>
+          <tr><td>Known at compile time</td><td>Runtime allocation</td></tr>
+          <tr><td>Deterministic</td><td>Flexible</td></tr>
+          <tr><td>No runtime allocation</td><td>Possible fragmentation</td></tr>
+          <tr><td>Predictable RAM usage</td><td>Allocation can fail (trả NULL)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <span class="badge badge-example">EXAMPLE</span>
+      <h3>Ví dụ số — Fragmentation</h3>
+      <p>Free blocks: <code>[5 byte] [25 byte] [100 byte]</code>. Yêu cầu lần lượt: 20, 80, 110 byte.</p>
+      <div class="ascii">Yêu cầu 20 byte  -> vừa vào block 25 -> OK (best-fit) hoặc block 100 (first-fit)
+Yêu cầu 80 byte  -> chỉ block 100 đủ chỗ -> OK, tách còn ~20 byte free
+Yêu cầu 110 byte -> KHÔNG block nào đủ (blocks còn lại: 5, ~20, phần dư)
+                    dù tổng free ban đầu = 130 byte > 110 byte
+                    => THẤT BẠI do FRAGMENTATION, không phải do thiếu RAM tổng</div>
+      <div class="infobox warning">
+        <div class="infobox-title">⚠ WARNING</div>
+        <p>Đây chính là lý do câu hỏi "tại sao allocation thất bại dù tổng free heap vẫn còn nhiều?" luôn dẫn tới cùng một câu trả lời: <b>fragmentation</b> — kiểm tra bằng <code>vPortGetHeapStats()</code> (xem Lesson 10), so sánh <code>xAvailableHeapSpaceInBytes</code> với <code>xSizeOfLargestFreeBlockInBytes</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= pvPortMalloc / vPortFree ============================= -->
+  <section class="section" id="pvportmalloc">
+    <div class="lesson-header"><span class="lesson-number">LESSON 04</span><h2>pvPortMalloc() &amp; vPortFree()</h2></div>
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Ý tưởng</h3>
+      <p><code>pvPortMalloc()</code> có <b>cùng prototype</b> với <code>malloc()</code> chuẩn; <code>vPortFree()</code> có cùng prototype với <code>free()</code>. Cả hai là <b>hàm public</b>, ứng dụng có thể gọi trực tiếp, không chỉ FreeRTOS kernel mới gọi được.</p>
+      <div class="diagram">
+        <div class="diagram-label">Application → Heap</div>
+        <div class="ascii">Application
+   │
+   ▼
+pvPortMalloc()
+   │
+   ▼
+FreeRTOS Heap Manager (heap_1..5 hoặc tự viết)
+   │
+   ▼
+Heap (mảng RAM tĩnh, hoặc malloc() chuẩn với heap_3)
+   │
+   ▼
+RAM vật lý</div>
+      </div>
+    </div>
+    <div class="card">
+      <span class="badge badge-example">EXAMPLE</span>
+      <h3>Ví dụ dùng trực tiếp trong ứng dụng</h3>
+      <div class="code-block" data-filename="app_example.c" data-lang="C">
+        <div class="code-block-header"><span class="fname">app_example.c</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>void *ptr = pvPortMalloc(100);
+
+if (ptr != NULL)
+{
+    /* Cấp phát thành công — dùng vùng nhớ 100 byte tại ptr */
+}
+else
+{
+    /* Thất bại — có thể do hết heap hoặc fragmentation */
+}
+
+vPortFree(ptr);   /* Trả lại RAM cho heap (nếu heap đó hỗ trợ free) */</code></pre>
+      </div>
+      <p style="font-size:13px;color:var(--muted);"><b>Giải thích từng dòng:</b> dòng 1 xin 100 byte; <code>ptr == NULL</code> nghĩa là thất bại — luôn phải kiểm tra trước khi dùng; <code>vPortFree(ptr)</code> chỉ có tác dụng thật sự với heap hỗ trợ free (heap_2/3/4/5 — <b>không phải heap_1</b>).</p>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON heap_1 ============================= -->
+  <section class="section" id="heap1">
+    <div class="lesson-header"><span class="lesson-number">LESSON 05</span><h2>3.2.1 — heap_1</h2></div>
+    <p class="lesson-sub">PDF trang 2–3 · Đơn giản nhất, không free, luôn deterministic.</p>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Concept</h3>
+      <p>Nhiều hệ nhúng nhỏ chỉ tạo task/kernel object <b>một lần trước khi scheduler chạy</b>, không bao giờ xóa. <code>heap_1.c</code> hiện thực một <code>pvPortMalloc()</code> rất cơ bản và <b>không implement <code>vPortFree()</code></b>. Ứng dụng không bao giờ xóa task/object có thể dùng heap_1 — kể cả hệ thống safety-critical vốn cấm dynamic allocation, vì <b>heap_1 luôn deterministic và không thể fragment</b>.</p>
+      <p>Cách hiện thực: chia nhỏ dần một mảng <code>uint8_t</code> tĩnh (<code>configTOTAL_HEAP_SIZE</code>). Mỗi task dynamically-created tốn <b>2 lần gọi <code>pvPortMalloc()</code></b> (TCB + stack).</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <h3>Vì sao "không free" = "luôn deterministic"?</h3>
+      <p>Fragmentation chỉ xảy ra khi bạn cấp phát rồi giải phóng liên tục các block khác kích thước. Nếu không bao giờ free, không "lỗ hổng" nào xuất hiện — chỉ đi thẳng một chiều từ đầu tới cuối mảng. Logic cực đơn giản ("lấy con trỏ hiện tại, cộng kích thước, trả về") → thời gian thực thi gần như hằng số.</p>
+    </div>
+
+    <div class="card">
+      <h3>Interactive Visualization — heap_1</h3>
+      <div class="interactive-panel">
+        <div class="panel-controls">
+          <button class="btn" id="h1CreateBtn">➕ Create Task</button>
+          <button class="btn secondary" id="h1ResetBtn">↺ Reset</button>
+        </div>
+        <div class="diagram-label">HEAP_1 ARRAY (configTOTAL_HEAP_SIZE)</div>
+        <div class="mem-bar" id="h1Bar"><div class="mem-seg seg-free" style="width:100%">FREE</div></div>
+        <div class="mem-legend">
+          <span><i class="seg-tcb" style="background:#fbbf24;"></i>TCB</span>
+          <span><i class="seg-stack" style="background:#fb923c;"></i>Stack</span>
+          <span><i class="seg-free" style="background:#1e293b;border:1px dashed #334155;"></i>Free</span>
+        </div>
+        <p class="panel-note" id="h1Note">Bấm "Create Task" để xem heap_1 bị chia nhỏ dần — <b>không bao giờ co lại</b> vì không có <code>vPortFree()</code>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Source Code (minh họa logic — <span class="badge badge-infer" style="margin:0;">INFERENCE</span>)</h3>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">heap_1.c (giản lược)</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>static uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
+static size_t xNextFreeByte = 0;
+
+void *pvPortMalloc( size_t xWantedSize )
+{
+    void *pvReturn = NULL;
+
+    if ( (xNextFreeByte + xWantedSize) <= configTOTAL_HEAP_SIZE )
+    {
+        pvReturn = &ucHeap[ xNextFreeByte ];
+        xNextFreeByte += xWantedSize;
+    }
+    return pvReturn;
+}
+/* vPortFree() KHONG duoc implement trong heap_1.c */</code></pre>
+      </div>
+    </div>
+
+    <div class="infobox warning">
+      <div class="infobox-title">⚠ COMMON MISTAKE</div>
+      <p>Dùng heap_1 cho ứng dụng có tạo/xóa task hoặc queue động theo thời gian chạy → RAM cạn dần, allocation thất bại sau một thời gian, rất khó tái hiện lúc test ngắn.</p>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON heap_2 ============================= -->
+  <section class="section" id="heap2">
+    <div class="lesson-header"><span class="lesson-number">LESSON 06</span><h2>3.2.2 — heap_2 (Best-Fit)</h2></div>
+    <p class="lesson-sub">PDF trang 3–4 · Có free(), nhưng không khuyến khích cho thiết kế mới.</p>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Concept</h3>
+      <p>"Heap_2 is superseded by heap_4 ... kept for backward compatibility and is <b>not recommended for new designs</b>." Heap_2 chia nhỏ mảng tĩnh giống heap_1, dùng thuật toán <b>best-fit</b>, và <b>có implement <code>vPortFree()</code></b>.</p>
+      <p><b>Best-fit</b>: <code>pvPortMalloc()</code> luôn chọn block free <b>gần khít nhất</b> với số byte yêu cầu. Ví dụ PDF: free blocks 5/25/100 byte, yêu cầu 20 byte → chọn block <b>25-byte</b> (nhỏ nhất mà vẫn đủ), tách thành 20-byte (trả về) + ~5-byte (free, dư ra do heap_2 lưu metadata trong vùng heap nên thực tế nhỏ hơn 5 chẵn).</p>
+      <p>"Unlike heap_4, heap_2 does <b>not combine adjacent free blocks</b> ... more susceptible to fragmentation ... <b>However, fragmentation is not an issue if the allocated and subsequently freed blocks are always the same size.</b>"</p>
+    </div>
+
+    <div class="card">
+      <h3>Interactive — Best-Fit Demo</h3>
+      <div class="interactive-panel">
+        <div class="diagram-label">Free blocks hiện có</div>
+        <div class="blocks-row" id="h2Blocks">
+          <div class="free-chip" data-size="5">5 B</div>
+          <div class="free-chip" data-size="25">25 B</div>
+          <div class="free-chip" data-size="100">100 B</div>
+        </div>
+        <div class="panel-controls">
+          <button class="btn" id="h2AllocBtn">Allocate 20 bytes (Best-Fit)</button>
+          <button class="btn secondary" id="h2ResetBtn">↺ Reset</button>
+        </div>
+        <p class="panel-note" id="h2Note">Bấm nút để xem best-fit chọn block nào và tách ra sao.</p>
+      </div>
+    </div>
+
+    <div class="infobox concept">
+      <div class="infobox-title">💡 EXPLANATION</div>
+      <p>Best-fit cố "tiết kiệm" block lớn cho tương lai bằng cách dùng block nhỏ vừa đủ trước. Cái giá: không gộp block liền kề khi free → theo thời gian, nếu kích thước alloc/free thay đổi liên tục, heap dần chia thành nhiều mảnh nhỏ không dùng lại được cho yêu cầu lớn.</p>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON heap_3 ============================= -->
+  <section class="section" id="heap3">
+    <div class="lesson-header"><span class="lesson-number">LESSON 07</span><h2>3.2.3 — heap_3 (Wrapper quanh malloc/free)</h2></div>
+    <p class="lesson-sub">PDF trang 5 · Toàn bộ nội dung PDF về heap_3 (rất ngắn gọn).</p>
+    <div class="card">
+      <span class="badge badge-source">SOURCE — toàn văn</span>
+      <p>"Heap_3.c uses the standard library <code>malloc()</code> and <code>free()</code> functions, so the linker configuration defines the heap size, and the <code>configTOTAL_HEAP_SIZE</code> constant is not used. Heap_3 makes <code>malloc()</code> and <code>free()</code> thread-safe by temporarily suspending the FreeRTOS scheduler for the duration of their execution."</p>
+    </div>
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <h3>Vì sao cần?</h3>
+      <p>Nếu buộc phải dùng <code>malloc()</code> chuẩn (thư viện bên thứ 3 gọi cứng), heap_3 đảm bảo an toàn đa nhiệm bằng cách <b>tạm dừng scheduler</b> trong lúc <code>malloc()</code>/<code>free()</code> chạy — không task nào chen ngang giữa lúc dữ liệu quản lý heap nội bộ đang bị sửa. Đánh đổi: toàn hệ thống "đứng" trong lúc đó, và vì <code>malloc()</code> chuẩn không deterministic, thời gian "đứng" cũng không xác định trước.</p>
+      <div class="diagram">
+        <div class="ascii">Task A gọi pvPortMalloc(50)
+    │
+    ├─► vTaskSuspendAll()   // scheduler ngừng chuyển task khác
+    ├─► malloc(50)          // gọi C library chuẩn
+    └─► xTaskResumeAll()    // scheduler hoạt động lại</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON heap_4 ============================= -->
+  <section class="section" id="heap4">
+    <div class="lesson-header"><span class="lesson-number">LESSON 08</span><h2>3.2.4 — heap_4 (First-Fit + Coalescing)</h2></div>
+    <p class="lesson-sub">PDF trang 5–7 · Heap được khuyến nghị phổ biến nhất.</p>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Concept</h3>
+      <p>Heap_4 dùng thuật toán <b>first-fit</b>: <code>pvPortMalloc()</code> dùng <b>block đầu tiên</b> (theo thứ tự trong mảng) đủ lớn để chứa yêu cầu. Ví dụ PDF: free blocks 5/200/100 byte (theo thứ tự), yêu cầu 20 byte → chọn block <b>200-byte</b> (đầu tiên đủ điều kiện), tách 20-byte + ~180-byte dư.</p>
+      <p>Khác heap_2, heap_4 <b>combines (coalesces) adjacent free blocks</b> thành 1 block lớn hơn, giảm nguy cơ fragmentation. <b>"Heap_4 is not deterministic but is faster than most standard library implementations of malloc() and free()."</b></p>
+    </div>
+
+    <div class="card">
+      <h3>Interactive — First-Fit Coalescing Demo</h3>
+      <div class="interactive-panel">
+        <div class="diagram-label">Trạng thái: <span id="h4StateLabel">A — 3 task vừa tạo</span></div>
+        <div class="mem-bar" id="h4Bar"></div>
+        <div class="mem-legend">
+          <span><i style="background:#818cf8;"></i>Used (Stack+TCB)</span>
+          <span><i style="background:#f87171;"></i>Queue</span>
+          <span><i style="background:#a3e635;"></i>User alloc</span>
+          <span><i style="background:#1e293b;border:1px dashed #334155;"></i>Free (chưa gộp)</span>
+          <span><i style="background:#34d399;"></i>Free (đã coalesced)</span>
+        </div>
+        <div class="panel-controls">
+          <button class="btn secondary" id="h4PrevBtn">◀ Bước trước</button>
+          <button class="btn" id="h4NextBtn">Bước tiếp ▶</button>
+          <button class="btn secondary" id="h4ResetBtn">↺ Reset về A</button>
+        </div>
+        <p class="panel-note" id="h4Note"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Source Code (cấu trúc chuẩn — <span class="badge badge-infer" style="margin:0;">INFERENCE</span>)</h3>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">heap_4.c (cấu trúc)</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>typedef struct A_BLOCK_LINK
+{
+    struct A_BLOCK_LINK *pxNextFreeBlock;
+    size_t xBlockSize;   /* bit cao nhat = co "dang cap phat" */
+} BlockLink_t;
+
+/* Free list duoc sap xep THEO DIA CHI tang dan -> de kiem tra
+   "block lien ke" khi coalescing (chi can nhin node truoc/sau). */
+
+void vPortFree( void *pv )
+{
+    BlockLink_t *pxLink = /* lui lai lay header cua block */;
+    vTaskSuspendAll();
+    {
+        /* 1. Danh dau block nay la free               */
+        /* 2. Kiem tra block ben PHAI (dia chi lien sau) -> gop neu free */
+        /* 3. Kiem tra block ben TRAI (dia chi lien truoc) -> gop neu free */
+        /* 4. Chen block (da gop neu co) vao dung vi tri trong free list */
+    }
+    xTaskResumeAll();
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON heap_5 ============================= -->
+  <section class="section" id="heap5">
+    <div class="lesson-header"><span class="lesson-number">LESSON 09</span><h2>3.2.5 &amp; 3.2.6 — heap_5 (Multiple Memory Regions)</h2></div>
+    <p class="lesson-sub">PDF trang 7–10 · Gộp nhiều vùng RAM rời rạc thành một heap logic.</p>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Concept</h3>
+      <p>"Heap_5 uses the same allocation algorithm as heap_4 ... can combine memory from multiple separated memory spaces into a single heap. Heap_5 is useful when the RAM ... does not appear as a single contiguous block in the system's memory map."</p>
+      <p><code>vPortDefineHeapRegions()</code> khởi tạo heap_5 — <b>heap duy nhất cần khởi tạo tường minh</b>, kernel object <b>không thể tạo động trước</b> khi gọi hàm này.</p>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">HeapRegion_t</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>void vPortDefineHeapRegions( const HeapRegion_t * const pxHeapRegions );
+
+typedef struct HeapRegion
+{
+    uint8_t *pucStartAddress;   /* dia chi bat dau 1 khoi RAM */
+    size_t   xSizeInBytes;      /* kich thuoc khoi do (byte) */
+} HeapRegion_t;</code></pre>
+      </div>
+      <p><b>Quy tắc bắt buộc:</b> mảng phải sắp xếp theo <b>địa chỉ tăng dần</b>, kết thúc bằng phần tử có <code>pucStartAddress = NULL</code>.</p>
+    </div>
+
+    <div class="card">
+      <h3>Ví dụ Memory Map (PDF Figure 3.4)</h3>
+      <div class="diagram">
+        <div class="diagram-label">3 vùng RAM rời rạc → 1 heap logic</div>
+        <div class="ascii">                 heap_5
+                    │
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+      RAM1        RAM2        RAM3
+   0x00010000   0x00020000  0x00030000
+    65K bytes    32K bytes   32K bytes</div>
+      </div>
+      <div class="infobox warning">
+        <div class="infobox-title">⚠ WARNING — chồng lấn RAM</div>
+        <p>Nếu hard-code toàn bộ RAM1 vào <code>xHeapRegions[]</code> (Listing 3.3) trong khi linker đã dùng một phần RAM1 cho biến khác → <b>chồng lấn (overlap)</b>, lỗi cực khó debug. Giải pháp đúng (Listing 3.4): khai báo một mảng biến <code>ucHeap[]</code> để linker tự tính ranh giới — heap_5 chỉ quản lý đúng vùng đó, không thể overlap, và nếu <code>ucHeap</code> quá lớn thì <b>chương trình sẽ không link được</b> (lỗi phát hiện lúc build).</p>
+      </div>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">Listing 3.4 — cách an toàn</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>#define RAM2_START_ADDRESS ( ( uint8_t * ) 0x00020000 )
+#define RAM2_SIZE ( 32 * 1024 )
+#define RAM3_START_ADDRESS ( ( uint8_t * ) 0x00030000 )
+#define RAM3_SIZE ( 32 * 1024 )
+
+#define RAM1_HEAP_SIZE ( 30 * 1024 )
+static uint8_t ucHeap[ RAM1_HEAP_SIZE ];   /* linker tu dat vao RAM1 */
+
+const HeapRegion_t xHeapRegions[] =
+{
+    { ucHeap,             RAM1_HEAP_SIZE },
+    { RAM2_START_ADDRESS, RAM2_SIZE },
+    { RAM3_START_ADDRESS, RAM3_SIZE },
+    { NULL,               0 }   /* Marks the end of the array. */
+};
+
+int main( void )
+{
+    vPortDefineHeapRegions( xHeapRegions );
+    /* Add application code here. */
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON 10 — STATISTICS ============================= -->
+  <section class="section" id="statistics">
+    <div class="lesson-header"><span class="lesson-number">LESSON 10</span><h2>3.3 Heap Statistics &amp; Utility Functions</h2></div>
+    <p class="lesson-sub">PDF trang 10–14.</p>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Định vị Heap Start Address</h3>
+      <p><code>configAPPLICATION_ALLOCATED_HEAP</code> cho phép ứng dụng tự khai báo mảng <code>ucHeap</code> (thay vì để nó nằm sẵn trong <code>heap_n.c</code>) — hữu ích khi cần đặt heap vào vùng RAM nhanh cụ thể.</p>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">Listing 3.5 (GCC) / 3.6 (IAR)</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>/* GCC - dat vao section ".my_heap" */
+uint8_t ucHeap[ configTOTAL_HEAP_SIZE ] __attribute__( ( section( ".my_heap" ) ) );
+
+/* IAR - dat vao dia chi tuyet doi */
+uint8_t ucHeap[ configTOTAL_HEAP_SIZE ] @ 0x20000000;</code></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>xPortGetFreeHeapSize() &amp; xPortGetMinimumEverFreeHeapSize()</h3>
+      <p><code>xPortGetFreeHeapSize()</code> trả số byte free hiện tại — <b>không</b> phải thông tin fragmentation, và <b>không implement cho heap_3</b>. <code>xPortGetMinimumEverFreeHeapSize()</code> trả số byte free thấp nhất từng đạt được kể từ khi chạy — chỉ <b>heap_4 và heap_5</b> mới có. Dùng để tối ưu <code>configTOTAL_HEAP_SIZE</code>.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-example">EXAMPLE</span>
+      <h3>Ví dụ số theo dõi qua thời gian</h3>
+      <div class="ascii">Initial free heap = 100 KB
+
+Task A allocates 10 KB  -> free = 90 KB,  min-ever-free = 90 KB
+Task B allocates 20 KB  -> free = 70 KB,  min-ever-free = 70 KB
+Task A frees 10 KB      -> free = 80 KB,  min-ever-free = 70 KB  (KHONG tang lai!)
+Task C allocates 5 KB   -> free = 75 KB,  min-ever-free = 70 KB</div>
+      <p style="font-size:13px;color:var(--muted);">min-ever-free chỉ <b>giảm hoặc giữ nguyên</b>, không bao giờ hồi phục dù bạn free RAM — nó ghi nhớ điểm thấp nhất trong lịch sử.</p>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>vPortGetHeapStats()</h3>
+      <p>Heap_4 và heap_5 implement, điền đầy đủ <code>HeapStats_t</code>:</p>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">HeapStats_t</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>typedef struct xHeapStats
+{
+    size_t xAvailableHeapSpaceInBytes;      /* Tong free (sum tat ca block) */
+    size_t xSizeOfLargestFreeBlockInBytes;  /* Block free LON NHAT */
+    size_t xSizeOfSmallestFreeBlockInBytes; /* Block free NHO NHAT */
+    size_t xNumberOfFreeBlocks;             /* So block free hien tai */
+    size_t xMinimumEverFreeBytesRemaining;  /* Giong xPortGetMinimumEverFreeHeapSize() */
+    size_t xNumberOfSuccessfulAllocations;  /* Tong so lan pvPortMalloc() thanh cong */
+    size_t xNumberOfSuccessfulFrees;        /* Tong so lan vPortFree() thanh cong */
+} HeapStats_t;</code></pre>
+      </div>
+      <div class="infobox important">
+        <div class="infobox-title">⚠ IMPORTANT — Phát hiện fragmentation</div>
+        <p>Nếu <code>xAvailableHeapSpaceInBytes</code> lớn nhưng <code>xSizeOfLargestFreeBlockInBytes</code> nhỏ → heap đang phân mảnh.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Per-task stats, Malloc Failed Hook, Fast Memory</h3>
+      <p>Nếu <code>configTRACK_TASK_MEMORY_ALLOCATIONS = 1</code>, <code>vTaskGetInfo()</code> có thêm: số lần task gọi <code>pvPortMalloc()</code>/<code>vPortFree()</code>, số byte đang chiếm dụng, mức dùng heap tối đa.</p>
+      <p><code>pvPortMalloc()</code> trả <code>NULL</code> khi thất bại. Nếu <code>configUSE_MALLOC_FAILED_HOOK = 1</code>, hàm <code>vApplicationMallocFailedHook()</code> được gọi — và object đó <b>không được tạo</b>. PDF lưu ý: coi thất bại là fatal error (như nhiều demo) <b>không phải best practice cho production</b>.</p>
+      <p><code>pvPortMallocStack()</code>/<code>vPortFreeStack()</code> (mặc định gọi thẳng <code>pvPortMalloc</code>/<code>vPortFree</code>) có thể map sang hàm ứng dụng riêng để lấy stack từ vùng "fast memory" tách biệt heap chính — vì stack bị truy cập tần suất rất cao.</p>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON 11 — STATIC ALLOCATION ============================= -->
+  <section class="section" id="static-alloc">
+    <div class="lesson-header"><span class="lesson-number">LESSON 11</span><h2>3.4 Using Static Memory Allocation</h2></div>
+    <p class="lesson-sub">PDF trang 14–16.</p>
+    <div class="card">
+      <span class="badge badge-source">SOURCE</span>
+      <h3>Enabling &amp; Internal Kernel Memory</h3>
+      <p>Bật bằng <code>configSUPPORT_STATIC_ALLOCATION = 1</code>, mở khóa các API <code>*CreateStatic</code> (task, event group, queue, mutex, counting semaphore, stream buffer, timer). Khi bật, <b>idle task</b> và <b>timer task</b> (nếu dùng) cần bộ nhớ tĩnh do ứng dụng cung cấp qua <code>vApplicationGetIdleTaskMemory</code> (luôn cần) và <code>vApplicationGetTimerTaskMemory</code> (nếu <code>configUSE_TIMERS</code>).</p>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">Listing 3.14 — vApplicationGetIdleTaskMemory</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer,
+                                     StackType_t **ppxIdleTaskStackBuffer,
+                                     uint32_t *pulIdleTaskStackSize )
+{
+    static StaticTask_t xIdleTaskTCB;
+    static StackType_t uxIdleTaskStack[ configMINIMAL_STACK_SIZE ];
+
+    *ppxIdleTaskTCBBuffer = &xIdleTaskTCB;
+    *ppxIdleTaskStackBuffer = uxIdleTaskStack;
+    *pulIdleTaskStackSize = configMINIMAL_STACK_SIZE;
+}</code></pre>
+      </div>
+      <div class="infobox warning">
+        <div class="infobox-title">⚠ COMMON MISTAKE</div>
+        <p>Nếu buffer trong hàm này <b>không</b> khai báo <code>static</code>, chúng bị cấp phát trên stack và biến mất khi hàm return → dangling pointer, crash ngẫu nhiên cực khó debug. Đây là điểm PDF nhấn mạnh riêng bằng comment trong code.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================= LESSON 12 — DEBUGGING ============================= -->
+  <section class="section" id="debugging">
+    <div class="lesson-header"><span class="lesson-number">LESSON 12</span><h2>Debugging FreeRTOS Heap</h2></div>
+    <p class="lesson-sub"><span class="badge badge-infer">INFERENCE</span> Phần này là kiến thức FreeRTOS/embedded tổng quát để hỗ trợ thực hành — <b>không phải trích dẫn trực tiếp</b> từ 16 trang PDF Chapter 3 (PDF chỉ cung cấp các API thống kê ở Lesson 10, không có mục "Debugging" riêng).</p>
+    <div class="debug-grid" id="debugGrid"></div>
+    <div class="card" id="debugDetailCard" style="display:none;"></div>
+  </section>
+
+  <!-- ============================= LESSON 13 — SOURCE TRACE ============================= -->
+  <section class="section" id="source-trace">
+    <div class="lesson-header"><span class="lesson-number">LESSON 13</span><h2>Source Code Trace — Task Lifecycle</h2></div>
+    <p class="lesson-sub"><span class="badge badge-infer">INFERENCE</span> Trace tổng quát dựa trên kiến trúc FreeRTOS chuẩn (tasks.c + heap_n.c) — PDF Chapter 3 không show trực tiếp nội dung <code>tasks.c</code>.</p>
+    <div class="card">
+      <h3>Task Creation</h3>
+      <div class="flow" id="traceCreate"></div>
+    </div>
+    <div class="card">
+      <h3>Task Deletion</h3>
+      <div class="flow" id="traceDelete"></div>
+    </div>
+  </section>
+
+  <!-- ============================= COMPARISON TABLE ============================= -->
+  <section class="section" id="comparison">
+    <div class="lesson-header"><span class="lesson-number">REFERENCE</span><h2>So sánh 5 Heap Implementations</h2></div>
+    <div class="table-wrap"><table class="cmp" id="cmpTable"></table></div>
+    <div class="card">
+      <span class="badge badge-explain">EXPLANATION</span>
+      <p><b>heap_1</b>: đơn giản nhất, không free, dùng khi chỉ tạo object một lần lúc khởi động. <b>heap_2</b>: best-fit, có free nhưng không gộp block — chỉ ổn khi kích thước alloc/free lặp lại cố định; không khuyến khích cho thiết kế mới. <b>heap_3</b>: wrapper quanh <code>malloc()</code>/<code>free()</code> chuẩn, thread-safe qua suspend scheduler. <b>heap_4</b>: first-fit + coalescing, lựa chọn phổ biến nhất. <b>heap_5</b>: giống heap_4 nhưng gộp nhiều vùng RAM rời rạc.</p>
+    </div>
+  </section>
+
+  <!-- ============================= API CARDS ============================= -->
+  <section class="section" id="apicards">
+    <div class="lesson-header"><span class="lesson-number">REFERENCE</span><h2>API Reference</h2></div>
+    <div class="api-grid" id="apiGrid"></div>
+  </section>
+
+  <!-- ============================= LABS ============================= -->
+  <section class="section" id="labs">
+    <div class="lesson-header"><span class="lesson-number">LESSON 14</span><h2>Practical Labs</h2></div>
+    <p class="lesson-sub"><span class="badge badge-infer">INFERENCE</span> Bài lab thực hành dựa trên API/khái niệm đã học — cần môi trường FreeRTOS thật (QEMU hoặc board như CV25S66) để chạy.</p>
+    <div id="labsContainer"></div>
+  </section>
+
+  <!-- ============================= QUIZ ============================= -->
+  <section class="section" id="quiz">
+    <div class="lesson-header"><span class="lesson-number">LESSON 15</span><h2>Final Quiz — 30 Questions</h2></div>
+    <div class="quiz-progress">
+      <span id="quizProgressText">0 / 30 đã trả lời</span>
+      <div class="bar"><div class="bar-fill" id="quizProgressBar"></div></div>
+    </div>
+    <div id="quizContainer"></div>
+    <div class="panel-controls" style="margin-top:10px;">
+      <button class="btn" id="quizSubmitBtn">Nộp bài</button>
+      <button class="btn secondary" id="quizResetBtn">↺ Làm lại</button>
+    </div>
+    <div class="quiz-result" id="quizResult">
+      <div class="score" id="quizScore">0/30</div>
+      <div class="pct" id="quizPct">0%</div>
+      <div class="verdict" id="quizVerdict"></div>
+    </div>
+  </section>
+
+  <!-- ============================= GLOSSARY ============================= -->
+  <section class="section" id="glossary">
+    <div class="lesson-header"><span class="lesson-number">REFERENCE</span><h2>Glossary</h2></div>
+    <div class="glossary-nav" id="glossaryNav"></div>
+    <div id="glossaryContainer"></div>
+  </section>
+
+  <!-- ============================= CHEAT SHEET ============================= -->
+  <section class="section" id="cheatsheet">
+    <div class="lesson-header"><span class="lesson-number">REFERENCE</span><h2>FreeRTOS Heap — Cheat Sheet</h2></div>
+    <div class="cheat-grid" id="cheatGrid"></div>
+  </section>
+
+  <footer class="site-footer">
+    FreeRTOS Heap Memory Management — Interactive Learning Portal · Nội dung dựa trên PDF "RTOS Chapter 3" (16 trang) do người học cung cấp · Chạy hoàn toàn offline, không kết nối internet.
+  </footer>
+</main>
+</div>
+
+<button class="back-to-top" id="backToTop" aria-label="Về đầu trang">↑</button>
+
+<script>
+/* =========================================================
+   DATA — GLOSSARY
+   ========================================================= */
+const GLOSSARY = [
+  {t:"Allocation",d:"Hành động cấp phát một vùng RAM để sử dụng, có thể tĩnh (compile-time) hoặc động (runtime)."},
+  {t:"Best-fit",d:"Thuật toán chọn block free có kích thước gần khít nhất với yêu cầu (dùng trong heap_2)."},
+  {t:"Block",d:"Một đoạn liên tục của vùng heap, có thể đang free hoặc đang được cấp phát."},
+  {t:"BlockLink_t",d:"Struct nội bộ (heap_2/4/5) lưu con trỏ tới block free kế tiếp và kích thước block."},
+  {t:"Coalescing",d:"Gộp các block free liền kề thành một block lớn hơn ngay khi free — cơ chế cốt lõi của heap_4/heap_5."},
+  {t:"configTOTAL_HEAP_SIZE",d:"Hằng số trong FreeRTOSConfig.h định nghĩa kích thước mảng heap tĩnh cho heap_1/2/4."},
+  {t:"Determinism",d:"Tính chất một thao tác luôn mất cùng một khoảng thời gian (hoặc có giới hạn trên biết trước), quan trọng với hệ real-time."},
+  {t:"Dynamic Allocation",d:"Cấp phát bộ nhớ lúc runtime, ví dụ qua pvPortMalloc()."},
+  {t:"First-fit",d:"Thuật toán chọn block free đầu tiên (theo thứ tự duyệt) đủ lớn cho yêu cầu (dùng trong heap_4/heap_5)."},
+  {t:"Fragmentation",d:"Tổng bộ nhớ free đủ nhưng bị chia rải rác thành nhiều mảnh không liền kề, không mảnh nào đủ lớn cho yêu cầu."},
+  {t:"Free Block",d:"Một block RAM hiện không được sử dụng, sẵn sàng cho lần cấp phát tiếp theo."},
+  {t:"Heap",d:"Vùng RAM dùng cho cấp phát động, được quản lý bởi pvPortMalloc()/vPortFree()."},
+  {t:"heap_1",d:"Cấp phát đơn giản nhất — chia mảng tĩnh một chiều, không free, luôn deterministic."},
+  {t:"heap_2",d:"Best-fit + có free, nhưng không coalescing — không khuyến khích cho thiết kế mới."},
+  {t:"heap_3",d:"Wrapper quanh malloc()/free() chuẩn của C library, thread-safe qua suspend scheduler."},
+  {t:"heap_4",d:"First-fit + coalescing — lựa chọn phổ biến nhất, không deterministic nhưng nhanh."},
+  {t:"heap_5",d:"Giống heap_4 nhưng gộp nhiều vùng RAM vật lý rời rạc, cần vPortDefineHeapRegions()."},
+  {t:"HeapRegion_t",d:"Struct mô tả địa chỉ bắt đầu và kích thước một vùng RAM, dùng bởi heap_5."},
+  {t:"HeapStats_t",d:"Struct thống kê chi tiết heap (free lớn nhất/nhỏ nhất, số block, số lần alloc/free...)."},
+  {t:"Kernel Object",d:"Cấu trúc dữ liệu do RTOS quản lý: task, queue, semaphore, mutex, event group, timer."},
+  {t:"Malloc Failed Hook",d:"Hàm vApplicationMallocFailedHook() được gọi khi pvPortMalloc() trả NULL."},
+  {t:"pvPortMalloc()",d:"Hàm cấp phát RAM động của FreeRTOS, cùng prototype với malloc() chuẩn."},
+  {t:"Scheduler",d:"Thành phần lõi RTOS quyết định task nào được chạy trên CPU tại một thời điểm."},
+  {t:"Stack",d:"Vùng nhớ riêng của mỗi task, lưu biến local, địa chỉ trả về và ngữ cảnh CPU."},
+  {t:"Static Allocation",d:"Cấp phát bộ nhớ lúc compile/link-time, tồn tại suốt vòng đời chương trình."},
+  {t:"Task",d:"Một hàm C chạy độc lập, có stack riêng, được RTOS coi như một luồng thực thi ảo."},
+  {t:"TCB (Task Control Block)",d:"Struct RTOS dùng để lưu toàn bộ trạng thái quản lý của một task."},
+  {t:"vApplicationGetIdleTaskMemory",d:"Hàm callback bắt buộc cung cấp buffer tĩnh (TCB+stack) cho idle task khi static allocation bật."},
+  {t:"vPortDefineHeapRegions()",d:"Hàm khởi tạo bắt buộc của heap_5, nhận mảng HeapRegion_t mô tả các vùng RAM."},
+  {t:"vPortFree()",d:"Hàm giải phóng RAM động của FreeRTOS, cùng prototype với free() chuẩn."},
+  {t:"vPortGetHeapStats()",d:"Hàm trả về thống kê chi tiết heap qua struct HeapStats_t (chỉ heap_4/heap_5)."},
+  {t:"xPortGetFreeHeapSize()",d:"Trả về số byte free hiện tại trong heap (không cho biết fragmentation)."},
+  {t:"xPortGetMinimumEverFreeHeapSize()",d:"Trả về số byte free thấp nhất từng đạt được kể từ khi hệ thống chạy (chỉ heap_4/5)."},
+];
+
+/* =========================================================
+   DATA — COMPARISON TABLE
+   ========================================================= */
+const CMP_ROWS = [
+  {h:"heap_1",alloc:"Tuần tự, một chiều",free:"no",frag:"no",det:"yes",speed:"Rất nhanh",use:"Tạo object 1 lần lúc khởi động, không bao giờ xóa"},
+  {h:"heap_2",alloc:"Best-fit",free:"yes",frag:"partial",det:"no",speed:"Nhanh hơn malloc chuẩn",use:"Alloc/free cùng kích thước lặp lại (không khuyến khích thiết kế mới)"},
+  {h:"heap_3",alloc:"malloc() chuẩn",free:"yes",frag:"partial",det:"no",speed:"Phụ thuộc toolchain",use:"Buộc phải dùng malloc()/free() chuẩn từ thư viện thứ 3"},
+  {h:"heap_4",alloc:"First-fit + coalescing",free:"yes",frag:"partial",det:"no",speed:"Nhanh",use:"Lựa chọn mặc định phổ biến, alloc/free kích thước đa dạng"},
+  {h:"heap_5",alloc:"First-fit + coalescing",free:"yes",frag:"partial",det:"no",speed:"Nhanh",use:"Giống heap_4, khi RAM không liền một khối"},
+];
+function pill(v){
+  if(v==="yes") return '<span class="pill pill-yes">Có</span>';
+  if(v==="no") return '<span class="pill pill-no">Không</span>';
+  return '<span class="pill pill-partial">Giảm thiểu</span>';
+}
+function renderCmpTable(){
+  const t=document.getElementById('cmpTable');
+  let html='<thead><tr><th>Heap</th><th>Allocation</th><th>Free</th><th>Fragmentation risk</th><th>Deterministic</th><th>Tốc độ</th><th>Dùng khi</th></tr></thead><tbody>';
+  CMP_ROWS.forEach(r=>{
+    html+=`<tr><td><code>${r.h}</code></td><td>${r.alloc}</td><td>${pill(r.free)}</td><td>${pill(r.frag)}</td><td>${pill(r.det)}</td><td>${r.speed}</td><td>${r.use}</td></tr>`;
+  });
+  html+='</tbody>';
+  t.innerHTML=html;
+}
+
+/* =========================================================
+   DATA — API CARDS
+   ========================================================= */
+const APIS = [
+  {name:"pvPortMalloc()",proto:"void *pvPortMalloc( size_t xWantedSize );",desc:"Cấp phát động một vùng RAM từ heap. Cùng prototype với malloc() chuẩn.",params:"xWantedSize — số byte cần cấp phát.",ret:"Con trỏ tới vùng nhớ, hoặc NULL nếu thất bại.",mistake:"Không kiểm tra NULL trước khi dùng con trỏ."},
+  {name:"vPortFree()",proto:"void vPortFree( void *pv );",desc:"Giải phóng vùng nhớ trước đó được cấp bởi pvPortMalloc(). Không được implement trong heap_1.",params:"pv — con trỏ cần giải phóng.",ret:"Không có (void).",mistake:"Gọi trên heap_1 (không có tác dụng); double-free."},
+  {name:"xPortGetFreeHeapSize()",proto:"size_t xPortGetFreeHeapSize( void );",desc:"Trả về số byte free hiện tại trong heap. Không implement cho heap_3.",params:"Không có.",ret:"Số byte free hiện tại.",mistake:"Coi đây là chỉ số fragmentation — nó không phải."},
+  {name:"xPortGetMinimumEverFreeHeapSize()",proto:"size_t xPortGetMinimumEverFreeHeapSize( void );",desc:"Trả về số byte free thấp nhất từng đạt được từ khi hệ thống chạy. Chỉ heap_4/heap_5.",params:"Không có.",ret:"Số byte free thấp nhất trong lịch sử.",mistake:"Kỳ vọng giá trị này tăng trở lại sau khi free RAM."},
+  {name:"vPortGetHeapStats()",proto:"void vPortGetHeapStats( HeapStats_t *xHeapStats );",desc:"Điền đầy đủ thống kê heap (free lớn/nhỏ nhất, số block, số alloc/free). Chỉ heap_4/heap_5.",params:"xHeapStats — con trỏ struct sẽ được điền dữ liệu.",ret:"Không có (void).",mistake:"Gọi trên heap_1/2/3 (không được implement)."},
+  {name:"vPortDefineHeapRegions()",proto:"void vPortDefineHeapRegions( const HeapRegion_t * const pxHeapRegions );",desc:"Khởi tạo heap_5 bằng mảng mô tả các vùng RAM. Bắt buộc gọi trước khi tạo object động.",params:"pxHeapRegions — mảng HeapRegion_t, sắp xếp theo địa chỉ tăng dần, kết thúc bằng {NULL,0}.",ret:"Không có (void).",mistake:"Gọi xTaskCreate() trước khi gọi hàm này."},
+  {name:"vApplicationMallocFailedHook()",proto:"void vApplicationMallocFailedHook( void );",desc:"Callback do ứng dụng cung cấp, được kernel gọi khi pvPortMalloc() trả NULL (cần configUSE_MALLOC_FAILED_HOOK=1).",params:"Không có.",ret:"Không có (void) — ứng dụng tự định nghĩa hành vi.",mistake:"Coi allocation failure luôn là lỗi fatal — PDF khuyến cáo nên graceful recovery cho production."},
+];
+function renderApiCards(){
+  const g=document.getElementById('apiGrid');
+  g.innerHTML=APIS.map(a=>`
+    <div class="api-card">
+      <span class="badge badge-source">SOURCE</span>
+      <h4>${a.name}</h4>
+      <div class="proto">${a.proto}</div>
+      <dl>
+        <dt>Description</dt><dd>${a.desc}</dd>
+        <dt>Parameters</dt><dd>${a.params}</dd>
+        <dt>Return</dt><dd>${a.ret}</dd>
+        <dt>Common mistake</dt><dd>${a.mistake}</dd>
+      </dl>
+    </div>`).join('');
+}
+
+/* =========================================================
+   DATA — DEBUGGING DASHBOARD
+   ========================================================= */
+const DEBUG_ITEMS = [
+  {icon:"📉",title:"Heap Exhaustion",summary:"Hết RAM để cấp phát thêm",symptoms:"pvPortMalloc() liên tục trả NULL; malloc failed hook được gọi thường xuyên.",causes:"configTOTAL_HEAP_SIZE quá nhỏ; tạo quá nhiều object động; memory leak tích lũy.",detect:"Theo dõi xPortGetFreeHeapSize() / xPortGetMinimumEverFreeHeapSize() theo thời gian.",fix:"Tăng configTOTAL_HEAP_SIZE, hoặc chuyển bớt object sang static allocation."},
+  {icon:"🧩",title:"Fragmentation",summary:"Free đủ nhưng không liền khối",symptoms:"Allocation thất bại dù xPortGetFreeHeapSize() báo còn nhiều RAM free.",causes:"heap_2 không coalescing; heap_4/5 vẫn có thể fragment nếu alloc/free kích thước rất đa dạng xen kẽ block đang dùng.",detect:"So sánh xAvailableHeapSpaceInBytes với xSizeOfLargestFreeBlockInBytes từ vPortGetHeapStats().",fix:"Chuyển sang heap_4/5 nếu đang dùng heap_2; chuẩn hóa kích thước các object hay tạo/xóa."},
+  {icon:"🩸",title:"Memory Leak",summary:"Quên giải phóng RAM đã cấp",symptoms:"Free heap giảm dần đều theo thời gian, không bao giờ hồi phục.",causes:"Quên gọi vPortFree()/vTaskDelete()/vQueueDelete() sau khi dùng xong.",detect:"Log xPortGetMinimumEverFreeHeapSize() định kỳ; nếu giảm liên tục không hồi phục -> leak.",fix:"Rà soát mọi đường code alloc để đảm bảo có nhánh free tương ứng, kể cả nhánh lỗi."},
+  {icon:"🧨",title:"Heap Corruption",summary:"Metadata heap bị ghi đè",symptoms:"Crash ngẫu nhiên bên trong pvPortMalloc()/vPortFree(); assert nội bộ của heap_4/5.",causes:"Buffer overflow ghi tràn ra ngoài block đã cấp phát, đè lên metadata block kế tiếp.",detect:"Dùng canary/guard byte quanh buffer khi debug; kiểm tra kỹ các thao tác memcpy/strcpy.",fix:"Sửa lỗi tràn buffer tại nguồn; xem xét bật thêm kiểm tra runtime nếu toolchain hỗ trợ."},
+  {icon:"❌",title:"Invalid / Double Free",summary:"Free sai con trỏ, hoặc free 2 lần",symptoms:"Crash hoặc hành vi không xác định ngay sau lệnh vPortFree().",causes:"Gọi vPortFree() trên con trỏ không phải do pvPortMalloc() cấp; gọi free() 2 lần trên cùng con trỏ.",detect:"Đặt con trỏ về NULL ngay sau khi free để lần free thứ 2 dễ bị phát hiện (nếu có kiểm tra NULL trước free).",fix:"Luôn gán NULL sau free; tránh giữ nhiều alias tới cùng một con trỏ."},
+  {icon:"📍",title:"Wrong Memory Region",summary:"Heap/stack đặt sai vùng RAM",symptoms:"Hoạt động sai chỉ trên một số bản build/board nhất định; hiệu năng thấp bất thường.",causes:"configAPPLICATION_ALLOCATED_HEAP hoặc linker section đặt heap vào vùng RAM chậm/sai mục đích.",detect:"Kiểm tra map file của linker, xác nhận địa chỉ ucHeap thực tế.",fix:"Dùng __attribute__((section(...))) hoặc cú pháp @address đúng theo compiler (xem Lesson 10)."},
+];
+function renderDebugGrid(){
+  const g=document.getElementById('debugGrid');
+  g.innerHTML=DEBUG_ITEMS.map((d,i)=>`
+    <button class="debug-card" data-idx="${i}">
+      <div class="dc-icon">${d.icon}</div>
+      <h4>${d.title}</h4>
+      <p>${d.summary}</p>
+    </button>`).join('');
+  g.querySelectorAll('.debug-card').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const d=DEBUG_ITEMS[btn.dataset.idx];
+      const card=document.getElementById('debugDetailCard');
+      card.style.display='block';
+      card.innerHTML=`<span class="badge badge-infer">INFERENCE</span><h3>${d.icon} ${d.title}</h3>
+        <dl class="debug-detail show">
+          <dt>Symptoms</dt><dd>${d.symptoms}</dd>
+          <dt>Possible causes</dt><dd>${d.causes}</dd>
+          <dt>How to detect</dt><dd>${d.detect}</dd>
+          <dt>How to fix</dt><dd>${d.fix}</dd>
+        </dl>`;
+      card.scrollIntoView({behavior:'smooth',block:'nearest'});
+    });
+  });
+}
+
+/* =========================================================
+   DATA — LABS
+   ========================================================= */
+const LABS = [
+  {n:1,title:"Create a Task and Observe RAM",diff:"beginner",obj:"Tạo 1 task bằng xTaskCreate(), quan sát xPortGetFreeHeapSize() trước/sau.",concept:"pvPortMalloc() được gọi 2 lần (TCB+stack) mỗi khi tạo task (Lesson 2).",code:`size_t before = xPortGetFreeHeapSize();
+xTaskCreate(vMyTask, "T1", 128, NULL, 1, NULL);
+size_t after = xPortGetFreeHeapSize();
+printf("Heap used: %u bytes\\n", before - after);`,expected:"before - after xấp xỉ sizeof(TCB_t) + kích thước stack (128 x sizeof(StackType_t)).",debug:"Nếu after == before, kiểm tra xem configSUPPORT_DYNAMIC_ALLOCATION có bật không.",questions:"Vì sao con số chênh lệch không tròn chẵn 128*4 byte? (Gợi ý: metadata heap + kích thước TCB)"},
+  {n:2,title:"Allocate / Free Memory Directly",diff:"beginner",obj:"Gọi trực tiếp pvPortMalloc()/vPortFree() từ code ứng dụng, không qua API tạo object.",concept:"pvPortMalloc()/vPortFree() là hàm public (Lesson 4).",code:`void *p = pvPortMalloc(100);
+if (p != NULL) {
+    memset(p, 0xAA, 100);
+    vPortFree(p);
+}`,expected:"xPortGetFreeHeapSize() trở về đúng giá trị ban đầu sau khi free (nếu dùng heap_2/3/4/5).",debug:"Nếu dùng heap_1, free không có tác dụng — RAM không được trả lại.",questions:"Thử chạy lab này trên heap_1 — kết quả xPortGetFreeHeapSize() có khác không?"},
+  {n:3,title:"Create Fragmentation on Purpose",diff:"intermediate",obj:"Cố tình tạo fragmentation trên heap_2 bằng cách alloc/free xen kẽ nhiều kích thước khác nhau.",concept:"Best-fit không coalescing (Lesson 6).",code:`void *a = pvPortMalloc(10);
+void *b = pvPortMalloc(50);
+void *c = pvPortMalloc(10);
+vPortFree(a);
+vPortFree(c);
+/* Giờ thử alloc 1 block 15 byte -> xem no co dung lai duoc
+   1 trong 2 khoang trong (10 byte) khong, hay phai lay tu vung free lon */
+void *d = pvPortMalloc(15);`,expected:"pvPortMalloc(15) thất bại hoặc phải lấy từ vùng free lớn phía sau, vì 2 khoảng 10-byte không đủ và không được gộp.",debug:"Dùng vPortGetHeapStats() để so sánh free tổng vs block lớn nhất (chỉ khả dụng ở heap_4/5, không có ở heap_2 — với heap_2 phải tự log thủ công).",questions:"Lặp lại lab này với heap_4 — kết quả có khác không? Vì sao?"},
+  {n:4,title:"Compare heap_2 vs heap_4",diff:"intermediate",obj:"Build cùng 1 ứng dụng với heap_2.c rồi heap_4.c, so sánh hành vi.",concept:"Best-fit (không coalescing) vs First-fit (coalescing) — Lesson 6 & 8.",code:`/* Đổi file heap_n.c trong build system, giữ nguyên logic alloc/free
+   giống Lab 3, log kết quả pvPortMalloc(15) ở mỗi bản build. */`,expected:"heap_4 có khả năng cấp phát thành công cao hơn nhờ coalescing.",debug:"Đảm bảo configTOTAL_HEAP_SIZE giống hệt nhau giữa 2 lần build để so sánh công bằng.",questions:"Heap nào phù hợp hơn cho ứng dụng của bạn (RTSP server tạo/xóa task liên tục)? Vì sao?"},
+  {n:5,title:"Track Minimum Ever Free Heap",diff:"intermediate",obj:"Theo dõi xPortGetMinimumEverFreeHeapSize() trong lúc hệ thống chạy tải cao nhất.",concept:"Lesson 10 — dùng để tối ưu configTOTAL_HEAP_SIZE.",code:`void vHeapMonitorTask(void *pv) {
+    for (;;) {
+        printf("Min ever free: %u\\n", xPortGetMinimumEverFreeHeapSize());
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}`,expected:"Giá trị giảm dần rồi ổn định ở mức thấp nhất hệ thống từng chạm tới.",debug:"Chỉ hoạt động trên heap_4/heap_5 — kiểm tra file heap_n.c đang dùng nếu hàm luôn trả về 0 hoặc lỗi link.",questions:"Nếu min-ever-free gần bằng 0, bạn nên làm gì với configTOTAL_HEAP_SIZE?"},
+  {n:6,title:"Use Malloc Failed Hook",diff:"intermediate",obj:"Cố tình làm cạn heap để kích hoạt vApplicationMallocFailedHook().",concept:"Lesson 10 — configUSE_MALLOC_FAILED_HOOK.",code:`void vApplicationMallocFailedHook(void) {
+    printf("MALLOC FAILED! Free heap = %u\\n", xPortGetFreeHeapSize());
+    /* Production: KHONG nen for(;;) treo he thong - xu ly graceful */
+}
+
+/* Trong task test: */
+while (pvPortMalloc(1000) != NULL) { /* lap den khi het heap */ }`,expected:"Hook được gọi đúng 1 lần ngay khi pvPortMalloc() bắt đầu trả NULL liên tục.",debug:"Nhớ bật configUSE_MALLOC_FAILED_HOOK = 1 trong FreeRTOSConfig.h.",questions:"Thiết kế một chiến lược graceful recovery thay vì treo hệ thống khi hook được gọi."},
+  {n:7,title:"heap_5 with 2 RAM Regions",diff:"advanced",obj:"Cấu hình heap_5 với 2 vùng RAM giả lập (2 mảng tĩnh riêng biệt) và cấp phát xuyên qua cả hai.",concept:"Lesson 9 — vPortDefineHeapRegions().",code:`static uint8_t ucHeapA[10*1024];
+static uint8_t ucHeapB[10*1024];
+
+const HeapRegion_t xHeapRegions[] = {
+    { ucHeapA, sizeof(ucHeapA) },
+    { ucHeapB, sizeof(ucHeapB) },
+    { NULL, 0 }
+};
+
+int main(void) {
+    vPortDefineHeapRegions(xHeapRegions);
+    /* ... */
+}`,expected:"Tổng heap khả dụng = 20KB, pvPortMalloc() có thể cấp phát từ cả 2 vùng.",debug:"Đảm bảo 2 mảng được sắp xếp đúng thứ tự địa chỉ tăng dần trong xHeapRegions[] (kiểm tra bằng cách in địa chỉ &ucHeapA, &ucHeapB).",questions:"Điều gì xảy ra nếu bạn quên phần tử kết thúc {NULL, 0}?"},
+  {n:8,title:"Static Allocation for a Task",diff:"advanced",obj:"Tạo 1 task bằng xTaskCreateStatic() thay vì xTaskCreate(), không dùng pvPortMalloc() cho task này.",concept:"Lesson 11 — configSUPPORT_STATIC_ALLOCATION.",code:`static StaticTask_t xTaskBuffer;
+static StackType_t uxTaskStack[128];
+
+TaskHandle_t h = xTaskCreateStatic(
+    vMyTask, "StaticTask", 128, NULL, 1,
+    uxTaskStack, &xTaskBuffer);`,expected:"xPortGetFreeHeapSize() không đổi trước/sau khi tạo task này (không dùng heap).",debug:"Nếu build lỗi thiếu vApplicationGetIdleTaskMemory, nhớ implement nó vì bắt buộc khi bật static allocation.",questions:"So sánh RAM tổng dùng giữa cách static này và xTaskCreate() động ở Lab 1 — cách nào dễ dự đoán hơn?"},
+];
+function renderLabs(){
+  const c=document.getElementById('labsContainer');
+  c.innerHTML=LABS.map(l=>`
+    <div class="lab-card">
+      <div class="lab-top">
+        <h4>LAB 0${l.n} — ${l.title}</h4>
+        <span class="diff diff-${l.diff}">${l.diff}</span>
+      </div>
+      <p><b>Objective:</b> ${l.obj}</p>
+      <p><b>Concept cần biết:</b> ${l.concept}</p>
+      <div class="code-block">
+        <div class="code-block-header"><span class="fname">lab${l.n}.c</span><button class="copy-btn"><span class="cp-label">📋 Copy</span></button></div>
+        <pre><code>${l.code.replace(/</g,'&lt;')}</code></pre>
+      </div>
+      <p><b>Expected result:</b> ${l.expected}</p>
+      <p><b>Debugging:</b> ${l.debug}</p>
+      <p><b>Câu hỏi:</b> ${l.questions}</p>
+      <label class="lab-check"><input type="checkbox" class="lab-checkbox" data-lab="${l.n}"> Đánh dấu đã hoàn thành</label>
+    </div>`).join('');
+}
+
+/* =========================================================
+   DATA — CHEAT SHEET
+   ========================================================= */
+const CHEATS = [
+  {fn:"pvPortMalloc()",desc:"Allocate memory"},
+  {fn:"vPortFree()",desc:"Release memory"},
+  {fn:"heap_1",desc:"Simple / no free / deterministic"},
+  {fn:"heap_2",desc:"Best fit / has free / no coalescing"},
+  {fn:"heap_3",desc:"Wraps standard malloc()/free()"},
+  {fn:"heap_4",desc:"First fit + coalescing"},
+  {fn:"heap_5",desc:"heap_4 + multiple memory regions"},
+  {fn:"xPortGetFreeHeapSize()",desc:"Free bytes hiện tại"},
+  {fn:"xPortGetMinimumEverFreeHeapSize()",desc:"Free bytes thấp nhất từng đạt (heap_4/5)"},
+  {fn:"vPortGetHeapStats()",desc:"Thống kê chi tiết (heap_4/5)"},
+  {fn:"vApplicationMallocFailedHook()",desc:"Callback khi pvPortMalloc() trả NULL"},
+  {fn:"vPortDefineHeapRegions()",desc:"Khởi tạo heap_5 (bắt buộc, gọi trước mọi alloc động)"},
+];
+function renderCheat(){
+  document.getElementById('cheatGrid').innerHTML = CHEATS.map(c=>`
+    <div class="cheat-card">
+      <div class="cfn">${c.fn}</div>
+      <div class="cheat-arrow">↓</div>
+      <div class="cdesc">${c.desc}</div>
+    </div>`).join('');
+}
+
+/* =========================================================
+   DATA — QUIZ (30 questions)
+   ========================================================= */
+const QUIZ = [
+  {q:"pvPortMalloc() và malloc() chuẩn có cùng prototype không?",type:"tf",opts:["Đúng","Sai"],ans:0,exp:"Đúng — PDF nói rõ pvPortMalloc() có cùng prototype với malloc(), vPortFree() có cùng prototype với free()."},
+  {q:"configTOTAL_HEAP_SIZE được dùng bởi heap nào?",type:"mc",opts:["Chỉ heap_3","heap_1, heap_2, heap_4","heap_5 duy nhất","Tất cả 5 heap như nhau"],ans:1,exp:"heap_1/2/4 dùng mảng tĩnh kích thước configTOTAL_HEAP_SIZE. heap_3 dùng heap của linker/toolchain; heap_5 dùng nhiều vùng RAM khai báo qua HeapRegion_t."},
+  {q:"vPortFree() có được implement trong heap_1.c không?",type:"tf",opts:["Đúng","Sai"],ans:1,exp:"Sai — heap_1 không implement vPortFree(), RAM cấp ra không bao giờ trả lại được."},
+  {q:"Vì sao heap_1 luôn deterministic?",type:"mc",opts:["Vì nó dùng thuật toán best-fit","Vì nó không bao giờ free, chỉ cấp phát một chiều nên thời gian thực thi gần như hằng số","Vì nó gộp các block liền kề","Vì nó gọi thẳng malloc() chuẩn"],ans:1,exp:"Không free → không có tìm kiếm/gộp block → thời gian pvPortMalloc() gần như hằng số."},
+  {q:"Free blocks: 5, 25, 100 byte. Yêu cầu 20 byte bằng heap_2 (best-fit) → chọn block nào?",type:"mc",opts:["5 byte","25 byte","100 byte","Không block nào"],ans:1,exp:"Best-fit chọn block nhỏ nhất nhưng vẫn đủ chỗ: 25 byte."},
+  {q:"Free blocks theo thứ tự trong mảng: 5, 200, 100 byte. Yêu cầu 20 byte bằng heap_4 (first-fit) → chọn block nào?",type:"mc",opts:["5 byte","200 byte","100 byte","Block gần khít nhất"],ans:1,exp:"First-fit dừng ngay ở block đầu tiên đủ điều kiện theo thứ tự duyệt: 200 byte (không quan tâm block 100 phía sau khít hơn)."},
+  {q:"Heap_2 có gộp (coalesce) các block free liền kề không?",type:"tf",opts:["Đúng","Sai"],ans:1,exp:"Sai — đây chính là điểm yếu của heap_2 khiến nó dễ fragment hơn heap_4."},
+  {q:"Theo PDF, fragmentation KHÔNG phải vấn đề với heap_2 khi nào?",type:"mc",opts:["Khi RAM rất lớn","Khi alloc/free luôn cùng kích thước","Khi dùng static allocation song song","Khi bật malloc failed hook"],ans:1,exp:"PDF: 'fragmentation is not an issue if the allocated and subsequently freed blocks are always the same size.'"},
+  {q:"Heap_3 dùng thuật toán cấp phát riêng của FreeRTOS đúng không?",type:"tf",opts:["Đúng","Sai"],ans:1,exp:"Sai — heap_3 gọi thẳng malloc()/free() của C standard library, không có thuật toán riêng."},
+  {q:"Heap_3 làm cho malloc()/free() thread-safe bằng cách nào?",type:"mc",opts:["Dùng mutex riêng","Tạm dừng scheduler (suspend) trong lúc thực thi","Chỉ cho phép 1 task duy nhất gọi","Không cần làm gì, malloc() vốn thread-safe"],ans:1,exp:"PDF: heap_3 'temporarily suspending the FreeRTOS scheduler for the duration of their execution.'"},
+  {q:"configTOTAL_HEAP_SIZE có được dùng bởi heap_3 không?",type:"tf",opts:["Đúng","Sai"],ans:1,exp:"Sai — với heap_3, kích thước heap do linker configuration quyết định, không dùng constant này."},
+  {q:"Heap_4 dùng thuật toán nào để chọn block cấp phát?",type:"mc",opts:["Best-fit","First-fit","Worst-fit","Round-robin"],ans:1,exp:"Heap_4 dùng first-fit, kết hợp coalescing khi free."},
+  {q:"Theo PDF, heap_4 có deterministic không?",type:"tf",opts:["Có, luôn deterministic","Không deterministic nhưng nhanh hơn hầu hết malloc() chuẩn"],ans:1,exp:"PDF: 'Heap_4 is not deterministic but is faster than most standard library implementations of malloc() and free().'"},
+  {q:"Coalescing trong heap_4 xảy ra khi nào?",type:"mc",opts:["Mỗi khi pvPortMalloc() được gọi","Mỗi khi vPortFree() được gọi, nếu block liền kề cũng đang free","Chỉ khi ứng dụng gọi thủ công","Định kỳ theo timer"],ans:1,exp:"Coalescing xảy ra ngay lúc free, kiểm tra block liền kề (trái/phải) có đang free không để gộp."},
+  {q:"Heap_5 dùng thuật toán cấp phát giống heap nào?",type:"mc",opts:["heap_1","heap_2","heap_3","heap_4"],ans:3,exp:"PDF: 'Heap_5 uses the same allocation algorithm as heap_4.'"},
+  {q:"Heap nào là heap DUY NHẤT cần khởi tạo tường minh trước khi dùng?",type:"mc",opts:["heap_1","heap_3","heap_4","heap_5"],ans:3,exp:"Chỉ heap_5 cần gọi vPortDefineHeapRegions() trước khi tạo bất kỳ kernel object động nào."},
+  {q:"Mảng HeapRegion_t truyền cho vPortDefineHeapRegions() phải sắp xếp theo thứ tự nào?",type:"mc",opts:["Kích thước tăng dần","Kích thước giảm dần","Địa chỉ bắt đầu tăng dần","Không quan trọng thứ tự"],ans:2,exp:"PDF yêu cầu bắt buộc: sắp xếp theo địa chỉ bắt đầu (start address) tăng dần."},
+  {q:"Phần tử cuối cùng trong mảng HeapRegion_t để đánh dấu kết thúc có giá trị pucStartAddress là gì?",type:"mc",opts:["0","NULL","0xFFFFFFFF","Không cần phần tử kết thúc"],ans:1,exp:"Phải kết thúc bằng {NULL, 0} để đánh dấu điểm dừng."},
+  {q:"Kỹ thuật dùng biến ucHeap[] (Listing 3.4) trong heap_5 có lợi ích gì so với hard-code địa chỉ?",type:"mc",opts:["Nhanh hơn lúc runtime","Không thể chồng lấn (overlap) với dữ liệu linker đặt, và lỗi phát hiện lúc link nếu quá lớn","Cho phép free nhiều lần hơn","Không cần config gì thêm"],ans:1,exp:"Linker tự tính ranh giới ucHeap, nên heap_5 không thể ghi đè lên biến khác trong cùng vùng RAM."},
+  {q:"xPortGetFreeHeapSize() có cho biết thông tin fragmentation không?",type:"tf",opts:["Có","Không"],ans:1,exp:"Không — PDF nói rõ nó chỉ trả số byte free hiện tại, 'does not provide information on heap fragmentation.'"},
+  {q:"xPortGetFreeHeapSize() được implement cho heap nào?",type:"mc",opts:["Tất cả 5 heap","Tất cả trừ heap_3","Chỉ heap_4 và heap_5","Chỉ heap_1"],ans:1,exp:"PDF: 'xPortGetFreeHeapSize() is not implemented for heap_3.'"},
+  {q:"xPortGetMinimumEverFreeHeapSize() chỉ được implement ở heap nào?",type:"mc",opts:["heap_1 và heap_2","heap_2 và heap_3","heap_4 và heap_5","Tất cả 5 heap"],ans:2,exp:"PDF: 'xPortGetMinimumEverFreeHeapSize() is only implemented in heap_4 and heap_5.'"},
+  {q:"Nếu Task A free 10KB sau khi cấp phát, giá trị min-ever-free-heap có tăng trở lại không?",type:"tf",opts:["Có, nó luôn phản ánh giá trị free hiện tại","Không, nó chỉ giảm hoặc giữ nguyên, không bao giờ tăng lại"],ans:1,exp:"min-ever-free ghi nhớ điểm THẤP NHẤT trong lịch sử — free RAM sau đó không làm nó tăng lại."},
+  {q:"vPortGetHeapStats() được implement ở heap nào?",type:"mc",opts:["heap_1 và heap_2","heap_4 và heap_5","Chỉ heap_3","Tất cả 5 heap"],ans:1,exp:"Theo PDF, chỉ heap_4 và heap_5 implement vPortGetHeapStats()."},
+  {q:"Trong HeapStats_t, trường nào giúp phát hiện fragmentation khi so sánh với xAvailableHeapSpaceInBytes?",type:"mc",opts:["xNumberOfSuccessfulFrees","xSizeOfLargestFreeBlockInBytes","xNumberOfFreeBlocks","xMinimumEverFreeBytesRemaining"],ans:1,exp:"Nếu xAvailableHeapSpaceInBytes lớn nhưng xSizeOfLargestFreeBlockInBytes nhỏ -> dấu hiệu fragmentation."},
+  {q:"vApplicationMallocFailedHook() được gọi khi nào?",type:"mc",opts:["Mỗi khi pvPortMalloc() được gọi thành công","Mỗi khi pvPortMalloc() trả về NULL (cần bật configUSE_MALLOC_FAILED_HOOK)","Mỗi khi vPortFree() được gọi","Định kỳ theo timer"],ans:1,exp:"Đây là callback báo hiệu allocation thất bại, chỉ hoạt động khi configUSE_MALLOC_FAILED_HOOK=1."},
+  {q:"Theo PDF, coi allocation failure là lỗi fatal (như nhiều demo application) có phải best practice cho production không?",type:"tf",opts:["Có","Không — production nên graceful recovery"],ans:1,exp:"PDF: '...that is not the best practice for production systems, which should gracefully recover from allocation failures.'"},
+  {q:"configSUPPORT_STATIC_ALLOCATION = 1 mở khóa API nào?",type:"mc",opts:["pvPortMalloc()","Các hàm *CreateStatic (xTaskCreateStatic, xQueueGenericCreateStatic...)","vPortDefineHeapRegions()","xPortGetFreeHeapSize()"],ans:1,exp:"Bật static allocation mở khóa toàn bộ nhóm API *CreateStatic cho kernel object."},
+  {q:"Khi bật static allocation, hàm nào LUÔN bắt buộc phải implement (không có điều kiện config nào khác)?",type:"mc",opts:["vApplicationGetTimerTaskMemory","vApplicationGetIdleTaskMemory","vApplicationMallocFailedHook","vPortDefineHeapRegions"],ans:1,exp:"vApplicationGetIdleTaskMemory luôn cần; vApplicationGetTimerTaskMemory chỉ cần khi configUSE_TIMERS=1."},
+  {q:"Nếu buffer trong vApplicationGetIdleTaskMemory() KHÔNG được khai báo static, hậu quả là gì?",type:"mc",opts:["Không có vấn đề gì","Buffer bị cấp phát trên stack, mất hiệu lực sau khi hàm return -> dangling pointer, crash khó debug","Chương trình không compile được","RAM bị lãng phí gấp đôi"],ans:1,exp:"Đây là lỗi kinh điển PDF nhấn mạnh bằng comment trong Listing 3.13/3.14 — biến local không static sẽ 'biến mất' sau khi hàm return."},
+];
+
+function renderQuiz(){
+  const c=document.getElementById('quizContainer');
+  c.innerHTML = QUIZ.map((item,i)=>`
+    <div class="quiz-item" data-idx="${i}">
+      <div class="quiz-type">${item.type==='tf'?'True / False':'Multiple Choice'} — Câu ${i+1}/30</div>
+      <div class="quiz-q">${item.q}</div>
+      ${item.opts.map((o,oi)=>`
+        <label class="quiz-opt">
+          <input type="radio" name="q${i}" value="${oi}">
+          <span>${o}</span>
+        </label>`).join('')}
+      <div class="quiz-explain" id="exp${i}"></div>
+    </div>`).join('');
+  c.querySelectorAll('input[type=radio]').forEach(inp=>{
+    inp.addEventListener('change',updateQuizProgress);
+  });
+}
+function updateQuizProgress(){
+  const answered = QUIZ.filter((_,i)=>document.querySelector(`input[name="q${i}"]:checked`)).length;
+  document.getElementById('quizProgressText').textContent = `${answered} / ${QUIZ.length} đã trả lời`;
+  document.getElementById('quizProgressBar').style.width = (answered/QUIZ.length*100)+'%';
+}
+function submitQuiz(){
+  let score=0;
+  QUIZ.forEach((item,i)=>{
+    const checked = document.querySelector(`input[name="q${i}"]:checked`);
+    const itemDiv = document.querySelector(`.quiz-item[data-idx="${i}"]`);
+    const opts = itemDiv.querySelectorAll('.quiz-opt');
+    opts.forEach((optEl,oi)=>{
+      optEl.classList.remove('right-answer','wrong-answer');
+      if(oi===item.ans) optEl.classList.add('right-answer');
+      if(checked && parseInt(checked.value)===oi && oi!==item.ans) optEl.classList.add('wrong-answer');
+    });
+    const isCorrect = checked && parseInt(checked.value)===item.ans;
+    itemDiv.classList.remove('correct','incorrect');
+    itemDiv.classList.add(isCorrect?'correct':'incorrect');
+    if(isCorrect) score++;
+    const exp=document.getElementById('exp'+i);
+    exp.textContent = 'Giải thích: '+item.exp;
+    exp.classList.add('show');
+  });
+  const pct = Math.round(score/QUIZ.length*100);
+  const result=document.getElementById('quizResult');
+  result.classList.add('show');
+  document.getElementById('quizScore').textContent = `${score} / ${QUIZ.length}`;
+  document.getElementById('quizPct').textContent = pct+'%';
+  let verdict = pct>=85?'🏆 Xuất sắc — bạn đã sẵn sàng đọc source code FreeRTOS!':
+                pct>=70?'👍 Khá tốt — ôn lại vài phần trước khi trace source code.':
+                pct>=50?'📘 Cần ôn lại — đọc lại các lesson heap_2/heap_4/heap_5.':
+                '📕 Nên học lại từ đầu Chapter 3 trước khi tiếp tục.';
+  document.getElementById('quizVerdict').textContent = verdict;
+  result.scrollIntoView({behavior:'smooth',block:'center'});
+  localStorage.setItem('freertos_quiz_score', JSON.stringify({score,total:QUIZ.length,pct,date:new Date().toISOString()}));
+  updateHeaderProgress();
+}
+function resetQuiz(){
+  document.querySelectorAll('#quizContainer input[type=radio]').forEach(i=>i.checked=false);
+  document.querySelectorAll('.quiz-item').forEach(el=>el.classList.remove('correct','incorrect'));
+  document.querySelectorAll('.quiz-opt').forEach(el=>el.classList.remove('right-answer','wrong-answer'));
+  document.querySelectorAll('.quiz-explain').forEach(el=>el.classList.remove('show'));
+  document.getElementById('quizResult').classList.remove('show');
+  updateQuizProgress();
+}
+
+/* =========================================================
+   DATA — SOURCE TRACE FLOWS
+   ========================================================= */
+const TRACE_CREATE = [
+  {t:"Application calls xTaskCreate()",p:"Bắt đầu tạo 1 task mới.",i:"Tên hàm task, kích thước stack, priority.",o:"TaskHandle_t (nếu thành công).",v:"pxCreatedTask",next:"prvAllocateTCBAndStack()"},
+  {t:"prvAllocateTCBAndStack()",p:"Cấp phát bộ nhớ cho TCB và stack.",i:"usStackDepth (số phần tử StackType_t).",o:"Con trỏ TCB_t đã cấp phát.",v:"pxNewTCB",next:"pvPortMalloc() x2"},
+  {t:"pvPortMalloc() (gọi 2 lần)",p:"Lần 1: cấp RAM cho TCB. Lần 2: cấp RAM cho stack.",i:"sizeof(TCB_t) / kích thước stack theo byte.",o:"Con trỏ vùng nhớ hoặc NULL.",v:"ucHeap / free list nội bộ heap_n",next:"prvInitialiseNewTask()"},
+  {t:"prvInitialiseNewTask()",p:"Khởi tạo nội dung TCB: priority, tên, con trỏ stack, trạng thái ban đầu.",i:"Các tham số truyền vào xTaskCreate().",o:"TCB đã sẵn sàng.",v:"pxNewTCB->pxTopOfStack",next:"prvAddNewTaskToReadyList()"},
+  {t:"prvAddNewTaskToReadyList()",p:"Thêm task vào danh sách Ready List của scheduler.",i:"Con trỏ TCB đã khởi tạo.",o:"Task sẵn sàng được scheduler chọn chạy.",v:"pxReadyTasksLists[priority]",next:"(kết thúc — chờ scheduler)"},
+];
+const TRACE_DELETE = [
+  {t:"Application calls vTaskDelete()",p:"Yêu cầu xóa 1 task (hoặc chính task đang gọi nếu tham số NULL).",i:"TaskHandle_t của task cần xóa.",o:"Không có (void) — task được đánh dấu xóa.",v:"pxTCB",next:"uxListRemove() khỏi Ready/Blocked list"},
+  {t:"Gỡ task khỏi các list quản lý",p:"Gỡ TCB khỏi Ready List / State List / Event List đang giữ nó.",i:"Con trỏ TCB.",o:"Task không còn được scheduler xem xét nữa.",v:"xStateListItem, xEventListItem",next:"Nếu xóa task đang chạy -> chờ Idle Task dọn dẹp"},
+  {t:"Idle Task gọi prvCheckTasksWaitingTermination()",p:"Idle task định kỳ kiểm tra danh sách task chờ bị xóa hẳn, giải phóng bộ nhớ.",i:"xTasksWaitingTermination list.",o:"RAM của TCB + stack được trả lại heap.",v:"uxDeletedTasksWaitingCleanUp",next:"vPortFree() x2"},
+  {t:"vPortFree() (gọi 2 lần)",p:"Giải phóng RAM của TCB và stack trở lại heap (nếu heap hỗ trợ free — không phải heap_1).",i:"Con trỏ TCB / con trỏ stack.",o:"Block RAM trở thành free (có thể coalesce nếu heap_4/5).",v:"Free list nội bộ heap_n",next:"(kết thúc)"},
+];
+function renderTrace(containerId, steps){
+  const el = document.getElementById(containerId);
+  let html='';
+  steps.forEach((s,i)=>{
+    html+=`<div class="flow-node clickable" data-idx="${i}" tabindex="0" role="button">${s.t}</div>`;
+    html+=`<div class="flow-detail" id="${containerId}-d${i}">
+      <dl>
+        <dt>Purpose</dt><dd>${s.p}</dd>
+        <dt>Input</dt><dd>${s.i}</dd>
+        <dt>Output</dt><dd>${s.o}</dd>
+        <dt>Important variables</dt><dd>${s.v}</dd>
+        <dt>Next function</dt><dd>${s.next}</dd>
+      </dl></div>`;
+    if(i<steps.length-1) html+='<div class="flow-arrow">▼</div>';
+  });
+  el.innerHTML=html;
+  el.querySelectorAll('.flow-node').forEach(n=>{
+    const toggle=()=>{
+      const d=document.getElementById(containerId+'-d'+n.dataset.idx);
+      d.classList.toggle('show');
+    };
+    n.addEventListener('click',toggle);
+    n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();}});
+  });
+}
+
+/* =========================================================
+   GLOSSARY RENDER
+   ========================================================= */
+function renderGlossary(){
+  const sorted=[...GLOSSARY].sort((a,b)=>a.t.localeCompare(b.t));
+  const groups={};
+  sorted.forEach(g=>{
+    const letter=g.t[0].toUpperCase();
+    (groups[letter]=groups[letter]||[]).push(g);
+  });
+  const letters=Object.keys(groups).sort();
+  document.getElementById('glossaryNav').innerHTML = letters.map(l=>`<a href="#gloss-${l}">${l}</a>`).join('');
+  let html='';
+  letters.forEach(l=>{
+    html+=`<div class="gloss-letter" id="gloss-${l}">${l}</div>`;
+    groups[l].forEach(g=>{
+      html+=`<dl class="gloss-term"><dt>${g.t}</dt><dd>${g.d}</dd></dl>`;
+    });
+  });
+  document.getElementById('glossaryContainer').innerHTML=html;
+}
+
+/* =========================================================
+   ROADMAP RENDER
+   ========================================================= */
+const ROADMAP = [
+  {n:"01",title:"RTOS Fundamentals",target:"rtos-basics"},
+  {n:"02",title:"3.1 Introduction",target:"memory-intro"},
+  {n:"03",title:"Static vs Dynamic",target:"static-dynamic"},
+  {n:"04",title:"pvPortMalloc()",target:"pvportmalloc"},
+  {n:"05",title:"heap_1",target:"heap1"},
+  {n:"06",title:"heap_2",target:"heap2"},
+  {n:"07",title:"heap_3",target:"heap3"},
+  {n:"08",title:"heap_4",target:"heap4"},
+  {n:"09",title:"heap_5",target:"heap5"},
+  {n:"10",title:"Heap Statistics",target:"statistics"},
+  {n:"11",title:"Static Allocation",target:"static-alloc"},
+  {n:"12",title:"Debugging",target:"debugging"},
+  {n:"13",title:"Source Trace",target:"source-trace"},
+  {n:"14",title:"Labs",target:"labs"},
+  {n:"15",title:"Quiz",target:"quiz"},
+];
+function renderRoadmap(){
+  document.getElementById('roadmap').innerHTML = ROADMAP.map(r=>`
+    <a class="roadmap-node" data-target="${r.target}">
+      <div class="roadmap-num">${r.n}</div>
+      <div><strong>${r.title}</strong><span>Click để tới bài học</span></div>
+    </a>`).join('');
+}
+
+/* =========================================================
+   NAVIGATION / SCROLLSPY
+   ========================================================= */
+const navLinks = document.querySelectorAll('.nav-link');
+function goTo(target){
+  const el=document.getElementById(target);
+  if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); }
+  closeSidebarMobile();
+}
+navLinks.forEach(a=>a.addEventListener('click',()=>goTo(a.dataset.target)));
+document.addEventListener('click',(e)=>{
+  const rm=e.target.closest('.roadmap-node');
+  if(rm) goTo(rm.dataset.target);
+});
+
+const allSections = Array.from(document.querySelectorAll('.section'));
+const seenSections = new Set(JSON.parse(localStorage.getItem('freertos_seen_sections')||'[]'));
+function markSeen(id){
+  seenSections.add(id);
+  localStorage.setItem('freertos_seen_sections', JSON.stringify([...seenSections]));
+  updateHeaderProgress();
+  const link=document.querySelector(`.nav-link[data-target="${id}"]`);
+  if(link && !link.querySelector('.done-mark')){
+    const mark=document.createElement('span');
+    mark.className='done-mark';
+    mark.textContent='✓';
+    link.appendChild(mark);
+  }
+}
+seenSections.forEach(id=>{
+  const link=document.querySelector(`.nav-link[data-target="${id}"]`);
+  if(link && !link.querySelector('.done-mark')){
+    const mark=document.createElement('span');
+    mark.className='done-mark';
+    mark.textContent='✓';
+    link.appendChild(mark);
+  }
+});
+
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(entry=>{
+    const id=entry.target.id;
+    const link=document.querySelector(`.nav-link[data-target="${id}"]`);
+    if(entry.isIntersecting){
+      navLinks.forEach(l=>l.classList.remove('active'));
+      if(link) link.classList.add('active');
+      if(entry.intersectionRatio>0.4) markSeen(id);
+    }
+  });
+},{rootMargin:'-80px 0px -60% 0px',threshold:[0,0.4,1]});
+allSections.forEach(s=>io.observe(s));
+
+function updateHeaderProgress(){
+  const totalWeight = allSections.length; // lessons
+  const seenPct = Math.round((seenSections.size/totalWeight)*70); // 70% weight lessons
+  const quizData = JSON.parse(localStorage.getItem('freertos_quiz_score')||'null');
+  const quizPct = quizData ? Math.round((quizData.score/quizData.total)*30) : 0; // 30% weight quiz
+  const total = Math.min(100, seenPct+quizPct);
+  document.getElementById('progressText').textContent = total+'%';
+  document.getElementById('progressBarFill').style.width = total+'%';
+}
+
+/* =========================================================
+   MOBILE SIDEBAR
+   ========================================================= */
+const sidebar=document.getElementById('sidebar');
+const overlay=document.getElementById('sidebarOverlay');
+document.getElementById('hamburgerBtn').addEventListener('click',()=>{
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('show');
+});
+overlay.addEventListener('click',closeSidebarMobile);
+function closeSidebarMobile(){
+  sidebar.classList.remove('open');
+  overlay.classList.remove('show');
+}
+
+/* =========================================================
+   THEME TOGGLE
+   ========================================================= */
+const themeToggle=document.getElementById('themeToggle');
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  themeToggle.textContent = t==='light' ? '☀️' : '🌙';
+  localStorage.setItem('freertos_theme',t);
+}
+applyTheme(localStorage.getItem('freertos_theme') || 'dark');
+themeToggle.addEventListener('click',()=>{
+  const cur=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
+  applyTheme(cur);
+});
+
+/* =========================================================
+   COPY CODE BUTTONS
+   ========================================================= */
+document.addEventListener('click',(e)=>{
+  const btn=e.target.closest('.copy-btn');
+  if(!btn) return;
+  const codeBlock = btn.closest('.code-block') || btn.closest('.card');
+  const codeEl = codeBlock.querySelector('code');
+  if(!codeEl) return;
+  const text = codeEl.textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    const label=btn.querySelector('.cp-label');
+    const original = label.textContent;
+    label.textContent='✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(()=>{ label.textContent=original; btn.classList.remove('copied'); },1500);
+  }).catch(()=>{
+    // fallback
+    const ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(err){}
+    document.body.removeChild(ta);
+  });
+});
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+const SEARCH_INDEX = [];
+function buildSearchIndex(){
+  document.querySelectorAll('.section').forEach(sec=>{
+    const id=sec.id;
+    const heading = sec.querySelector('h2') ? sec.querySelector('h2').textContent : id;
+    SEARCH_INDEX.push({label:heading, sub:'Section', target:id});
+  });
+  GLOSSARY.forEach(g=>SEARCH_INDEX.push({label:g.t, sub:'Glossary — '+g.d.slice(0,60)+'...', target:'glossary'}));
+  APIS.forEach(a=>SEARCH_INDEX.push({label:a.name, sub:'API — '+a.desc.slice(0,60)+'...', target:'apicards'}));
+  CMP_ROWS.forEach(r=>SEARCH_INDEX.push({label:r.h, sub:'Heap implementation — '+r.use.slice(0,60), target:'comparison'}));
+}
+const searchInput=document.getElementById('searchInput');
+const searchResults=document.getElementById('searchResults');
+searchInput.addEventListener('input',()=>{
+  const q=searchInput.value.trim().toLowerCase();
+  if(q.length<2){ searchResults.classList.remove('show'); return; }
+  const matches = SEARCH_INDEX.filter(item=>
+    item.label.toLowerCase().includes(q) || item.sub.toLowerCase().includes(q)
+  ).slice(0,10);
+  if(matches.length===0){
+    searchResults.innerHTML = `<div class="search-result-item">Không tìm thấy kết quả cho "${q}"</div>`;
+  } else {
+    searchResults.innerHTML = matches.map(m=>`
+      <div class="search-result-item" data-target="${m.target}" tabindex="0" role="button">
+        ${m.label}<small>${m.sub}</small>
+      </div>`).join('');
+  }
+  searchResults.classList.add('show');
+});
+searchResults.addEventListener('click',(e)=>{
+  const item=e.target.closest('.search-result-item');
+  if(item && item.dataset.target){
+    goTo(item.dataset.target);
+    searchResults.classList.remove('show');
+    searchInput.value='';
+  }
+});
+document.addEventListener('click',(e)=>{
+  if(!e.target.closest('.search-wrap')) searchResults.classList.remove('show');
+});
+
+/* =========================================================
+   BACK TO TOP
+   ========================================================= */
+const backToTop=document.getElementById('backToTop');
+window.addEventListener('scroll',()=>{
+  backToTop.classList.toggle('show', window.scrollY>600);
+});
+backToTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+
+/* =========================================================
+   HEAP_1 INTERACTIVE
+   ========================================================= */
+const h1Bar=document.getElementById('h1Bar');
+const h1Note=document.getElementById('h1Note');
+let h1TaskCount=0;
+const H1_COLORS=[
+  {tcb:'#fbbf24',stack:'#fb923c'},
+];
+function renderH1(){
+  h1Bar.innerHTML='';
+  const used = h1TaskCount*24; // % width per task (fake)
+  const freePct = Math.max(0,100-used);
+  for(let i=1;i<=h1TaskCount;i++){
+    const tcb=document.createElement('div');
+    tcb.className='mem-seg'; tcb.style.background='#fbbf24'; tcb.style.width='12%';
+    tcb.textContent='TCB'+i;
+    const stack=document.createElement('div');
+    stack.className='mem-seg'; stack.style.background='#fb923c'; stack.style.width='12%';
+    stack.textContent='Stack'+i;
+    h1Bar.appendChild(tcb); h1Bar.appendChild(stack);
+  }
+  if(freePct>0){
+    const free=document.createElement('div');
+    free.className='mem-seg seg-free'; free.style.width=freePct+'%'; free.textContent='FREE';
+    h1Bar.appendChild(free);
+  }
+  h1Note.innerHTML = h1TaskCount===0
+    ? 'Bấm "Create Task" để xem heap_1 bị chia nhỏ dần — <b>không bao giờ co lại</b> vì không có <code>vPortFree()</code>.'
+    : `Đã tạo <b>${h1TaskCount}</b> task → <b>${h1TaskCount*2}</b> lần gọi pvPortMalloc() (TCB + Stack mỗi task). Vùng đã cấp phát <b>không bao giờ được trả lại</b>, kể cả khi bạn "xóa" task này trong code thật.`;
+  if(h1TaskCount>=4){ document.getElementById('h1CreateBtn').disabled=true; }
+}
+document.getElementById('h1CreateBtn').addEventListener('click',()=>{ h1TaskCount++; renderH1(); });
+document.getElementById('h1ResetBtn').addEventListener('click',()=>{ h1TaskCount=0; document.getElementById('h1CreateBtn').disabled=false; renderH1(); });
+renderH1();
+
+/* =========================================================
+   HEAP_2 INTERACTIVE (Best-Fit demo)
+   ========================================================= */
+const h2AllocBtn=document.getElementById('h2AllocBtn');
+const h2Note=document.getElementById('h2Note');
+const h2Blocks=document.getElementById('h2Blocks');
+function resetH2(){
+  h2Blocks.innerHTML = `
+    <div class="free-chip" data-size="5">5 B</div>
+    <div class="free-chip" data-size="25">25 B</div>
+    <div class="free-chip" data-size="100">100 B</div>`;
+  h2Note.textContent='Bấm nút để xem best-fit chọn block nào và tách ra sao.';
+  h2AllocBtn.disabled=false;
+}
+h2AllocBtn.addEventListener('click',()=>{
+  const chips=[...h2Blocks.querySelectorAll('.free-chip')];
+  chips.forEach(c=>c.classList.remove('selected'));
+  const target = chips.find(c=>parseInt(c.dataset.size)===25);
+  target.classList.add('selected');
+  target.innerHTML = '20 B<br><small style="font-weight:400;">(cấp cho caller)</small>';
+  const remainder=document.createElement('div');
+  remainder.className='free-chip';
+  remainder.dataset.size='5';
+  remainder.textContent='~5 B (dư, free)';
+  target.after(remainder);
+  h2Note.innerHTML = '<b>Best-fit</b> chọn block <b>25 byte</b> vì đây là block free nhỏ nhất mà vẫn đủ chứa 20 byte (không chọn block 100 dù nó cũng đủ, vì 25 khít hơn). Sau khi tách: 20 byte trả về caller, ~5 byte còn dư vẫn nằm trong free list (thực tế nhỏ hơn 5 vì heap_2 lưu metadata ngay trong vùng heap).';
+  h2AllocBtn.disabled=true;
+});
+document.getElementById('h2ResetBtn').addEventListener('click',resetH2);
+
+/* =========================================================
+   HEAP_4 INTERACTIVE (Coalescing states A-F)
+   ========================================================= */
+const H4_STATES = [
+  {label:"A — Sau khi tạo 3 task", note:"3 task được tạo (Stack+TCB mỗi task), một khối FREE lớn còn lại ở đầu mảng.",
+   segs:[{c:'seg-free',w:34,label:'FREE'},{c:'seg-used',w:22,label:'T3'},{c:'seg-used',w:22,label:'T2'},{c:'seg-used',w:22,label:'T1'}]},
+  {label:"B — Sau khi xóa Task T2 (coalesced ngay)", note:"heap_4 GỘP NGAY 2 block (TCB+Stack) của T2 thành 1 block free duy nhất — khác hẳn heap_2 (sẽ để lại 2 block riêng).",
+   segs:[{c:'seg-free',w:34,label:'FREE'},{c:'seg-used',w:22,label:'T3'},{c:'seg-coalesced',w:22,label:'FREE (gộp)'},{c:'seg-used',w:22,label:'T1'}]},
+  {label:"C — Tạo 1 Queue (first-fit dùng block free vừa gộp)", note:"xQueueCreate() gọi pvPortMalloc(), first-fit dùng ngay block free (từ T2 cũ) vì đây là block free đầu tiên đủ lớn.",
+   segs:[{c:'seg-free',w:34,label:'FREE'},{c:'seg-used',w:22,label:'T3'},{c:'seg-queue',w:10,label:'Queue'},{c:'seg-coalesced',w:12,label:'FREE'},{c:'seg-used',w:22,label:'T1'}]},
+  {label:"D — Gọi pvPortMalloc() trực tiếp từ ứng dụng (User alloc)", note:"Block free còn lại bị tách thêm: Queue | User | phần free còn dư.",
+   segs:[{c:'seg-free',w:34,label:'FREE'},{c:'seg-used',w:22,label:'T3'},{c:'seg-queue',w:10,label:'Queue'},{c:'seg-user',w:8,label:'User'},{c:'seg-coalesced',w:4,label:'FREE'},{c:'seg-used',w:22,label:'T1'}]},
+  {label:"E — Xóa Queue (tự động free)", note:"vQueueDelete() tự động gọi vPortFree() — giờ có FREE ở CẢ HAI BÊN của block User.",
+   segs:[{c:'seg-free',w:34,label:'FREE'},{c:'seg-used',w:22,label:'T3'},{c:'seg-coalesced',w:10,label:'FREE'},{c:'seg-user',w:8,label:'User'},{c:'seg-coalesced',w:4,label:'FREE'},{c:'seg-used',w:22,label:'T1'}]},
+  {label:"F — Free block User (coalesce cả 3 phần)", note:"3 block free liền kề (trái + User + phải) GỘP LẠI thành 1 block lớn duy nhất — minh chứng coalescing hoạt động cả 2 phía.",
+   segs:[{c:'seg-free',w:34,label:'FREE'},{c:'seg-used',w:22,label:'T3'},{c:'seg-coalesced',w:22,label:'FREE (gộp 3→1)'},{c:'seg-used',w:22,label:'T1'}]},
+];
+let h4State=0;
+function renderH4(){
+  const st=H4_STATES[h4State];
+  document.getElementById('h4StateLabel').textContent = st.label;
+  document.getElementById('h4Bar').innerHTML = st.segs.map(s=>`<div class="mem-seg ${s.c}" style="width:${s.w}%">${s.label}</div>`).join('');
+  document.getElementById('h4Note').textContent = st.note;
+  document.getElementById('h4PrevBtn').disabled = h4State===0;
+  document.getElementById('h4NextBtn').disabled = h4State===H4_STATES.length-1;
+}
+document.getElementById('h4NextBtn').addEventListener('click',()=>{ if(h4State<H4_STATES.length-1){h4State++; renderH4();} });
+document.getElementById('h4PrevBtn').addEventListener('click',()=>{ if(h4State>0){h4State--; renderH4();} });
+document.getElementById('h4ResetBtn').addEventListener('click',()=>{ h4State=0; renderH4(); });
+renderH4();
+
+/* =========================================================
+   LAB PROGRESS TRACKING
+   ========================================================= */
+function initLabTracking(){
+  const done = new Set(JSON.parse(localStorage.getItem('freertos_labs_done')||'[]'));
+  document.querySelectorAll('.lab-checkbox').forEach(cb=>{
+    if(done.has(cb.dataset.lab)) cb.checked=true;
+    cb.addEventListener('change',()=>{
+      if(cb.checked) done.add(cb.dataset.lab); else done.delete(cb.dataset.lab);
+      localStorage.setItem('freertos_labs_done', JSON.stringify([...done]));
+    });
+  });
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+renderRoadmap();
+renderCmpTable();
+renderApiCards();
+renderDebugGrid();
+renderLabs();
+renderQuiz();
+renderGlossary();
+renderCheat();
+renderTrace('traceCreate', TRACE_CREATE);
+renderTrace('traceDelete', TRACE_DELETE);
+buildSearchIndex();
+initLabTracking();
+resetH2();
+updateHeaderProgress();
+
+document.getElementById('quizSubmitBtn').addEventListener('click',submitQuiz);
+document.getElementById('quizResetBtn').addEventListener('click',resetQuiz);
+</script>
+</body>
+</html>

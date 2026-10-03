@@ -1,4 +1,6 @@
-![[Pasted image 20260819153058.png]]\
+![[Pasted image 20260819153058.png]]
+
+![[Pasted image 20261003075724.png]]
 ## Nơi định nghĩa các chân GPIO này
 
 Toàn bộ cặp macro `<TênTínHiệu>_Pin` / `<TênTínHiệu>_GPIO_Port` trong bảng của bạn được định nghĩa tại:
@@ -7,28 +9,28 @@ Toàn bộ cặp macro `<TênTínHiệu>_Pin` / `<TênTínHiệu>_GPIO_Port` tro
 
 Đối chiếu từng dòng của bạn với file:
 
-|Chân MCU|Macro trong [mxconstants.h](vscode-webview://1v7kr62lml590cb3gndmegc6ml88sjdjv7262pvi3l6t2rv5t7fr/PS-CPU/pscpu_s800/main/Inc/mxconstants.h)|Dòng|
-|---|---|---|
-|PC13|`WAKEUP_Pin` / `WAKEUP_GPIO_Port` (GPIOC)|44-45|
-|PA1|`_HRESET_REQ_Pin` (GPIOA)|50-51|
-|PA2|`AP_PWR_EN_Pin` (GPIOA)|52-53|
-|PA4|`POWER_MONITOR_Pin` (GPIOA)|54-55|
-|PA5|`MSW_ON_Pin` (GPIOA)|56-57|
-|PB0|`IR_P_ON_Pin` (GPIOB)|60-61|
-|PB1|`ERP_SENSOR_ON_Pin` (GPIOB)|62-63|
-|PB2|`_RESET_Pin` (GPIOB)|64-65|
-|PB10|`_USB2_OE_Pin` (GPIOB)|66-67|
-|PB13|`MC_PWR_EN_Pin` (GPIOB)|70-71|
-|PA8|`MONI_24V11_Pin` (GPIOA)|76-77|
-|PA9 / PA10|`PA9_IN_Pin` / `PA10_IN_Pin` (GPIOA)|78-81|
-|PA11|`MC_PG_Pin` (GPIOA)|82-83|
-|PA13|`TMS_Pin` (GPIOA)|84-85|
-|PA15|`MC3_3VON_MONI_Pin` (GPIOA)|86-87|
-|PB3|`SB_PWR_EN_Pin` (GPIOB)|88-89|
-|PB4|`SB_PG_Pin` (GPIOB)|90-91|
-|PB5|`MC_P_ON_Pin` (GPIOB)|92-93|
-|PB8|`_DISCHG_Pin` (GPIOB)|94-95|
-|PB9|`_RST_SLP2_Pin` (GPIOB)|96-97|
+| Chân MCU   | Macro trong [mxconstants.h](vscode-webview://1v7kr62lml590cb3gndmegc6ml88sjdjv7262pvi3l6t2rv5t7fr/PS-CPU/pscpu_s800/main/Inc/mxconstants.h) | Dòng  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| PC13       | `WAKEUP_Pin` / `WAKEUP_GPIO_Port` (GPIOC)                                                                                                   | 44-45 |
+| PA1        | `_HRESET_REQ_Pin` (GPIOA)                                                                                                                   | 50-51 |
+| PA2        | `AP_PWR_EN_Pin` (GPIOA)                                                                                                                     | 52-53 |
+| PA4        | `POWER_MONITOR_Pin` (GPIOA)                                                                                                                 | 54-55 |
+| PA5        | `MSW_ON_Pin` (GPIOA)                                                                                                                        | 56-57 |
+| PB0        | `IR_P_ON_Pin` (GPIOB)                                                                                                                       | 60-61 |
+| PB1        | `ERP_SENSOR_ON_Pin` (GPIOB)                                                                                                                 | 62-63 |
+| PB2        | `_RESET_Pin` (GPIOB)                                                                                                                        | 64-65 |
+| PB10       | `_USB2_OE_Pin` (GPIOB)                                                                                                                      | 66-67 |
+| PB13       | `MC_PWR_EN_Pin` (GPIOB)                                                                                                                     | 70-71 |
+| PA8        | `MONI_24V11_Pin` (GPIOA)                                                                                                                    | 76-77 |
+| PA9 / PA10 | `PA9_IN_Pin` / `PA10_IN_Pin` (GPIOA)                                                                                                        | 78-81 |
+| PA11       | `MC_PG_Pin` (GPIOA)                                                                                                                         | 82-83 |
+| PA13       | `TMS_Pin` (GPIOA)                                                                                                                           | 84-85 |
+| PA15       | `MC3_3VON_MONI_Pin` (GPIOA)                                                                                                                 | 86-87 |
+| PB3        | `SB_PWR_EN_Pin` (GPIOB)                                                                                                                     | 88-89 |
+| PB4        | `SB_PG_Pin` (GPIOB)                                                                                                                         | 90-91 |
+| PB5        | `MC_P_ON_Pin` (GPIOB)                                                                                                                       | 92-93 |
+| PB8        | `_DISCHG_Pin` (GPIOB)                                                                                                                       | 94-95 |
+| PB9        | `_RST_SLP2_Pin` (GPIOB)                                                                                                                     | 96-97 |
 ## Nơi cấu hình mode thực tế (input/output/EXTI/AF) cho các chân này
 
 Macro trên chỉ là tên số hiệu chân — chiều/kiểu chân thật sự được thiết lập ở 2 nơi:
@@ -59,6 +61,46 @@ Macro trên chỉ là tên số hiệu chân — chiều/kiểu chân thật s�
 - Có một bộ `mxconstants.h` **riêng** cho target IAP (bootloader cập nhật FW) tại [iap/Inc/mxconstants.h](vscode-webview://1v7kr62lml590cb3gndmegc6ml88sjdjv7262pvi3l6t2rv5t7fr/PS-CPU/pscpu_s800/iap/Inc/mxconstants.h), chỉ định nghĩa `MSW_ON_Pin` và `TMS_Pin` — vì bootloader IAP chỉ cần tối thiểu, không cần toàn bộ chân sequencing nguồn.
 
 # Tín hiệu input  `MONI_24V11 (PA8)`
+
+## Phân tích theo phần cứng
+
+```
+DC24V11 ──[điện trở chia áp]──┬──► (+) ┐
+                              │         ├─ Comparator (cấp 3.3V_SB) ──► 24V11_MONI ──► PS-CPU
+                           [điện trở]   │
+                              │      (−)┘
+                             GND     ▲
+                                   1.6V (mức chuẩn)
+
+```
+
+Mạch gồm ba phần.
+
+1. **Chia áp**: PS-CPU chỉ chịu được tối đa 3,3V, nên không thể nối thẳng 24V vào. Hai điện trở nối tiếp hạ 24V xuống một mức nhỏ hơn nhiều. Điện áp này tỷ lệ với 24V thật. 24V giảm thì điện áp chia cũng giảm theo.
+2. **Mức chuẩn 1,6V**: đây là "vạch ngưỡng" cố định đưa vào đầu còn lại của comparator.
+3. **Comparator** (khối hình tam giác có dấu + và −): so hai đầu vào rồi cho ra tín hiệu số.
+
+### Hoạt động
+
+|Tình huống|Điện áp sau chia áp|So với 1,6V|24V11_MONI|Ý nghĩa|
+|---|---|---|---|---|
+|24V còn nguyên|Cao|**Lớn hơn**|**High**|24V vẫn còn|
+|24V đã xả xuống thấp|Thấp|**Nhỏ hơn**|**Low**|24V đã xả hết|
+
+Sau khi tắt nguồn, các tụ lớn ở mạch 24V vẫn giữ điện và xả chậm xuống 0V. Khi điện áp chia áp rơi xuống dưới 1,6V, ngõ ra comparator đổi từ High sang Low. Firmware thấy `MONI_24V11 = Low` thì hiểu "24V đã xả đủ thấp".
+
+### Lưu ý
+
+- **"Xả hết" thực chất là "xuống dưới một ngưỡng"**, không phải đúng 0V. Ngưỡng thật phụ thuộc tỷ lệ chia áp. Ví dụ nếu chia 1/10 thì 1,6V ứng với khoảng 16V thật. Sơ đồ không ghi giá trị điện trở, nên tôi không tính được ngưỡng chính xác. Bạn cần xem schematic chi tiết.
+- **Chiều của comparator** (đầu nào là +, đầu nào là −): tôi suy ra từ code. Code đòi `MONI_24V11 = Low` mới coi là xả xong, nên mạch phải cho ra High khi có 24V. Cần xác nhận với schematic.
+- **Comparator được cấp bởi 3.3V_SB**, nên tín hiệu chỉ có ý nghĩa khi rail SB đã bật. Điều này khớp với code: điều kiện kiểm tra 24V nằm sau điều kiện `SB_PG` (comment 2017/12/13 trong code ghi "kiểm tra 24V sau khi SB đã xác nhận").
+- **Chống nhiễu**: ở firmware, `IS_CHECKING_CHATTERING(...)` đảm bảo tín hiệu đã ổn định, không phải xung nhiễu, rồi mới tin.
+
+### Tại sao phải kiểm tra
+
+Nếu bật lại máy khi 24V chưa xả hết, mạch có thể nhận điện áp còn dư rồi cộng thêm điện áp mới, gây trạng thái không xác định cho các IC. Phép đo này giúp PS-CPU bắt buộc chờ cho tới khi 24V xuống thấp.
+
+## Phân tích phần mềm
 
 **a) Lớp phần cứng/ngắt** — cấu hình `GPIO_MODE_IT_RISING_FALLING` ([mx_init.c:442-446](vscode-webview://1v7kr62lml590cb3gndmegc6ml88sjdjv7262pvi3l6t2rv5t7fr/PS-CPU/pscpu_s800/main/Src/mx_init.c#L442-L446)) → mỗi lần đổi mức, ngắt EXTI gọi `km_exti_callback()`:
 
@@ -337,6 +379,149 @@ Trạng thái `CA72_ON`/`CA72_SLEEP`/`CA72_OFF` này chính là dữ liệu nề
 | `sleep_mode()` ([:1399](vscode-webview://1v7kr62lml590cb3gndmegc6ml88sjdjv7262pvi3l6t2rv5t7fr/PS-CPU/pscpu_s800/main/App/km_extend_io.c#L1399))                                          | `AP_PWR_EN=Low` là một trong các điều kiện để **chính PS-CPU** vào chế độ Sleep (STM32 STOP mode) tiết kiệm điện — chỉ ngủ khi biết chắc AP cũng đang ngủ                                                                                                                                                                                            |
 | Event log (`THRD_EventRecord_ApLowDet/ApHighDet/...`, [:75-78](vscode-webview://1v7kr62lml590cb3gndmegc6ml88sjdjv7262pvi3l6t2rv5t7fr/PS-CPU/pscpu_s800/main/App/km_extend_io.c#L75-L78)) | Ghi log thời điểm chuyển mức của `AP_PWR_EN` phục vụ đo thời gian boot/sleep tự động                                                                                                                                                                                                                                                                 |
 
+
+## `MSW_ON_Pin`
+
+### Phân tích phần cứng
+![[Pasted image 20261003080810.png]]
+
+
+|MSW_ON|Công tắc|Ý nghĩa|
+|---|---|---|
+|**High**|Đóng (ON)|Người dùng **bật** nguồn chính|
+|**Low**|Mở (OFF)|Người dùng **tắt** nguồn chính|
+
+Mức tín hiệu này do công tắc quyết định. Nhưng điều kiện "MSW_ON High" trong code là **MSW_ON = High và đã qua debounce**. Debounce là chờ tín hiệu ổn định, không còn nảy tiếp điểm. Thời gian là 10 ms, theo comment ở [km_it.h](vscode-webview://1bvn9deljhs67bs6tdc4nttro6fasb6a3o9dsbsr0n55qjrijoej/PS-CPU/pscpu_s800/main/Inc/km_it.h) dòng 5. Cặp điều kiện `!IS_CHECKING_CHATTERING(MSW) && ReadPin(MSW_ON)` có nghĩa là "đã chắc chắn High". Cặp tương tự với `!ReadPin` có nghĩa là "đã chắc chắn Low".
+
+### Phân tích phần mềm
+
+Chân `MSW_ON` (PA5) được cấu hình là **ngắt ngoài (EXTI)**. Khi có cạnh lên hoặc xuống, [km_it.c:267-275](vscode-webview://1bvn9deljhs67bs6tdc4nttro6fasb6a3o9dsbsr0n55qjrijoej/PS-CPU/pscpu_s800/main/App/km_it.c#L267-L275) làm hai việc:
+
+1. Nếu MCU đang ngủ sâu (STOP mode), đánh thức bằng cách khôi phục clock.
+2. Gọi `start_anti_chattering()` để bắt đầu đếm 10 ms. Khi hết 10 ms mà mức còn giữ nguyên, `msw_on_proc()` mới được gọi (với `STATE_INT`).
+
+```c
+static void km_exti_callback(PinType GPIO_Pin ,GPIOEventType event)
+{
+    PinStateType            level;
+	/* 割り込みイベントが発生 */
+	if(event == GPIO_EVENT_EXT_INTR){
+		switch(GPIO_Pin){
+			case _HRESET_REQ_Pin:
+				set_pending_factor_bit(TYPE_Km_PFB_HRESET_REQ);
+				break;
+			case AP_PWR_EN_Pin:
+				set_pending_factor_bit(TYPE_Km_PFB_AP_PWR_EN);
+				break;
+			case POWER_MONITOR_Pin:
+                level = BSP_GPIO_ReadPin(POWER_MONITOR_GPIO_Port, POWER_MONITOR_Pin);
+				start_anti_chattering(TYPE_Km_AC_Idx_POWER_MONI, level);
+				break;
+			case MONI_24V11_Pin:
+                level = BSP_GPIO_ReadPin(MONI_24V11_GPIO_Port, MONI_24V11_Pin);
+				start_anti_chattering(TYPE_Km_AC_Idx_24V11_MONI, level);
+				break;
+			case MSW_ON_Pin:
+                level = BSP_GPIO_ReadPin(MSW_ON_GPIO_Port, MSW_ON_Pin);
+				if(stop_mode == STOP_MODE_ON){
+					SystemClock_Config2();
+					HAL_RTC_DeactivateAlarm(&hrtc, RTC_ALARM_A);
+					stop_mode = STOP_MODE_OFF;
+				}
+				start_anti_chattering(TYPE_Km_AC_Idx_MSW, level);
+				break;
+			default:
+				break;
+		}
+	}
+	return;
+
+}
+```
+
+Có hai nhánh trong [msw_on_proc](vscode-webview://1bvn9deljhs67bs6tdc4nttro6fasb6a3o9dsbsr0n55qjrijoej/PS-CPU/pscpu_s800/main/App/km_extend_io.c#L1149).
+
+```c
+void msw_on_proc(uint8_t state)
+{
+	uint32_t data;
+	TYPE_Km_Timer_State seqstate;
+
+	/* 瞬断バックアップタイマ */
+	if(TYPE_Km_Timer_Start == km_timer_get_state(TYPE_Km_Timer_BACKUP_WAITTIME)) {
+		if(!IS_CHECKING_CHATTERING(TYPE_Km_AC_Idx_MSW) && BSP_GPIO_ReadPin(MSW_ON_GPIO_Port,MSW_ON_Pin)){
+			g_backupwait_pending |= BACKUPWAIT_PENDING_MSW_ON;
+		}
+		return;	/* バックアップ中は、電源抑止. */
+	}
+	/* 電源OFFシーケンスタイマ */
+	seqstate = km_timer_get_state(TYPE_Km_Timer_PWROFF_SEQTIME);
+	if( TYPE_Km_Timer_Start == seqstate ){
+		if(!IS_CHECKING_CHATTERING(TYPE_Km_AC_Idx_MSW) && BSP_GPIO_ReadPin(MSW_ON_GPIO_Port,MSW_ON_Pin)){
+			poweroff_factor_save(PWROFF_FACTOR_OFFSEQ_ON);
+			s800_power_off();	/* リブートする. */
+		}
+		return;
+	}else if( TYPE_Km_Timer_End == seqstate ){
+		return;					/* イベントを処理しない. */
+	}else{
+		/* 以下既存処理を行う. */
+	}
+	
+	if(state == STATE_INT){
+		if((!IS_CHECKING_CHATTERING(TYPE_Km_AC_Idx_MSW)        &&  BSP_GPIO_ReadPin(MSW_ON_GPIO_Port,MSW_ON_Pin))         &&
+           (!IS_CHECKING_CHATTERING(TYPE_Km_AC_Idx_24V11_MONI) && !BSP_GPIO_ReadPin(MONI_24V11_GPIO_Port,MONI_24V11_Pin)) &&
+           !BSP_GPIO_ReadPin(SB_PG_GPIO_Port,SB_PG_Pin)){
+			/* システムリセット */
+			HAL_NVIC_SystemReset();
+		}
+		else if(!IS_CHECKING_CHATTERING(TYPE_Km_AC_Idx_MSW) && !BSP_GPIO_ReadPin(MSW_ON_GPIO_Port,MSW_ON_Pin)) {
+			data = io_extend_read(INTERNEAL_STS_COMMAND);
+			if(!BSP_GPIO_ReadPin(AP_PWR_EN_GPIO_Port,AP_PWR_EN_Pin) && 
+			   !(data & BIT_CALC(INT_STS_SLEEP2_ERP_BIT))){
+				poweroff_factor_save(PWROFF_FACTOR_BOOTING_OFF);
+				s800_power_off();
+			}
+			else{
+				poweroff_timer_start();		/* タイマーを起動する */
+			}
+		}
+	}
+	else{
+		if(!IS_CHECKING_CHATTERING(TYPE_Km_AC_Idx_MSW) && !BSP_GPIO_ReadPin(MSW_ON_GPIO_Port,MSW_ON_Pin)){
+			if(!BSP_GPIO_ReadPin(SB_PG_GPIO_Port,SB_PG_Pin)){
+#ifdef	MSWOFF_STOP_MODE
+				if(km_timer_get_state(TYPE_Km_Timer_Reboot_SB_PWR_EN) != TYPE_Km_Timer_Start) {
+					if(km_timer_get_state(TYPE_Km_Timer_Reboot_SB_PWR_EN) == TYPE_Km_Timer_End) {
+						km_timer_set(TYPE_Km_Timer_Reboot_SB_PWR_EN, 0, TYPE_Km_Timer_Normal);
+					}
+					if(set_cycle_time(2) == HAL_OK){		/* 2s cycle time */
+						BSP_PWR_enter_stopmode();
+					}
+				}
+#else
+				BSP_PWR_enter_sleepmode();
+#endif
+			}
+		}
+		else{
+            if(!BSP_GPIO_ReadPin(SB_PG_GPIO_Port,SB_PG_Pin)) {
+				s800_power_on();
+			}
+		}
+	}
+	
+
+}
+```
+
+**a) Bật bình thường.** Vòng lặp chính chạy `sb_reset_proc()` ([dòng 1231](vscode-webview://1bvn9deljhs67bs6tdc4nttro6fasb6a3o9dsbsr0n55qjrijoej/PS-CPU/pscpu_s800/main/App/km_extend_io.c#L1231)). Khi đủ `MSW_ON=High`, `24V xả xong`, `SB_PG=High` và timer reset hết, `_RESET` được nhả và S800 boot.
+
+**b) Trường hợp đặc biệt (STATE_INT).** Nếu cả ba điều kiện sau đúng: `MSW_ON=High`, `24V xả xong`, `SB_PG=Low` (nguồn SB đã mất), thì MCU gọi `HAL_NVIC_SystemReset()` để **tự reset toàn bộ PS-CPU** (dòng 1176-1181). Đây là trường hợp công tắc được bật lại khi hệ thống đang ở trạng thái dở dang.
+
+**c) Trong lúc tắt nguồn có kiểm soát** (timer `PWROFF_SEQTIME` đang chạy). Nếu người dùng bật lại công tắc giữa chừng, firmware lưu nguyên nhân `OFFSEQ_ON` và gọi `s800_power_off()` để **khởi động lại** (dòng 1164-1167).
+
+**d) Trong thời gian "backup tức thời"** (timer `BACKUP_WAITTIME` đang chạy, dùng cho mất điện chớp nhoáng). Firmware chỉ **ghi nhớ** MSW đã bật (`BACKUPWAIT_PENDING_MSW_ON`) và chưa xử lý ngay (dòng 1155-1160).
 ## Tóm lại
 
 `AP_PWR_EN` không chỉ đơn thuần là công tắc cho `ERP_SENSOR_ON` như tài liệu bạn trích mô tả (mục 5.2.2.2) — đó chỉ là **một trong hơn 10 nơi** sử dụng tín hiệu này. Về bản chất, đây là **tín hiệu báo hiệu chính từ LPPP/AP806 cho PS-CPU biết "khối AP đang thức hay đang ngủ"**, và toàn bộ chuỗi bật nguồn ngoại vi (`MC_P_ON`, `IR_P_ON`, `MC_PWR_EN`, `/RST_SLP2`), cơ chế DeepSleep/ErP (`SLEEP_STATUS_REM`), cơ chế bảo vệ khi tắt máy giữa chừng, và cả việc PS-CPU tự vào chế độ ngủ — đều phụ thuộc trực tiếp hoặc gián tiếp vào trạng thái của chân này. Tài liệu bạn có khả năng chỉ trích một mục nhỏ (5.2.2.2) trong một đặc tả lớn hơn mô tả đầy đủ các vai trò này.

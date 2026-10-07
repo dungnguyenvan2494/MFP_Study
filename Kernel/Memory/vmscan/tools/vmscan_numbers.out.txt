@@ -1,0 +1,100 @@
+
+======================================================================
+1. Watermark cho 1 zone, managed = 250000 page (~977 MiB)
+======================================================================
+min_free_kbytes = 4000 KiB  -> pages_min = 1000
+tmp = max(min>>2=250, managed*10/10000=250) = 250
+WMARK_MIN  =   1000 page = 3.91 MiB
+WMARK_LOW  =   1250 page = 4.88 MiB
+WMARK_HIGH =   1500 page = 5.86 MiB
+=> free < LOW  : allocator danh thuc kswapd (wakeup_kswapd)
+=> free > HIGH : kswapd ngu lai (pgdat_balanced)
+=> free < MIN  : chi con ALLOC_HARDER/ALLOC_HIGH/PF_MEMALLOC duoc cap tiep; con lai vao direct reclaim
+kswapd_shrink_node: nr_to_reclaim = max(high, 32) = 1500 page (~5.9 MiB moi lan shrink_node)
+max watermark boost = high * 15000/10000 = 2250 page  (boost_watermark)
+
+======================================================================
+2. Priority -> so page quet (scan >>= priority), danh sach 80000 page
+======================================================================
+priority | scan_target | so lan goi shrink_list (batch 32)
+   12    |       19    | 1
+   10    |       78    | 3
+    8    |      312    | 10
+    6    |     1250    | 40
+    4    |     5000    | 157
+    2    |    20000    | 625
+    0    |    80000    | 2500
+priority 12 (DEF_PRIORITY) = quet 1/4096 danh sach; priority 0 = quet het.
+do_try_to_free_pages giam priority tu 12 xuong 0 (--sc->priority) neu chua du nr_to_reclaim.
+
+======================================================================
+3. inactive_is_low: inactive_ratio theo dung luong list (anon hoac file)
+======================================================================
+tong (GiB) | inactive_ratio | inactive toi da giu (xap xi)
+     0     |        1       |  50.0% tong
+     1     |        3       |  25.0% tong
+     2     |        4       |  20.0% tong
+     4     |        6       |  14.3% tong
+    10     |       10       |   9.1% tong
+   100     |       31       |   3.1% tong
+(source comment: 1GB -> ratio 3 -> 25% inactive; khop voi bang trong vmscan.c:2209-2218)
+
+======================================================================
+4. get_scan_count / SCAN_FRACT: chia ap luc anon vs file (swappiness=60)
+======================================================================
+case                                                       | ap  | fp  | anon% | file%
+khong co cost (moi bat dau)                                |  60 | 140 |  30.0 |  70.0
+anon refault nhieu (anon_cost=1000, file_cost=0)           |  89 | 419 |  17.5 |  82.5
+file refault nhieu (anon_cost=0, file_cost=1000)           | 179 | 209 |  46.1 |  53.9
+swappiness=100, cost bang nhau (1000/1000)                 | 199 | 199 |  50.0 |  50.0
+swappiness=0 nhung SCAN_FRACT (global reclaim)             |   0 | 200 |   0.0 | 100.0
+swappiness=200 (chi anon)                                  | 200 |   0 | 100.0 |   0.0
+
+======================================================================
+5. Vi du 1 vong shrink_lruvec: nr[] va thu tu quet
+======================================================================
+Gia su get_scan_count tra ve: {'anon_inact': 12, 'anon_act': 10, 'file_inact': 64, 'file_act': 40}
+  round 1: shrink_list(anon_inact, 12)  con lai 0
+  round 1: shrink_list(anon_act  , 10)  con lai 0
+  round 1: shrink_list(file_inact, 32)  con lai 32
+  round 1: shrink_list(file_act  , 32)  con lai 8
+  round 2: shrink_list(file_inact, 32)  con lai 0
+  round 2: shrink_list(file_act  ,  8)  con lai 0
+(luu y: dieu kien while cua shrink_lruvec bo qua nr[LRU_ACTIVE_ANON])
+
+======================================================================
+6. do_shrink_slab: delta = (freeable >> priority) * 4 / seeks
+======================================================================
+freeable=10000 object, seeks=2 (DEFAULT_SEEKS), batch=128
+priority | delta | total_scan | co goi scan_objects khong?
+   12    |     4 |      4     | khong (cong don vao nr_deferred)
+   10    |    18 |     18     | khong (cong don vao nr_deferred)
+    8    |    78 |     78     | khong (cong don vao nr_deferred)
+    6    |   312 |    312     | CO
+    4    |  1250 |   1250     | CO
+    2    |  5000 |   5000     | CO
+    0    | 20000 |  20000     | CO
+
+======================================================================
+7. allow_direct_reclaim (throttle_direct_reclaim)
+======================================================================
+pfmemalloc_reserve = 1000 page; direct reclaimer bi throttle neu free <= reserve/2 = 500
+
+======================================================================
+8. should_continue_reclaim: compact_gap = 2 << order
+======================================================================
+order 1: compact_gap =    4 page; in_reclaim_compaction = chi khi priority < 10 (costly order > 3)
+order 2: compact_gap =    8 page; in_reclaim_compaction = chi khi priority < 10 (costly order > 3)
+order 3: compact_gap =   16 page; in_reclaim_compaction = chi khi priority < 10 (costly order > 3)
+order 4: compact_gap =   32 page; in_reclaim_compaction = luon (costly order > 3)
+order 5: compact_gap =   64 page; in_reclaim_compaction = luon (costly order > 3)
+order 9: compact_gap = 1024 page; in_reclaim_compaction = luon (costly order > 3)
+
+======================================================================
+9. vmpressure window
+======================================================================
+vmpressure_win = 32*16 = 512 page quet; pressure% = (1 - reclaimed/scanned)*100
+  scanned=512 reclaimed=400 ->  21% -> low
+  scanned=512 reclaimed=200 ->  60% -> medium
+  scanned=512 reclaimed= 20 ->  96% -> critical
+  scanned=512 reclaimed=  0 -> 100% -> critical

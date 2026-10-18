@@ -1,0 +1,95 @@
+
+========================================================================
+1. Vi du RAM 1024 MiB + swap 2048 MiB (page 4 KiB)
+========================================================================
+RAM page frame                    :     262144
+swap header last_page             :     524287
+si->max (maxpages)                :     524288
+si->pages (slot dung duoc, tru header): 524287
+swap_map = vzalloc(maxpages)      :     524288 byte = 512 KiB (1 byte/slot)
+so cluster (256 slot/cluster)     :       2048
+cluster_info (chi SSD/non-rot)    :      16384 byte = 16 KiB (gia dinh 8 byte/cluster)
+so address_space cua swap cache   :         32 (moi cai phu 16384 slot = 64 MiB)
+swap_cgroup: SC_PER_PAGE          :       2048 entry/page
+swap_cgroup: ctrl->length         :        256 page = 1.00 MiB (+ mang con tro 2048 byte)
+Tong metadata/so voi du lieu swap : 0.074 %
+vm_swap_full() dung khi free_swap*2 < total -> free < 262143.5 slot (~50%)
+
+========================================================================
+2. Per-CPU swap slots cache (swap_slots.c)
+========================================================================
+SWAP_SLOTS_CACHE_SIZE             : 64
+bo nho slots[] + slots_ret[] /CPU  : 1024 byte
+nr_cpus online (gia dinh)          : 4
+deactivate khi nr_swap_pages <     : 512
+reactivate khi nr_swap_pages >     : 1280
+slot 'giu' toi da trong cache      : 512 (= 2 MiB dung luong swap)
+
+Hysteresis check_cache_active() voi 4 CPU (gia tri nr_swap_pages lan luot):
+  nr_swap_pages= 5000  cache_active=True 
+  nr_swap_pages= 2000  cache_active=True 
+  nr_swap_pages= 1300  cache_active=True 
+  nr_swap_pages=  900  cache_active=True 
+  nr_swap_pages=  600  cache_active=True 
+  nr_swap_pages=  511  cache_active=False  <-- deactivate + drain tat ca CPU
+  nr_swap_pages=  400  cache_active=False
+  nr_swap_pages=  800  cache_active=False
+  nr_swap_pages= 1200  cache_active=False
+  nr_swap_pages= 1280  cache_active=False
+  nr_swap_pages= 1281  cache_active=True   <-- reactivate
+  nr_swap_pages= 3000  cache_active=True 
+
+========================================================================
+3. Ma hoa swp_entry_t va swap PTE (arm64)
+========================================================================
+SWP_TYPE_SHIFT (arch-independent) : 58
+MAX_SWAPFILES (config KM)         : 30
+Offset toi da trong PTE arm64     : 2^50 (nhung si->max la unsigned int)
+type=0 offset=      5: swp_entry.val=0x0000000000000005  swp_type=0 swp_offset=5  PTE=0x0000000000000500 (bit0..1 = 0 -> not present)
+type=0 offset=      1: swp_entry.val=0x0000000000000001  swp_type=0 swp_offset=1  PTE=0x0000000000000100 (bit0..1 = 0 -> not present)
+type=1 offset=   4660: swp_entry.val=0x0400000000001234  swp_type=1 swp_offset=4660  PTE=0x0000000000123404 (bit0..1 = 0 -> not present)
+type=0 offset= 524287: swp_entry.val=0x000000000007ffff  swp_type=0 swp_offset=524287  PTE=0x0000000007ffff00 (bit0..1 = 0 -> not present)
+
+========================================================================
+4. Tu offset den moi cau truc lien quan (offset = 300000, type 0)
+========================================================================
+swap_map[300000]                         -> 1 byte trong vmalloc array
+cluster index = offset/256             -> 1171 (lock_cluster dung ci + idx)
+swapper_spaces[0][offset>>14]          -> address_space #18, xarray index 300000
+swap_cgroup: map[offset/2048], [offset%2048] -> page 146, entry 992
+vi tri tren dia (1 extent, block device) -> page 300000 cua device = byte 1228800000 = sector 2400000
+
+========================================================================
+5. Giai ma mot so gia tri swap_map
+========================================================================
+  0x00: slot trong (free)
+  0x40: swap count=0, SWAP_HAS_CACHE=1
+  0x01: swap count=1, SWAP_HAS_CACHE=0
+  0x41: swap count=1, SWAP_HAS_CACHE=1
+  0x03: swap count=3, SWAP_HAS_CACHE=0
+  0x43: swap count=3, SWAP_HAS_CACHE=1
+  0x3e: swap count=62, SWAP_HAS_CACHE=0
+  0x3f: SWAP_MAP_BAD: header/bad block/cluster dang discard
+  0xbf: SWAP_MAP_SHMEM: slot cua shmem/tmpfs
+  0xbe: count da dat SWAP_MAP_MAX, phan cao nam o continuation page
+
+========================================================================
+6. Swap readahead (swap_state.c)
+========================================================================
+page_cluster (swap_setup, RAM>=16MB) : 3 -> max 8 page/lan
+__swapin_nr_pages(prev, off, hits, max=8, prev_win):
+  prev=100 off=500 hits=0 prev_win=0 -> 1 page
+  prev=100 off=101 hits=0 prev_win=0 -> 2 page
+  prev=100 off=500 hits=1 prev_win=0 -> 4 page
+  prev=100 off=500 hits=3 prev_win=0 -> 8 page
+  prev=100 off=500 hits=0 prev_win=8 -> 4 page
+  prev=100 off=500 hits=7 prev_win=1 -> 8 page
+
+========================================================================
+7. Dem so lan lay khoa toan cuc khi cap/tra 1 000 000 slot (vi du E)
+========================================================================
+Khong co slot cache : cap 1000000 lan get_swap_pages(1) -> 1000000 lan swap_avail_lock + 1000000 lan si->lock
+                      tra 1000000 lan swapcache_free_entries(1) -> 1000000 lan si->lock
+Co slot cache (64)  : cap -> 15625 lan refill (moi lan 1 swap_avail_lock + 1 si->lock) + 1000000 lan alloc_lock (mutex per-CPU, hau nhu khong tranh chap)
+                      tra -> 15625 lan swapcache_free_entries(64) (sort theo area, 1 si->lock/lo) + 1000000 lan free_lock (spinlock per-CPU)
+Ti le giam khoa toan cuc: 64 lan

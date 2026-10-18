@@ -1,0 +1,100 @@
+
+==============================================================================
+KICH BAN 1: vong doi slot cua page A (1 process, 1 CPU, cache size=4, 8 slot)
+==============================================================================
+[ 0] swapon: slot 0 = header (0x3f), 7 slot trong
+      swap_map=[3f 00 00 00 00 00 00 00]  nr_swap_pages=7 inuse=0
+      cpu0: slots=[] ret=[]
+[ 1] reclaim A: add_to_swap() -> get_swap_page(): refill lay 4 slot, A nhan slot 1
+      swap_map=[3f 40 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 2] add_to_swap_cache(A, entry): swap_map khong doi; A vao swap cache, PageDirty
+      swap_map=[3f 40 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 3] try_to_unmap(): PTE cua A -> swap PTE, swap_duplicate(): count 0 -> 1
+      swap_map=[3f 41 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 4] pageout() -> swap_writepage(): ghi I/O (swap_map khong doi)
+      swap_map=[3f 41 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 5] __remove_mapping(): xoa khoi swap cache + put_swap_page(): bo HAS_CACHE -> page frame duoc free
+      swap_map=[3f 01 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 6] fault: do_swap_page() miss -> __read_swap_cache_async(): swapcache_prepare() -> OK
+      swap_map=[3f 41 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 7] do_swap_page(): set PTE, swap_free(): count 1 -> 0, CON HAS_CACHE -> slot chua duoc free
+      swap_map=[3f 40 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 8] reclaim lai A (chua bi sua): da PageSwapCache -> bo qua add_to_swap; try_to_unmap(): count 1
+      swap_map=[3f 41 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 9] A sach -> khong pageout, __remove_mapping() ngay: KHONG CO I/O ghi lan 2
+      swap_map=[3f 01 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[10] process exit: zap_pte_range() -> free_swap_and_cache(): count -> 0 -> free_swap_slot() -> slots_ret
+      swap_map=[3f 40 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[1]
+      (chu y: swap_map[e] van = 0x40 va nr_swap_pages CHUA tang -> slot chua cap phat lai duoc)
+[11] drain (swapoff/deactivate) hoac slots_ret day -> swapcache_free_entries(): 0x40 -> 0x00
+      swap_map=[3f 00 00 00 00 00 00 00]  nr_swap_pages=7 inuse=0
+      cpu0: slots=[] ret=[]
+
+==============================================================================
+KICH BAN 2: 1 slot dung chung boi parent + child sau fork()
+==============================================================================
+[ 1] page B da swap out xong: slot 1 count=1 (PTE cua parent)
+      swap_map=[3f 01 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 2] fork(): copy_nonpresent_pte() -> swap_duplicate(): count 1 -> 2
+      swap_map=[3f 02 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 3] child doc B: swapcache_prepare() set HAS_CACHE, doc I/O
+      swap_map=[3f 42 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 4] child: swap_free(): count 2 -> 1 (parent van tro toi slot)
+      swap_map=[3f 41 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+[ 5] parent exit: free_swap_and_cache(): count 1 -> 0, con HAS_CACHE; __try_to_reclaim_swap(TTRS_UNMAPPED) that bai vi child dang map page
+      swap_map=[3f 40 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[]
+
+==============================================================================
+KICH BAN 3: 2 CPU, cache KHONG co nguong deactivate (gia dinh) -> slot bi 'giam' trong cache
+==============================================================================
+[ 1] CPU0 can 1 slot: refill 4 slot, dung 1
+      swap_map=[3f 40 40 40 40 00 00 00]  nr_swap_pages=3 inuse=4
+      cpu0: slots=[2, 3, 4] ret=[] | cpu1: slots=[] ret=[]
+[ 2] CPU1 can 1 slot: refill chi con 3 slot, dung 5
+      swap_map=[3f 40 40 40 40 40 40 40]  nr_swap_pages=0 inuse=7
+      cpu0: slots=[2, 3, 4] ret=[] | cpu1: slots=[6, 7] ret=[]
+[ 3] CPU1 can them 3 slot: nhan 6, 7, 0 (0 = that bai)
+      swap_map=[3f 40 40 40 40 40 40 40]  nr_swap_pages=0 inuse=7
+      cpu0: slots=[2, 3, 4] ret=[] | cpu1: slots=[] ret=[]
+      -> CPU1 that bai trong khi CPU0 con 3 slot chua dung trong cache:
+         day la ly do check_cache_active() deactivate + drain khi swap con it.
+
+==============================================================================
+KICH BAN 4: co nguong (2 CPU, size=4 -> deactivate < 16, reactivate > 40), 48 slot
+==============================================================================
+  lan  1 CPU0: truoc nr_swap_pages=47 cpu0=[] cpu1=[]
+          -> slot  1, sau nr_swap_pages=43 active=True cpu0=[2, 3, 4] cpu1=[]
+  lan  2 CPU1: truoc nr_swap_pages=43 cpu0=[2, 3, 4] cpu1=[]
+          -> slot  5, sau nr_swap_pages=39 active=True cpu0=[2, 3, 4] cpu1=[6, 7, 8]
+  lan 27 CPU0: truoc nr_swap_pages=15 cpu0=[26, 27, 28] cpu1=[30, 31, 32]
+          -> slot 33, sau nr_swap_pages=20 active=False cpu0=[] cpu1=[]  <-- check_cache_active(): deactivate + drain
+  lan 36 CPU1: truoc nr_swap_pages=12 cpu0=[] cpu1=[]
+          -> slot 42, sau nr_swap_pages=11 active=False cpu0=[] cpu1=[]
+  -> khi nr_swap_pages < 16: deactivate, drain slot thua ve pool, cap phat truc tiep tu global pool
+
+==============================================================================
+KICH BAN 5: vi sao phai khoa khi sua swap_map (xen ke do choi, KHONG co lock)
+==============================================================================
+  ban dau swap_map=[3f 40 40 00 00]
+  CPU0: doc swap_map[3]==0 -> True
+  CPU1: doc swap_map[3]==0 -> True
+  CPU0: ghi swap_map[3]=0x40, giao slot 3 cho page P
+  CPU1: ghi swap_map[3]=0x40, giao slot 3 cho page Q
+  -> P va Q cung ghi vao cung 1 vi tri tren dia: du lieu mot trong hai bi mat.
+  Source tranh dieu nay: kiem tra + ghi swap_map nam trong si->lock (va ci->lock voi SSD),
+  xem scan_swap_map_slots(): lock_cluster() ... if (si->swap_map[offset]) ... WRITE_ONCE(...)

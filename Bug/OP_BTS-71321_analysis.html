@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phân tích OP_BTS-71321</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: một cột đọc 760px, bảng/log được phép tràn ngang trong khung riêng; dải trục thời gian vẽ theo tỉ lệ giây */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #17202b;
+  --muted: #5b6676;
+  --line: #d9dee6;
+  --accent: #1f5f8b;
+  --root: #c2410c;      /* nguyên nhân gốc */
+  --root-soft: #fdeee4;
+  --hang: #9a6a00;      /* Power treo */
+  --hang-soft: #fbf3dc;
+  --conseq: #6b7686;    /* hệ quả */
+  --code-bg: #eef1f5;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --step--1: 0.86rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+    --accent: #6fb0e0; --root: #f08a4b; --root-soft: #3a2418; --hang: #e0b44a; --hang-soft: #33291a;
+    --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+  --accent: #6fb0e0; --root: #f08a4b; --root-soft: #3a2418; --hang: #e0b44a; --hang-soft: #33291a;
+  --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-2); font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: var(--step-1); font-weight: 600; margin-top: 8px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: var(--step--1); }
+.meta span b { color: var(--ink); font-weight: 600; }
+
+.verdict {
+  background: var(--root-soft); border: 1px solid color-mix(in srgb, var(--root) 35%, transparent);
+  border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+}
+.verdict .label { color: var(--root); font-weight: 700; font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; }
+.verdict p { font-size: 1.05rem; }
+
+.owners { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.owner { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.owner .tag { align-self: flex-start; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.root { background: var(--root-soft); color: var(--root); }
+.tag.hang { background: var(--hang-soft); color: var(--hang); }
+.tag.conseq { background: var(--code-bg); color: var(--conseq); }
+.owner h3 { margin: 0; font-size: 1.05rem; }
+.owner p { color: var(--muted); font-size: var(--step--1); }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .mono { white-space: nowrap; }
+tr.row-root td:first-child { box-shadow: inset 3px 0 0 var(--root); }
+tr.row-hang td:first-child { box-shadow: inset 3px 0 0 var(--hang); }
+tr.row-conseq td:first-child { box-shadow: inset 3px 0 0 var(--line); }
+
+pre {
+  margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.55; color: var(--ink);
+}
+pre .ln { color: var(--muted); user-select: none; }
+pre .hl { color: var(--root); font-weight: 600; }
+pre .hh { color: var(--hang); font-weight: 600; }
+.cap { font-size: var(--step--1); color: var(--muted); }
+
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 10px 8px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.chart text { font-family: var(--font-body); fill: var(--ink); }
+.chart .axis text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--step--1); color: var(--muted); padding: 6px 6px 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.evidence { display: flex; flex-direction: column; gap: 12px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fact h3 { margin: 0; font-size: 1.05rem; }
+.decode { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--font-mono); font-size: 0.95rem; }
+.decode span { display: flex; flex-direction: column; align-items: center; padding: 6px 10px; border-radius: 6px; background: var(--code-bg); }
+.decode span small { font-family: var(--font-body); font-size: 0.7rem; color: var(--muted); }
+.decode span.key { background: var(--hang-soft); color: var(--hang); font-weight: 600; }
+
+.checklist li::marker { color: var(--accent); }
+footer { color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 480px) { h1 { font-size: 1.65rem; } }
+</style>
+</head>
+<body>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <div class="eyebrow">Phân tích nguyên nhân · IT6_3.0 · F00-W4</div>
+    <h1>OP_BTS-71321: reboot trong lúc chạy thử chuyển Sleep</h1>
+    <div class="meta">
+      <span>Mã ghi nhận: <b class="mono">1D050F0000020008 → 2202400000000000 → 24006B40C5000A01 → 2201410000004000</b></span>
+      <span>Thời điểm: <b>20/10/2026 08:33–08:42</b></span>
+      <span>Log: <b class="mono">20261019_OP_BTS-71321.log</b></span>
+      <span>Phân tích: <b>28/10/2026</b></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="verdict">
+      <div class="label">Kết luận</div>
+      <p>Nguyên nhân gốc nhiều khả năng là <b>driver mạng <code>mvri</code> (BSP)</b>. Từ <b>08:33:37.69</b>, thread ngắt <code>irq/79-mvri-irq</code> (RT FIFO) kẹt trong <code>mvri_poll</code> và chiếm CPU1 liên tục. Các thread của <b>lui000</b> (process chứa LocalUI, Browser và <code>pdpi</code>) đang nằm trên CPU1 nên không được chạy nữa. Power gửi yêu cầu đồng bộ <code>req_changePowerMode</code> sang lui000 rồi chờ mãi.</p>
+      <p>NACK của Browser, mã <code>1D05…</code> và lần reboot do CPU Stall đều là hệ quả. Báo cáo triage coi NACK lúc 08:33:54 là điểm khởi đầu là chưa đúng: Power đã treo trước đó 11 giây, còn CPU1 đã kẹt trước đó 16 giây.</p>
+    </div>
+    <div class="owners">
+      <div class="owner"><span class="tag root">Nguyên nhân gốc</span><h3>BSP – driver mạng mvri</h3><p><code>mvri_poll+0x4d8</code> không thoát, chiếm CPU1 suốt 120 giây.</p></div>
+      <div class="owner"><span class="tag hang">Điểm treo</span><h3>Power ↔ lui000 (pdpi)</h3><p>Power chờ đồng bộ không có timeout tại device index 8.</p></div>
+      <div class="owner"><span class="tag conseq">Hệ quả</span><h3>Browser NACK, CPU Stall</h3><p>Timer gửi NACK muộn. Reboot do RCU stall của cùng lỗi trên CPU1.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trục thời gian theo tỉ lệ</h2>
+    <p>Mốc 0 là 08:33:30, đơn vị giây. Thời gian kernel được quy đổi theo cặp mốc <code>662803.508583 ↔ 08:33:54.099</code> (log dòng 329434).</p>
+    <div class="chart" role="img" aria-label="Trục thời gian: CPU1 kẹt từ giây 7.7, Power treo từ giây 12.7, NACK ở giây 24.1, watchdog Power ở giây 72.8, báo RCU stall ở giây 127.6, ghi CPU Stall ở giây 135.4">
+      <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg">
+        <!-- scale: x = 40 + t * 4.2  (t: 0..150 s -> 40..670) -->
+        <g class="axis">
+          <line class="grid" x1="40" y1="200" x2="670" y2="200"/>
+          <line class="grid" x1="40" y1="30" x2="40" y2="200"/>
+          <line class="grid" x1="166" y1="30" x2="166" y2="200" stroke-dasharray="2 4"/>
+          <line class="grid" x1="292" y1="30" x2="292" y2="200" stroke-dasharray="2 4"/>
+          <line class="grid" x1="418" y1="30" x2="418" y2="200" stroke-dasharray="2 4"/>
+          <line class="grid" x1="544" y1="30" x2="544" y2="200" stroke-dasharray="2 4"/>
+          <line class="grid" x1="670" y1="30" x2="670" y2="200" stroke-dasharray="2 4"/>
+          <text x="40" y="218" text-anchor="middle">0</text>
+          <text x="166" y="218" text-anchor="middle">30</text>
+          <text x="292" y="218" text-anchor="middle">60</text>
+          <text x="418" y="218" text-anchor="middle">90</text>
+          <text x="544" y="218" text-anchor="middle">120</text>
+          <text x="670" y="218" text-anchor="middle">150 s</text>
+          <text x="40" y="236" text-anchor="start">08:33:30</text>
+          <text x="670" y="236" text-anchor="end">08:36:00</text>
+        </g>
+        <!-- CPU1 stall bar: t=7.69 -> x=72.3 -->
+        <rect x="72.3" y="44" width="597.7" height="22" rx="3" fill="var(--root)" opacity="0.85"/>
+        <text x="78" y="59" font-size="12" font-weight="600" fill="var(--surface)" style="fill:var(--surface)">CPU1: irq/79-mvri-irq chạy liên tục (RCU stall)</text>
+        <!-- Power hang bar: t=12.75 -> x=93.6 -->
+        <rect x="93.6" y="80" width="576.4" height="22" rx="3" fill="var(--hang)" opacity="0.85"/>
+        <text x="99" y="95" font-size="12" font-weight="600" style="fill:var(--surface)">Power task chờ req_changePowerMode (device 8 · pdpi)</text>
+        <!-- watchdog 60 s bracket: 12.75 -> 72.84 (x 93.6 -> 345.9) -->
+        <line x1="93.6" y1="118" x2="345.9" y2="118" stroke="var(--muted)" stroke-width="1.2"/>
+        <line x1="93.6" y1="113" x2="93.6" y2="123" stroke="var(--muted)" stroke-width="1.2"/>
+        <line x1="345.9" y1="113" x2="345.9" y2="123" stroke="var(--muted)" stroke-width="1.2"/>
+        <text x="219.7" y="133" text-anchor="middle" font-size="11" style="fill:var(--muted)">60 s watchdog Power</text>
+        <!-- RCU 120 s bracket: 7.69 -> 127.62 (x 72.3 -> 576.0) -->
+        <line x1="72.3" y1="22" x2="576" y2="22" stroke="var(--root)" stroke-width="1.2"/>
+        <line x1="72.3" y1="17" x2="72.3" y2="27" stroke="var(--root)" stroke-width="1.2"/>
+        <line x1="576" y1="17" x2="576" y2="27" stroke="var(--root)" stroke-width="1.2"/>
+        <text x="324" y="15" text-anchor="middle" font-size="11" style="fill:var(--root)">120 s = 24004 jiffies @ HZ=200</text>
+        <!-- point events -->
+        <g font-size="11">
+          <circle cx="72.3" cy="160" r="4.5" fill="var(--root)"/>
+          <text x="72.3" y="178" text-anchor="middle" style="fill:var(--root)">37.69</text>
+          <circle cx="93.6" cy="160" r="4.5" fill="var(--hang)"/>
+          <text x="98" y="150" text-anchor="start" style="fill:var(--hang)">42.75 ACK → treo</text>
+          <circle cx="141.2" cy="160" r="4.5" fill="var(--conseq)"/>
+          <text x="141.2" y="178" text-anchor="middle" style="fill:var(--conseq)">54.10 NACK</text>
+          <circle cx="345.9" cy="160" r="4.5" fill="var(--conseq)"/>
+          <text x="345.9" y="178" text-anchor="middle" style="fill:var(--conseq)">34:42.8 · 1D05…</text>
+          <circle cx="576" cy="160" r="4.5" fill="var(--root)"/>
+          <text x="568" y="150" text-anchor="end" style="fill:var(--root)">35:37.6 RCU stall</text>
+          <circle cx="608.8" cy="160" r="4.5" fill="var(--conseq)"/>
+          <text x="612" y="178" text-anchor="middle" style="fill:var(--conseq)">35:45 · 2202…</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--root)"></i>Nguyên nhân gốc</span>
+        <span><i style="background:var(--hang)"></i>Điểm treo</span>
+        <span><i style="background:var(--conseq)"></i>Hệ quả</span>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="num">Thời điểm</th><th>Sự kiện</th><th class="num">Log</th></tr></thead>
+        <tbody>
+          <tr class="row-conseq"><td class="num">08:33:34.874</td><td>Power bắt đầu chuyển Now[2] → Next[15], gửi <code>req_preparePowerMode</code> tới 15 device.</td><td class="num">329337</td></tr>
+          <tr class="row-conseq"><td class="num">08:33:35.077</td><td>Browser vào trạng thái <code>StateWaitSleepFinalizeNotice</code>.</td><td class="num">≈329357</td></tr>
+          <tr class="row-root"><td class="num">08:33:37.69</td><td><b>Core1 chuyển sang <code>irq/79-mvri-irq</code> lần cuối và không bao giờ chuyển ra.</b></td><td class="num">329805–330006</td></tr>
+          <tr class="row-hang"><td class="num">08:33:42.746</td><td>Browser nhận <code>BrowserFinalizeNotice</code> và gửi ACK (ACK thứ 15). Power broadcast <code>changePowerMode</code>, nhận 8 ACK, rồi <b>treo ở device index 8 (pdpi)</b>.</td><td class="num">329431</td></tr>
+          <tr class="row-conseq"><td class="num">08:33:54.099</td><td>Timer của Browser chạy trên thread <code>BRW_WdSigHdr</code>. Trạng thái chưa được cập nhật nên timer gửi NACK muộn.</td><td class="num">329433–329441</td></tr>
+          <tr class="row-conseq"><td class="num">08:34:42.842</td><td>Watchdog Power (60 s sau 08:33:42.7) ghi <code>1D050F0000020008</code>, chạy gdb và ps.</td><td class="num">329448</td></tr>
+          <tr class="row-root"><td class="num">08:35:37.615</td><td>RCU stall trên CPU1: <code>irq/79-mvri-irq</code>, stack <code>mvri_poll+0x4d8 ← net_rx_action</code>.</td><td class="num">329572–329602</td></tr>
+          <tr class="row-conseq"><td class="num">08:35:45.436</td><td>Phát hiện CPU Stall, WDT CA72 reboot, ghi <code>2202400000000000</code>.</td><td class="num">330439</td></tr>
+          <tr class="row-conseq"><td class="num">08:38:40 – 08:42:25</td><td>Ghi <code>24006B40C5000A01</code> khi tắt máy, U-Boot khởi động lại, ghi <code>2201410000004000</code>.</td><td class="num">332300–333897</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bằng chứng</h2>
+    <div class="evidence">
+
+      <div class="fact">
+        <h3>1. Power treo lúc 08:33:42.7, trước khi có NACK</h3>
+        <p>Sequence log của Power được in ra lúc 08:35:54 (log dòng 330463). Mình giải mã theo bảng ID trong <code>pwrg/PWRC_PowerInfoManager.h:822-828</code>:</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th class="num">Tick</th><th class="num">ID</th><th>Ý nghĩa</th></tr></thead>
+            <tbody>
+              <tr><td class="num">132496857</td><td class="num">361</td><td>Gửi <code>req_preparePowerMode</code> tới các device</td></tr>
+              <tr><td class="num">132496857–862</td><td class="num">363 ×14</td><td>Nhận ACK prepare từ 14 device</td></tr>
+              <tr class="row-hang"><td class="num">132498430</td><td class="num">363</td><td>ACK thứ 15, của Browser. Cùng tick với <code>BT receive msg BrowserFinalizeNotice</code></td></tr>
+              <tr class="row-hang"><td class="num">132498430</td><td class="num">365</td><td>Gửi <code>req_changePowerMode</code> tới các device</td></tr>
+              <tr class="row-hang"><td class="num">132498430</td><td class="num">367 ×8</td><td>Nhận ACK change từ device 0–7, sau đó không có thêm ACK nào</td></tr>
+              <tr><td class="num">132500702</td><td class="num">364</td><td>NACK đến lúc Power đã sang pha change, nên đến muộn và không còn tác dụng</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Watchdog Power ngắt sau 60 giây: 08:33:42.7 + 60 s = 08:34:42.8, khớp với lúc ghi <code>1D05…</code>. Nếu Power treo từ lúc NACK thì mã phải được ghi vào khoảng 08:34:54.</p>
+      </div>
+
+      <div class="fact">
+        <h3>2. Mã 1D050F0000020008 chỉ đích danh device đang được chờ</h3>
+        <p>Giải mã theo <code>createPowerTaskNewDetailCode()</code> (<code>PWRC_PowerSequence.cpp:2377</code>). Vòng lặp gửi request nằm ở <code>PWRC_PowerSequence.cpp:2629-2646</code>.</p>
+        <div class="decode" aria-label="Giải mã mã chi tiết">
+          <span>1D<small>module Power</small></span>
+          <span>05<small>loại mã</small></span>
+          <span>0F<small>trạng thái 15 · Sleep</small></span>
+          <span>00<small>—</small></span>
+          <span class="key">0002<small>req_changePowerMode</small></span>
+          <span class="key">0008<small>device index 8</small></span>
+        </div>
+        <pre><span class="ln">330733</span> Power attachDevice ModuleInfo start.
+<span class="ln">     </span> [07] (0x11e74a18  ) [ENGC_Scanner.cpp] 61
+<span class="ln">     </span> <span class="hh">[08] (0x7f704d5a00) [pdpi.cpp        ] 773</span>     ← địa chỉ 0x7f70…, thuộc process 1149 (lui000)
+<span class="ln">     </span> [09] (0x7f704e7430) [BRWC_Browser.cpp] 1323</pre>
+        <p>Stack của task Power cũng khớp: <code>taskPowerMan → _changePowerMode → Stub_PowerManagementDevice::req_changePowerMode → … → ThreadConditionWait::wait()</code> (log dòng 329478–329490). Hàm wait này không có timeout.</p>
+      </div>
+
+      <div class="fact">
+        <h3>3. CPU1 bị chiếm từ 08:33:37.69</h3>
+        <pre><span class="ln">329804</span> [662908.779517] ----Core1----
+<span class="ln">     </span> 00197, 132497403, 662787.096096, ksoftirq[15], …
+<span class="ln">     </span> 00198, 132497403, 662787.096260, chrome[1287], …
+<span class="ln">     </span> <span class="hl">00199, 132497403, 662787.096676, irq/79-m[141], 0.000000, 255, &lt;2&gt;</span>   ← lần chuyển cuối cùng
+<span class="ln">329572</span> [662907.101073] rcu: INFO: rcu_preempt self-detected stall on CPU
+<span class="ln">329574</span> [662907.117158]  <span class="hl">(t=24004 jiffies</span> g=167509961 q=924923)
+<span class="ln">329594</span> [662907.203653]  <span class="hl">mvri_poll+0x4d8/0x840</span>
+<span class="ln">     </span>                   net_rx_action ← __do_softirq ← irq_forced_thread_fn</pre>
+        <ul>
+          <li>Kernel cấu hình <code>CONFIG_HZ=200</code> và <code>CONFIG_RCU_CPU_STALL_TIMEOUT=120</code> (theo defconfig trong <code>Kernel/</code>). <code>24004 / 200 = 120.02 s</code>, nên stall bắt đầu ở khoảng 662787.08. Mốc này khớp với lần chuyển cuối cùng của Core1.</li>
+          <li>Stall bắt đầu trước khi gdb chạy (08:34:42), nên giả thuyết "do tải thu thập chẩn đoán" không đúng.</li>
+        </ul>
+      </div>
+
+      <div class="fact">
+        <h3>4. Các thread của lui000 runnable nhưng không được chạy</h3>
+        <p>Theo <code>ps</code> lúc 08:36, các thread dưới đây ở trạng thái <b>R</b> nhưng không xuất hiện trong lịch sử lập lịch của Core0/2/3. Trước stall, chúng chạy đều đặn trên Core1.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th class="num">Log</th><th class="num">PID</th><th class="num">TID</th><th>Thread</th><th>Ghi chú</th></tr></thead>
+            <tbody>
+              <tr><td class="num">331797</td><td class="num">1149</td><td class="num">1149</td><td class="mono">lui000</td><td>main thread của LocalUI/Browser</td></tr>
+              <tr><td class="num">331799</td><td class="num">1149</td><td class="num">1154</td><td class="mono">ProxyRxCtrlTh</td><td>nhận request BlackAPI</td></tr>
+              <tr><td class="num">331803</td><td class="num">1149</td><td class="num">1178</td><td class="mono">WdSigHandler-34</td><td>chạy 17 lần / 90 ms trên Core1 trước stall</td></tr>
+              <tr><td class="num">331825</td><td class="num">1149</td><td class="num">1741</td><td class="mono">tBAPIWatch</td><td></td></tr>
+              <tr><td class="num">331834–331851</td><td class="num">1159</td><td class="num">—</td><td class="mono">SlideMenu, WdSigHandler</td><td>process con của lui000</td></tr>
+              <tr class="row-root"><td class="num">332290</td><td class="num">31200</td><td class="num">31200</td><td class="mono">kworker/1:1</td><td>worker gắn cứng vào CPU1</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Đây cũng là lý do Browser không chuyển sang <code>StateSleep</code>. Ở chu kỳ bình thường 08:26:12.266 (log dòng 327199), Browser chuyển trạng thái ngay trong cùng ms nhận FinalizeNotice. Sau 08:33:42.746 thì lui000 không ghi thêm dòng log nào. Riêng thread <code>BRW_WdSigHdr</code> (1737) vẫn chạy trên CPU khác nên timer vẫn hết hạn và gửi NACK. Sau đó thread này cũng bị chặn (<code>futex_wait</code>, log dòng 331823).</p>
+      </div>
+
+      <div class="fact">
+        <h3>5. Các yếu tố đã loại trừ</h3>
+        <ul>
+          <li><b>WebUI gửi AutoReset/GotoHome trong lúc chờ Sleep:</b> xuất hiện ở 60 chu kỳ khác và các chu kỳ đó đều vào Sleep bình thường. Đây không phải trigger.</li>
+          <li><b>Dòng "No empty component found" của BlackAPI:</b> lặp lại hàng nghìn lần trong suốt log. Đây chỉ là bảng log component bị đầy, vô hại.</li>
+          <li><b>24006B40C5000A01 và 2201410000004000:</b> xảy ra sau thời điểm reboot nên chỉ là hệ quả.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Chưa xác nhận được</h2>
+    <ul>
+      <li><b>Lý do <code>mvri_poll</code> quay mãi.</b> Hàm này ở <code>Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c:1502</code>. Vì có inline, <code>+0x4d8</code> có thể nằm trong <code>mvri_statusle_handle</code> hoặc trong <code>spin_lock(&amp;pAC-&gt;SlowPathLock)</code>. Cần vmlinux của đúng bản build để decode.</li>
+      <li><b>Affinity của lui000.</b> Việc lui000 bị kẹt trên CPU1 được suy ra từ trạng thái R và việc nó không xuất hiện trên core khác. Trong log không có <code>taskset</code> nào cho lui000.</li>
+      <li><b>Thread nào trong lui000 xử lý <code>req_changePowerMode</code> của pdpi.</b> Source Browser, <code>pdpi</code> và BlackAPI không có trong repo nên chưa kiểm tra được.</li>
+      <li><b>Kích hoạt từ phía mạng.</b> Chưa biết có bão gói tin, hay tranh chấp quyền sở hữu Ethernet HW với LPPP quanh lúc chuyển Sleep hay không.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Đề xuất</h2>
+    <h3>BSP – driver mạng mvri (phụ trách chính)</h3>
+    <ul class="checklist">
+      <li>Decode <code>mvri_poll+0x4d8</code> bằng <code>addr2line</code> hoặc <code>decode_stacktrace.sh</code> với vmlinux của bản F00-W4.</li>
+      <li>Rà vòng lặp xử lý status LE, các chỗ giữ <code>SlowPathLock</code>, và điều kiện <code>WorkDone &lt; WorkToDo</code> để <code>napi_complete</code> được gọi.</li>
+      <li>Kiểm tra counter <code>eth0</code> (rx/overflow) và trạng thái chuyển quyền HW với LPPP tại thời điểm lỗi.</li>
+    </ul>
+    <h3>Cấu hình hệ thống</h3>
+    <ul class="checklist">
+      <li>Xác nhận affinity của lui000 (<code>taskset -p 1149</code>) và IRQ 79 (<code>/proc/irq/79/smp_affinity</code>). Nếu chúng nằm trên cùng một core thì nên tách ra.</li>
+    </ul>
+    <h3>Phòng thủ (không phải nguyên nhân gốc)</h3>
+    <ul class="checklist">
+      <li>Power / BlackAPI: thêm timeout cho <code>DIVC_SynchronizedMediator::sendSynchronizedRequest</code> khi Power gửi request tới device.</li>
+      <li>Browser: <code>BRWC_StateWaitSleepFinalizeNotice::timer()</code> không nên gửi NACK sau khi đã gửi ACK.</li>
+      <li>Power: <code>ans_preparePowerMode</code> đang ghi đè ACK thành NACK dù đã qua pha prepare. Nên bỏ qua các phản hồi đến muộn.</li>
+    </ul>
+    <h3>Tái hiện</h3>
+    <ul class="checklist">
+      <li>Chạy lại với cùng cài đặt tiết kiệm điện và chu kỳ chạy thử. Khi lỗi xảy ra, lấy thêm <code>/proc/interrupts</code>, <code>/proc/softirqs</code> và thống kê <code>eth0</code>.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Nguồn: <span class="mono">20261019_OP_BTS-71321.log</span> (số dòng là dòng thực tế trong file), source IT6_Controller (pwrg) và Kernel/Src trong repo Source_MFP. Bản phân tích này đối chiếu và hiệu chỉnh báo cáo triage tự động <span class="mono">triage_report.OP_BTS-71321</span>.
+  </footer>
+</main>
+</body>
+</html>

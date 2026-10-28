@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phân tích OP_BTS-71095</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: một cột đọc 760px; trục thời gian 4 làn (thức dậy / attach / lỗi xHCI / khôi phục) vẽ theo tỉ lệ giây; bảng và log tràn ngang trong khung riêng */
+:root {
+  --bg: #f5f7f8;
+  --surface: #ffffff;
+  --ink: #16212a;
+  --muted: #5a6875;
+  --line: #d7dee4;
+  --accent: #19658a;
+  --root: #b42318;      /* nguyên nhân gốc: host xHCI */
+  --root-soft: #fdecea;
+  --defect: #9a5b00;    /* lỗi làm khôi phục thất bại */
+  --defect-soft: #fbf1df;
+  --conseq: #687684;    /* hệ quả */
+  --ok: #2f7d4f;
+  --code-bg: #edf1f4;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --step--1: 0.86rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161b; --surface: #172028; --ink: #e3e9ee; --muted: #98a6b2; --line: #2b3843;
+    --accent: #68b3d8; --root: #f2766b; --root-soft: #3a1d1a; --defect: #e7b04f; --defect-soft: #33281a;
+    --conseq: #8e9cab; --ok: #6cc596; --code-bg: #1e2932; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161b; --surface: #172028; --ink: #e3e9ee; --muted: #98a6b2; --line: #2b3843;
+  --accent: #68b3d8; --root: #f2766b; --root-soft: #3a1d1a; --defect: #e7b04f; --defect-soft: #33281a;
+  --conseq: #8e9cab; --ok: #6cc596; --code-bg: #1e2932; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-2); font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: var(--step-1); font-weight: 600; margin-top: 8px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: var(--step--1); }
+.meta b { color: var(--ink); font-weight: 600; }
+
+.verdict {
+  background: var(--root-soft); border: 1px solid color-mix(in srgb, var(--root) 35%, transparent);
+  border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+}
+.verdict .label { color: var(--root); font-weight: 700; font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; }
+.verdict p { font-size: 1.05rem; }
+
+.owners { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.owner { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.owner .tag { align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.root { background: var(--root-soft); color: var(--root); }
+.tag.defect { background: var(--defect-soft); color: var(--defect); }
+.tag.conseq { background: var(--code-bg); color: var(--conseq); }
+.owner h3 { margin: 0; font-size: 1rem; }
+.owner p { color: var(--muted); font-size: var(--step--1); }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.row-root td:first-child { box-shadow: inset 3px 0 0 var(--root); }
+tr.row-defect td:first-child { box-shadow: inset 3px 0 0 var(--defect); }
+tr.row-conseq td:first-child { box-shadow: inset 3px 0 0 var(--line); }
+
+pre {
+  margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.55; color: var(--ink);
+}
+pre .ln { color: var(--muted); user-select: none; }
+pre .hl { color: var(--root); font-weight: 600; }
+pre .hd { color: var(--defect); font-weight: 600; }
+pre .cm { color: var(--muted); }
+
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 10px 8px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.chart text { font-family: var(--font-body); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--step--1); color: var(--muted); padding: 6px 6px 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.evidence { display: flex; flex-direction: column; gap: 12px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fact h3 { margin: 0; font-size: 1.05rem; }
+
+.ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.step { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); min-width: 0; }
+.step .t { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.step b { font-size: 0.98rem; }
+.step .r { font-size: var(--step--1); }
+.step.bad { border-color: color-mix(in srgb, var(--defect) 55%, transparent); background: var(--defect-soft); }
+.step.end { border-color: color-mix(in srgb, var(--root) 55%, transparent); background: var(--root-soft); }
+
+.checklist li::marker { color: var(--accent); }
+footer { color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 480px) { h1 { font-size: 1.65rem; } }
+</style>
+</head>
+<body>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <div class="eyebrow">Phân tích nguyên nhân · IT6_3.0.0 · F00-W3</div>
+    <h1>OP_BTS-71095: C-B197 khi chạy liên tục, không nhận được FAX</h1>
+    <div class="meta">
+      <span>Mã: <b class="mono">C-B197 · NewDC 026146000000FBA3</b></span>
+      <span>Thời điểm: <b>08/10/2026 07:05:51 – 07:07:37</b></span>
+      <span>Log: <b class="mono">mfp_110_COM5_20261002-131844.log</b></span>
+      <span>Phân tích: <b>28/10/2026</b></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="verdict">
+      <div class="label">Kết luận</div>
+      <p>Báo cáo triage xếp FaxP đứng đầu, nhưng FaxP chỉ là nơi ghi ra B197. Nguyên nhân gốc nhiều khả năng nằm ở <b>USB host xHCI <code>8d00d0000.usb3</code> (BSP)</b>. Khoảng 3 giây sau khi máy thoát SLEEP1, xHCI không khớp được event "truyền thành công" với TD đang chờ trên endpoint bulk OUT của bo FAX. Driver bỏ event đi, nên lệnh ghi không bao giờ hoàn tất. Lỗi lặp lại cả sau khi bo FAX đã tắt/bật nguồn và enumerate lại, tức là trạng thái hỏng nằm ở phía host.</p>
+      <p>Có thêm hai lỗi phía BSP khiến việc khôi phục không thể thành công: bước BusReset gọi vào cổng sai nên không làm gì, và <code>usbfax_write</code> không hủy URB khi hết thời gian chờ. FaxP dùng hết ba bước khôi phục, mỗi bước một lần, rồi ghi B197.</p>
+    </div>
+    <div class="owners">
+      <div class="owner"><span class="tag root">Nguyên nhân gốc</span><h3>BSP – USB host xHCI</h3><p>Lỗi "TRB DMA ptr not part of current TD" sau SLEEP1, lặp lại 3 lần.</p></div>
+      <div class="owner"><span class="tag defect">Lỗi khôi phục</span><h3>BSP – THRC_BSPif</h3><p>BusReset hard-code <code>3-1.1.x</code>, bo FAX ở <code>3-1.2</code>.</p></div>
+      <div class="owner"><span class="tag defect">Lỗi khôi phục</span><h3>Driver usbfax</h3><p>Không hủy <code>txurb</code> khi hết 3 s chờ ghi.</p></div>
+      <div class="owner"><span class="tag conseq">Hệ quả</span><h3>FaxP – B197</h3><p>Dùng hết 3 bước khôi phục khi bo chưa khởi tạo xong.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trục thời gian theo tỉ lệ</h2>
+    <p>Mốc 0 là 07:05:50, đơn vị giây. Khoảng trống từ giây 13 đến giây 100 là thời gian không có lệnh ghi nào, nhưng <code>txurb</code> vẫn đang treo trong xHCI.</p>
+    <div class="chart" role="img" aria-label="Trục thời gian: thức dậy ở giây 1.3; lỗi xHCI ở giây 4.4, 9.8 và 104.1; PortReset ở giây 7.7, BusReset không hiệu lực ở giây 12.8, URB submitted while active ở giây 100, FaxOffOn ở giây 101.1, B197 ở giây 107.5">
+      <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg">
+        <!-- scale: x = 130 + t * 5   (t: 0..110 s -> 130..680) -->
+        <g fill="var(--muted)" font-size="11.5">
+          <text x="10" y="54">Ngủ / thức</text>
+          <text x="10" y="94">faxAttach</text>
+          <text x="10" y="134">Lỗi xHCI</text>
+          <text x="10" y="174">Khôi phục</text>
+          <text x="10" y="214">txurb treo</text>
+        </g>
+        <g stroke="var(--line)" stroke-width="1">
+          <line x1="130" y1="30" x2="130" y2="230"/>
+          <line x1="230" y1="30" x2="230" y2="230" stroke-dasharray="2 4"/>
+          <line x1="330" y1="30" x2="330" y2="230" stroke-dasharray="2 4"/>
+          <line x1="430" y1="30" x2="430" y2="230" stroke-dasharray="2 4"/>
+          <line x1="530" y1="30" x2="530" y2="230" stroke-dasharray="2 4"/>
+          <line x1="630" y1="30" x2="630" y2="230" stroke-dasharray="2 4"/>
+          <line x1="130" y1="230" x2="690" y2="230"/>
+        </g>
+        <g fill="var(--muted)" font-size="11" text-anchor="middle" style="font-variant-numeric:tabular-nums">
+          <text x="130" y="248">0</text><text x="230" y="248">20</text><text x="330" y="248">40</text>
+          <text x="430" y="248">60</text><text x="530" y="248">80</text><text x="630" y="248">100 s</text>
+          <text x="130" y="264">07:05:50</text><text x="630" y="264">07:07:30</text>
+        </g>
+        <!-- sleep / wake -->
+        <rect x="130" y="42" width="6.5" height="16" rx="2" fill="var(--conseq)" opacity="0.5"/>
+        <circle cx="136.5" cy="50" r="4.5" fill="var(--ok)"/>
+        <text x="144" y="54" font-size="11" fill="var(--ok)">thoát SLEEP1 (07:05:51.3)</text>
+        <!-- attach -->
+        <g fill="var(--accent)">
+          <circle cx="147" cy="90" r="4"/><circle cx="174.3" cy="90" r="4"/><circle cx="645.7" cy="90" r="4"/>
+        </g>
+        <!-- xHCI errors -->
+        <g fill="var(--root)">
+          <path d="M152.2 124 l6 10 h-12 z"/><path d="M178.9 124 l6 10 h-12 z"/><path d="M650.5 124 l6 10 h-12 z"/>
+        </g>
+        <g fill="var(--root)" font-size="10.5" text-anchor="middle">
+          <text x="152.2" y="118">#1</text><text x="178.9" y="118">#2</text><text x="650.5" y="118">#3</text>
+        </g>
+        <!-- recovery steps -->
+        <rect x="164.3" y="164" width="8" height="12" rx="2" fill="var(--conseq)"/>
+        <rect x="190.2" y="164" width="8" height="12" rx="2" fill="none" stroke="var(--defect)" stroke-width="1.6"/>
+        <rect x="631.4" y="164" width="8" height="12" rx="2" fill="var(--conseq)"/>
+        <circle cx="667.7" cy="170" r="6" fill="var(--root)"/>
+        <g font-size="10.5">
+          <text x="168.3" y="158" text-anchor="end" fill="var(--conseq)">PortReset</text>
+          <text x="202" y="190" fill="var(--defect)">BusReset → No such device</text>
+          <text x="626" y="158" text-anchor="end" fill="var(--conseq)">FaxOffOn</text>
+          <text x="676" y="190" text-anchor="end" fill="var(--root)" font-weight="600">B197</text>
+        </g>
+        <!-- stuck urb -->
+        <rect x="178.9" y="204" width="456.5" height="14" rx="3" fill="var(--defect)" opacity="0.8"/>
+        <text x="186" y="215" font-size="10.5" fill="var(--surface)">URB ghi từ 07:05:59 không bị hủy → 07:07:29.993 "URB submitted while active"</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--root)"></i>Lỗi xHCI / B197</span>
+        <span><i style="background:var(--defect)"></i>Lỗi làm khôi phục thất bại</span>
+        <span><i style="background:var(--accent)"></i>faxAttach</span>
+        <span><i style="background:var(--conseq)"></i>Bước khôi phục có thực thi</span>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="num">Thời điểm</th><th>Sự kiện</th><th class="num">Dòng log</th></tr></thead>
+        <tbody>
+          <tr class="row-conseq"><td class="num">07:05:51.3</td><td>Thoát SLEEP1, kết thúc <code>leave_sleep</code>. FAX nhận lệnh khôi phục từ tiết kiệm điện.</td><td class="num">~1676975</td></tr>
+          <tr class="row-conseq"><td class="num">07:05:53.405</td><td><code>faxAttach</code></td><td class="num">1677001</td></tr>
+          <tr class="row-root"><td class="num">07:05:54.449</td><td><b>Lỗi xHCI #1</b>: <code>TRB DMA ptr not part of current TD ep_index 1 comp_code 1</code></td><td class="num">1677024</td></tr>
+          <tr class="row-conseq"><td class="num">07:05:57.650</td><td>Ghi thất bại sau 3.2 s → <b>PortReset</b> (<code>3-1.2</code>). Kèm theo <code>can't set config #1, error -71</code>.</td><td class="num">1677025–1677030</td></tr>
+          <tr class="row-root"><td class="num">07:05:59.781</td><td><b>Lỗi xHCI #2</b>. Ghi thất bại lúc 07:06:02.840.</td><td class="num">1677041–1677043</td></tr>
+          <tr class="row-defect"><td class="num">07:06:02.840</td><td><b>BusReset</b> gọi vào <code>3-1.1.1</code> và <code>3-1.1.2</code>, báo <code>sh: write error: No such device</code> hai lần. Không có detach hay attach nào.</td><td class="num">1677044–1677048</td></tr>
+          <tr class="row-defect"><td class="num">07:07:29.993</td><td>Lệnh ghi tiếp theo gặp <code>URB submitted while active</code> trong <code>usbfax_write</code>, retry 5 lần, trả EIO.</td><td class="num">1677055–1677098</td></tr>
+          <tr class="row-conseq"><td class="num">07:07:31 → 07:07:33.134</td><td><b>FaxOffOn</b>: tắt/bật nguồn bo, unbind/bind <code>3-1.2</code>, rồi <code>faxAttach</code>.</td><td class="num">1677100–1677116</td></tr>
+          <tr class="row-root"><td class="num">07:07:34.108</td><td><b>Lỗi xHCI #3</b>, ngay sau khi bo FAX đã tắt/bật nguồn và enumerate lại.</td><td class="num">1677117</td></tr>
+          <tr class="row-root"><td class="num">07:07:37.531</td><td>Ghi thất bại → <code>BusErr_exeRecovery over</code> → <b>B197</b>, NewDC <code>026146000000FBA3</code>.</td><td class="num">1677118–1677129</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bằng chứng</h2>
+    <div class="evidence">
+
+      <div class="fact">
+        <h3>1. xHCI bỏ event "truyền thành công", lệnh ghi không bao giờ hoàn tất</h3>
+        <pre><span class="ln">1677024</span> [151860.296100] xhci-hcd 8d00d0000.usb3: <span class="hl">ERROR Transfer event TRB DMA ptr not part of current TD ep_index 1 comp_code 1</span>
+<span class="ln">1677025</span> (30312704)&lt;FAXLOG&gt; 1 write error. 0x0 errno 2 cmdsts 0x0080      <span class="cm">← 3.2 s sau: usbfax_write hết thời gian chờ, trả 0</span></pre>
+        <ul>
+          <li><code>comp_code 1</code> là <code>COMP_SUCCESS</code>: phần cứng đã truyền xong. <code>ep_index 1</code> là endpoint bulk OUT, tức đường ghi.</li>
+          <li>Ở <code>Kernel/Src/drivers/usb/host/xhci-ring.c:2777-2790</code>, khi event không khớp TD đang chờ, driver in lỗi rồi <code>goto cleanup</code>. URB không được trả về nên <code>usbfax_write</code> đợi hết <code>USBFAX_STATUS_TIMEOUT</code> (3 s).</li>
+          <li>Cả 3 lần, khoảng cách từ lỗi xHCI đến <code>write error</code> đều khoảng 3.1–3.2 s.</li>
+          <li><b>Lỗi #3 xảy ra 1 giây sau một lần enumerate mới</b>, khi bo FAX vừa được tắt/bật nguồn. Điều này cho thấy trạng thái hỏng nằm ở phía host controller, không phải ở bo FAX.</li>
+        </ul>
+      </div>
+
+      <div class="fact">
+        <h3>2. Đây là kiểu lỗi đã biết trên đúng controller này, nhưng cơ chế cứu hộ hiện có không bao gồm bo FAX</h3>
+        <pre><span class="cm">// xhci-ring.c:2777  (OP_BTS-44703 / OP_BTS-46374)</span>
+if ( usb_resume_go == true ) {
+    if ( strcmp( p_name, "8d00d0000.usb3" ) == 0 ) usb_resume_usb3_err = true;
+}
+<span class="cm">/* HC is busted, give up! */</span>
+
+<span class="cm">// driver.c:1748  usb_resume_go chỉ bật cho:</span>
+if (( 4 == udev-&gt;bus-&gt;busnum ) &amp;&amp; ( 0 == strcmp(udev-&gt;devpath,"1.2" )))   <span class="cm">← bus 4, devpath 1.2</span></pre>
+        <p>Cơ chế cứu hộ (reboot với mã chi tiết <code>0x2202804130000000</code>) chỉ chạy khi lỗi xảy ra <b>trong lúc đang resume</b> thiết bị ở bus 4 / devpath 1.2. Bo FAX nằm ở bus 3 / <code>3-1.2</code>, và lỗi xảy ra sau khi resume đã xong, nên không được bảo vệ. Toàn bộ log không có lần nào ghi <code>22028041…</code>.</p>
+      </div>
+
+      <div class="fact">
+        <h3>3. BusReset gọi vào cổng sai, nên không làm gì</h3>
+        <pre><span class="cm">// thr_it6/thrcom/THRC_BSPif.cpp:6026  THRF_USBFaxBoardBusReset()  – nhánh #else (Eagle/Emu800)</span>
+system("echo -n <span class="hd">3-1.1.1</span> &gt; /sys/bus/usb/drivers/usb/unbind");
+system("echo -n <span class="hd">3-1.1.1</span> &gt; /sys/bus/usb/drivers/usb/bind");
+system("echo -n <span class="hd">3-1.1.2</span> &gt; /sys/bus/usb/drivers/usb/unbind");
+system("echo -n <span class="hd">3-1.1.2</span> &gt; /sys/bus/usb/drivers/usb/bind");
+
+<span class="ln">1677044</span> BusErr_exeRecovery BusReset … conv:[1] port:[<b>0x03120000</b>]   <span class="cm">← FaxP biết bo ở 3-1.2</span>
+<span class="ln">1677047</span> <span class="hd">sh: write error: No such device</span>
+<span class="ln">1677048</span> <span class="hd">sh: write error: No such device</span></pre>
+        <p>Trên máy này, bo FK-513 nằm ở <code>3-1.2</code> (sau hub <code>045b:0209</code> ở <code>3-1</code>), đúng cổng mà FaxP dùng khi detach trước khi ngủ và khi PortReset. <code>THRF_USBFaxBoardBusReset()</code> bỏ qua tham số cổng. Ngoài ra hàm này còn tự bỏ qua nếu được gọi lại trong vòng 60 giây. Kết quả là một trong ba bước khôi phục bị phí mất.</p>
+      </div>
+
+      <div class="fact">
+        <h3>4. usbfax_write không hủy URB khi hết thời gian chờ</h3>
+        <pre><span class="cm">// Kernel/Src/drivers/mfp/usbfax/usbfax.c:508</span>
+rv = wait_event_interruptible_timeout(usbfax-&gt;write_wait, usbfax-&gt;tx_condition, USBFAX_STATUS_TIMEOUT * HZ);
+if ( 0 == rv ){
+    writecount = 0;   <span class="cm">// TimeOut.</span>
+    <span class="hd">/* không có usb_kill_urb(usbfax-&gt;txurb) */</span>
+}
+<span class="cm">// usb_kill_urb(txurb) chỉ có ở dòng 1222 (khi đóng thiết bị / disconnect)</span>
+
+<span class="ln">1677056</span> [151955.637710] <span class="hd">URB 00000000330743d7 submitted while active</span>
+<span class="ln">     </span>  usb_submit_urb+0x4f4 ← <b>usbfax_write+0xec</b> ← vfs_write   (Comm: FaxFK508_1)
+<span class="ln">1677093</span> ksys_write : retry 1 … retry 5
+<span class="ln">1677098</span> (30331380)&lt;FAXLOG&gt; 1 write error. 0xffffffff errno 5</pre>
+        <p>URB của lần ghi lúc 07:05:59 vẫn còn treo. BusReset không thực sự unbind thiết bị nên không có disconnect nào để dọn nó. Lần ghi tiếp theo gọi <code>usb_fill_bulk_urb</code> rồi <code>usb_submit_urb</code> trên chính URB đang active đó.</p>
+      </div>
+
+      <div class="fact">
+        <h3>5. Thang khôi phục của FaxP dẫn tới B197</h3>
+        <div class="ladder">
+          <div class="step"><span class="t">07:05:57.698</span><b>PortReset</b><span class="r">Có chạy (<code>3-1.2</code>). Lỗi #2 xảy ra 1 s sau attach.</span></div>
+          <div class="step bad"><span class="t">07:06:02.840</span><b>BusReset</b><span class="r">Không hiệu lực: cổng sai, báo <code>No such device</code>.</span></div>
+          <div class="step"><span class="t">07:07:31.084</span><b>FaxOffOn</b><span class="r">Có chạy. Lỗi #3 xảy ra 1 s sau attach.</span></div>
+          <div class="step end"><span class="t">07:07:37.531</span><b>over → B197</b><span class="r"><code>m_InitOverFlag == 0</code>, bo chưa khởi tạo xong.</span></div>
+        </div>
+        <p>Mỗi bước chỉ chạy một lần. Các bit đánh dấu chỉ được xóa khi bo FAX khởi tạo xong (<code>FAX_DriverImp.cpp:2725</code>). Thang này không có bước reset ở cấp host controller. Khi hết ba bước, <code>FAXC_DriverImpGaia::exeFaxBoardFatalErr</code> ghi B197.</p>
+      </div>
+
+      <div class="fact">
+        <h3>6. Các dấu hiệu bất thường chỉ có trong sự cố này</h3>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Dấu hiệu trong toàn bộ log (02/10 – 08/10)</th><th class="num">Số lần</th></tr></thead>
+            <tbody>
+              <tr><td><code>faxAttach</code></td><td class="num">1458</td></tr>
+              <tr><td>Lỗi xHCI "TRB DMA ptr not part of current TD"</td><td class="num">3</td></tr>
+              <tr><td><code>URB … submitted while active</code></td><td class="num">1</td></tr>
+              <tr><td><code>can't set config</code></td><td class="num">1</td></tr>
+              <tr><td><code>BusErr_exeRecovery</code></td><td class="num">4</td></tr>
+              <tr><td><code>sh: write error: No such device</code></td><td class="num">3</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Tất cả đều nằm trong khoảng 07:05–07:07 ngày 08/10. Bộ nhớ không phải nguyên nhân: Meminfo lúc 07:11 vẫn còn MemAvailable khoảng 457 MB.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Chưa xác nhận được</h2>
+    <ul>
+      <li><b>Vì sao vòng transfer của xHCI lệch đồng bộ</b> sau SLEEP1: erratum của controller Marvell hay lỗi driver Linux 5.10.258 sau resume. Cần trace sự kiện <code>xhci-hcd</code> khi tái hiện.</li>
+      <li><b>BusReset đúng cổng có cứu được không.</b> Có thể là không, vì FaxOffOn kèm enumerate lại vẫn hỏng. Nhiều khả năng cần reset ở cấp host controller (unbind/bind controller, hoặc cơ chế rmmod/insmod theo OP_BTS-54314, <code>reset_usb_pm()</code>).</li>
+      <li><b>Cấu hình <code>DEF_*</code> và topology USB của model này.</b> Cần xác nhận model rơi vào nhánh <code>#else</code> của <code>THRF_USBFaxBoardBusReset</code>, và kiểm tra lại topology thực tế.</li>
+      <li><b>Vì sao lần thoát SLEEP1 này khác 1458 lần trước.</b> Log không cho thấy điểm khác biệt ở phía Power.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Đề xuất</h2>
+    <h3>BSP – USB host (phụ trách chính)</h3>
+    <ul class="checklist">
+      <li>Điều tra lỗi "TRB DMA ptr not part of current TD" trên <code>8d00d0000.usb3</code> sau SLEEP1. Tái hiện kèm trace sự kiện xHCI.</li>
+      <li>Mở rộng cơ chế cứu hộ OP_BTS-44703/46374 để bao gồm bo FAX trên bus 3 và cả sau khi resume đã xong. Hoặc cung cấp một bước reset ở cấp host controller để FaxP gọi.</li>
+    </ul>
+    <h3>BSP – THRC_BSPif</h3>
+    <ul class="checklist">
+      <li>Sửa <code>THRF_USBFaxBoardBusReset</code> để dùng đúng cổng FAX của model, lấy từ cấu hình như <code>THRF_USBFaxSelectPortLineBusReset</code> đang làm, thay vì hard-code.</li>
+    </ul>
+    <h3>Driver usbfax</h3>
+    <ul class="checklist">
+      <li>Gọi <code>usb_kill_urb(usbfax-&gt;txurb)</code> khi <code>usbfax_write</code> hết thời gian chờ. Áp dụng tương tự cho đường đọc và status.</li>
+    </ul>
+    <h3>FaxP (phòng thủ)</h3>
+    <ul class="checklist">
+      <li>Kiểm tra kết quả thực tế của từng bước khôi phục, thay vì chỉ đánh dấu là đã chạy.</li>
+      <li>Thêm bước reset ở cấp host controller trước khi ghi B197.</li>
+    </ul>
+    <h3>Tái hiện</h3>
+    <ul class="checklist">
+      <li>Chạy lại với cùng điều kiện (sleep 2 phút, power save ngay lập tức; copy, in PCL/PS, gửi và nhận PC-FAX). Khi lỗi xảy ra, lấy thêm <code>/sys/kernel/debug/usb/xhci</code>, trace <code>xhci-hcd</code> và <code>lsusb -t</code>.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Nguồn: <span class="mono">mfp_110_COM5_20261002-131844.log</span> (số dòng là dòng thực tế trong file), Meminfo, source IT6_Controller (fax, thr_it6) và Kernel/Src (usb/host, usb/core, mfp/usbfax) trong repo Source_MFP. Bản phân tích này đối chiếu và hiệu chỉnh báo cáo triage tự động <span class="mono">triage_report.OP_BTS-71095</span>.
+  </footer>
+</main>
+</body>
+</html>

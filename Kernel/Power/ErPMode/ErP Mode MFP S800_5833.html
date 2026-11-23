@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ErP Mode on MFP – Complete Guide (S800 / Quartz)</title>
+<style>:root{
+  --bg:#f5f7fb;--panel:#ffffff;--primary:#1d4ed8;--secondary:#0f766e;--ink:#172033;--muted:#526076;--line:#dce3ee;
+  --code-bg:#0f172a;--code-ink:#e2e8f0;--inline-code:#eef2f8;--th:#eef2f8;--hover:#eef3ff;
+  --ok:#15803d;--ok-soft:#e5f6ea;--doc:#1d4ed8;--doc-soft:#e6edfd;--log:#7c3aed;--log-soft:#f1eafe;
+  --inf:#b45309;--inf-soft:#fdf1df;--unk:#5b6472;--unk-soft:#eceff3;--risk:#b91c1c;--risk-soft:#fde8e8;
+  --beg:#0e7490;--beg-soft:#e3f6f9;--dbg:#a16207;--dbg-soft:#fdf6dc;--hw:#7c3aed;--hw-soft:#f3edfe;
+  --mark:#fde68a;--topbar:56px;--sbw:300px;
+  --font:Inter,"Segoe UI",Roboto,Arial,sans-serif;--mono:Consolas,"Cascadia Code",SFMono-Regular,Menlo,monospace;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0b1120;--panel:#111827;--primary:#60a5fa;--secondary:#2dd4bf;--ink:#e5e7eb;--muted:#9ca3af;--line:#273244;
+  --code-bg:#020617;--code-ink:#e2e8f0;--inline-code:#1c2638;--th:#172033;--hover:#18233a;
+  --ok:#4ade80;--ok-soft:#0f2a1a;--doc:#93c5fd;--doc-soft:#132443;--log:#c4b5fd;--log-soft:#221a3d;
+  --inf:#fbbf24;--inf-soft:#2d230f;--unk:#a8b0bd;--unk-soft:#1d2533;--risk:#f87171;--risk-soft:#331616;
+  --beg:#67e8f9;--beg-soft:#0d2a31;--dbg:#facc15;--dbg-soft:#2b250c;--hw:#c4b5fd;--hw-soft:#221a3d;
+  --mark:#854d0e;color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--topbar) + 16px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15.5px;line-height:1.72;overflow-x:hidden}
+a{color:var(--primary)}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.skip{position:absolute;left:-999px;top:8px;z-index:100;background:var(--panel);padding:8px 12px;border-radius:6px}
+.skip:focus{left:8px}
+code,.mono{font-family:var(--mono);font-size:.88em}
+:not(pre)>code{background:var(--inline-code);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+h1,h2,h3,h4{line-height:1.3;margin:0;text-wrap:balance}
+p,ul,ol{margin:0}
+ul,ol{padding-left:1.35em;display:flex;flex-direction:column;gap:6px}
+
+/* progress + topbar */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--secondary))}
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar);z-index:50;display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.tb-title{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.tb-title strong{font-size:1rem}
+.tb-title span{font-size:.75rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:nowrap}
+.btn{font:inherit;font-size:.82rem;font-weight:600;padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover);border-color:var(--primary)}
+.btn.sm{padding:5px 9px;font-size:.78rem}
+.icon-btn{font:inherit;font-size:1.1rem;width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:none;align-items:center;justify-content:center}
+
+/* layout */
+.layout{display:flex;padding-top:var(--topbar)}
+.sidebar{position:fixed;top:var(--topbar);bottom:0;left:0;width:var(--sbw);overflow-y:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 14px 40px;z-index:40}
+.sb-brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sb-brand b{display:block;font-size:.95rem}.sb-brand small{color:var(--muted);font-size:.75rem}
+.sb-close{margin-left:auto}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:flex-end;justify-content:center;gap:3px;padding:7px}
+.logo i{display:block;width:5px;background:#fff;border-radius:2px;opacity:.95}
+.logo i:nth-child(1){height:30%}.logo i:nth-child(2){height:60%}.logo i:nth-child(3){height:95%}
+.search label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.search-row{display:flex;gap:6px;margin-top:4px}
+.search input{flex:1;min-width:0;font:inherit;font-size:.85rem;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.search-meta{font-size:.78rem;color:var(--muted);margin-top:6px;min-height:1.2em}
+.search-results{list-style:none;padding:0;margin:4px 0 0;max-height:220px;overflow-y:auto;display:block}
+.search-results li{margin:0}
+.search-results button{all:unset;display:block;width:100%;box-sizing:border-box;cursor:pointer;font-size:.78rem;padding:5px 8px;border-radius:6px;color:var(--ink)}
+.search-results button:hover,.search-results button:focus-visible{background:var(--hover)}
+.search-results small{color:var(--muted);display:block}
+.sb-progress{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+.toc{list-style:none;padding:0;display:block}
+.toc li{margin:1px 0}
+.toc a{overflow-wrap:anywhere;min-width:0;display:flex;gap:8px;align-items:baseline;text-decoration:none;color:var(--ink);font-size:.84rem;padding:5px 8px;border-radius:7px;border-left:3px solid transparent;line-height:1.4}
+.toc a:hover{background:var(--hover)}
+.toc a.active{background:var(--hover);border-left-color:var(--primary);color:var(--primary);font-weight:600}
+.toc-n{flex:0 0 22px;color:var(--muted);font-variant-numeric:tabular-nums;font-size:.78rem}
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:35}
+
+main{flex:1;min-width:0;margin-left:var(--sbw);padding:28px 28px 80px;display:flex;flex-direction:column;gap:26px;align-items:center}
+main>*{width:100%;max-width:1200px}
+
+/* hero */
+.hero{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:14px;
+  background-image:radial-gradient(circle at 100% 0,color-mix(in srgb,var(--primary) 12%,transparent),transparent 45%)}
+.hero h1{font-size:2.1rem;letter-spacing:-.01em}
+.subtitle{color:var(--muted);font-size:1.05rem}
+.hero-meta{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:.75rem;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--doc-soft);color:var(--doc)}
+.warn-pill{background:var(--inf-soft);color:var(--inf)}
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card h3{font-size:.95rem;color:var(--primary)}
+.card ul{font-size:.9rem}
+.flow{display:flex;flex-wrap:wrap;gap:6px 22px;padding:14px;border:1px dashed var(--line);border-radius:12px}
+.flow span{position:relative;font-size:.8rem;font-weight:600;padding:5px 10px;border-radius:8px;background:var(--doc-soft);color:var(--doc)}
+.flow span:not(:last-child)::after{content:"→";position:absolute;right:-17px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.flow .f-erp{background:var(--risk-soft);color:var(--risk)}
+.flow .f-back{background:var(--ok-soft);color:var(--ok)}
+
+/* dashboard */
+.dash{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;gap:12px}
+.dash-h{font-size:1.25rem}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi b{display:block;font-size:1.6rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:.78rem;color:var(--muted)}
+.kpi.k-code b{color:var(--ok)}.kpi.k-doc b{color:var(--doc)}.kpi.k-inf b{color:var(--inf)}.kpi.k-unk b{color:var(--unk)}.kpi.k-risk b{color:var(--risk)}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+
+/* chapters */
+.chapter{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:0;overflow:hidden}
+.ch-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 24px;border-bottom:1px solid var(--line);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--primary) 8%,transparent),transparent 60%)}
+.ch-num{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;background:var(--primary);padding:3px 9px;border-radius:6px}
+:root[data-theme="dark"] .ch-num{color:#0b1120}
+.ch-head h2{font-size:1.35rem;flex:1;min-width:200px}
+.ch-toggle{font:inherit;font-size:.78rem;font-weight:600;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}
+.ch-toggle:hover{color:var(--primary);border-color:var(--primary)}
+.ch-body{padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.ch-body h3{font-size:1.08rem;margin-top:8px;padding-left:10px;border-left:3px solid var(--secondary)}
+.ch-body h4{font-size:.98rem;color:var(--primary)}
+.cap{font-size:.84rem;color:var(--muted)}
+.ref{font-family:var(--mono);font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
+.eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+
+/* badges */
+.tag{display:inline-block;font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.02em;padding:1px 7px;border-radius:5px;white-space:nowrap;vertical-align:1px;border:1px solid transparent}
+.t-code{color:var(--ok);background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.t-doc{color:var(--doc);background:var(--doc-soft);border-color:color-mix(in srgb,var(--doc) 35%,transparent)}
+.t-log{color:var(--log);background:var(--log-soft);border-color:color-mix(in srgb,var(--log) 35%,transparent)}
+.t-inf{color:var(--inf);background:var(--inf-soft);border-color:color-mix(in srgb,var(--inf) 40%,transparent)}
+.t-unk{color:var(--unk);background:var(--unk-soft);border-color:color-mix(in srgb,var(--unk) 35%,transparent)}
+.t-risk{color:var(--risk);background:var(--risk-soft);border-color:color-mix(in srgb,var(--risk) 40%,transparent)}
+
+/* callouts */
+.callout{border:1px solid var(--line);border-left-width:4px;border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.c-title{font-weight:700;font-size:.85rem;display:flex;align-items:center;gap:6px}
+.c-ico{display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;border-radius:50%;font-size:.75rem}
+.c-beginner{background:var(--beg-soft);border-left-color:var(--beg)}.c-beginner .c-title{color:var(--beg)}
+.c-important{background:var(--doc-soft);border-left-color:var(--doc)}.c-important .c-title{color:var(--doc)}
+.c-important b{color:var(--doc)}
+.c-risk{background:var(--risk-soft);border-left-color:var(--risk)}.c-risk .c-title{color:var(--risk)}
+.c-unknown{background:var(--unk-soft);border-left-color:var(--unk)}.c-unknown .c-title{color:var(--unk)}
+.c-debug{background:var(--dbg-soft);border-left-color:var(--dbg)}.c-debug .c-title{color:var(--dbg)}
+.c-remember{display:block;background:var(--ok-soft);border-left-color:var(--ok);font-weight:600}
+.c-title-inline{color:var(--ok);font-weight:700}
+
+/* verdict */
+.verdict{border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.verdict pre{margin:0;font-family:var(--mono);font-size:.95rem;font-weight:700;color:var(--risk);white-space:pre-wrap}
+
+/* grids */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.box{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.box h4{color:var(--primary)}
+
+/* code */
+.codewrap{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--code-bg)}
+.codebar{display:flex;justify-content:space-between;align-items:center;padding:5px 10px;background:color-mix(in srgb,var(--code-bg) 80%,#334155);color:#94a3b8;font-family:var(--mono);font-size:.72rem}
+.copy-btn{font:inherit;font-size:.72rem;padding:3px 9px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer}
+.copy-btn:hover{border-color:#60a5fa}
+.copy-btn.done{color:#4ade80;border-color:#4ade80}
+pre.code{margin:0;padding:12px 14px;overflow-x:auto;font-family:var(--mono);font-size:.8rem;line-height:1.6;color:var(--code-ink);background:var(--code-bg)}
+
+/* tables */
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;vertical-align:top;padding:8px 11px;border-bottom:1px solid var(--line)}
+th{background:var(--th);font-weight:700;white-space:nowrap;position:sticky;top:0}
+tbody tr:hover td{background:var(--hover)}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+td.wrap code{white-space:normal}
+.on{color:var(--ok);font-weight:700}.off{color:var(--risk);font-weight:700}.unk{color:var(--unk);font-style:italic}
+
+/* diagrams */
+.diagram{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;font-family:var(--mono);font-size:.78rem;white-space:pre;color:var(--muted)}
+.mmd-out svg{display:block;margin:0 auto;max-width:100%;height:auto}
+.mmd-err{font-size:.8rem;color:var(--risk);margin-bottom:6px}
+
+/* details */
+details{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+details>summary{cursor:pointer;font-weight:700}
+details[open]>summary{margin-bottom:10px}
+details>ul,details>div,details>p{margin-top:4px}
+
+mark.hl{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
+mark.hl.cur{outline:2px solid var(--risk)}
+
+.to-top{position:fixed;right:20px;bottom:20px;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--primary);color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.18);z-index:45}
+.foot{text-align:center;color:var(--muted);font-size:.8rem;padding-top:8px}
+
+@media (max-width:1100px){.tb-actions .btn#expandAll,.tb-actions .btn#collapseAll{display:none}}
+@media (max-width:960px){
+  .icon-btn{display:inline-flex}
+  .sidebar{transform:translateX(-105%);transition:transform .2s ease;width:min(86vw,320px);box-shadow:0 0 30px rgba(0,0,0,.25)}
+  .sidebar.open{transform:none}
+  main{margin-left:0;padding:18px 12px 70px}
+}
+@media (min-width:961px){.sb-close{display:none}.backdrop{display:none!important}}
+@media (max-width:600px){
+  .tb-title span{display:none}
+  .tb-actions .btn#printBtn{display:none}
+  .hero{padding:18px}.hero h1{font-size:1.6rem}
+  .ch-head,.ch-body{padding-left:14px;padding-right:14px}
+  .ch-head h2{font-size:1.12rem;min-width:0}
+  .dash{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.sidebar{transition:none}}
+
+@media print{
+  :root{--bg:#fff;--panel:#fff}
+  .topbar,.sidebar,.backdrop,.to-top,.progress,.ch-toggle,.copy-btn,.skip{display:none!important}
+  main{margin:0;padding:0}
+  body{font-size:11pt;background:#fff}
+  .ch-body[hidden]{display:flex!important}
+  .chapter{break-before:page;border:none;border-radius:0}
+  .hero,.dash{border:none}
+  .scroll,.diagram,.codewrap,.callout,table,tr,details{break-inside:avoid}
+  .scroll,.diagram{overflow:visible}
+  pre.code{white-space:pre-wrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tag,.callout,th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  a{text-decoration:none;color:inherit}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Bỏ qua tới nội dung</a>
+<div class="progress" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+
+<header class="topbar">
+  <button type="button" class="icon-btn" id="menuBtn" aria-label="Mở mục lục" aria-controls="sidebar" aria-expanded="false">☰</button>
+  <div class="tb-title"><strong>ErP Mode on MFP</strong><span>Architecture · Source Code · Power Flow · Wake-up · Debugging</span></div>
+  <div class="tb-actions">
+    <button type="button" class="btn" id="expandAll">Expand All</button>
+    <button type="button" class="btn" id="collapseAll">Collapse All</button>
+    <button type="button" class="btn" id="printBtn">Print</button>
+    <button type="button" class="btn" id="themeBtn" aria-label="Đổi giao diện sáng/tối">🌙 Dark</button>
+  </div>
+</header>
+
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Mục lục">
+  <div class="sb-brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span><div><b>ErP Guide</b><small>S800 / Quartz · v1.0</small></div>
+  <button type="button" class="icon-btn sb-close" id="closeBtn" aria-label="Đóng mục lục">✕</button></div>
+  <div class="search">
+    <label for="searchInput">Tìm kiếm</label>
+    <div class="search-row"><input id="searchInput" type="search" placeholder="Function, file, register, signal…" autocomplete="off">
+    <button type="button" class="btn sm" id="searchClear">Clear</button></div>
+    <div class="search-meta" id="searchMeta" aria-live="polite"></div>
+    <ol class="search-results" id="searchResults"></ol>
+  </div>
+  <div class="sb-progress"><span>Tiến độ đọc</span><b id="readPct">0%</b></div>
+  <nav><ol class="toc" id="toc"><li><a href="#s1" data-target="s1"><span class="toc-n">1</span>Executive summary</a></li><li><a href="#s2" data-target="s2"><span class="toc-n">2</span>ErP trong 5 phút</a></li><li><a href="#s3" data-target="s3"><span class="toc-n">3</span>Thuật ngữ</a></li><li><a href="#s4" data-target="s4"><span class="toc-n">4</span>So sánh power state</a></li><li><a href="#s5" data-target="s5"><span class="toc-n">5</span>Kiến trúc tổng thể</a></li><li><a href="#s6" data-target="s6"><span class="toc-n">6</span>Hardware power domains</a></li><li><a href="#s7" data-target="s7"><span class="toc-n">7</span>Software architecture</a></li><li><a href="#s8" data-target="s8"><span class="toc-n">8</span>Khởi tạo Power Manager</a></li><li><a href="#s9" data-target="s9"><span class="toc-n">9</span>Điều kiện vào ErP (eligibility)</a></li><li><a href="#s10" data-target="s10"><span class="toc-n">10</span>THRC_PowerManager::req_DeepSleepShift() theo phase</a></li><li><a href="#s11" data-target="s11"><span class="toc-n">11</span>Linux suspend và device suspend</a></li><li><a href="#s12" data-target="s12"><span class="toc-n">12</span>PSCI / ATF</a></li><li><a href="#s13" data-target="s13"><span class="toc-n">13</span>SCPI / MHU / LPPP</a></li><li><a href="#s14" data-target="s14"><span class="toc-n">14</span>PMU / PS-CPU / hardware</a></li><li><a href="#s15" data-target="s15"><span class="toc-n">15</span>SLEEP1 → ErP lot.6</a></li><li><a href="#s16" data-target="s16"><span class="toc-n">16</span>Trạng thái trong ErP</a></li><li><a href="#s17" data-target="s17"><span class="toc-n">17</span>Wake và ErP → SLEEP1</a></li><li><a href="#s18" data-target="s18"><span class="toc-n">18</span>USB và network</a></li><li><a href="#s19" data-target="s19"><span class="toc-n">19</span>Error, race và reboot</a></li><li><a href="#s20" data-target="s20"><span class="toc-n">20</span>State / sequence / activity diagrams</a></li><li><a href="#s21" data-target="s21"><span class="toc-n">21</span>Code / register / signal maps</a></li><li><a href="#s22" data-target="s22"><span class="toc-n">22</span>Debug guide</a></li><li><a href="#s23" data-target="s23"><span class="toc-n">23</span>Test matrix</a></li><li><a href="#s24" data-target="s24"><span class="toc-n">24</span>Unknowns và dữ liệu cần thêm</a></li><li><a href="#s25" data-target="s25"><span class="toc-n">25</span>Final summary</a></li><li><a href="#appx" data-target="appx"><span class="toc-n">A</span>Phụ lục A–H</a></li></ol></nav>
+</aside>
+<div class="backdrop" id="backdrop" hidden></div>
+
+<main id="content">
+<section class="hero" id="top">
+  <div class="hero-meta">
+    <span class="pill">Version 1.0</span><span class="pill">Cập nhật: 18/11/2026</span>
+    <span class="pill warn-pill">Trạng thái: Software path confirmed · Physical state chưa xác nhận</span>
+  </div>
+  <h1>ErP Mode on MFP</h1>
+  <p class="subtitle">Architecture, Source Code, Power Flow, Wake-up and Debugging — nền tảng S800 / Quartz</p>
+  <p><b>Mục tiêu của tài liệu:</b> giúp người mới hiểu toàn bộ quá trình MFP đi vào ErP, hoạt động trong ErP và thức dậy từ ErP, từ Controller đến hardware.</p>
+  <div class="hero-grid">
+    <div class="card"><h3>Dành cho ai</h3><ul><li>Người mới tìm hiểu kiến trúc MFP</li><li>BSP / Linux kernel engineer</li><li>Kỹ sư điều tra bug, reviewer</li></ul></div>
+    <div class="card"><h3>Phạm vi</h3><ul><li>Controller · <code>THRC_PowerManager</code> · Linux</li><li>ATF (PSCI) · SCPI/MHU · LPPP (R4)</li><li>PS-CPU (M0) · tín hiệu nguồn</li></ul></div>
+    <div class="card"><h3>Nguồn dữ liệu</h3><ul><li>Repo <b>Source_MFP</b> (IT6_Controller, Kernel 5.10, atf_s800, lppp_s800, PS-CPU)</li><li><b>BSP-SRS-53. ErP compatible.xlsx</b> v0.01</li><li>Không có log máy thật / số đo công suất</li></ul></div>
+  </div>
+  <div class="flow" aria-label="Luồng tổng quan">
+    <span>User / Timer / Setting</span><span>MFP Controller</span><span>Eligibility</span><span>BSP / Linux PM</span><span>Device Suspend</span><span>PSCI / ATF</span><span>SCPI / MHU</span><span>LPPP / R4</span><span>PMU / PS-CPU</span><span>Clock / DDR / CPU / Rails</span><span class="f-erp">ErP</span><span>Wake Source</span><span class="f-back">Resume theo chiều ngược lại</span>
+  </div>
+  <div class="callout c-beginner"><div class="c-title"><span class="c-ico" aria-hidden="true">💡</span>Beginner Note</div>
+  <p>ErP không phải là một hàm <code>power_off()</code>. Đây là một chuỗi nhiều tầng: ứng dụng quyết định, Linux cất trạng thái vào DDR, firmware tắt CPU, LPPP và PS-CPU cắt nguồn và tiếp tục canh nguồn đánh thức.</p></div>
+</section>
+
+<section class="dash" id="dashboard" aria-label="Dashboard">
+  <h2 class="dash-h">Dashboard</h2>
+  <div class="kpis" id="kpis"></div>
+  <p class="cap">Các con số được đếm tự động từ nội dung tài liệu (số chapter, số badge bằng chứng, số dòng trong các bảng chỉ mục). Không có số ước đoán.</p>
+  <div class="legend">
+    <span class="tag t-code">CONFIRMED BY CODE</span><span class="tag t-doc">CONFIRMED BY DOCUMENT</span><span class="tag t-log">CONFIRMED BY LOG</span><span class="tag t-inf">INFERENCE - NOT CONFIRMED</span><span class="tag t-unk">UNKNOWN</span><span class="tag t-risk">WARNING / RISK</span>
+  </div>
+  <div class="callout c-unknown"><div class="c-title"><span class="c-ico" aria-hidden="true">?</span>Unknown</div>
+  <p>Không có log máy thật trong dữ liệu đầu vào, nên nhãn <span class="tag t-log">CONFIRMED BY LOG</span> chưa được dùng cho kết luận nào. Các chapter của Prompt 2 chưa có dữ liệu (ví dụ: device suspend của gadget/PCIe/SATA, đo tín hiệu thực tế) được ghi trong Chapter 24.</p></div>
+</section>
+
+<section class="chapter" data-title="Executive summary" id="s1"><div class="ch-head"><span class="ch-num">Chapter 1</span><h2 id="s1-h">Executive summary</h2><button aria-controls="s1-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s1-body">
+
+<div class="verdict">
+<span class="eyebrow">Kết luận verification</span>
+<pre>ERP ENTRY REQUEST CONFIRMED
+PHYSICAL ERP STATE NOT FULLY CONFIRMED</pre>
+<p class="cap">Đường gọi phần mềm từ Controller tới PS-CPU đã được lần theo bằng code. Chưa có log máy thật, chưa có đo tín hiệu và công suất, và source NICFUM (<code>mio*</code>) không có trong repo.</p>
+</div>
+<ol>
+<li><b>ErP và Sleep2 dùng chung một đường phần cứng.</b> Ứng dụng gọi cùng hàm <code>req_DeepSleepShift()</code>, Linux cùng suspend-to-RAM (<code>"mem"</code>), ATF cùng <code>SYSTEM_SUSPEND</code>, LPPP cùng hàm <code>power_cpu()</code> và <code>pmu_phase(pmu_suspend)</code>, PS-CPU nhận cùng giá trị I2C <code>0x68 = 0x01</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><b>Chỗ duy nhất LPPP phân biệt ErP với Sleep2 là cờ <code>g_wolMode</code>.</b> Khi CPU cuối cùng tắt, <code>g_wolMode != 0</code> thì sinh <code>LPPP_INTERNALEVT_GO_TO_ERP</code>, ngược lại <code>GO_TO_S2</code>. <code>g_wolMode</code> được đặt bởi host command <code>MSG_CMD_SYSTEM_SET_WOL</code> do driver Ethernet <code>mvri</code> gửi trong lúc suspend. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">lppp_s800/ApplicationMrvl/Test/app_scpi.c:258-279</span></li>
+<li><b>Đường vào ErP thật khác với sơ đồ “2. SW” trong SRS.</b> SRS vẽ <code>chkExecDeepSleepMode → execDeepSleepMode → req_DeepSleepShift</code>. Code cho thấy đường đó chỉ gọi <code>THRE_ReqShiftType_DeepSleep</code>. ErP đi đường riêng: <code>setErpMode → ans_setErpMode → PWRD_TM_ErpModeExecReq → chkExecErpMode → execErpMode → req_DeepSleepShift(THRE_ReqShiftType_Erp, 0)</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><b>Nguồn kích hoạt ErP:</b> nhấn phím nguồn khi đang Normal (“ErpAutoPowerOff MSG”, <code>reserveErpModeReq(True)</code>) hoặc Weekly Timer khi cài đặt “Off power mode = ErP Auto Power Off”. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><b>Khác biệt ErP ở tầng ứng dụng:</b> bộ wake interrupt hẹp hơn (tắt FAX, PHY, Fiery, cảm biến người, cảm biến EDH/DSET/cửa trước), cảm biến engine luôn OFF, cấu hình WLAN ErP/WoWLAN, <code>MIO_RETENTION_MODE</code>, ghi B013 thay vì B014, bỏ qua kiểm tra job đang chạy. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><b>Rủi ro đáng chú ý:</b> <code>exec_str()</code> chờ vô hạn nếu <code>fopen("/sys/power/state")</code> lỗi; <code>Task_pre_DeepSleepShift</code> chạy song song và chỉ ghi log khi quá 1 s; ATF gửi SCPI “cluster ON, system ON” khi system suspend vì giá trị state = 1 (RET); LPPP luôn mở wake <code>WAKE_FIERY</code> dù ứng dụng tắt wake Fiery trong ErP. <span class="tag t-risk">[WARNING / RISK]</span></li>
+</ol>
+</div></section>
+<section class="chapter" data-title="ErP trong 5 phút" id="s2"><div class="ch-head"><span class="ch-num">Chapter 2</span><h2 id="s2-h">ErP trong 5 phút</h2><button aria-controls="s2-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s2-body">
+
+<div class="callout c-beginner"><div class="c-title"><span aria-hidden="true" class="c-ico">💡</span>Beginner Note</div><p><b>Đời thường:</b> ErP giống như cho máy “ngủ đông”. Đèn trong nhà tắt gần hết, chỉ để lại chuông cửa và một người trực. Người trực (PS-CPU và LPPP) nghe chuông (phím nguồn, gói mạng đặc biệt, hẹn giờ RTC) rồi bật lại đèn. Bộ nhớ DDR được giữ lại để khi thức dậy, Linux chạy tiếp từ chỗ cũ thay vì khởi động lại từ đầu.</p></div>
+<p><b>Vì sao không tắt nguồn hẳn?</b> Nếu tắt hẳn, máy không thể tự thức khi có Magic Packet hay khi tới giờ hẹn, và phải boot lại toàn bộ. ErP giữ lại khối luôn sống (Live: PS-CPU) và khối AON (LPPP R4 + PMU M3) để giám sát nguồn đánh thức. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span> <span class="ref">SRS sheet “1. HW”, hình Power ON Blocks</span></p>
+<p><b>Mục tiêu tiết kiệm điện:</b> SRS ghi “Ở chế độ ErP Off Mode, công suất tiêu thụ thường phải ≤ 0.5W (theo quy định EU)”. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span> <span class="ref">SRS sheet “Overview”, ô A8</span>. Lot/version của quy định, điều kiện đo, option lắp đặt và kết quả đo thực tế <span class="tag t-unk">[UNKNOWN]</span>. Lưu ý mức “0.5W/0.7W” xuất hiện trong code là của <b>DeepSleep</b> (<code>us_level</code> 1/0), không phải của ErP.</p>
+<div class="callout c-important"><div class="c-title"><span aria-hidden="true" class="c-ico">★</span>Important</div><b>Ý chính:</b> ErP = Sleep2 về phần cứng + chế độ mạng WoL (thay vì proxy mạng đầy đủ) + bộ wake source hẹp + cảm biến engine tắt.</div>
+</div></section>
+<section class="chapter" data-title="Thuật ngữ" id="s3"><div class="ch-head"><span class="ch-num">Chapter 3</span><h2 id="s3-h">Thuật ngữ</h2><button aria-controls="s3-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s3-body">
+
+<div class="scroll"><table>
+<thead><tr><th>Thuật ngữ</th><th>Nghĩa trong dự án này</th><th>Bằng chứng</th></tr></thead>
+<tbody>
+<tr><td>ErP lot.6</td><td>Chế độ off-mode theo chỉ thị EU. SRS: Live ON, AON ON, AP/UL OFF, MFP OFF.</td><td><span class="tag t-doc">DOC</span> sheet 1. HW</td></tr>
+<tr><td>Sleep1</td><td>CA72 vẫn chạy Linux, MFP power OFF. LPPP state <code>PWR_STATUS_SLEEP1</code>.</td><td><span class="tag t-code">CODE</span> LPPP_Matrix.c:236</td></tr>
+<tr><td>Sleep2 / DeepSleep</td><td>Ứng dụng gọi là DeepSleep (0.7W: <code>us_level=0</code>, 0.5W mở rộng: <code>us_level=1</code>). LPPP gọi là <code>PWR_STATUS_SLEEP2</code>.</td><td><span class="tag t-code">CODE</span> app_scpi.c:265-269</td></tr>
+<tr><td>STR</td><td>Suspend-to-RAM của Linux, kích hoạt bằng ghi <code>"mem"</code> vào <code>/sys/power/state</code>.</td><td><span class="tag t-code">CODE</span> main_BSP.cpp:2131-2134</td></tr>
+<tr><td>CA72 / AP806</td><td>Cụm CPU chính chạy ATF + Linux + ứng dụng MFP.</td><td><span class="tag t-doc">DOC</span> block diagram</td></tr>
+<tr><td>LPPP (R4)</td><td>Cortex-R4 trong miền AON. Nhận SCPI, quản lý nguồn AP806, giữ GMAC khi AP ngủ (proxy mạng / WoL).</td><td><span class="tag t-code">CODE</span> lppp_s800</td></tr>
+<tr><td>PMU (M3)</td><td>Cortex-M3 trong AON. Code trong repo ghi “PMU m4 is currently unused, keep off”.</td><td><span class="tag t-code">CODE</span> power.c (pmu_baseline)</td></tr>
+<tr><td>PS-CPU (M0)</td><td>MCU STM32F0 luôn sống, nối I2C slave <code>0x3E</code>, điều khiển <code>MC_PWR_EN</code>, <code>ERP_SENSOR_ON</code>, <code>/RESET</code>…</td><td><span class="tag t-code">CODE</span> LPPP_I2C.c:1020-1055</td></tr>
+<tr><td>SCPI / MHU</td><td>Giao thức thông điệp AP ↔ LPPP qua Message Handling Unit và vùng shared memory.</td><td><span class="tag t-code">CODE</span> atf quartz/scpi.c</td></tr>
+<tr><td>NICFUM</td><td>Thư viện mạng/USB (<code>mioChangeModeToSleep</code>…). Chỉ có header và file .so/stub trong repo.</td><td><span class="tag t-unk">UNKNOWN</span> nội dung</td></tr>
+<tr><td>B013 / B014</td><td>“B register” 2 byte nằm trong Q-SPI flash (offset <code>…FF01A</code> / <code>…FF01C</code>), ghi qua MTD.</td><td><span class="tag t-code">CODE</span> mdels800_pmu.h:213-216</td></tr>
+<tr><td>SuperWarp</td><td>Snapshot khi tắt nguồn chính để boot nhanh (<code>THRE_ReqShiftType_GetSnapShot</code>).</td><td><span class="tag t-code">CODE</span> THRC_PowerManager.h:127</td></tr>
+</tbody>
+</table></div>
+</div></section>
+<section class="chapter" data-title="So sánh power state" id="s4"><div class="ch-head"><span class="ch-num">Chapter 4</span><h2 id="s4-h">So sánh power state</h2><button aria-controls="s4-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s4-body">
+
+<p>Dữ liệu thiết kế từ SRS <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span> <span class="ref">sheet “1. HW”, hình Power ON Blocks</span>:</p>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">ErP lot.6: Live ON, AON ON, AP/UL OFF, MFP OFF
+Sleep2:    Live ON, AON ON, AP/UL OFF, MFP OFF
+Sleep1:    Live ON, AON ON, AP/UL ON,  MFP OFF
+Normal:    Live ON, AON ON, AP/UL ON,  MFP ON
+“AON Power is controlled by Power Management CPU”</pre></div>
+<p>Chú thích hình cùng sheet: “PCIe: Clocks are stopped in ErP &amp; SLEEP2”, “UART: Clocks are stopped in ErP”, “USB: Clock of USB2.0 is stopped in SLEEP2 when USB2.0 cable is not set”, “UL/MC: Clocks are stopped in SLEEP1”, “CA72: Power Down in SLEEP1”. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span></p>
+<div class="scroll"><table>
+<thead><tr><th>Khối</th><th>Normal</th><th>Sleep1</th><th>Sleep2 / DeepSleep</th><th>ErP lot.6</th><th>Main Power Off</th><th>Nguồn</th></tr></thead>
+<tbody>
+<tr><td>Live Power</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON</td><td class="unk">UNKNOWN</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td>AON (LPPP, PMU)</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON</td><td class="off">OFF (SB_PWR_EN=0)</td><td><span class="tag t-doc">DOC</span> sheet 2.1</td></tr>
+<tr><td>AP/UL</td><td class="on">ON</td><td class="on">ON</td><td class="off">OFF</td><td class="off">OFF</td><td class="off">OFF</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td>MFP Power (engine)</td><td class="on">ON</td><td class="off">OFF</td><td class="off">OFF</td><td class="off">OFF</td><td class="off">OFF</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td>CA72</td><td class="on">ON</td><td>“Power Down” theo chú thích; trong code Sleep1 vẫn chạy Linux</td><td class="off">OFF (AP806 power off)</td><td class="off">OFF</td><td class="off">OFF</td><td><span class="tag t-doc">DOC</span> + <span class="tag t-code">CODE</span> power.c:386-397 <span class="tag t-inf">mâu thuẫn cần làm rõ</span></td></tr>
+<tr><td>LPPP (R4)</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON, chạy proxy mạng</td><td class="on">ON, chạy WoL filter</td><td class="off">OFF</td><td><span class="tag t-code">CODE</span> app_scpi.c:265</td></tr>
+<tr><td>PS-CPU</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON (sleep_mode khi AP_PWR_EN=0)</td><td class="on">ON</td><td class="on">ON, STOP mode chu kỳ 2 s</td><td><span class="tag t-doc">DOC</span> PS-CPU FINAL_MCU_DESIGN_DOCUMENTATION.md §708-709</td></tr>
+<tr><td>DDR</td><td class="on">ON</td><td class="on">ON</td><td>Giữ nội dung (retention)</td><td>Giữ nội dung (retention)</td><td class="off">Mất</td><td><span class="tag t-inf">INFERENCE</span> STR cần RAM; LPPP gọi <code>mc_save_state()</code>, resume gọi <code>init_ddr(true,…)</code> + <code>mc_restore_state()</code></td></tr>
+<tr><td>USB2.0 device</td><td class="on">ON</td><td class="on">ON</td><td>Clock dừng nếu không cắm cáp; không vào DeepSleep khi host đang nối</td><td>Dừng (“Stop USB2.0-D”)</td><td class="off">OFF</td><td><span class="tag t-doc">DOC</span> + <span class="tag t-code">CODE</span> isShiftDeepSleep</td></tr>
+<tr><td>PCIe</td><td class="on">ON</td><td class="on">ON</td><td class="off">Clock dừng</td><td class="off">Clock dừng</td><td class="off">OFF</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td>Ethernet (onboard)</td><td>Linux <code>mvri</code></td><td>Linux <code>mvri</code></td><td>LPPP giữ GMAC, proxy mạng</td><td>LPPP giữ GMAC, chỉ WoL (Magic/ARP/Unicast/Link)</td><td class="off">OFF</td><td><span class="tag t-code">CODE</span> mvri_nonpci.c:2891, hal_wol.c:226-247</td></tr>
+<tr><td>WLAN (USB)</td><td class="on">ON</td><td class="on">ON</td><td class="unk">UNKNOWN</td><td>ErP mode + suspend qua NICFUM, wake KR0</td><td class="off">OFF</td><td><span class="tag t-code">CODE</span> THRC_PowerManager.cpp:5464-5514</td></tr>
+<tr><td>UART</td><td class="on">ON</td><td class="on">ON</td><td class="unk">UNKNOWN</td><td class="off">Clock dừng</td><td class="off">OFF</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td>Panel</td><td class="on">ON</td><td class="unk">UNKNOWN</td><td class="unk">UNKNOWN</td><td class="unk">UNKNOWN</td><td class="off">OFF</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+<tr><td>Engine (MC_PWR_EN)</td><td class="on">ON</td><td class="off">OFF</td><td class="off">OFF</td><td class="off">OFF</td><td class="off">OFF</td><td><span class="tag t-code">CODE</span> PS-CPU km_extend_io.c:1096</td></tr>
+<tr><td>Cảm biến engine (ERP_SENSOR_ON)</td><td class="on">ON</td><td class="unk">UNKNOWN</td><td>0.7W: ON · 0.5W: OFF</td><td class="off">OFF</td><td class="off">OFF</td><td><span class="tag t-code">CODE</span> THRC_PowerManager.cpp:4591-4603</td></tr>
+<tr><td>Wake support</td><td>—</td><td>mọi IRQ Linux</td><td>phím nguồn, USB VBUS, cảm biến người, SNMP II, Fiery, MODEM*</td><td>phím nguồn, WLAN*, RTC, LAN (WoL)</td><td>MSW (công tắc chính)</td><td><span class="tag t-code">CODE</span> Task_pre_DeepSleepShift</td></tr>
+</tbody>
+</table></div>
+<p class="cap">* MODEM chỉ khi <code>bl_MODEM_MaskSetting == True</code>; WLAN chỉ khi có card WLAN và cài đặt adapter = Wireless.</p>
+<h3>Vì sao ErP và Sleep2 giống domain nhưng khác hành vi</h3>
+<ul>
+<li><b>Wake source:</b> ErP tắt KR1 (FAX), KR3 (PHY), KR4 (Fiery), KR5 (cảm biến người), KR2 (MODEM), KR7 (SNMP II), INTP5/6/7. DeepSleep bật KR6 (USB VBUS), KR5, KR7, KR4. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">THRC_PowerManager.cpp:4528-4600</span></li>
+<li><b>Network:</b> Sleep2 = LPPP làm proxy mạng (thư mục <code>Application/</code> có mdns/llmnr/nbns proxy). ErP = chỉ WoL filter, LED link không nháy (<code>hal_lan.c:280</code>: “When LINKUP and NotErP, LED blinks”). <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><b>Clock:</b> UART clock chỉ dừng ở ErP. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span> Đoạn code thực hiện việc dừng clock UART khác nhau giữa ErP và Sleep2 chưa tìm thấy. <span class="tag t-unk">[UNKNOWN]</span></li>
+<li><b>Retention:</b> cả hai giữ DDR để resume STR. <span class="tag t-inf">[INFERENCE]</span></li>
+<li><b>USB:</b> NICFUM nhận <code>MIO_RETENTION_MODE</code> (ErP) thay vì <code>MIO_DEEP_SLEEP_MODE</code> hoặc <code>MIO_LOT26_MODE</code>. Khác biệt bên trong NICFUM <span class="tag t-unk">[UNKNOWN]</span>.</li>
+<li><b>Software policy:</b> DeepSleep bị huỷ nếu có job in đang chờ hoặc có DeepSleep delay. ErP bỏ qua hai kiểm tra này. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">THRC_PowerManager.cpp:5681-5691</span></li>
+</ul>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> Về điện, ErP và Sleep2 là cùng một trạng thái; khác nhau ở chỗ ai được phép đánh thức máy và LPPP xử lý mạng ra sao.</p>
+</div></section>
+<section class="chapter" data-title="Kiến trúc tổng thể" id="s5"><div class="ch-head"><span class="ch-num">Chapter 5</span><h2 id="s5-h">Kiến trúc tổng thể</h2><button aria-controls="s5-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s5-body">
+
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  subgraph AP["AP806 - CA72 (AP Power)"]
+    APP["Power app (PWRC_*)"] --&gt; THR["THRC_PowerManager"]
+    THR --&gt; NIC["NICFUM mio*"]
+    THR --&gt; KER["Linux kernel 5.10"]
+    KER --&gt; ATF["ATF BL31 PSCI"]
+  end
+  subgraph AON["AON Power"]
+    LPPP["LPPP Cortex-R4 FreeRTOS"]
+    PMUM["PMU Cortex-M3 (không dùng)"]
+  end
+  subgraph LIVE["Live Power"]
+    PS["PS-CPU Cortex-M0"]
+  end
+  ATF --&gt;|"SCPI qua MHU"| LPPP
+  KER --&gt;|"km_scpi qua MHU"| LPPP
+  KER --&gt;|"mvri host cmd HELLO SET_WOL GOODBYE"| LPPP
+  KER --&gt;|"I2C 0x3E reg 0x74 0x78"| PS
+  LPPP --&gt;|"I2C 0x3E reg 0x68 0x6C"| PS
+  LPPP --&gt;|"GPIO AP_PWR_EN"| PS
+  PS --&gt;|"MC_PWR_EN ERP_SENSOR_ON /RESET"| HW["Engine, cảm biến, nguồn"]
+  </pre></div>
+<p class="cap">Sơ đồ ghép từ code: SCPI ATF→LPPP (<code>atf quartz/scpi.c:137</code>), km_scpi kernel→LPPP (<code>drivers/firmware/km_scpi.c</code>), host command <code>mvri_fw.c</code>, I2C kernel→PS-CPU (<code>mdels800_pmu.c:224-259</code>), I2C LPPP→PS-CPU (<code>LPPP_I2C.c:1020-1080</code>), GPIO <code>AP_PWR_EN</code> (<code>power.c:275</code>, PS-CPU <code>mxconstants.h:52</code>). Nhánh PMU M3 “không dùng” theo comment <code>power.c</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></p>
+<div class="scroll"><table>
+<thead><tr><th>Tầng</th><th>Chạy trên</th><th>Nguồn</th><th>Giao tiếp xuống dưới</th><th>ACK / timeout</th><th>Trạng thái trong ErP</th></tr></thead>
+<tbody>
+<tr><td>Power app (PWRC)</td><td>CA72, task “Power”</td><td>AP</td><td>gọi hàm C++ <code>thePowerManagerTask.req_DeepSleepShift()</code></td><td>đồng bộ, không timeout</td><td>Đóng băng (DDR giữ)</td></tr>
+<tr><td>THRC_PowerManager</td><td>CA72, cùng task “Power”</td><td>AP</td><td><code>ioctl /dev/PMU0</code>, sysfs, <code>mio*</code>, <code>exec_str()</code></td><td>USB busy 10 s, Task_pre 1 s, USB resume 20 s</td><td>Đóng băng</td></tr>
+<tr><td>taskSTR</td><td>CA72, task riêng</td><td>AP</td><td>ghi <code>"mem"</code> vào <code>/sys/power/state</code></td><td>chờ vô hạn (msgQ WAIT_FOREVER)</td><td>Đang trong <code>write()</code></td></tr>
+<tr><td>Linux PM core</td><td>CA72</td><td>AP</td><td>dev_pm_ops, PSCI SMC</td><td>rollback khi callback lỗi</td><td>Ngủ</td></tr>
+<tr><td>ATF BL31</td><td>CA72 EL3</td><td>AP</td><td>SCPI cmd 0x03 qua MHU</td><td>không chờ reply (comment)</td><td>Tắt</td></tr>
+<tr><td>LPPP</td><td>R4</td><td>AON</td><td>GPIO <code>AP_PWR_EN</code>, I2C PS-CPU, thanh ghi PLL/DDR</td><td><code>AP_PG</code> 500 ms</td><td>Chạy, giám sát wake</td></tr>
+<tr><td>PS-CPU</td><td>M0</td><td>Live</td><td>GPIO nguồn</td><td>vòng poll main loop</td><td>Chạy, sleep mode</td></tr>
+</tbody>
+</table></div>
+</div></section>
+<section class="chapter" data-title="Hardware power domains" id="s6"><div class="ch-head"><span class="ch-num">Chapter 6</span><h2 id="s6-h">Hardware power domains</h2><button aria-controls="s6-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s6-body">
+
+<p>Block diagram SRS (sheet “1. HW”) cho thấy chip Quartz gồm AP806 (CA72×4, CM3 32 KB, DDR controller, GPIO), khối AON (QSPI, LPPP R4, PMU CM3, GPIO 24 pin, UART, I2C 4ch, USB2.0, I2S, FPD Link), khối MC (CM3 520 KB, MC_PIO) và UL (SYS_PIO, V-by-One, LVDS). PS-CPU nằm ngoài chip, trên Mother Board, nối tới “AC Power Unit”. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span></p>
+<div class="grid2">
+<div class="box"><h4>Live Power</h4><p>PS-CPU. Luôn có điện khi cắm AC. Giám sát MSW, POWER_MONITOR, 24V11_MONI, AP_PWR_EN.</p></div>
+<div class="box"><h4>AON Power</h4><p>LPPP, PMU, QSPI flash, MHU. Bật bằng <code>SB_PWR_EN</code> từ PS-CPU. Tồn tại trong Sleep1/Sleep2/ErP.</p></div>
+<div class="box"><h4>AP Power</h4><p>AP806 (CA72, CM3 phụ). LPPP bật/tắt bằng GPIOC[1] <code>AP_PWR_EN</code>, chờ <code>AP_PG</code> (GPIOH[19]).</p></div>
+<div class="box"><h4>MC/UL + MFP Power</h4><p>MC (CM3), UL, engine 24 V/3.3 V. PS-CPU điều khiển <code>MC_P_ON</code>, <code>MC_PWR_EN</code>, <code>IR_P_ON</code>.</p></div>
+</div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> PS-CPU cấp điện cho AON, LPPP cấp điện cho AP; ErP tắt AP và engine, giữ AON và Live.</p>
+</div></section>
+<section class="chapter" data-title="Software architecture" id="s7"><div class="ch-head"><span class="ch-num">Chapter 7</span><h2 id="s7-h">Software architecture</h2><button aria-controls="s7-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s7-body">
+
+<div class="scroll"><table>
+<thead><tr><th>Thành phần</th><th>File chính</th><th>Vai trò với ErP</th></tr></thead>
+<tbody>
+<tr><td>Power common</td><td class="wrap"><code>system/pwr/pwrg/PWRC_PowerSequence.cpp</code>, <code>PWRC_PowerInfoManager.cpp</code></td><td>Quyết định ErP: đếm thời gian, kiểm tra điều kiện, gửi task message</td></tr>
+<tr><td>Power model-specific</td><td class="wrap"><code>system/pwr/pwrc/PWRC_PowerImpColor.cpp</code></td><td><code>setErpMode</code>, <code>execErpMode</code>, đặt RTC, gọi BSP</td></tr>
+<tr><td>BSP thread</td><td class="wrap"><code>system/thr/thrcom/THRC_PowerManager.cpp</code></td><td><code>req_DeepSleepShift</code>, <code>Task_pre_DeepSleepShift</code>, <code>resumeAfterDeepSleep</code></td></tr>
+<tr><td>STR task</td><td class="wrap"><code>Linux/main_BSP.cpp</code></td><td><code>exec_str</code>, <code>taskSTR</code></td></tr>
+<tr><td>PMU driver</td><td class="wrap"><code>Kernel/Src/drivers/mfp/pmu/mdels800_pmu.c</code></td><td>ioctl, IRQ wake, B013/B014, I2C PS-CPU, suspend/resume</td></tr>
+<tr><td>Ethernet driver</td><td class="wrap"><code>drivers/net/ethernet/marvell/mvri_nonpci.c</code>, <code>mvri_fw.c</code></td><td>Giao GMAC cho LPPP, gửi SET_WOL</td></tr>
+<tr><td>PSCI / SCPI</td><td class="wrap"><code>drivers/firmware/psci/psci.c</code>, <code>atf_s800/plat/marvell/a8k/quartz/plat_pm.c</code>, <code>scpi.c</code></td><td>SYSTEM_SUSPEND, tắt từng CPU</td></tr>
+<tr><td>LPPP</td><td class="wrap"><code>lppp_s800/ApplicationMrvl/Test/app_scpi.c</code>, <code>Hal/quartz/asic/build/power.c</code>, <code>ApplicationKM/LPPP_Matrix.c</code></td><td>Chọn ErP/Sleep2, tắt AP, DDR, PLL, wake</td></tr>
+<tr><td>PS-CPU</td><td class="wrap"><code>PS-CPU/pscpu_s800/main/App/km_extend_io.c</code>, <code>km_i2c.c</code></td><td>MC_PWR_EN, ERP_SENSOR_ON, SLEEP_STATUS_REM</td></tr>
+</tbody>
+</table></div>
+<p class="cap">Biến thể thư mục: <code>system/thr</code> và <code>system/thr_it6</code> giống hệt nhau (<code>diff -rq</code> rỗng); <code>system/Makefile</code> build <code>thr</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span> Kernel defconfig dùng cho sản phẩm IT6 cụ thể <span class="tag t-unk">[UNKNOWN]</span>; <code>km_mvebu_v8_lsp_defconfig</code> và <code>Eagle_defconfig</code> giống nhau ở mọi option liên quan (SUSPEND, ARM_PSCI_FW, ARM_SCPI_PROTOCOL, MV_MHU, KM_BIZHUB, PM_WARP).</p>
+</div></section>
+<section class="chapter" data-title="Khởi tạo Power Manager" id="s8"><div class="ch-head"><span class="ch-num">Chapter 8</span><h2 id="s8-h">Khởi tạo Power Manager</h2><button aria-controls="s8-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s8-body">
+
+<div class="callout c-beginner"><div class="c-title"><span aria-hidden="true" class="c-ico">💡</span>Beginner Note</div><p><b>Đời thường:</b> lúc máy khởi động, một “nhân viên trực ca” tên task <code>Power</code> được tạo ra. Nó ngồi chờ thư (message queue) và xử lý từng thư một.</p></div>
+<div class="scroll"><table>
+<thead><tr><th>Bước</th><th>Code</th><th>Vị trí</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>BSP_main → SYSC_SystemInit0()</code></td><td class="ref">Linux/main_BSP.cpp:3078</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>2</td><td><code>PWRG_InitModule( 1 ); INIT_REC( 0x23 );</code></td><td class="ref">system/sys/sysg/SYSC_SystemInit.cpp:1122</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>3</td><td><code>case 1: PWRC_Power::initClass();</code></td><td class="ref">system/pwr/PWRG_InitModuleIf.cpp:11-17</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>4</td><td>tạo mutex <code>SYSF_semMCreate(SEM_Q_PRIORITY|SEM_DELETE_SAFE|SEM_INVERSION_SAFE)</code>, gọi <code>pc_PowerSequence-&gt;initClass()</code></td><td class="ref">pwr/pwrg/PWRC_Power.cpp:610-624</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>5</td><td><code>SYSF_taskSpawn("Power", …, PWRC_PowerSequence::taskPowerMan)</code> và task <code>"PowerWatchDog"</code></td><td class="ref">pwr/pwrg/PWRC_PowerSequence.cpp:499-511</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>6</td><td><code>taskPowerMan()</code>: <code>SYSF_msgQReceive(pc_PowerInfo-&gt;msg_Q_ID, …, WAIT_FOREVER)</code> rồi switch theo <code>s_TaskMsg.sl_MsgType</code></td><td class="ref">PWRC_PowerSequence.cpp:690-712</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>7</td><td><code>setPowerManTaskRcvInfo(N)</code> chỉ ghi “đã nhận message loại N” để debug (0, 1501, 1701…), không điều phối</td><td class="ref">PWRC_PowerSequence.cpp:710, 1248, 1267</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant M as BSP_main
+  participant S as SYSC_SystemInit0
+  participant P as PWRC_Power
+  participant Q as PWRC_PowerSequence
+  participant T as task Power
+  M-&gt;&gt;S: SYSC_SystemInit0()
+  S-&gt;&gt;P: PWRG_InitModule(1) rồi INIT_REC(0x23)
+  P-&gt;&gt;P: semMCreate (mutex có inversion safe)
+  P-&gt;&gt;Q: initClass()
+  Q-&gt;&gt;T: taskSpawn Power và PowerWatchDog
+  loop mỗi message
+    T-&gt;&gt;T: msgQReceive WAIT_FOREVER
+    T-&gt;&gt;T: setPowerManTaskRcvInfo(N)
+    alt PWRD_TM_DeepSleepExecReq
+      T-&gt;&gt;T: chkExecDeepSleepMode()
+    else PWRD_TM_ErpModeExecReq
+      T-&gt;&gt;T: chkExecErpMode()
+    end
+  end
+  </pre></div>
+<p class="cap">Ở SRS “2. SW”, <code>setPowerManTaskRcvInfo()</code> được vẽ như bước điều phối gọi <code>chkExecDeepSleepMode()</code>. Code cho thấy nó chỉ ghi lại thông tin debug, việc điều phối nằm ở <code>switch</code> trong <code>taskPowerMan()</code>.</p>
+<h3>Đồng thời và khoá</h3>
+<ul>
+<li>Mọi xử lý ErP chạy trong <b>một</b> task “Power”, nên các request ErP được tuần tự hoá bởi message queue. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li>Một số nhánh gọi <code>pc_PowerSequence-&gt;_lock()/_unlock()</code> (ví dụ <code>_procCancelDeepSleepMode</code>, PWRC_PowerSequence.cpp:1240-1242), nhưng nhánh <code>chkExecErpMode()</code> không khoá. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><code>req_DeepSleepShift()</code> chạy đồng bộ trong task “Power” và chỉ trả về sau khi máy thức dậy. Trong thời gian đó task “Power” không xử lý message khác. <span class="tag t-code">[CONFIRMED BY CODE]</span> → Task “PowerWatchDog” giám sát task này <span class="tag t-inf">[INFERENCE]</span> từ tên task.</li>
+</ul>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> Mọi thứ bắt đầu từ task “Power”, một hàng đợi message, một luồng xử lý tuần tự.</p>
+</div></section>
+<section class="chapter" data-title="Điều kiện vào ErP (eligibility)" id="s9"><div class="ch-head"><span class="ch-num">Chapter 9</span><h2 id="s9-h">Điều kiện vào ErP (eligibility)</h2><button aria-controls="s9-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s9-body">
+
+<div class="callout c-beginner"><div class="c-title"><span aria-hidden="true" class="c-ico">💡</span>Beginner Note</div><p><b>Đời thường:</b> máy chỉ vào ErP khi có người yêu cầu (phím nguồn hoặc lịch hẹn), máy đang ở chế độ Sleep, không có hẹn thức dậy trong 1 phút tới và không có máy tính nào đang cắm cáp USB vào máy in.</p></div>
+<h3>Chuỗi gọi thực tế (khác SRS)</h3>
+<div class="diagram"><pre class="mermaid">
+flowchart TD
+  K["Phím nguồn khi Normal"] --&gt;|"reserveErpModeReq(True)"| R["e_ChangeERP = PowerKey"]
+  W["Weekly Timer và OffPowerMode = ErP Auto Power Off"] --&gt;|"reserveErpModeReq(False)"| R2["e_ChangeERP = WeeklyTimer"]
+  R --&gt; C{"_chkPowerModeToDeepSleepTimeout mỗi chu kỳ"}
+  R2 --&gt; C
+  C --&gt;|"Sleep hoặc SubPowerOff và timer ErP gần nhất lớn hơn 1 phút và isShiftDeepSleep"| CNT["_chkEnablePowerModeToDeepSleepCounter(True)"]
+  C --&gt;|"không đạt"| Z["counter = 0 hoặc -1"]
+  CNT --&gt;|"đủ 1000 ms và không PowerSaveDoing"| SE["pc_PowerImp setErpMode(ans_setErpMode)"]
+  SE --&gt;|"ul_PowerControlStatus = EventNone"| ANS["ans_setErpMode()"]
+  SE --&gt;|"đang bận"| HOLD["lưu fp_ansSetErpMode, chkSetErpMode gọi lại sau"]
+  HOLD --&gt; ANS
+  ANS --&gt;|"kiểm tra lại điều kiện"| MSG["sendTaskMessage PWRD_TM_ErpModeExecReq"]
+  MSG --&gt; X["chkExecErpMode()"]
+  X --&gt;|"không PowerSaveModeDoing"| E["execErpMode()"]
+  E --&gt; D["req_DeepSleepShift(THRE_ReqShiftType_Erp, 0)"]
+  </pre></div>
+<div class="scroll"><table>
+<thead><tr><th>Điều kiện</th><th>Hàm / biến</th><th>Kết quả nếu không đạt</th><th>Bằng chứng</th></tr></thead>
+<tbody>
+<tr><td>Có yêu cầu ErP</td><td><code>getErpModeReq()</code> ⇔ <code>e_ChangeERP != TYPE_ChangeERP_None</code></td><td>Đi nhánh DeepSleep thay vì ErP</td><td><span class="tag t-code">CODE</span> PWRC_PowerInfoManager.cpp:15454</td></tr>
+<tr><td>Nguồn yêu cầu</td><td><code>reserveErpModeReq(True)</code> = phím nguồn; <code>(False)</code> + <code>getOffPowerMode() == TYPE_OffPowerModeErPAutoPowerOff</code> = Weekly Timer</td><td><code>e_ChangeERP = None</code></td><td><span class="tag t-code">CODE</span> PWRC_PowerInfoManager.cpp:15395-15425; PWRC_PowerSequence.cpp:4665, 10078, 10165</td></tr>
+<tr><td>Trạng thái power</td><td><code>_getPowerSaveStatus()</code> ∈ Sleep, SleepDelay, SubPowerOff, SubPowerOffDelay (+ In/Out)</td><td>counter = -1 (dừng)</td><td><span class="tag t-code">CODE</span> PWRC_PowerSequence.cpp:10446-10538</td></tr>
+<tr><td>Không có wake timer gần</td><td><code>getNearestErpReturnTime(False)</code> = None hoặc &gt; <code>PWRD_NearestWakeupEventTime</code> (1 phút)</td><td>counter = 0</td><td><span class="tag t-code">CODE</span> PWRC_PowerInfoManager.h:63</td></tr>
+<tr><td>Không có USB host</td><td><code>isShiftDeepSleep()</code> ⇔ <code>getUSBHostConnect() == False</code>; đọc <code>/sys/bus/platform/drivers/ci_hdrc/ci_hdrc.0/power/level</code>, “suspend” = không nối</td><td>counter = 0</td><td><span class="tag t-code">CODE</span> THRC_PowerManager.cpp:6559-6610</td></tr>
+<tr><td>Thời gian ổn định</td><td><code>sl_PowerModeToDeepSleepCounter ≥ PWRD_PowerModeToDeepSleepTimeout</code> (1000 ms, bước 500 ms)</td><td>chờ chu kỳ sau</td><td><span class="tag t-code">CODE</span> PWRC_PowerInfoManager.h:58; PWRC_PowerSequence.cpp:11885-11925</td></tr>
+<tr><td>Không đang chuyển trạng thái</td><td><code>_getPowerSaveDoing() == False</code>, <code>b_PowerSaveModeDoing == False</code></td><td>không gửi request</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Main SW chưa OFF</td><td><code>getMainSwOFF() == False</code></td><td>return, không vào ErP</td><td><span class="tag t-code">CODE</span> PWRC_PowerSequence.cpp:11888-11891</td></tr>
+<tr><td>ErP 0W chưa ở “Reserve”</td><td><code>getErpMode0WsetInfo() != PWRE_ErpMode0WsetInfo_Reserve</code> (đường chkEnableDeepSleepErpAutoPowerOffMode)</td><td>không gửi</td><td><span class="tag t-code">CODE</span> PWRC_PowerSequence.cpp:11103</td></tr>
+<tr><td>Phần cứng rảnh</td><td><code>ul_PowerControlStatus == PWRE_EventNone</code> trong <code>setErpMode</code></td><td>trì hoãn (lưu callback)</td><td><span class="tag t-code">CODE</span> PWRC_PowerImpColor.cpp:7538-7557</td></tr>
+</tbody>
+</table></div>
+<h3>Kiểm tra trong danh sách của prompt</h3>
+<div class="scroll"><table>
+<thead><tr><th>Mục</th><th>Tác động</th><th>Loại</th><th>Bằng chứng</th></tr></thead>
+<tbody>
+<tr><td>Timer (Weekly Timer)</td><td>Tạo yêu cầu ErP</td><td>trigger</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Power key</td><td>Tạo yêu cầu ErP (Normal); trong lúc chuyển → huỷ ở bước cuối</td><td>trigger / cancel</td><td><span class="tag t-code">CODE</span> 5707-5716</td></tr>
+<tr><td>Active print job</td><td>Chỉ huỷ DeepSleep; ErP <b>bỏ qua</b></td><td>block (DeepSleep)</td><td><span class="tag t-code">CODE</span> 5681</td></tr>
+<tr><td>FAX job</td><td>Không chặn; nếu không idle thì ghi shared memory vào vùng power-down của flash</td><td>lưu dữ liệu</td><td><span class="tag t-code">CODE</span> 5321-5327</td></tr>
+<tr><td>USB host (cáp tới PC)</td><td>Chặn</td><td>block</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>USB busy (resume trước chưa xong)</td><td>Chờ tối đa 10 s rồi tiếp tục</td><td>delay</td><td><span class="tag t-code">CODE</span> 5273-5286</td></tr>
+<tr><td>WLAN</td><td>Cấu hình ErP; lỗi chỉ log, vẫn đi tiếp</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Ethernet</td><td>Không chặn; mvri giao GMAC cho LPPP nếu interface đang up</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>RTC</td><td>Timer ErP &lt; 1 phút → không vào; IRQ RTC lúc chuyển → huỷ</td><td>block / cancel</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>DeepSleep delay (<code>isDeepSleepDelayExist</code>)</td><td>Chỉ chặn DeepSleep; ErP bỏ qua</td><td>block (DeepSleep)</td><td><span class="tag t-code">CODE</span> 5687</td></tr>
+<tr><td>Main power switch</td><td>Huỷ, đi tiếp sang chuỗi tắt nguồn</td><td>cancel</td><td><span class="tag t-code">CODE</span> 5695-5701</td></tr>
+<tr><td>Snapshot / SuperWarp</td><td>Đường riêng <code>GetSnapShot</code>, không phải ErP</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Watchdog</td><td>Đổi chế độ softdog trước STR, khôi phục sau</td><td>—</td><td><span class="tag t-code">CODE</span> 5597-5615, 5962-5965</td></tr>
+<tr><td>Fiery, HDD rebuild, cloud, remote log, debug mode, option board</td><td>Không thấy kiểm tra trực tiếp trong chuỗi ErP đã đọc</td><td>—</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+</tbody>
+</table></div>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p><code>chkExecErpMode()</code> chỉ kiểm tra <code>b_PowerSaveModeDoing</code>. Các điều kiện thời gian/USB được kiểm tra trước đó trong <code>ans_setErpMode()</code>, sau đó message đi qua hàng đợi. Nếu USB host được cắm vào giữa lúc message nằm trong hàng đợi, <code>chkExecErpMode</code> không kiểm tra lại. <span class="tag t-inf">[INFERENCE]</span> từ thứ tự code; chưa có log chứng minh xảy ra thực tế.</p>
+</div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> ErP do phím nguồn hoặc Weekly Timer yêu cầu, được duyệt bởi bộ đếm 1 giây ở trạng thái Sleep, rồi đi qua message <code>PWRD_TM_ErpModeExecReq</code>.</p>
+</div></section>
+<section class="chapter" data-title="THRC_PowerManager::req_DeepSleepShift() theo phase" id="s10"><div class="ch-head"><span class="ch-num">Chapter 10</span><h2 id="s10-h"><code>THRC_PowerManager::req_DeepSleepShift()</code> theo phase</h2><button aria-controls="s10-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s10-body">
+
+<p class="ref">IT6_Controller/KM3/application/mfp/system/thr/thrcom/THRC_PowerManager.cpp:5200-6119</p>
+<p><b>Nói đơn giản:</b> đây là “kịch bản đi ngủ” của BSP. Nó chuẩn bị mọi thứ, gọi Linux suspend, và khi máy thức dậy thì code tiếp tục chạy ngay sau dòng <code>exec_str()</code> để dọn dẹp.</p>
+<ul>
+<li><b>Input:</b> <code>THRE_ReqShiftType e_ReqShiftType</code> (0 DeepSleep, 1 Erp, 2 PowerOFF, 3 GetSnapShot — <span class="ref">THRC_PowerManager.h:123-128</span>), <code>ushort us_level</code> (0 = 0.7W, 1 = 0.5W cho DeepSleep).</li>
+<li><b>Caller:</b> <code>PWRC_PowerImpColor::execDeepSleepMode()</code> (DeepSleep 0/1), <code>execErpMode()</code> (Erp), dòng 8366 (GetSnapShot). Không tìm thấy caller nào truyền <code>THRE_ReqShiftType_PowerOFF</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><b>Output/side effect:</b> không có return value; thay đổi IRQ mask, B013/B014, trạng thái NICFUM/USB, gọi STR, ghi pmuEvent, có thể reboot.</li>
+</ul>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p><code>Bool b_ErP = ((e_ReqShiftType &gt; 0) ? True : False);</code> (dòng 5229). Vì enum có 4 giá trị, <code>b_ErP</code> cũng là True với <b>GetSnapShot</b> (SuperWarp) và PowerOFF. Với SuperWarp, nhiều nhánh được che bằng <code>THRE_ReqShiftType_GetSnapShot != e_ReqShiftType</code>, nhưng các nhánh chỉ dựa vào <code>b_ErP</code> vẫn chạy, ví dụ <code>ioctl(THRD_PMU_IOCSPWRSUBINT, 1)</code> ở dòng 6100-6106 và chọn <code>MIO_RETENTION_MODE</code> trước khi bị ghi đè thành <code>MIO_SUPERWARP_MODE</code> (5521-5522). Người đọc không được hiểu <code>b_ErP</code> là “đang vào ErP”. <span class="tag t-code">[CONFIRMED BY CODE]</span></p>
+</div>
+<h3>Bảng phase</h3>
+<div class="scroll"><table>
+<thead><tr><th>#</th><th>Phase</th><th>Dòng</th><th>Việc chính</th><th>Lỗi / timeout</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Nhận request, xác định <code>b_ErP</code></td><td>5200-5244</td><td>log “req_DeepSleepShift() Start”, <code>bl_setPowerDownRegion = isJobIdle()</code>, <code>b_ErP</code></td><td>NVDC instance NULL → return sớm</td></tr>
+<tr><td>2</td><td>Finalize job / virus scan, chuẩn bị storage</td><td>5246-5252, 5310-5327</td><td>PowerOFF: <code>APIC_VirusScan::finalize()</code>. Đọc mật khẩu SSD lock; job chưa idle → <code>THRF_writePowerDownRegion()</code></td><td>—</td></tr>
+<tr><td>3</td><td>Open PMU, chờ USB busy</td><td>5257-5286</td><td><code>SYSF_open("/dev/PMU0")</code> (static <code>si_Fd</code>), chờ <code>bWakeupUSB_Busy</code></td><td>open lỗi → ASSERT detail <code>0x0CEA</code>; chờ <code>PM_TIME_WaitCntr</code>=100 × <code>PM_TIME_Watch</code>=100 ms = <b>10 s</b> rồi chỉ log</td></tr>
+<tr><td>4</td><td>Tắt IRQ phím nguồn và IRQ PS-CPU</td><td>5290-5308</td><td><code>ioctl(THRD_PMU_IOCSSUBSWINT, 0)</code>, <code>ioctl(THRD_PMU_IOCSPWRSUBINT, 0)</code> (trừ GetSnapShot)</td><td>lỗi → ASSERT <code>0x0CEB</code></td></tr>
+<tr><td>—</td><td>Khối interrupt cũ</td><td>5328-5441</td><td>Nằm trong <code>#if 0</code>, đã chuyển sang <code>Task_pre_DeepSleepShift</code></td><td>dead code</td></tr>
+<tr><td>5</td><td>WLAN ErP / WoWLAN</td><td>5445-5516</td><td>workaround <code>ifconfig eth0 up/down</code>; nếu có WLAN và adapter = Wireless: bật KR0, <code>mioWlanSetErPMode</code>, <code>mioWlanSuspend</code></td><td>2 lần thử, cách 500 ms; lỗi chỉ log</td></tr>
+<tr><td>6</td><td>Chọn <code>MioWakeupMode</code></td><td>5520-5532</td><td>DEEP_SLEEP / RETENTION (ErP) / SUPERWARP / LOT26 (USB host + Lot26 HW + không ErP)</td><td>—</td></tr>
+<tr><td>7</td><td>Spawn sub-CPU task</td><td>5536-5539</td><td><code>si_SubCpuIntEnd = 1</code>, spawn <code>"SUBCPUSINGL"</code> chạy <code>Task_pre_DeepSleepShift</code></td><td>chạy song song</td></tr>
+<tr><td>8</td><td>Ghi B013/B014</td><td>5542-5568</td><td>ErP: ghi 0 rồi <code>34791</code> (0x87E7) vào B013. DeepSleep: 0 rồi <code>33023</code> (0x80FF) vào B014. Cách nhau 30 ms.</td><td><code>system()</code> lỗi chỉ printf</td></tr>
+<tr><td>—</td><td>Khoá panel, NICFUM pre-sleep</td><td>5578-5595</td><td><code>semTake(semID_PanelPower, WAIT_FOREVER)</code>; <code>si_Ret = mioPreChangeModeToSleep(MioWakeupMode)</code></td><td>lỗi → nhánh 6033: detail <code>0x2008</code> + reboot</td></tr>
+<tr><td>—</td><td>Watchdog</td><td>5597-5615</td><td>có wdtFd → <code>change_cntSoftDog(0)</code>; chưa có → mở <code>/dev/watchdog</code>, <code>start_cyclicLoop_taskSoftDog()</code>, ghi “D”</td><td>open/write lỗi chỉ log</td></tr>
+<tr><td>9</td><td>Kiểm tra lần cuối</td><td>5640-5720</td><td>chờ <code>si_SubCpuIntEnd==0</code> (100 × 10 ms = <b>1 s</b>), đọc <code>THRF_getIntSource()</code>, <code>THRF_getIntPinStatus()</code>, job/delay</td><td>xem bảng huỷ bên dưới</td></tr>
+<tr><td>10</td><td>STR status, USB/NICFUM</td><td>5726-5730</td><td><code>ioctl(THRD_PMU_IOCSSET_STR_STATUS, 1)</code>, <code>b_usbResumeBusy = True</code></td><td>lỗi chỉ printf</td></tr>
+<tr><td>11</td><td><code>mioChangeModeToSleep()</code></td><td>5738-5782</td><td>NICFUM chuyển sleep/retention</td><td>lỗi: STR_STATUS 0, bật lại PWRSUBINT, <code>pmuEvent.add(0x1305)</code>, đánh dấu <code>b_isErr_mioChangeModeToSleep</code></td></tr>
+<tr><td>12</td><td><code>THRF_DoSync()</code> + <code>exec_str()</code></td><td>5844-5884</td><td>chặn SSD, <code>IOCSGET_DETAILFLG</code>, đọc <code>irq_disable_flg</code>, sync, STR</td><td><code>irq_disable_flg==1</code> hoặc ioctl lỗi → detail <code>0x22…011…</code> + reboot</td></tr>
+<tr><td>13</td><td>Return sau wake</td><td>5883-5904</td><td><code>THRF_setEventRecord(BSPReturnStart)</code>, <code>THRF_setAPStatus(True)</code></td><td>—</td></tr>
+<tr><td>14</td><td><code>mioChangeModeToNormal()</code> + USB recovery</td><td>5907-5927, 5956-6004</td><td>STR_STATUS 0, <code>checkFTaikiWakeupFactor()</code>, spawn <code>TASK_WakeupUSB</code> (<code>resumeAfterDeepSleep</code>)</td><td>spawn lỗi 3 lần → detail <code>0x22…037…</code> + reboot</td></tr>
+<tr><td>15</td><td>Wake reason, restore IRQ, cleanup</td><td>5946-5953, 6010-6117</td><td>unmask INTP4/KR7/KR0/KR3; <code>IOCSREQESTFACTOR</code>; SUBSWINT 1; tắt RTC alarm; xoá vùng power-down; ErP: PWRSUBINT 1; log “End”</td><td>ioctl lỗi → ASSERT <code>0x0CEB</code></td></tr>
+</tbody>
+</table></div>
+<h3>Phase 3–4: PMU open, USB busy, chặn IRQ</h3>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// THRC_PowerManager.cpp:270-271
+#define PM_TIME_Watch    (100)
+#define PM_TIME_WaitCntr (10*1000/PM_TIME_Watch)   // = 100 lần → 10 s
+
+// 5290 và 5303
+si_Ret2 = ioctl( si_Fd, THRD_PMU_IOCSSUBSWINT, 0 );   // kernel: gul_SubSwInt = 0
+si_Ret2 = ioctl( si_Fd, THRD_PMU_IOCSPWRSUBINT, 0 );  // kernel: gul_PwrsubInt = 0, interrupts = 0</pre></div>
+<p>Trong kernel, <code>PMU_IOCSPWRSUBINT(0)</code> đặt <code>gul_PwrsubInt = 0</code> và <b>xoá</b> <code>gst_PmuData.interrupts</code>. Từ đó các IRQ wake không gửi signal lên app nữa mà được cộng dồn vào <code>gst_PmuData.interrupts</code> (<code>BspPmuIsrWorkCb</code>, mdels800_pmu.c:3016-3022). <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">mdels800_pmu.c:4254-4268</span></p>
+<h3>Phase 4b: <code>Task_pre_DeepSleepShift()</code> — wake source</h3>
+<p class="ref">THRC_PowerManager.cpp:4528-4624 · chạy trong task “SUBCPUSINGL”</p>
+<p>Ánh xạ trạng thái: <code>THRC_PowerStateID_LOW</code> ghi <code>"1"</code> (bật IRQ), <code>NORMAL</code> ghi <code>"0"</code> (tắt IRQ) qua ioctl <code>PMU_IOCSSTOREDIRECT</code>; kernel <code>BspIntStore()</code> gọi <code>enable_irq/disable_irq(gpio_to_irq(WAKE_GPIO(pin)))</code>, với <code>WAKE_GPIO(gpio) = gpio+288</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">THRC_PowerManagerDevice.cpp:3326-3337; mdels800_pmu.c:166, 1361-1380</span></p>
+<div class="scroll"><table>
+<thead><tr><th>Device ID</th><th>Tín hiệu (comment)</th><th>Bit INT_SOURCE</th><th>ErP</th><th>DeepSleep 0.7W</th><th>DeepSleep 0.5W</th></tr></thead>
+<tbody>
+<tr><td><code>SET_INTP4</code></td><td>[副]電源SW — phím nguồn</td><td>0x0002</td><td class="on">bật</td><td class="on">bật</td><td class="on">bật</td></tr>
+<tr><td><code>SET_INTP5</code></td><td>原稿セット EDH</td><td>0x0004</td><td class="off">tắt</td><td>không đổi</td><td class="off">tắt</td></tr>
+<tr><td><code>SET_INTP6</code></td><td>原稿セット DSET</td><td>0x0008</td><td class="off">tắt</td><td>không đổi</td><td class="off">tắt</td></tr>
+<tr><td><code>SET_INTP7</code></td><td>前カバー開閉 — cửa trước</td><td>0x0010</td><td class="off">tắt</td><td>không đổi</td><td class="off">tắt</td></tr>
+<tr><td><code>SET_KR0</code></td><td>Wake từ WLAN</td><td>0x0020</td><td>bật nếu WLAN + Wireless (trong req_DeepSleepShift)</td><td>không đổi</td><td>không đổi</td></tr>
+<tr><td><code>SET_KR1</code></td><td>FAX</td><td>0x0040</td><td class="off">tắt</td><td>không đổi</td><td>không đổi</td></tr>
+<tr><td><code>SET_KR2</code></td><td>MODEM RI (CSRC)</td><td>0x0080</td><td class="off">tắt</td><td>bật nếu <code>bl_MODEM_MaskSetting</code></td><td>như 0.7W</td></tr>
+<tr><td><code>SET_KR3</code></td><td>PHY (WoL/PME)</td><td>0x0100</td><td class="off">tắt</td><td class="off">tắt</td><td class="off">tắt</td></tr>
+<tr><td><code>SET_KR4</code></td><td>Fiery</td><td>0x0200</td><td class="off">tắt</td><td class="on">bật</td><td class="on">bật</td></tr>
+<tr><td><code>SET_KR5</code></td><td>人体検出センサ — cảm biến người (panel)</td><td>0x0400</td><td class="off">tắt</td><td class="on">bật</td><td class="on">bật</td></tr>
+<tr><td><code>SET_KR6</code></td><td>USB host VBUS</td><td>0x0800</td><td>không đổi</td><td class="on">bật</td><td class="on">bật</td></tr>
+<tr><td><code>SET_KR7</code></td><td>SNMP(II)</td><td>0x1000</td><td class="off">tắt</td><td class="on">bật</td><td class="on">bật</td></tr>
+<tr><td><code>ENG_SENSOR</code></td><td>PS-CPU bit <code>/ERP</code> (0x0002)</td><td>—</td><td class="off">LOW (sensor OFF)</td><td>NORMAL (ON)</td><td class="off">LOW</td></tr>
+</tbody>
+</table></div>
+<p class="cap">Bit INT_SOURCE theo <code>PMU_INTxx</code> (mdels800_pmu.c:152-165): RTC = 0x2000, MAINSW = 0x4000. Mức active vật lý của từng chân <span class="tag t-unk">[UNKNOWN]</span>; code chỉ định nghĩa <code>TYPE_Pin_ActiveHigh</code> cho thuộc tính sysfs <code>SET_INTP4</code> (mdels800_pmu.c:1454).</p>
+<h3>Phase 5: WLAN ErP</h3>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// THRC_PowerManager.cpp:5471-5512 (khối đang hoạt động)
+if( THRF_isExistWLAN() == True &amp;&amp; True == APIC_SystemInfo::newInstance()-&gt;getExNetworkAdapter() ) {
+    SwitchPowerState( SET_KR0, LOW );                       // bật wake WLAN trước khi set ErP mode
+    switch( getReturnFromErp() ) {
+    case TYPE_ReturnFromErp_MagicPacket:  mioWlanSetErPMode( 16, 56 ); ...  // tối đa PMU_AP_CHECK_CNT=2 lần, cách 500 ms
+    case TYPE_ReturnFromErp_ARP_Unicast:  mioWlanSetErPMode( 0, 8 );   ...
+    }
+    statRet = mioWlanSuspend();
+}</pre></div>
+<ul>
+<li><code>getExNetworkAdapter()</code> trả về 0 Disable, 1 Wireless, 2 Wired (<span class="ref">APIC_SystemInfo_DEF.h:600-602</span>). So sánh với <code>True</code> (=1) nghĩa là chỉ adapter Wireless. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li><code>getReturnFromErp()</code>: 0 None, 1 MagicPacket, 2 ARP+Unicast (<span class="ref">APIC_Setting_Network.h:568-570</span>). <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li>Prototype <code>mioWlanSetErPMode(UINT32 repeat, UINT32 offset)</code> (<span class="ref">nicfum/h/mioApi.h:18945</span>). Ý nghĩa của 16/56 và 0/8 trong firmware WLAN <span class="tag t-unk">[UNKNOWN]</span>. Có thể 16 = số lần lặp MAC trong Magic Packet chuẩn <span class="tag t-inf">[INFERENCE]</span>.</li>
+<li>Không có rollback nếu cả hai lần thử thất bại: máy vẫn vào ErP với WLAN có thể không đánh thức được. <span class="tag t-risk">[WARNING / RISK]</span></li>
+</ul>
+<h3>Phase 8: B013 / B014</h3>
+<ul>
+<li>Ghi qua <code>system("echo N &gt; /sys/bus/platform/devices/PMU.0/devices/B013")</code>; kernel <code>BspSpiB013Store()</code> đổi chuỗi sang số thập phân rồi <code>Bsp_mtd_write()</code> 2 byte tại <code>B013_OFFSET_ADDRESS 0x000FF01A</code> trong MTD <code>B_REGISTER_CS</code>. B014 tại <code>0x000FF01C</code>. Đây là vùng trong <b>Q-SPI flash</b>, không phải thanh ghi phần cứng. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">mdels800_pmu.c:1810-1837; mdels800_pmu.h:213-216</span></li>
+<li>Comment code: “ErPはRB013に0x87FFを、DeepSleepはRB014に0x80FFを記録する” nhưng giá trị thật cho ErP là <code>0x87E7</code> (34791) theo CQ.519866. Comment cũ lệch giá trị hiện tại. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">5541, 5550-5552</span></li>
+<li>B013 bit definition: không tìm thấy → <b>không giải mã</b> <code>0x87E7</code>. <span class="tag t-unk">[UNKNOWN]</span></li>
+<li>B014 bit definition có trong LPPP (<span class="ref">lppp_s800/ApplicationKM/LPPP_Flash.h:51-68</span>): bit0 <code>ERP_RCV_RET_REQ</code>, bit1 <code>ERP_ON_PD1</code>, bit2 <code>ERP_RCV_PD1_PG</code>, bit3 <code>ERP_OUT_XPONRESET</code>, bit4 <code>ERP_OUT_POFFISO</code>, bit5 <code>ERP_RCV_POFFCTL2</code>, bit6 <code>ERP_ON_PD2</code>, bit7 <code>ERP_RCV_POFFCTL0</code>, bit8 <code>ERP_ON_PD3</code>, bit9 <code>ERP_RCV_PONCTL0_1</code>, bit10 <code>ERP_ON_PD5</code>, bit11 <code>TO_SLEEP2_OR_ErP</code>, bit12 <code>BEGIN_PHASE6</code>, bit13 <code>TO_SLEEP1</code>, bit15 <code>ERP_LOG_EN</code>. Vậy <code>0x80FF</code> có bit0-7 và bit15 bằng 1. Mức 1 nghĩa là “đã qua” hay “chưa qua” phase <span class="tag t-unk">[UNKNOWN]</span>; LPPP dùng <code>Bregister_modify()</code> đặt bit11, bit12, bit13 khi chuyển trạng thái <span class="tag t-code">[CONFIRMED BY CODE]</span>, nên B014 hoạt động như nhật ký tiến trình chung giữa app và LPPP <span class="tag t-inf">[INFERENCE]</span>.</li>
+</ul>
+<h3>Phase 9: kiểm tra lần cuối và huỷ</h3>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// 5640-5650: chờ Task_pre_DeepSleepShift
+for(cnt=0;cnt&lt;100;cnt++){ if( si_SubCpuIntEnd == 0 ) break; SYSF_taskDelay(10 ms); }
+if(cnt &gt;= 100){ THRC_PM_LOG( "Task_pre_DeepSleepShift(): Time Over " ); }   // chỉ log, vẫn đi tiếp</pre></div>
+<div class="scroll"><table>
+<thead><tr><th>Thứ tự</th><th>Điều kiện</th><th>Hành động</th><th>Áp dụng ErP?</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>check_ActiveJobList()</code> (job in) và không ErP và không SubPowerOff</td><td><code>pmuEvent.add(0x1305)</code>, “Skip deep sleep for active job list”</td><td>Không</td></tr>
+<tr><td>2</td><td><code>isDeepSleepDelayExist()</code> và không ErP</td><td><code>0x1305</code>, “Skip deep sleep for DeepSleep delay”</td><td>Không</td></tr>
+<tr><td>3</td><td>INT_SOURCE không có 0x4000 nhưng chân MAINSW (bit 0x0004 của INT_PIN_STATUS) đang ở trạng thái OFF</td><td>“Skip DeepSleep/Erp for MainPowerSwitch Off interrupt”</td><td>Có</td></tr>
+<tr><td>4</td><td>INT_SOURCE &amp; 0x4000 (MAINSW)</td><td><code>0x126A</code></td><td>Có</td></tr>
+<tr><td>5</td><td>INT_SOURCE &amp; 0x0022 (phím nguồn hoặc WLAN)</td><td><code>0x1262</code>, <code>0x1306</code>, bật lại PWRSUBINT</td><td>Có</td></tr>
+<tr><td>6</td><td>INT_SOURCE &amp; 0x2000 (RTC)</td><td><code>0x1263</code></td><td>Có</td></tr>
+<tr><td>7</td><td>Còn lại</td><td>STR_STATUS 1 → <code>mioChangeModeToSleep</code> → <code>exec_str</code></td><td>Có</td></tr>
+</tbody>
+</table></div>
+<p class="cap"><code>u32_INT_SOURCE</code> chỉ được đọc khi <code>b_ErP</code> (dòng 5653-5655). Với DeepSleep, giá trị luôn 0 nên chỉ các bước 1-3 có tác dụng. <span class="tag t-code">[CONFIRMED BY CODE]</span></p>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p>Kernel <code>BspIntSourceShow()</code> đọc rồi <b>xoá</b> <code>gst_PmuData.interrupts</code> (mdels800_pmu.c:1479-1488). IRQ tới sau thời điểm đọc nhưng trước khi Linux suspend sẽ nằm lại trong <code>gst_PmuData.interrupts</code>. Sau resume, <code>PMU_resume()</code> và <code>PMU_IOCSPWRSUBINT(1)</code> chỉ gửi bit MAINSW qua <code>BspPmuSendInterrupt(&amp;work_INTMAINSW)</code>. Bit khác (ví dụ phím nguồn) có được gửi lên app hay không phụ thuộc vào đường <code>PMU_resume</code> đọc lại GPIO <code>WAKE_UP/WAKE_FIERY/WAKE_WLAN</code>. Khả năng mất sự kiện phím nguồn trong cửa sổ này <span class="tag t-inf">[INFERENCE]</span>; cần log kernel “PMU_resume:WAKE_UP detect” để xác minh.</p>
+</div>
+<h3>Phase 12: <code>THRF_DoSync()</code> và <code>exec_str()</code></h3>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// main_BSP.cpp:2097-2111
+void exec_str() {
+    SYSF_msgQSend( msgQID_STR, &amp;msg, …, WAIT_FOREVER, … );
+    while( 1 ) {
+        if( ERROR == SYSF_msgQReceive( msgQID_STRret, &amp;msg, …, WAIT_FOREVER )){}
+        else if( msg == 123 ) break;
+    }
+    thePowerManagerTask.unlockStorage( False );
+}
+// main_BSP.cpp:2129-2137 (taskSTR)
+if (checkTransitionDeepSleep()) {             // luôn trả True (THRC_PowerManager.cpp:4168-4189)
+    fp = SYSF_fopen( "/sys/power/state", "w" );
+    if( NULL != fp ) {
+        fprintf( fp, "%s\n", "mem" );
+        SYSF_Fflush( fp );                      // chặn ở đây tới khi resume xong
+        SYSF_msgQSend( msgQID_STRret, &amp;smsg /*123*/, … );
+        SYSF_fclose( fp );
+    }
+}</pre></div>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p>Nếu <code>fopen</code> trả NULL, <code>taskSTR</code> không gửi 123 và <code>exec_str()</code> chờ vĩnh viễn. Task “Power” bị treo khi đang giữ <code>semID_PanelPower</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></p>
+<p>Kết quả của <code>fflush</code> không được kiểm tra. Nếu kernel huỷ suspend (ví dụ <code>-EBUSY</code> do wakeup pending), app vẫn nhận 123 và chạy đường “thức dậy” bình thường. Việc phân biệt “đã ngủ” và “bị huỷ” chỉ còn dựa vào log kernel. <span class="tag t-code">[CONFIRMED BY CODE]</span></p>
+</div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> <code>req_DeepSleepShift()</code> là một hàm chặn: phần trước <code>exec_str()</code> là đi ngủ, phần sau là thức dậy.</p>
+</div></section>
+<section class="chapter" data-title="Linux suspend và device suspend" id="s11"><div class="ch-head"><span class="ch-num">Chapter 11</span><h2 id="s11-h">Linux suspend và device suspend</h2><button aria-controls="s11-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s11-body">
+
+<div class="callout c-beginner"><div class="c-title"><span aria-hidden="true" class="c-ico">💡</span>Beginner Note</div><p><b>Đời thường:</b> Linux lần lượt nhắc từng driver “cất đồ đi”, tắt các CPU phụ, rồi CPU0 gọi firmware để tắt hẳn.</p></div>
+<h3>Chuỗi gọi</h3>
+<div class="scroll"><table>
+<thead><tr><th>Bước</th><th>Hàm</th><th>Vị trí</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>write("mem")</code> → <code>state_store</code> → <code>pm_suspend</code> → <code>enter_state</code></td><td>kernel/power (upstream)</td><td><span class="tag t-inf">INFERENCE</span> theo upstream 5.10</td></tr>
+<tr><td>2</td><td><code>ksys_sync_helper()</code></td><td class="ref">kernel/power/suspend.c:690</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>3</td><td><code>suspend_freeze_processes()</code></td><td class="ref">suspend.c:382</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>4</td><td><code>dpm_suspend_start(PMSG_SUSPEND)</code></td><td class="ref">suspend.c:577</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>5</td><td><code>dpm_suspend_late</code> → <code>dpm_suspend_noirq</code></td><td class="ref">suspend.c:431, 442</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>6</td><td><code>suspend_disable_secondary_cpus()</code> (CPU1-3 → PSCI CPU_OFF)</td><td class="ref">suspend.c:463</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>7</td><td><code>syscore_suspend()</code>, <code>pm_wakeup_pending()</code></td><td class="ref">suspend.c:477-482</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>8</td><td><code>psci_system_suspend_enter</code> → <code>cpu_suspend(0, psci_system_suspend)</code> → SMC <code>SYSTEM_SUSPEND</code>, entry = <code>__pa_symbol(cpu_resume)</code></td><td class="ref">drivers/firmware/psci/psci.c:317-331, 353</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div>
+<p>KM có thêm các điểm ghi <code>suspend_prepare_record_point</code> (0x04…0x2e) và <code>watchdog_record_point</code> vào kernel/power/suspend.c để ghi detail code khi treo (OP_BTS-30528, OP_BTS-21251). <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">suspend.c:351-485</span></p>
+<p><b>Khác biệt callback:</b> <code>.suspend</code> chạy khi IRQ còn bật; <code>.suspend_late</code> sau khi runtime PM bị khoá; <code>.suspend_noirq</code> khi IRQ thiết bị đã tắt. Nếu một callback trả lỗi, PM core gọi resume ngược cho những thiết bị đã suspend và <code>write()</code> trả lỗi. <span class="tag t-inf">[INFERENCE]</span> theo upstream; driver KM nào dùng late/noirq chưa liệt kê đầy đủ.</p>
+<h3>Device suspend/resume</h3>
+<div class="scroll"><table>
+<thead><tr><th>Driver</th><th>Callback</th><th>Việc làm</th><th>Wakeup</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>PMU (<code>mdels800_pmu.c</code>)</td><td><code>.suspend=PMU_suspend</code>, <code>.resume=PMU_resume</code>, <code>.freeze/.thaw/.restore</code></td><td>suspend: <code>gl_ResumeFlag=0</code>, <code>gul_PwrsubInt=0</code>, dừng CA72 WDT nếu cờ, bật IRQ MainSW phía LPPP. resume: đọc GPIOB ISR bit 19/20/26 → RTC/Fiery/WLAN, bật lại cờ, gửi MAINSW</td><td>WAKE_UP, WAKE_FIERY, WAKE_WLAN</td><td><span class="tag t-code">CODE</span> 4560-4707</td></tr>
+<tr><td>Ethernet <code>mvri</code></td><td><code>mvri_suspend</code>/<code>mvri_resume</code> (platform legacy)</td><td>interface up → <code>mvri_close</code>, giữ link PHY, <code>mvri_fw_firmware_start</code>: HELLO, gửi msgq, GOODBYE → LPPP sở hữu GMAC</td><td>WoL qua LPPP</td><td><span class="tag t-code">CODE</span> mvri_nonpci.c:2891-2942</td></tr>
+<tr><td>usbcore</td><td>resume hook KM</td><td>cờ <code>usb_resume_fin</code> báo PMU driver qua <code>pmuSetUsbResumeFin()</code></td><td>—</td><td><span class="tag t-code">CODE</span> drivers/usb/core/driver.c:44, 1557-1560, 1756-1759</td></tr>
+<tr><td>xHCI</td><td>event ring</td><td>lỗi TRB DMA khi đang resume → <code>pmuSetUsbResumeError(true)</code></td><td>—</td><td><span class="tag t-code">CODE</span> xhci-ring.c:2895-2900</td></tr>
+<tr><td>Regulator <code>quartz-ps-sleep1</code></td><td>open/close char dev</td><td><code>ap_event(GO_TO_S1)</code> / <code>ap_event(WAKEUP_NORMAL)</code> tới LPPP</td><td>—</td><td><span class="tag t-code">CODE</span> drivers/regulator/quartz-ps-sleep1.c:95-130</td></tr>
+<tr><td>Gadget, PHY, root hub, PCIe, SATA, HDD/SSD, RTC, UART, watchdog, panel, engine, Fiery</td><td colspan="3">Chưa lần theo trong phiên này</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+</tbody>
+</table></div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> App chỉ cần ghi “mem”; phần còn lại là Linux suspend chuẩn kết thúc bằng PSCI SYSTEM_SUSPEND.</p>
+</div></section>
+<section class="chapter" data-title="PSCI / ATF" id="s12"><div class="ch-head"><span class="ch-num">Chapter 12</span><h2 id="s12-h">PSCI / ATF</h2><button aria-controls="s12-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s12-body">
+
+<p class="ref">atf/atf_s800/plat/marvell/a8k/quartz/plat_pm.c, lib/psci/psci_main.c, psci_suspend.c, psci_off.c</p>
+<ul>
+<li>Linux dùng SMC (PSCI 1.0: <code>PSCI_MAJOR_VER (1 &lt;&lt; 16)</code>, minor 0). <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">include/lib/psci/psci.h:170-171</span>. Conduit SMC/HVC đọc từ device tree <span class="tag t-unk">[UNKNOWN]</span> (DTS chưa đọc).</li>
+<li><code>psci_system_suspend()</code>: chỉ cho phép khi là CPU cuối (<code>psci_is_last_on_cpu</code>), lấy state từ <code>quartz_get_sys_suspend_power_state</code>, gọi <code>psci_cpu_suspend_start(…, PLAT_MAX_PWR_LVL, …, PSTATE_TYPE_POWERDOWN)</code>. Ba <code>assert</code> kiểm tra state đã bị comment. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">psci_main.c:180-212</span></li>
+<li>Handler: <code>.pwr_domain_suspend = a8k_pwr_domain_suspend</code> gọi thẳng <code>a8k_pwr_domain_off()</code> (hàm <code>__dead2</code>). <code>.pwr_domain_off = a8k_pwr_domain_prepare</code> (rỗng) và <code>.pwr_domain_pwr_down_wfi = a8k_pwr_domain_off</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">plat_pm.c:235-239, 302-324</span></li>
+<li><code>a8k_pwr_domain_off()</code>: ghi RVBAR = <code>_armada8k_cpu_entry &gt;&gt; 16</code> vào <code>MVEBU_CCU_RVBAR(0,0)</code>, tắt GIC CPU interface, gửi SCPI <code>SET_CSS_POWER_STATE</code>, <code>wfi()</code>, lặp vô hạn. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">plat_pm.c:186-226</span></li>
+<li>Context save/restore: dựa vào framework PSCI chuẩn; <code>a8k_pwr_domain_suspend_finish()</code> rỗng (chỉ VERBOSE). <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">plat_pm.c:262-266</span></li>
+</ul>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p><code>quartz_get_sys_suspend_power_state()</code> gán <code>pwr_domain_state[i] = 1; // ARM_LOCAL_STATE_OFF</code>, nhưng <code>MARVELL_LOCAL_STATE_RET = 1</code> và <code>OFF = 2</code> (<span class="ref">include/plat/marvell/a8k/common/arm_def.h:98-101</span>). Thêm nữa <code>PLAT_MAX_PWR_LVL = MPIDR_AFFLVL1</code> (<span class="ref">plat/marvell/a8k/common/include/platform_def.h:181</span>) nên <code>CSS_SYSTEM_PWR_STATE()</code> luôn trả 0. Kết quả: khi system suspend, payload SCPI là “CPU off (3), cluster ON (0), system ON (0)”. LPPP hiện không dùng trường cluster/system (chỉ in log) nên không gây lỗi chức năng, nhưng thông tin “đây là system suspend” không đi xuống LPPP. <span class="tag t-code">[CONFIRMED BY CODE]</span></p>
+</div>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant L as Linux CPU1-3
+  participant L0 as Linux CPU0
+  participant A as ATF BL31
+  participant R as LPPP R4
+  L-&gt;&gt;A: PSCI CPU_OFF
+  A-&gt;&gt;A: a8k_pwr_domain_prepare (rỗng)
+  A-&gt;&gt;R: SCPI 0x03 cpu off, cluster on, system on
+  A-&gt;&gt;A: wfi
+  Note over R: power_cpu tắt từng core, cập nhật cpu_state
+  L0-&gt;&gt;A: PSCI SYSTEM_SUSPEND entry cpu_resume
+  A-&gt;&gt;A: psci_cpu_suspend_start POWERDOWN
+  A-&gt;&gt;A: a8k_pwr_domain_off, ghi RVBAR, tắt GIC cpuif
+  A-&gt;&gt;R: SCPI 0x03 cho CPU0
+  A-&gt;&gt;A: wfi
+  Note over R: cpu_state == ALL_CPU_OFF thì bắt đầu suspend hệ thống
+  </pre></div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> ATF không quyết định ErP; nó chỉ báo LPPP “CPU này tắt” và đặt địa chỉ khởi động lại.</p>
+</div></section>
+<section class="chapter" data-title="SCPI / MHU / LPPP" id="s13"><div class="ch-head"><span class="ch-num">Chapter 13</span><h2 id="s13-h">SCPI / MHU / LPPP</h2><button aria-controls="s13-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s13-body">
+
+<h3>SCPI từ ATF</h3>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// atf quartz/scpi.c:137-178
+state |= mpidr &amp; 0x0f;              // CPU ID
+state |= (mpidr &amp; 0xf00) &gt;&gt; 4;      // Cluster ID
+state |= cpu_state     &lt;&lt; 8;        // scpi_power_off = 3
+state |= cluster_state &lt;&lt; 12;
+state |= css_state     &lt;&lt; 16;
+cmd-&gt;id = SCPI_CMD_SET_CSS_POWER_STATE;   // 0x03
+scpi_secure_message_send(channel, sizeof(state));
+// "SCP does not reply to this command" → không ACK, không timeout</pre></div>
+<p>Channel = <code>this_cpu_channel()</code>, header ở <code>PLAT_CSS_SCP_COM_SHARED_MEM_BASE + (2n+1)*SCPI_CHANNEL_BUFFER_SIZE</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">scpi.c:44-46</span></p>
+<h3>LPPP xử lý</h3>
+<ol>
+<li><code>process_scpi_cmd()</code> case <code>0x03</code> → <code>scpi_set_power_state()</code> → <code>power_cpu(cpuid | clusterid&lt;&lt;2, cpupower)</code>. <span class="ref">app_scpi.c:711-715, 355-384</span></li>
+<li><code>power_cpu(…, 3)</code>: chờ WFI tối đa 20 µs, bật isolation, tắt power (<code>PWRC_CPUN_CR_PWR_DN_RQ</code>), giữ reset (<code>CCU_B_PRCR</code>), cập nhật <code>cpu_state</code>. <span class="ref">app_scpi.c:214-257</span></li>
+<li>Khi <code>cpu_state == ALL_CPU_OFF</code>: đặt warm-boot flag, <code>pmu_phase(pmu_suspend)</code>, <code>suspended = true</code>, chọn <code>GO_TO_ERP</code> nếu <code>g_wolMode</code>, ngược lại <code>GO_TO_S2</code>, gửi vào <code>gst_MsgQHandle_PowerCtrl</code>, <code>CA72WDT_End()</code>. <span class="ref">app_scpi.c:258-279</span></li>
+</ol>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// lppp_s800/ApplicationMrvl/Test/app_scpi.c:258-279
+if (cpu_state == ALL_CPU_OFF) {
+    *(volatile uint32_t *)PLAT_WARMBOOT_FLAG_BASE = PLAT_WARMBOOT_FLAG_BASE;
+    pmu_phase(pmu_suspend);
+    suspended = true;
+    if (g_wolMode) { intr_event = LPPP_INTERNALEVT_GO_TO_ERP; }
+    else           { intr_event = LPPP_INTERNALEVT_GO_TO_S2;  }
+    xQueueSend(gst_MsgQHandle_PowerCtrl, &amp;intr_event, portMAX_DELAY);
+    CA72WDT_End();
+}</pre></div>
+<p><span class="tag t-code">[CONFIRMED BY CODE]</span> Đường lệnh KM <code>KM_SCPI_CMD_AP_EVENT</code> với payload GO_TO_S2/GO_TO_ERP trong <code>ApplicationKM/LPPP_Task.c:332-343</code> nằm trong <code>#if 0</code>; kernel cũng không có caller nào gửi <code>KM_SCPI_GENEV_GO_TO_ERP</code> (chỉ <code>scpi_debug.c</code> qua debugfs). Vậy ErP không được “ra lệnh” trực tiếp bằng SCPI mà được LPPP suy ra từ <code>g_wolMode</code>.</p>
+<h3>Nguồn của <code>g_wolMode</code></h3>
+<ul>
+<li>Khởi tạo 0 (<span class="ref">Hal/quartz/src/hal_wol.c:168</span>); về 0 mỗi lần driver gửi HELLO (<span class="ref">Sys/hostcmd/sys_hostcmd.c:173-174</span>).</li>
+<li>Host command <code>MSG_CMD_SYSTEM_SET_WOL</code>: bit MAGIC → <code>WOL_MODE_MAGIC_PACKET</code>, PHY → <code>WOL_MODE_LINK_ACT</code>, ARP → <code>WOL_MODE_ARP</code>, UCAST → <code>WOL_MODE_UNICAST</code> (<span class="ref">Application/hostcmd/app_hostcmd.c:281-299</span>).</li>
+<li>Phía Linux, <code>mvri_fw_send_all_msgs()</code> gửi SET_WOL từ ethtool chỉ khi <code>#ifndef CONFIG_KM_BIZHUB</code>; cả hai defconfig đều có <code>CONFIG_KM_BIZHUB=y</code>. Vì vậy SET_WOL chỉ tới từ hàng đợi msgq do user space nạp qua ioctl <code>MVRI_IOCTL_TO_FW</code> (<code>SIOCDEVPRIVATE+5</code>). <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">mvri_fw.c:717-801; mvri_user.h:7-8</span></li>
+<li>Thành phần user space nạp SET_WOL cho ErP: có lẽ NICFUM trong <code>mioChangeModeToSleep(MIO_RETENTION_MODE)</code>. <span class="tag t-inf">[INFERENCE]</span> Không có source NICFUM để xác nhận.</li>
+</ul>
+<h3>State machine LPPP (ApplicationKM)</h3>
+<div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  [*] --&gt; POWEROFF
+  POWEROFF --&gt; NORMAL: PWR_SW_ON / TR0
+  NORMAL --&gt; SLEEP1: GO_TO_S1 / TR3
+  SLEEP1 --&gt; NORMAL: WAKEUP_NORMAL / TR4
+  SLEEP1 --&gt; SLEEP2: GO_TO_S2 / TR5 TR6
+  SLEEP1 --&gt; ERP: GO_TO_ERP / TR5 TR6
+  SLEEP2 --&gt; SLEEP1: WAKEUP_S1 / TR8 TR10
+  ERP --&gt; SLEEP1: WAKEUP_S1 / TR8 TR10
+  SLEEP2 --&gt; POWEROFF: PWR_SW_OFF / TR7 TR9
+  ERP --&gt; POWEROFF: PWR_SW_OFF / TR7 TR9
+  ERP --&gt; NORMAL: PWR_FLICKER / TR2b
+  </pre></div>
+<p class="cap">Tên hàm chuyển trạng thái lấy từ <code>LPPP_Matrix.c</code> (TR0 dòng 76, TR3 236, TR4 259, TR5/TR6 284, TR7/TR9 323, TR8/TR10 356, TR2b 207). Bảng ánh xạ event → hàm (matrix) chưa đọc trực tiếp, nên cạnh nối được suy ra từ tên hàm. <span class="tag t-inf">[INFERENCE]</span></p>
+<p><code>LPPP_TR5_TR6_Sleep1To_Sleep2_Or_ErP()</code> chỉ đặt <code>AP_STATUS_NO_BOOT</code>, trả về <code>PWR_STATUS_ERP</code> hoặc <code>SLEEP2</code>, và đặt bit B014 <code>TO_SLEEP2_OR_ErP</code>. Phần tắt nguồn CA72 trong hàm này nằm trong <code>#if 0 /* handled by Marvell side */</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">LPPP_Matrix.c:284-312</span></p>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> LPPP biết “ErP” chỉ nhờ cờ WoL mà driver Ethernet để lại trước khi Linux ngủ.</p>
+</div></section>
+<section class="chapter" data-title="PMU / PS-CPU / hardware" id="s14"><div class="ch-head"><span class="ch-num">Chapter 14</span><h2 id="s14-h">PMU / PS-CPU / hardware</h2><button aria-controls="s14-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s14-body">
+
+<h3>LPPP <code>pmu_infrastructure_suspend()</code></h3>
+<p class="ref">lppp_s800/Hal/quartz/asic/build/power.c:1443-1640</p>
+<ol>
+<li>Khoá <code>pmu_transition_mutex</code>; nếu không ở AWAKE thì <code>while(1)</code> (treo cố ý). <span class="tag t-risk">RISK</span></li>
+<li>Gọi <code>suspend</code> của các thiết bị đăng ký (<code>lpp_pm_operations</code>), trong đó có <code>setup_wake_events()</code> (app_gpio.c:186). <span class="tag t-inf">INFERENCE</span> về việc đăng ký.</li>
+<li><code>pmu_phase(pmu_system_down)</code>: flush L2 hai cluster (<code>AP806_CCU_B_L2EFR_0/1</code>), invalidate LLC, tắt thiết bị theo bảng <code>power_up_dev</code> (UL xuống D2 bằng ghi trực tiếp 0xE82400xx).</li>
+<li><code>sys_save_state()</code>, <code>mc_save_state()</code> (lưu cấu hình memory controller).</li>
+<li><code>pmu_phase(pmu_ap_link_down)</code>: tắt MCIx4, PIDI xuống D2, tri-state chân PIDI, <code>ap806_power_on(false)</code>.</li>
+<li>PLL MC và ND xuống D2, hạ SYS PLL và clock R4.</li>
+</ol>
+<h3><code>ap806_power_on(false)</code></h3>
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">// power.c:386-397
+send_power_state_to_pscpu(on);                 // I2C 0x3E reg 0x68 = 0x01 | gen  ("sleep2/erp")
+for (i = 0; i &lt; …gpio_nums…; i++)              // SD_PWR_EN GPIOG[3], AP_PWR_EN GPIOC[1], GPIOI[26,27,29]
+    pmu_gpio_handle(…, 0);
+if( supportTEC() == RESULT_EAGLE3 ) {
+    cpu_spin_delay( 100*MILLISEC );            // AP_PWR_EN=0 rồi chờ 100 ms
+    send_sleep_status_rem( 0 );                // I2C 0x3E reg 0x6C = 0x0001
+}
+i2c_enable(false);</pre></div>
+<p><span class="tag t-code">[CONFIRMED BY CODE]</span> PS-CPU nhận giá trị 0x01 cho cả Sleep2 lẫn ErP (<span class="ref">LPPP_I2C.c:1047-1051</span>), nên PS-CPU <b>không phân biệt</b> hai chế độ.</p>
+<h3>Phản ứng của PS-CPU (vòng main loop)</h3>
+<ul>
+<li><code>mc_pwr_en_proc()</code>: <code>MC_PWR_EN</code> = HIGH chỉ khi bit MC_PWR_EN trong bộ nhớ mở rộng = 1 <b>và</b> <code>AP_PWR_EN</code> HIGH <b>và</b> <code>SB_PG</code> HIGH. Khi LPPP kéo <code>AP_PWR_EN</code> xuống 0, <code>MC_PWR_EN</code> tự về 0. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">PS-CPU/pscpu_s800/main/App/km_extend_io.c:1096-1112</span></li>
+<li><code>erp_sensor_proc()</code>: <code>ERP_SENSOR_ON</code> = LOW khi bit <code>ERP_SENSOR_ON</code> = 0 <b>và</b> <code>AP_PWR_EN</code> = LOW; ngược lại HIGH. App đặt bit này qua <code>ENG_SENSOR</code> LOW → kernel <code>CLR_PSCPU(0x0002)</code> (I2C reg 0x78). <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">km_extend_io.c:687-697; mdels800_pmu.c:241, 1146-1151, 1231</span></li>
+<li><code>sleep_mode()</code>: PS-CPU tự vào SLEEP khi MSW ON, SB_PG HIGH, AP_PWR_EN LOW, không có pending factor. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span> <span class="ref">PS-CPU/FINAL_MCU_DESIGN_DOCUMENTATION.md:708</span></li>
+</ul>
+<h3>Bảng tín hiệu</h3>
+<div class="scroll"><table>
+<thead><tr><th>Tín hiệu</th><th>Nguồn → đích</th><th>Active</th><th>Chuyển trong ErP entry</th><th>Code ghi / đọc</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td><code>AP_PWR_REQ</code> (tên trong SRS)</td><td>LPPP → AP / PS-CPU</td><td class="unk">—</td><td>1 → 0</td><td>Không có symbol này trong code; tương ứng <code>AP_PWR_EN</code></td><td><span class="tag t-doc">DOC</span> <span class="tag t-inf">tên lệch</span></td></tr>
+<tr><td><code>AP_PWR_EN</code></td><td>LPPP GPIOC[1] → regulator AP, PS-CPU PA? (<code>AP_PWR_EN_Pin GPIO_PIN_2</code>)</td><td>HIGH = bật AP</td><td>1 → 0</td><td>LPPP <code>ap806_power_on</code>; PS-CPU đọc</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>AP_PG</code></td><td>regulator → LPPP GPIOH[19]</td><td>HIGH = good</td><td>đọc khi bật lại, timeout 500 ms</td><td><code>ap806_power_good(500)</code> power.c:290-313</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>ERP_SENSOR_ON</code></td><td>PS-CPU → cảm biến engine</td><td>HIGH = sensor on</td><td>→ LOW</td><td><code>erp_sensor_proc</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>MC_PWR_EN</code></td><td>PS-CPU → nguồn engine 3.3 V</td><td>HIGH</td><td>→ LOW (tự động khi AP_PWR_EN=0)</td><td><code>mc_pwr_en_proc</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>MC_P_ON</code></td><td>PS-CPU → nguồn engine 24 V</td><td>HIGH</td><td class="unk">UNKNOWN trong ErP entry</td><td>kernel PIN_ATTR ENG_POWER (bit 0x0020)</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+<tr><td><code>IR_P_ON</code></td><td>PS-CPU → nguồn IR</td><td>HIGH</td><td class="unk">UNKNOWN</td><td>PIN_ATTR IR_RY (bit 0x0001)</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+<tr><td><code>SB_PWR_EN</code></td><td>PS-CPU → nguồn South Bridge (AON)</td><td>HIGH</td><td>giữ 1 (chỉ 0 khi main power off)</td><td>PS-CPU</td><td><span class="tag t-doc">DOC</span> sheet 2.1</td></tr>
+<tr><td><code>/RESET</code></td><td>PS-CPU → SB</td><td>LOW = reset</td><td>giữ 1</td><td><code>sb_reset_proc</code></td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td><code>/RST_SLP2</code></td><td>PS-CPU</td><td>LOW</td><td>→ LOW khi AP_PWR_EN=0 (rst_usb_proc STATE_INT)</td><td>km_extend_io.c:713-718; kernel <code>PMU_I2cSet_RST_SLP2n</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>/USB2_OE</code></td><td>PS-CPU</td><td>LOW</td><td>theo <code>/RST_SLP2</code> (<code>usb2_oe_proc</code>)</td><td>kernel <code>PMU_I2cSet_USB2_OE</code></td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td><code>WAKEUP</code> (WAKE_UP)</td><td>→ GPIOB[19]</td><td class="unk">—</td><td>LPPP luôn mở làm wake event</td><td>app_gpio.c:212; kernel PMU_resume bit 19</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>24V11_MON</code> (24V11_MONI)</td><td>Nguồn → PS-CPU PA8</td><td>HIGH = có 24 V</td><td>SRS: 24V11_MONI=1 trước MC_PWR_EN=0</td><td>PS-CPU debounce; kernel bit 0x0100</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td><code>ENG_STATUS1/2</code></td><td>PS-CPU / LPPP → Fiery</td><td>LOW</td><td>DeepSleep: <code>/ENG_STATUS1=1, /ENG_STATUS2=1</code> (SRS)</td><td>PS-CPU bit10/11; LPPP TR7 ghi 1</td><td><span class="tag t-doc">DOC</span> <span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>ENG_STATUS7</code></td><td colspan="4">Không tìm thấy trong code đã đọc</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+</tbody>
+</table></div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> LPPP chỉ kéo một chân <code>AP_PWR_EN</code>; PS-CPU tự suy ra phải tắt engine.</p>
+</div></section>
+<section class="chapter" data-title="SLEEP1 → ErP lot.6" id="s15"><div class="ch-head"><span class="ch-num">Chapter 15</span><h2 id="s15-h">SLEEP1 → ErP lot.6</h2><button aria-controls="s15-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s15-body">
+
+<p>Hình “図 7-3-4-2 SLEEP1⇒ErP lot6” (sheet 2.4) và sequence chi tiết “2.4 SLEEP-ErP” mô tả các bước sau. <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span> Cột code là nơi tìm thấy hành động tương ứng.</p>
+<div class="scroll"><table>
+<thead><tr><th>Bước (SRS)</th><th>Sender → receiver</th><th>Code tương ứng</th><th>ACK / timeout / rollback</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>起床要因マスク設定要求 (đặt mask wake)</td><td>CA72 → LPPP</td><td><code>Task_pre_DeepSleepShift</code> (IRQ phía AP) + <code>setup_wake_events()</code> phía LPPP</td><td>Task_pre: 1 s chỉ log</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>USB認証装置 ON → Suspend (“Linux のUSBドライバで制御される？？”)</td><td>CA72 → thiết bị USB</td><td>Linux USB suspend + NICFUM</td><td>SRS ghi dấu hỏi</td><td><span class="tag t-doc">DOC</span> <span class="tag t-unk">chưa rõ</span></td></tr>
+<tr><td>POWER_ON_HDD = 0</td><td>CA72 → HDD</td><td>Không tìm thấy trong chuỗi đã đọc</td><td>—</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+<tr><td>Fiery DeepSleep (PB10=1, PB11=1), Set CTRL Reg(0x70)</td><td>CA72 → PS-CPU</td><td>Kernel PIN_ATTR <code>Fiery_ENG_STATUS1/2</code> (GPIO), PS-CPU bit10/11</td><td>—</td><td><span class="tag t-doc">DOC</span> <span class="tag t-inf">ánh xạ</span></td></tr>
+<tr><td>Stop USB2.0-D</td><td>CA72</td><td>NICFUM <code>mioChangeModeToSleep</code></td><td>lỗi → 0x1305, không vào STR</td><td><span class="tag t-inf">INFERENCE</span></td></tr>
+<tr><td>Stop CLK MSB0101/0120 (USB3.0, PCIe, SATA3), AON APB I2C/I2S/UART/TIMER/MHU/Config, PMU MHU/Config, HighSpeed I/O USB2.0</td><td>CA72 → LPPP</td><td>Có lẽ SCPI 0x1b (set device) từ <code>scpi_pm_domain</code>, và <code>pmu_system_down</code></td><td>SCPI 0x1b có response</td><td><span class="tag t-inf">INFERENCE</span></td></tr>
+<tr><td>Suspend 88MSB0120 (Except GE+PHY)</td><td>CA72</td><td>mvri giữ link PHY: <code>GIDontInitPhy = true</code></td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>LAN処理停止 (dừng xử lý LAN)</td><td>CA72 → LPPP</td><td><code>mvri_suspend</code> → HELLO / SET_WOL / GOODBYE</td><td>check goodbye response (<code>mvri_fw_check_goodbye_response</code>)</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>ErP off mode遷移要求</td><td>CA72 → LPPP</td><td>Không có lệnh riêng; LPPP suy ra từ <code>g_wolMode</code></td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>サスペンド処理, 全コア停止</td><td>Linux → ATF → LPPP</td><td>PSCI CPU_OFF ×3 + SYSTEM_SUSPEND, SCPI 0x03 ×4</td><td>SCPI không reply</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>MC/UL電源OFF</td><td>LPPP</td><td><code>pmu_system_down</code> (UL → D2)</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>AP_PWR_REQ = 0 (Power OFF)</td><td>LPPP → AP806</td><td><code>ap806_power_on(false)</code>: AP_PWR_EN = 0</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>24V11_MONI = 1, MC_PWR_EN = 0</td><td>PS-CPU</td><td><code>mc_pwr_en_proc()</code></td><td>main loop polling</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant App as THRC_PowerManager
+  participant K as Linux
+  participant E as mvri
+  participant A as ATF
+  participant R as LPPP
+  participant P as PS-CPU
+  App-&gt;&gt;App: Task_pre_DeepSleepShift, B013 = 0x87E7
+  App-&gt;&gt;K: mioChangeModeToSleep(RETENTION)
+  App-&gt;&gt;K: exec_str ghi mem
+  K-&gt;&gt;E: mvri_suspend
+  E-&gt;&gt;R: HELLO, SET_WOL, GOODBYE
+  Note over R: g_wolMode khác 0
+  K-&gt;&gt;A: CPU_OFF x3 rồi SYSTEM_SUSPEND
+  A-&gt;&gt;R: SCPI 0x03 x4
+  R-&gt;&gt;R: pmu_suspend, flush L2, lưu MC, tắt UL
+  R-&gt;&gt;P: I2C reg 0x68 = 0x01
+  R-&gt;&gt;R: AP_PWR_EN = 0
+  R-&gt;&gt;P: I2C reg 0x6C = 0x0001 (Eagle3)
+  P-&gt;&gt;P: MC_PWR_EN = 0, ERP_SENSOR_ON = 0
+  R-&gt;&gt;R: GO_TO_ERP, state ERP, B014 bit11
+  </pre></div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> Trình tự thật: app chuẩn bị → Linux suspend → ATF tắt CPU → LPPP tắt AP → PS-CPU tắt engine.</p>
+</div></section>
+<section class="chapter" data-title="Trạng thái trong ErP" id="s16"><div class="ch-head"><span class="ch-num">Chapter 16</span><h2 id="s16-h">Trạng thái trong ErP</h2><button aria-controls="s16-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s16-body">
+
+<div class="grid2">
+<div class="box"><h4>Còn chạy</h4><p>PS-CPU (main loop, có thể ở SLEEP), LPPP R4 (FreeRTOS, MHU task, GPIO wake ISR, LAN filter), RTC của PS-CPU.</p><p><span class="tag t-code">CODE</span> <span class="tag t-doc">DOC</span></p></div>
+<div class="box"><h4>Đã tắt</h4><p>AP806 (CA72, CM3 phụ), MC/UL, engine, PCIe clock, UART clock (theo SRS), cảm biến engine.</p><p><span class="tag t-code">CODE</span> <span class="tag t-doc">DOC</span></p></div>
+<div class="box"><h4>DDR</h4><p>Giữ nội dung để Linux resume. Cơ chế self-refresh cụ thể khi ErP: <code>mv_lpddr4_sleep.c</code> có hàm enter/exit self-refresh, chưa lần theo caller.</p><p><span class="tag t-inf">INFERENCE</span></p></div>
+<div class="box"><h4>Network</h4><p>LPPP sở hữu GMAC; WoL filter theo <code>g_wolMode</code>: Magic Packet (<code>ETH_FILT_CSR_0.MP_PME_EN</code>), ARP, Unicast, Link.</p><p><span class="tag t-code">CODE</span> hal_wol.c:226-260</p></div>
+</div>
+<h3>Wake source được giám sát</h3>
+<ul>
+<li>LPPP <code>setup_wake_events()</code>: lấy các GPIO đã được map vào ITER1 (“ITER1 is used by the wake events”), luôn thêm <code>WAKE_UP</code> GPIOB[19] và <code>WAKE_FIERY</code> GPIOB[20], thêm <code>WAKE_WLAN</code> GPIOB[26] nếu cờ ở <code>WLAN_SUSPEND_FLAG_ADDR</code> bit 26. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">app_gpio.c:186-225</span></li>
+<li>Linux bật IRQ trên dải số <code>WAKE_GPIO(gpio)=gpio+288</code>; việc dải này tương ứng ITER1 để LPPP thấy <span class="tag t-inf">[INFERENCE]</span>.</li>
+<li>LAN: <code>FILTER_FLAG_WAKE_SYSTEM</code> trong <code>sys_filter_main.c:271-277</code> → <code>SYS_EVENT_WAKE_SYSTEM</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+<li>Timer: SCPI 0x06 đặt wake timer của LPPP (<code>my_callback</code> → <code>wake_system</code>). RTC alarm phía PS-CPU do app đặt qua <code>CB_RTC::setAlarm</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span></li>
+</ul>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p>Trong ErP, app tắt wake Fiery (<code>SET_KR4 NORMAL</code>), nhưng LPPP vẫn luôn thêm <code>WAKE_FIERY</code> GPIOB[20] vào wake event. Nếu Fiery còn điện và kéo chân này, máy sẽ thức từ ErP dù chính sách ứng dụng không cho. Fiery có còn điện trong ErP hay không <span class="tag t-unk">[UNKNOWN]</span>. Nếu chân trùng nhau là đúng <span class="tag t-inf">[INFERENCE]</span>.</p>
+</div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> Trong ErP chỉ LPPP và PS-CPU thức; DDR giữ dữ liệu; LPPP tự lọc gói mạng để quyết định có đánh thức AP hay không.</p>
+</div></section>
+<section class="chapter" data-title="Wake và ErP → SLEEP1" id="s17"><div class="ch-head"><span class="ch-num">Chapter 17</span><h2 id="s17-h">Wake và ErP → SLEEP1</h2><button aria-controls="s17-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s17-body">
+
+<p>Hình “図 7-3-4-3 ErP lot6⇒SLEEP1”: INT → LPPP, <code>AP_PWR_REQ=1</code>, Recovery from STR, Restart 88MSB0120, Restart 88MSB0104, Resume 88MSB0101, Restart USB2.0-D → SLEEP1 (Completed). <span class="tag t-doc">[CONFIRMED BY DOCUMENT]</span></p>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant W as Wake source
+  participant R as LPPP
+  participant P as PS-CPU
+  participant A as ATF
+  participant K as Linux
+  participant App as THRC_PowerManager
+  W-&gt;&gt;R: GPIO, gói LAN khớp filter, hoặc timer
+  R-&gt;&gt;R: SYS_EVENT_WAKE_SYSTEM
+  alt goodbye đang xử lý
+    R-&gt;&gt;R: wake_request = true, chờ SYS_EVENT_CAN_WAKE
+  end
+  R-&gt;&gt;R: power_cpu(0,0), CA72WDT_Start, B014 BEGIN_PHASE6
+  R-&gt;&gt;R: pmu_resume, khôi phục PLL
+  R-&gt;&gt;P: I2C 0x6C = 0x0002 SLEEP_STATUS_REM=1 (Eagle3)
+  R-&gt;&gt;R: AP_PWR_EN = 1, chờ AP_PG 500 ms
+  R-&gt;&gt;P: I2C 0x68 = normal
+  R-&gt;&gt;R: init_ddr(true), mc_restore_state, system_up
+  R-&gt;&gt;R: WAKEUP_S1, state SLEEP1, B014 TO_SLEEP1
+  R-&gt;&gt;R: RVBAR = WARM_BOOT_ADDR, wake_lan, bật CPU0
+  R-&gt;&gt;A: CPU0 ra khỏi reset
+  A-&gt;&gt;K: warm boot rồi cpu_resume
+  K-&gt;&gt;K: resume driver, mvri_resume, PMU_resume
+  K-&gt;&gt;App: write mem trả về, taskSTR gửi 123
+  App-&gt;&gt;App: mioChangeModeToNormal, checkFTaikiWakeupFactor
+  App-&gt;&gt;App: TASK_WakeupUSB, REQESTFACTOR
+  </pre></div>
+<p class="cap">Nguồn: <code>sys_system_thread.c:307-325</code> (wake/goodbye), <code>app_scpi.c:281-349</code> (power_cpu bật), <code>power.c:1692-1735</code> (resume), <code>power.c:316-385</code> (ap806_power_on true), <code>LPPP_Matrix.c:356-398</code> (TR8/TR10). <span class="tag t-code">[CONFIRMED BY CODE]</span> Việc ATF warm boot đi từ <code>WARM_BOOT_ADDR 0x1003</code> tới <code>bl31_warm_entrypoint</code> <span class="tag t-inf">[INFERENCE]</span> (BootROM/BLE chưa đọc).</p>
+<h3>Vì sao đích là Sleep1</h3>
+<p>LPPP luôn chuyển ErP/Sleep2 → <code>PWR_STATUS_SLEEP1</code> qua TR8/TR10. Sau khi Linux chạy lại, ứng dụng nhận wake reason qua <code>pmuEvent</code> và quyết định có lên Normal hay không. Ví dụ: <code>checkFTaikiWakeupFactor()</code> đổi cờ <code>THRD_PMU_WAKE_INFO_WOL</code> thành event <code>0x1264</code>, USB thành <code>0x1305</code>, SNMP2 thành <code>0x1308</code>. <span class="tag t-code">[CONFIRMED BY CODE]</span> <span class="ref">THRC_PowerManager.cpp:4626-4672</span></p>
+<h3>Theo từng nguồn</h3>
+<div class="scroll"><table>
+<thead><tr><th>Nguồn</th><th>Phát hiện ở</th><th>Đường vào LPPP</th><th>App event</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>Phím nguồn</td><td>INTP4 (wake GPIO)</td><td>ITER1 GPIO → <code>gpio_isr</code></td><td>INT_SOURCE 0x0002 → <code>0x1262/0x1306</code></td><td><span class="tag t-code">CODE</span> <span class="tag t-inf">đường ITER1</span></td></tr>
+<tr><td>RTC</td><td>PS-CPU RTC → <code>WAKE_UP</code> GPIOB[19]</td><td><code>gpio_isr</code></td><td>kernel đặt <code>PMU_INTRTC</code></td><td><span class="tag t-code">CODE</span> PMU_resume</td></tr>
+<tr><td>Ethernet</td><td>GMAC → LPPP filter</td><td><code>FILTER_FLAG_WAKE_SYSTEM</code></td><td><code>0x1264</code> (WOL)</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>WLAN</td><td>card WLAN → <code>WAKE_WLAN</code> GPIOB[26]</td><td><code>gpio_isr</code> (nếu flag)</td><td>kernel đặt <code>PMU_INTKR0</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Fiery</td><td><code>WAKE_FIERY</code> GPIOB[20]</td><td><code>gpio_isr</code></td><td><code>PMU_INTKR4</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>FAX</td><td>KR1 bị tắt trong ErP</td><td>—</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> Thức dậy luôn đưa máy về Sleep1 trước; lên Normal hay không là quyết định của ứng dụng.</p>
+</div></section>
+<section class="chapter" data-title="USB và network" id="s18"><div class="ch-head"><span class="ch-num">Chapter 18</span><h2 id="s18-h">USB và network</h2><button aria-controls="s18-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s18-body">
+
+<h3>USB</h3>
+<ul>
+<li><b>USB device (tới PC):</b> có host nối thì không vào ErP/DeepSleep (<code>isShiftDeepSleep</code>). <span class="tag t-code">CODE</span></li>
+<li><b>Đường STR (ErP/DeepSleep):</b> không rmmod USB; dựa vào suspend/resume của driver. Lệnh <code>unloadUSBModule.sh</code> chỉ chạy cho SuperWarp (5622-5637). <span class="tag t-code">CODE</span></li>
+<li><b>Sau resume:</b> <code>resumeAfterDeepSleep()</code> chờ <code>/sys/module/usbcore/parameters/usb_resume_fin</code> = “Y” tối đa 200 × 100 ms = <b>20 s</b>. Đọc <code>THRD_PMU_IOCSSET_RESET_USB_VAR</code>: bit0 = resume xong, bit1 = lỗi TRB DMA. <span class="tag t-code">CODE</span> <span class="ref">THRC_PowerManager.cpp:4341-4374</span></li>
+<li><b>Recovery:</b> nếu lỗi hoặc chưa xong: đặt CA72 WDT 300 s, umount + <code>rmmod usb-storage</code> (retry), <code>rmmod xhci-plat-hcd, xhci-pci, xhci-hcd, phy-usb3-mv</code>, chờ 1 s, <code>loadUSBModule.sh</code>, rồi yêu cầu reset WLAN nếu WLAN sẵn sàng. rmmod usb-storage lỗi → detail code BSP_035. <span class="tag t-code">CODE</span> <span class="ref">4376-4470</span></li>
+<li><b>Hệ quả:</b> rmmod/insmod gây disconnect và re-enumeration mọi thiết bị USB (WLAN USB, USB-LAN, thiết bị xác thực), tên interface có thể đổi và user space phải cấu hình lại. <span class="tag t-inf">INFERENCE</span></li>
+<li>WLAN Realtek: chờ <code>/proc/net/rtl8812bu/wlan0/in_suspend</code> = 0 tối đa 10 s (chỉ khi mode không phải Single/Dual Ethernet). <span class="tag t-code">CODE</span> <span class="ref">4480-4495</span></li>
+<li>Phân biệt mất clock / mất nguồn / mất context: SRS chỉ ghi dừng clock USB3.0/USB2.0; mất nguồn bus USB (VBUS) trong ErP <span class="tag t-unk">[UNKNOWN]</span>.</li>
+</ul>
+<h3>Ethernet / WoL</h3>
+<div class="diagram"><pre class="mermaid">
+flowchart LR
+  PKT["Gói tin tới RJ45"] --&gt; PHY["PHY (link giữ nguyên)"]
+  PHY --&gt; GMAC["GMAC 88MSB0120"]
+  GMAC --&gt; F{"LPPP filter theo g_wolMode"}
+  F --&gt;|"Magic Packet"| W["FILTER_FLAG_WAKE_SYSTEM"]
+  F --&gt;|"ARP hoặc Unicast khớp"| W
+  F --&gt;|"không khớp"| D["bỏ gói"]
+  W --&gt; S["SYS_EVENT_WAKE_SYSTEM"]
+  S --&gt; PC["power_cpu(0,0) bật AP"]
+  </pre></div>
+<ul>
+<li>Onboard Ethernet: wake qua LPPP filter, không qua chân KR3 (KR3 bị tắt trong ErP). <span class="tag t-code">CODE</span></li>
+<li>USB Ethernet (adapter Wired): không được giao cho LPPP; WLAN ErP setup bị bỏ qua khi adapter = Wired. Cơ chế wake qua USB-LAN trong ErP <span class="tag t-unk">[UNKNOWN]</span>.</li>
+<li>Workaround “never linking up ethernet” (5448-5462): sau SuperWarp, nếu WLAN Single STA thì <code>ifconfig eth0 up/down</code> một lần để tránh LPPP treo khi resume. <span class="tag t-code">CODE</span></li>
+</ul>
+<div class="callout c-risk"><div class="c-title"><span aria-hidden="true" class="c-ico">⚠</span>Risk</div>
+<span class="tag t-risk">[WARNING / RISK]</span>
+<p><code>mvri_suspend</code> chỉ giao GMAC cho LPPP khi <code>dev_state &amp; MVRI_DEV_STATE_IFUP</code>. Khi interface down, không có HELLO nên <code>g_wolMode</code> không bị reset về 0 và giữ giá trị của lần ngủ trước. LPPP có thể chọn nhầm ErP/Sleep2. <span class="tag t-inf">[INFERENCE]</span> từ hal_wol.c:168 và sys_hostcmd.c:174; cần log LPPP “g_wolMode” để kiểm.</p>
+</div>
+</div></section>
+<section class="chapter" data-title="Error, race và reboot" id="s19"><div class="ch-head"><span class="ch-num">Chapter 19</span><h2 id="s19-h">Error, race và reboot</h2><button aria-controls="s19-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s19-body">
+
+<h3>Đường lỗi dẫn tới reboot</h3>
+<div class="scroll"><table>
+<thead><tr><th>Điều kiện</th><th>Detail code</th><th>Vị trí</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td><code>open(/dev/PMU0)</code> lỗi (không phải SnapShot)</td><td>ASSERT <code>0x0CEA</code></td><td class="ref">5265</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>ioctl PMU lỗi (SUBSWINT, PWRSUBINT, REQESTFACTOR)</td><td>ASSERT <code>0x0CEB</code>, <code>setFA14_PmuDriverIoError(0x01..0x07, errno)</code></td><td class="ref">5292, 5305, 5775, 6012, 6019, 6103</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>mioPreChangeModeToSleep</code> lỗi</td><td><code>CFA14_DetailCode0x2008</code> + new detail <code>0x22 020 …</code> (bit8 err sleep, bit7 err normal, bit5-6 adapter, bit4 WLAN, bit1-3 MioWakeupMode, bit0 USB busy) + reboot</td><td class="ref">6045-6071</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>irq_disable_flg == 1</code> (đã có IRQ power-down / mất AC) hoặc ioctl lỗi</td><td>new detail <code>0x22 011</code> + reboot</td><td class="ref">5853-5877; kernel mdels800_pmu.c:2738</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Spawn <code>TASK_WakeupUSB</code> lỗi 3 lần</td><td>new detail <code>0x22 037</code> + reboot</td><td class="ref">5972-6003</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>mioPostChangeModeToNormal</code> lỗi</td><td>Assert <code>0x0961</code></td><td class="ref">4502-4504</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>LPPP: AP link up lỗi hai lần</td><td><code>pmu_resume</code> trả -1, <code>power_cpu</code> trả false</td><td class="ref">power.c:1718-1726; app_scpi.c:293-297</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>LPPP: suspend khi không AWAKE / resume khi không SLEEP</td><td><code>while(1)</code> trên R4</td><td class="ref">power.c:1456, 1701</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>CA72 WDT hết hạn (LPPP)</td><td>ghi cờ CA72WDT reboot vào flash (<code>LPPP_SpiFlashWrite_Ca72wdt_Reboot</code>)</td><td class="ref">LPPP_Matrix.c:443-480</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div>
+<h3>Race window</h3>
+<ol>
+<li><b>Task_pre chạy song song với B013 và NICFUM.</b> <code>si_SubCpuIntEnd</code> là <code>static int32_t</code> thường, không volatile, không khoá; quá 1 s chỉ log rồi tiếp tục. Có thể vào STR khi mask wake chưa đặt xong. <span class="tag t-risk">RISK</span> <span class="tag t-code">CODE</span></li>
+<li><b>Phím nguồn / RTC / main power trước <code>exec_str()</code>:</b> được bắt nếu nằm trong INT_SOURCE lúc đọc (5654). Sau thời điểm đọc, chỉ còn Linux <code>pm_wakeup_pending()</code> và LPPP wake. <span class="tag t-inf">INFERENCE</span></li>
+<li><b>Job in xuất hiện muộn:</b> ErP không kiểm tra job; DeepSleep kiểm tra ở 5679 và lần nữa trong <code>checkTransitionDeepSleep()</code> (luôn True). <span class="tag t-code">CODE</span></li>
+<li><b>USB resume chưa xong khi có yêu cầu ngủ mới:</b> chờ <code>bWakeupUSB_Busy</code> 10 s rồi bỏ qua (5282-5284). <code>bWakeupUSB_Busy</code> được set True trước khi spawn task (5956) để tránh OP_BTS-4583. <span class="tag t-code">CODE</span></li>
+<li><b>Wake trong lúc GOODBYE:</b> LPPP hoãn tới <code>SYS_EVENT_CAN_WAKE</code> (AR.1066939). <span class="tag t-code">CODE</span></li>
+<li><b>Mask / clear IRQ:</b> <code>PWRSUBINT(0)</code> xoá <code>interrupts</code> ở đầu hàm, nên IRQ tới trước dòng 5303 mà app chưa xử lý sẽ bị mất. <span class="tag t-inf">INFERENCE</span></li>
+<li><b>Treo vô hạn:</b> <code>exec_str</code> nếu <code>fopen</code> lỗi; <code>semTake(semID_PanelPower, WAIT_FOREVER)</code> nếu panel task giữ semaphore. <span class="tag t-code">CODE</span></li>
+</ol>
+<div class="diagram"><pre class="mermaid">
+flowchart TD
+  S["req_DeepSleepShift"] --&gt; O{"open PMU OK"}
+  O --&gt;|"không"| R1["ASSERT 0x0CEA"]
+  O --&gt;|"có"| P{"mioPreChangeModeToSleep OK"}
+  P --&gt;|"không"| R2["detail 0x2008, reboot"]
+  P --&gt;|"có"| I{"INT_SOURCE hoặc MAINSW"}
+  I --&gt;|"có"| C["huỷ, pmuEvent, về Sleep"]
+  I --&gt;|"không"| M{"mioChangeModeToSleep OK"}
+  M --&gt;|"không"| C2["0x1305, về Sleep"]
+  M --&gt;|"có"| F{"irq_disable_flg bằng 1"}
+  F --&gt;|"có"| R3["detail 0x22 011, reboot"]
+  F --&gt;|"không"| X["exec_str"]
+  X --&gt; U{"spawn TASK_WakeupUSB"}
+  U --&gt;|"lỗi 3 lần"| R4["detail 0x22 037, reboot"]
+  U --&gt;|"OK"| N["Sleep1 hoặc Normal"]
+  </pre></div>
+</div></section>
+<section class="chapter" data-title="State / sequence / activity diagrams" id="s20"><div class="ch-head"><span class="ch-num">Chapter 20</span><h2 id="s20-h">State / sequence / activity diagrams</h2><button aria-controls="s20-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s20-body">
+
+<p>Các sơ đồ boot/init (§8), eligibility (§9), PSCI/ATF (§12), state machine LPPP (§13), SLEEP1→ErP (§15), ErP→SLEEP1 (§17), Ethernet (§18), reboot (§19) đã đặt cạnh phần giải thích. Phần này bổ sung các sơ đồ còn lại.</p>
+<h3>Trạng thái power ở tầng ứng dụng</h3>
+<div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  Normal --&gt; Sleep: hết timer auto sleep
+  Sleep --&gt; DeepSleep: counter 1 s, không có ErP request
+  Sleep --&gt; ErP: counter 1 s, có ErP request
+  Normal --&gt; ErP: phím nguồn, qua Sleep
+  DeepSleep --&gt; Sleep: wake
+  ErP --&gt; Sleep: wake (LPPP về Sleep1)
+  Sleep --&gt; Normal: app quyết định
+  ErP --&gt; Sleep: huỷ ở kiểm tra cuối
+  </pre></div>
+<p class="cap">Tên trạng thái lấy theo <code>TYPE_PowerSaveStatus</code> và luồng code §9; mô hình đơn giản hoá. <span class="tag t-inf">[INFERENCE]</span></p>
+<h3>Interrupt setup và race với Task_pre</h3>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant M as task Power
+  participant T as task SUBCPUSINGL
+  participant K as PMU driver
+  M-&gt;&gt;K: ioctl SUBSWINT 0, PWRSUBINT 0
+  M-&gt;&gt;M: si_SubCpuIntEnd = 1
+  M-&gt;&gt;T: taskSpawn Task_pre_DeepSleepShift
+  par song song
+    T-&gt;&gt;K: SwitchPowerState INTP4 LOW, KRx NORMAL
+    T-&gt;&gt;K: ENG_SENSOR LOW (I2C CLR 0x0002)
+    T-&gt;&gt;T: si_SubCpuIntEnd = 0
+  and
+    M-&gt;&gt;K: echo 0 rồi 34791 vào B013
+    M-&gt;&gt;M: mioPreChangeModeToSleep
+  end
+  loop tối đa 100 lần, 10 ms
+    M-&gt;&gt;M: kiểm tra si_SubCpuIntEnd
+  end
+  opt quá 1 s
+    M-&gt;&gt;M: log Time Over rồi vẫn đi tiếp
+  end
+  </pre></div>
+<h3>WLAN ErP</h3>
+<div class="diagram"><pre class="mermaid">
+flowchart TD
+  A{"GetSnapShot"} --&gt;|"có"| Z["bỏ qua"]
+  A --&gt;|"không"| B{"b_ErP"}
+  B --&gt;|"không"| Z
+  B --&gt;|"có"| C{"có WLAN và adapter Wireless"}
+  C --&gt;|"không"| Z
+  C --&gt;|"có"| D["SET_KR0 LOW"]
+  D --&gt; E{"getReturnFromErp"}
+  E --&gt;|"MagicPacket"| F["mioWlanSetErPMode 16 56, tối đa 2 lần"]
+  E --&gt;|"ARP Unicast"| G["mioWlanSetErPMode 0 8, tối đa 2 lần"]
+  E --&gt;|"None"| H["không cấu hình"]
+  F --&gt; S["mioWlanSuspend"]
+  G --&gt; S
+  H --&gt; S
+  </pre></div>
+<h3>USB / NICFUM entry và recovery</h3>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant M as task Power
+  participant N as NICFUM
+  participant K as PMU driver
+  participant U as TASK_WakeupUSB
+  M-&gt;&gt;N: mioPreChangeModeToSleep(mode)
+  M-&gt;&gt;K: SET_STR_STATUS 1
+  M-&gt;&gt;N: mioChangeModeToSleep(mode)
+  M-&gt;&gt;M: exec_str
+  M-&gt;&gt;N: mioChangeModeToNormal(mode)
+  M-&gt;&gt;K: SET_STR_STATUS 0
+  M-&gt;&gt;U: spawn resumeAfterDeepSleep
+  U-&gt;&gt;K: SET_REQ_WLANRESET 1
+  loop tối đa 20 s
+    U-&gt;&gt;U: đọc usb_resume_fin
+  end
+  U-&gt;&gt;K: SET_RESET_USB_VAR
+  alt lỗi hoặc chưa xong
+    U-&gt;&gt;U: CA72 WDT 300 s, rmmod và loadUSBModule.sh
+    U-&gt;&gt;K: APP_REQ_WLANRESET 2
+  end
+  U-&gt;&gt;N: mioPostChangeModeToNormal(mode)
+  U-&gt;&gt;K: SET_REQ_WLANRESET 2
+  </pre></div>
+<h3>Cancellation ở kiểm tra cuối</h3>
+<div class="diagram"><pre class="mermaid">
+flowchart TD
+  A["đọc INT_SOURCE nếu b_ErP"] --&gt; J{"job in và không ErP"}
+  J --&gt;|"có"| X1["0x1305"]
+  J --&gt;|"không"| D{"DeepSleep delay và không ErP"}
+  D --&gt;|"có"| X1
+  D --&gt;|"không"| P{"chân MAINSW OFF"}
+  P --&gt;|"có"| X2["log Skip"]
+  P --&gt;|"không"| Q{"bit 0x4000"}
+  Q --&gt;|"có"| X3["0x126A"]
+  Q --&gt;|"không"| K{"bit 0x0022"}
+  K --&gt;|"có"| X4["0x1262 và 0x1306, PWRSUBINT 1"]
+  K --&gt;|"không"| R{"bit 0x2000"}
+  R --&gt;|"có"| X5["0x1263"]
+  R --&gt;|"không"| GO["mioChangeModeToSleep và exec_str"]
+  </pre></div>
+</div></section>
+<section class="chapter" data-title="Code / register / signal maps" id="s21"><div class="ch-head"><span class="ch-num">Chapter 21</span><h2 id="s21-h">Code / register / signal maps</h2><button aria-controls="s21-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s21-body">
+
+<h3>Code map</h3>
+<div class="scroll"><table>
+<thead><tr><th>Hàm</th><th>File:dòng</th><th>Vai trò</th></tr></thead>
+<tbody>
+<tr><td><code>PWRC_PowerInfo::reserveErpModeReq</code></td><td class="ref">pwr/pwrg/PWRC_PowerInfoManager.cpp:15395</td><td>Ghi nguồn yêu cầu ErP</td></tr>
+<tr><td><code>PWRC_PowerSequence::_chkPowerModeToDeepSleepTimeout</code></td><td class="ref">pwr/pwrg/PWRC_PowerSequence.cpp:10446</td><td>Kiểm tra điều kiện mỗi chu kỳ</td></tr>
+<tr><td><code>_chkEnablePowerModeToDeepSleepCounter</code></td><td class="ref">PWRC_PowerSequence.cpp:11885</td><td>Đếm 1 s, gọi setErpMode</td></tr>
+<tr><td><code>chkEnableDeepSleepErpAutoPowerOffMode</code></td><td class="ref">PWRC_PowerSequence.cpp:11086</td><td>Đường gọi thứ hai tới setErpMode</td></tr>
+<tr><td><code>PWRC_PowerImpColor::setErpMode</code></td><td class="ref">pwr/pwrc/PWRC_PowerImpColor.cpp:7516</td><td>Chờ HW rảnh, gọi callback</td></tr>
+<tr><td><code>PWRC_PowerSequence::ans_setErpMode</code></td><td class="ref">PWRC_PowerSequence.cpp:2159</td><td>Kiểm tra lại, gửi PWRD_TM_ErpModeExecReq</td></tr>
+<tr><td><code>PWRC_PowerInfo::chkExecErpMode</code></td><td class="ref">PWRC_PowerInfoManager.cpp:15467</td><td>Ghi thời điểm ErP, gọi execErpMode</td></tr>
+<tr><td><code>PWRC_PowerImpColor::execErpMode</code></td><td class="ref">PWRC_PowerImpColor.cpp:7590</td><td>RTC, BOX_FAN, req_DeepSleepShift(Erp)</td></tr>
+<tr><td><code>THRC_PowerManager::req_DeepSleepShift</code></td><td class="ref">thr/thrcom/THRC_PowerManager.cpp:5200</td><td>Kịch bản BSP</td></tr>
+<tr><td><code>Task_pre_DeepSleepShift</code></td><td class="ref">THRC_PowerManager.cpp:4528</td><td>Wake mask, ENG_SENSOR</td></tr>
+<tr><td><code>resumeAfterDeepSleep</code></td><td class="ref">THRC_PowerManager.cpp:4297</td><td>USB/WLAN recovery</td></tr>
+<tr><td><code>exec_str</code>, <code>taskSTR</code></td><td class="ref">Linux/main_BSP.cpp:2097, 2116</td><td>STR</td></tr>
+<tr><td><code>PMU_ioctl</code>, <code>PMU_suspend/resume</code></td><td class="ref">Kernel/Src/drivers/mfp/pmu/mdels800_pmu.c:4193, 4560, 4587</td><td>Kernel PMU</td></tr>
+<tr><td><code>mvri_suspend</code>, <code>mvri_fw_firmware_start</code></td><td class="ref">drivers/net/ethernet/marvell/mvri_nonpci.c:2891; mvri_fw.c:824 (MVRI_FW_SUPPORT, osm.h:38)</td><td>Giao GMAC</td></tr>
+<tr><td><code>psci_system_suspend_enter</code></td><td class="ref">drivers/firmware/psci/psci.c:323</td><td>SMC</td></tr>
+<tr><td><code>a8k_pwr_domain_off</code>, <code>scpi_set_css_power_state</code></td><td class="ref">atf_s800/plat/marvell/a8k/quartz/plat_pm.c:186; scpi.c:137</td><td>ATF → LPPP</td></tr>
+<tr><td><code>power_cpu</code></td><td class="ref">lppp_s800/ApplicationMrvl/Test/app_scpi.c:200</td><td>Chọn ErP/Sleep2</td></tr>
+<tr><td><code>pmu_infrastructure_suspend/resume</code></td><td class="ref">lppp_s800/Hal/quartz/asic/build/power.c:1443, 1692</td><td>Tắt/bật AP, DDR, PLL</td></tr>
+<tr><td><code>send_power_state_to_pscpu</code></td><td class="ref">lppp_s800/ApplicationKM/LPPP_I2C.c:1020</td><td>I2C reg 0x68</td></tr>
+<tr><td><code>mc_pwr_en_proc</code>, <code>erp_sensor_proc</code></td><td class="ref">PS-CPU/pscpu_s800/main/App/km_extend_io.c:1096, 687</td><td>Tín hiệu nguồn</td></tr>
+</tbody>
+</table></div>
+<h3>Register / ioctl map</h3>
+<div class="scroll"><table>
+<thead><tr><th>Mục</th><th>Giá trị</th><th>Ý nghĩa</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>B013</td><td>flash offset 0x000FF01A, 2 byte</td><td>ErP ghi 0x87E7; bit chưa có định nghĩa</td><td><span class="tag t-code">CODE</span> <span class="tag t-unk">bit</span></td></tr>
+<tr><td>B014</td><td>flash offset 0x000FF01C</td><td>DeepSleep ghi 0x80FF; bit theo LPPP_Flash.h</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU I2C slave</td><td>0x3E</td><td>LPPP và kernel cùng dùng</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU 0x68</td><td>0x00 normal, 0x01 sleep2/erp, 0x02 boot; +0x04 Eagle3</td><td>INTERNAL_STS</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU 0x6C</td><td>0x0001 SLEEP_STATUS_REM=0, 0x0002 =1</td><td>INTERNAL_CTL (LPPP→PS-CPU)</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU 0x70 / 0x74 / 0x78</td><td>GET / SET / CLR</td><td>Extend output; bit0 IR_P_ON, bit1 /ERP, bit2 /RESET, bit5 MC_P_ON, bit9 /RST_SLP2, bit10 /USB2_OE (kernel) hoặc /ENG_STATUS1 (PS-CPU), bit11 /ENG_STATUS2, bit12 MC_PWR_EN</td><td><span class="tag t-code">CODE</span> <span class="tag t-risk">bit10 lệch tên</span></td></tr>
+<tr><td>SCPI 0x03</td><td>payload cpu|cluster|state</td><td>SET_CSS_POWER_STATE, không reply</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>SCPI 0x80</td><td>wake int number</td><td>Đăng ký wake interrupt cho LPPP</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>KM SCPI 0x81-0x8C</td><td>GET_PROTOCOL_VER … SET_WDT_CA72_EXT</td><td>km_scpi.h:23-35</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>THRD_PMU_IOC*</code></td><td>5 REQESTFACTOR, 6 PWRSUBINT, 10 SUBSWINT, 11 GETWAKEINFO, 14 GET_IRQ_DISABLE_FLG, 15 GET_DETAILFLG, 31 SET_STR_STATUS</td><td>THRC_PowerManager.h:191-214</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>pmuEvent</td><td>0x1262 phím nguồn bắt đầu, 0x1263 timer, 0x1264 WOL, 0x126A main OFF, 0x1305 LAN/huỷ, 0x1306 phím ngắn, 0x1308 SNMP2</td><td>theo comment code</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div>
+<p class="cap">Bit10 của extend output: kernel đặt tên <code>PSCPU_BIT_USB2_OE 0x0400</code> (mdels800_pmu.c:245), còn PS-CPU <code>EXTEND_OUTPUT_INIT_VALUE</code> chú thích bit10 là <code>/ENG_STATUS1</code> (km_extend_io.c:392). Một trong hai chú thích đã lỗi thời. <span class="tag t-risk">[WARNING / RISK]</span></p>
+</div></section>
+<section class="chapter" data-title="Debug guide" id="s22"><div class="ch-head"><span class="ch-num">Chapter 22</span><h2 id="s22-h">Debug guide</h2><button aria-controls="s22-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s22-body">
+
+<p>Log string dưới đây lấy trực tiếp từ code. Chưa có log máy thật để đối chiếu. <span class="tag t-code">CODE</span></p>
+<details open=""><summary>Không vào ErP</summary>
+<ul>
+<li><b>Nguyên nhân thường gặp:</b> không có ErP request, USB host đang nối, wake timer &lt; 1 phút, MainSwOFF, đang PowerSaveDoing.</li>
+<li><b>Log:</b> <code>□■[Power][reserveErpModeReq] ChangeERP=[%d]■□</code>, <code>□■[Power]Not Shift Erp Mode!(1) …</code>, <code>[setErpMode]Shift Erp mode.</code>, <code>[chkExecErpMode]</code>, <code>][execErpMode] Request!!</code>.</li>
+<li><b>Kiểm tra:</b> <code>cat /sys/bus/platform/drivers/ci_hdrc/ci_hdrc.0/power/level</code> (phải “suspend”), cài đặt Off Power Mode.</li>
+<li><b>Kỳ vọng:</b> thấy “req_DeepSleepShift() Start” trong vòng ~1 s sau khi đủ điều kiện.</li>
+</ul>
+</details>
+<details><summary>Bị huỷ ở bước cuối</summary>
+<ul>
+<li><b>Log:</b> <code>Skip DeepSleep/Erp for MainPowerSwitch Off interrupt</code>, <code>Skip Erp for PowerSW interrupt</code>, <code>Skip Erp for RTC interrupt</code>, <code>req_DeepSleepShift(): mioChangeModeToSleep() return ERROR!!</code>, <code>Task_pre_DeepSleepShift(): Time Over</code>.</li>
+<li><b>Register:</b> <code>cat …/PMU.0/devices/INT_PIN_STATUS</code> (bit2 MAINSW), lưu ý đọc <code>INT_SOURCE</code> sẽ xoá giá trị.</li>
+<li><b>Bước tiếp:</b> so pmuEvent (0x1262/0x1263/0x126A/0x1305) với thời điểm nhấn phím.</li>
+</ul>
+</details>
+<details><summary>Reboot khi vào ErP</summary>
+<ul>
+<li><b>Log:</b> <code>mioRequestDeepSleepStart()にてエラー検出。FA14詳細コード0x2008の記録とリブート</code>, <code>new detail code. 0x…</code>, <code>si_Ret2[%d] , irq_disable_flg[%d]</code>, <code>@@ detect PD interrupt.</code>.</li>
+<li><b>Giải mã:</b> detail <code>0x22 020</code>: bit8 lỗi Sleep, bit7 lỗi Normal, bit5-6 adapter, bit4 WLAN, bit1-3 MioWakeupMode, bit0 USB busy (6048-6055).</li>
+<li><b>Bước tiếp:</b> nếu <code>irq_disable_flg=1</code> → điều tra nguồn AC (POWER_MONITOR), không phải ErP.</li>
+</ul>
+</details>
+<details><summary>Không wake</summary>
+<ul>
+<li><b>LPPP log:</b> <code>wake events %x</code>, <code>Set WAKE_WLAN interrupt enable.</code>, <code>WAKE_SYSTEM Events=%08x</code>, <code>wake delay</code>, <code>cpu id %d ON at …</code>, <code>AP_PG no good</code>.</li>
+<li><b>Kernel log:</b> <code>PMU_resume:WAKE_UP detect</code>, <code>…WAKE_FIERY…</code>, <code>…WAKE_WLAN…</code>.</li>
+<li><b>Signal:</b> đo AP_PWR_EN (GPIOC[1]), AP_PG (GPIOH[19]), MC_PWR_EN.</li>
+<li><b>Bước tiếp:</b> nếu LPPP thấy wake nhưng không có “AP_PG good” → nguồn AP; nếu có AP_PG mà Linux im lặng → ATF warm boot / DDR (<code>init_ddr(true)</code>).</li>
+</ul>
+</details>
+<details><summary>USB lỗi sau wake</summary>
+<ul>
+<li><b>Log:</b> <code>Start EXT Watchdog Timer 300s for USB Resume recovery</code>, <code>[USB Resume] unloadUSBModule.sh</code>, <code>rmmod NG module=…</code>, <code>usb_resume_fin[%d]</code>.</li>
+<li><b>Kiểm:</b> <code>cat /sys/module/usbcore/parameters/usb_resume_fin</code>.</li>
+</ul>
+</details>
+<details><summary>Network lỗi sau wake</summary>
+<ul>
+<li><b>Log LPPP:</b> <code>MSG_CMD_SYSTEM_SET_WOL value=%08x</code>, <code>…(g_wolMode:%x)</code>, <code>HELLO Events</code>, <code>GOODBYE</code>.</li>
+<li><b>Log kernel:</b> <code>lppp acquiring Ethernet HW...</code>, <code>lppp owns Ethernet HW</code>, <code>failed to start firmware!</code>, <code>sending firmware goodbye failed</code>.</li>
+<li><b>Bước tiếp:</b> kiểm tra interface up trước khi ngủ, kiểm tra LPPP có vào ERP hay SLEEP2.</li>
+</ul>
+</details>
+<details><summary>Peripheral mất sau wake</summary>
+<ul><li>Kiểm tra <code>B014</code> có bit TO_SLEEP1 / BEGIN_PHASE6; log <code>pmu_system_up</code>, <code>Skip pmu_MC_***</code>; <code>Restart 88MSB0120/0104</code> theo SRS. Driver chưa lần theo <span class="tag t-unk">UNKNOWN</span>.</li></ul>
+</details>
+<details><summary>Công suất không đạt</summary>
+<ul>
+<li>Xác định LPPP ở ERP hay SLEEP2 (log <code>Scenario function is called.[status:%d]</code>).</li>
+<li>Đo ERP_SENSOR_ON (phải LOW), MC_PWR_EN (LOW), AP_PWR_EN (LOW). Liên quan OP_BTS-16624 “DeepSleep後にErP移行すると電力が高い”.</li>
+<li>Xem LED link: ErP không nháy LED (hal_lan.c:280).</li>
+</ul>
+</details>
+</div></section>
+<section class="chapter" data-title="Test matrix" id="s23"><div class="ch-head"><span class="ch-num">Chapter 23</span><h2 id="s23-h">Test matrix</h2><button aria-controls="s23-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s23-body">
+
+<div class="scroll"><table>
+<thead><tr><th>ID</th><th>Precondition</th><th>Steps</th><th>Expected (log / register / signal / power)</th></tr></thead>
+<tbody>
+<tr><td>T01 Weekly Timer entry</td><td>Off Power Mode = ErP Auto Power Off, WT cài</td><td>Chờ WT tắt máy</td><td><code>ChangeERP=[WeeklyTimer]</code>, <code>req_DeepSleepShift() Start</code>, B013=34791, LPPP state ERP, AP_PWR_EN=0, ≤0.5 W</td></tr>
+<tr><td>T02 Power key entry</td><td>Normal</td><td>Nhấn phím nguồn</td><td><code>ErpAutoPowerOff MSG Receive</code>, như T01</td></tr>
+<tr><td>T03 Power key wake</td><td>Đang ErP</td><td>Nhấn phím</td><td><code>WAKE_SYSTEM</code>, AP_PG good, LPPP SLEEP1, app event 0x1262/0x1306</td></tr>
+<tr><td>T04 RTC wake</td><td>WT đặt giờ thức</td><td>Chờ</td><td><code>PMU_resume:WAKE_UP detect</code>, PMU_INTRTC</td></tr>
+<tr><td>T05 Magic Packet</td><td>Return from ErP = Magic, cáp LAN nối</td><td>Gửi Magic Packet</td><td>LPPP filter wake, event 0x1264</td></tr>
+<tr><td>T06 ARP/Unicast</td><td>Return from ErP = ARP+Unicast</td><td>ping / ARP</td><td>Wake; khi Magic-only thì không wake</td></tr>
+<tr><td>T07 WLAN wake</td><td>Adapter Wireless</td><td>Gửi gói qua WLAN</td><td><code>mioWlanSetErPMode_* OK</code>, <code>WAKE_WLAN detect</code></td></tr>
+<tr><td>T08 USB host nối</td><td>Cáp USB tới PC</td><td>Chờ WT</td><td>Không vào ErP (<code>isShiftDeepSleep</code> False)</td></tr>
+<tr><td>T09 USB device / USB LAN</td><td>Thiết bị USB cắm</td><td>Vào ErP rồi wake</td><td><code>usb_resume_fin = Y</code> trong 20 s; không recovery</td></tr>
+<tr><td>T10 Option Fiery</td><td>Fiery lắp</td><td>Vào ErP</td><td>/ENG_STATUS1/2 theo SRS; Fiery kéo WAKE_FIERY có/không wake (xác minh rủi ro §16)</td></tr>
+<tr><td>T11 Active job</td><td>Job in đang chờ</td><td>Kích ErP</td><td>ErP vẫn vào (khác DeepSleep)</td></tr>
+<tr><td>T12 Main SW trong transition</td><td>—</td><td>Tắt MSW ngay sau “Start”</td><td><code>Skip DeepSleep/Erp for MainPowerSwitch Off…</code>, chuỗi tắt nguồn</td></tr>
+<tr><td>T13 Phím nguồn trong transition</td><td>—</td><td>Nhấn trong 1 s đầu</td><td><code>Skip Erp for PowerSW interrupt</code>, không treo phím</td></tr>
+<tr><td>T14 Wake trong GOODBYE</td><td>LAN</td><td>Gửi Magic ngay lúc suspend</td><td><code>wake delay</code> rồi <code>wake start</code></td></tr>
+<tr><td>T15 Lặp lại</td><td>—</td><td>ErP ↔ Sleep1 1000 lần</td><td>Không reboot, không detail 0x2008/0x22011/0x22037</td></tr>
+<tr><td>T16 Dài hạn</td><td>—</td><td>ErP 72 h</td><td>Wake OK, công suất ổn định</td></tr>
+<tr><td>T17 Đo công suất</td><td>Cấu hình theo chuẩn (UNKNOWN)</td><td>Đo AC input</td><td>≤0.5 W (SRS)</td></tr>
+<tr><td>T18 Error injection</td><td>Debug build</td><td>Làm <code>mioPreChangeModeToSleep</code> lỗi; xoá <code>/sys/power/state</code> quyền ghi</td><td>Reboot 0x2008; quan sát treo exec_str (rủi ro §10)</td></tr>
+<tr><td>T19 Interface down</td><td><code>ifconfig eth0 down</code></td><td>Vào ErP sau một lần Sleep2</td><td>Log LPPP <code>g_wolMode</code> (xác minh rủi ro §18)</td></tr>
+</tbody>
+</table></div>
+<p class="cap">Pass khi mọi expected đều quan sát được; fail khi thiếu bất kỳ dòng log hoặc mức tín hiệu nào.</p>
+</div></section>
+<section class="chapter" data-title="Unknowns và dữ liệu cần thêm" id="s24"><div class="ch-head"><span class="ch-num">Chapter 24</span><h2 id="s24-h">Unknowns và dữ liệu cần thêm</h2><button aria-controls="s24-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s24-body">
+
+<div class="scroll"><table>
+<thead><tr><th>Unknown</th><th>Dữ liệu cần</th></tr></thead>
+<tbody>
+<tr><td>NICFUM <code>mioPreChangeModeToSleep/mioChangeModeToSleep/mioWlanSetErPMode</code> làm gì, có gửi SET_WOL không</td><td>Source NICFUM hoặc spec API</td></tr>
+<tr><td>Bit B013 (0x87E7)</td><td>Spec B-register</td></tr>
+<tr><td>Nghĩa mức 1/0 của bit B014</td><td>Spec B-register / Bregister_modify</td></tr>
+<tr><td>Defconfig và DTS thật của IT6 (PSCI conduit, scpi power domain, wake GPIO)</td><td>Build config, DTS</td></tr>
+<tr><td>Bảng matrix event → hàm của LPPP</td><td>Đọc <code>LPPP_Task.c event_handler</code> đầy đủ</td></tr>
+<tr><td>DDR self-refresh trong ErP</td><td>Caller của <code>mv_lpddr4_sleep.c</code>, đo CKE</td></tr>
+<tr><td>Panel, HDD (POWER_ON_HDD), Fiery, UART clock</td><td>Driver tương ứng, SRS chi tiết</td></tr>
+<tr><td>Công suất thực tế, điều kiện đo, lot/version ErP</td><td>Báo cáo đo</td></tr>
+<tr><td>Log thật của một chu kỳ ErP</td><td>Log COM (BSP, kernel, LPPP UART)</td></tr>
+<tr><td>Mâu thuẫn “CA72 Power Down in SLEEP1”</td><td>Hỏi HW team</td></tr>
+<tr><td>ENG_STATUS7</td><td>Schematic</td></tr>
+</tbody>
+</table></div>
+</div></section>
+<section class="chapter" data-title="Final summary" id="s25"><div class="ch-head"><span class="ch-num">Chapter 25</span><h2 id="s25-h">Final summary</h2><button aria-controls="s25-body" aria-expanded="true" class="ch-toggle" type="button">Thu gọn</button></div><div class="ch-body" id="s25-body">
+
+<div class="codewrap"><div class="codebar"><span>code</span><button class="copy-btn" type="button">Copy</button></div><pre class="code">Phím nguồn / Weekly Timer (Off Power Mode = ErP Auto Power Off)
+  -&gt; reserveErpModeReq -&gt; _chkPowerModeToDeepSleepTimeout (Sleep, &gt;1 phút, không USB host, 1 s)
+  -&gt; setErpMode -&gt; ans_setErpMode -&gt; PWRD_TM_ErpModeExecReq -&gt; chkExecErpMode -&gt; execErpMode
+  -&gt; req_DeepSleepShift(Erp): chặn IRQ, Task_pre (wake mask, ENG_SENSOR LOW), WLAN ErP, B013=0x87E7
+  -&gt; mioChangeModeToSleep(RETENTION) -&gt; exec_str -&gt; taskSTR: "mem" -&gt; /sys/power/state
+  -&gt; Linux suspend: mvri_suspend gửi SET_WOL/GOODBYE (LPPP giữ GMAC, g_wolMode != 0)
+  -&gt; PSCI CPU_OFF x3, SYSTEM_SUSPEND -&gt; ATF a8k_pwr_domain_off -&gt; SCPI 0x03 qua MHU
+  -&gt; LPPP power_cpu: ALL_CPU_OFF -&gt; pmu_suspend (L2 flush, MC save, UL off, AP_PWR_EN=0, PLL D2)
+  -&gt; I2C PS-CPU 0x68=0x01 -&gt; PS-CPU: MC_PWR_EN=0, ERP_SENSOR_ON=0 -&gt; LPPP state ERP
+  -&gt; wake (GPIO / LAN filter / timer) -&gt; power_cpu(0,0) -&gt; pmu_resume (AP_PWR_EN=1, AP_PG, DDR, MC)
+  -&gt; LPPP state SLEEP1 -&gt; CPU0 warm boot -&gt; Linux resume -&gt; exec_str trả về
+  -&gt; mioChangeModeToNormal, TASK_WakeupUSB, wake reason -&gt; Sleep1 hoặc Normal</pre></div>
+<div class="verdict">
+<pre>ERP ENTRY REQUEST CONFIRMED
+PHYSICAL ERP STATE NOT FULLY CONFIRMED</pre>
+<p class="cap">Thiếu: log thật (BSP + kernel + LPPP UART), đo AP_PWR_EN / MC_PWR_EN / ERP_SENSOR_ON, đo công suất, source NICFUM.</p>
+</div>
+<p class="callout c-remember"><span class="c-title-inline">🧠 Điều cần nhớ:</span> ErP là Sleep2 với cờ WoL: cùng một đường tắt nguồn, khác ở bộ wake và cách LPPP xử lý mạng.</p>
+</div></section>
+
+<section id="appx" class="chapter" data-title="Phụ lục">
+<div class="ch-head"><span class="ch-num">Appendix</span><h2 id="appx-title">Phụ lục A–H</h2>
+<button type="button" class="ch-toggle" aria-expanded="false" aria-controls="appx-body">Mở rộng</button></div>
+<div class="ch-body" id="appx-body" hidden>
+<p class="cap">Các bảng phụ lục được trích lại từ nội dung đã có trong tài liệu, không bổ sung dữ liệu mới.</p>
+<details id="appx-a"><summary>Appendix A. Function index (từ Code map §21)</summary><div class="scroll"><table>
+<thead><tr><th>Hàm</th><th>File:dòng</th><th>Vai trò</th></tr></thead>
+<tbody>
+<tr><td><code>PWRC_PowerInfo::reserveErpModeReq</code></td><td class="ref">pwr/pwrg/PWRC_PowerInfoManager.cpp:15395</td><td>Ghi nguồn yêu cầu ErP</td></tr>
+<tr><td><code>PWRC_PowerSequence::_chkPowerModeToDeepSleepTimeout</code></td><td class="ref">pwr/pwrg/PWRC_PowerSequence.cpp:10446</td><td>Kiểm tra điều kiện mỗi chu kỳ</td></tr>
+<tr><td><code>_chkEnablePowerModeToDeepSleepCounter</code></td><td class="ref">PWRC_PowerSequence.cpp:11885</td><td>Đếm 1 s, gọi setErpMode</td></tr>
+<tr><td><code>chkEnableDeepSleepErpAutoPowerOffMode</code></td><td class="ref">PWRC_PowerSequence.cpp:11086</td><td>Đường gọi thứ hai tới setErpMode</td></tr>
+<tr><td><code>PWRC_PowerImpColor::setErpMode</code></td><td class="ref">pwr/pwrc/PWRC_PowerImpColor.cpp:7516</td><td>Chờ HW rảnh, gọi callback</td></tr>
+<tr><td><code>PWRC_PowerSequence::ans_setErpMode</code></td><td class="ref">PWRC_PowerSequence.cpp:2159</td><td>Kiểm tra lại, gửi PWRD_TM_ErpModeExecReq</td></tr>
+<tr><td><code>PWRC_PowerInfo::chkExecErpMode</code></td><td class="ref">PWRC_PowerInfoManager.cpp:15467</td><td>Ghi thời điểm ErP, gọi execErpMode</td></tr>
+<tr><td><code>PWRC_PowerImpColor::execErpMode</code></td><td class="ref">PWRC_PowerImpColor.cpp:7590</td><td>RTC, BOX_FAN, req_DeepSleepShift(Erp)</td></tr>
+<tr><td><code>THRC_PowerManager::req_DeepSleepShift</code></td><td class="ref">thr/thrcom/THRC_PowerManager.cpp:5200</td><td>Kịch bản BSP</td></tr>
+<tr><td><code>Task_pre_DeepSleepShift</code></td><td class="ref">THRC_PowerManager.cpp:4528</td><td>Wake mask, ENG_SENSOR</td></tr>
+<tr><td><code>resumeAfterDeepSleep</code></td><td class="ref">THRC_PowerManager.cpp:4297</td><td>USB/WLAN recovery</td></tr>
+<tr><td><code>exec_str</code>, <code>taskSTR</code></td><td class="ref">Linux/main_BSP.cpp:2097, 2116</td><td>STR</td></tr>
+<tr><td><code>PMU_ioctl</code>, <code>PMU_suspend/resume</code></td><td class="ref">Kernel/Src/drivers/mfp/pmu/mdels800_pmu.c:4193, 4560, 4587</td><td>Kernel PMU</td></tr>
+<tr><td><code>mvri_suspend</code>, <code>mvri_fw_firmware_start</code></td><td class="ref">drivers/net/ethernet/marvell/mvri_nonpci.c:2891; mvri_fw.c:824 (MVRI_FW_SUPPORT, osm.h:38)</td><td>Giao GMAC</td></tr>
+<tr><td><code>psci_system_suspend_enter</code></td><td class="ref">drivers/firmware/psci/psci.c:323</td><td>SMC</td></tr>
+<tr><td><code>a8k_pwr_domain_off</code>, <code>scpi_set_css_power_state</code></td><td class="ref">atf_s800/plat/marvell/a8k/quartz/plat_pm.c:186; scpi.c:137</td><td>ATF → LPPP</td></tr>
+<tr><td><code>power_cpu</code></td><td class="ref">lppp_s800/ApplicationMrvl/Test/app_scpi.c:200</td><td>Chọn ErP/Sleep2</td></tr>
+<tr><td><code>pmu_infrastructure_suspend/resume</code></td><td class="ref">lppp_s800/Hal/quartz/asic/build/power.c:1443, 1692</td><td>Tắt/bật AP, DDR, PLL</td></tr>
+<tr><td><code>send_power_state_to_pscpu</code></td><td class="ref">lppp_s800/ApplicationKM/LPPP_I2C.c:1020</td><td>I2C reg 0x68</td></tr>
+<tr><td><code>mc_pwr_en_proc</code>, <code>erp_sensor_proc</code></td><td class="ref">PS-CPU/pscpu_s800/main/App/km_extend_io.c:1096, 687</td><td>Tín hiệu nguồn</td></tr>
+</tbody>
+</table></div></details>
+<details id="appx-b"><summary>Appendix B. File index theo layer (65 file)</summary><div class="scroll"><table><thead><tr><th>Layer</th><th>File</th></tr></thead><tbody><tr><td>Controller / BSP</td><td><code>APIC_Setting_Network.h</code></td></tr><tr><td>Controller / BSP</td><td><code>APIC_SystemInfo_DEF.h</code></td></tr><tr><td>Controller / BSP</td><td><code>include/lib/psci/psci.h</code></td></tr><tr><td>Controller / BSP</td><td><code>IT6_Controller/KM3/application/mfp/system/thr/thrcom/THRC_PowerManager.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>km_i2c.c</code></td></tr><tr><td>Controller / BSP</td><td><code>Linux/main_BSP.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>loadUSBModule.sh</code></td></tr><tr><td>Controller / BSP</td><td><code>mv_lpddr4_sleep.c</code></td></tr><tr><td>Controller / BSP</td><td><code>nicfum/h/mioApi.h</code></td></tr><tr><td>Controller / BSP</td><td><code>psci_off.c</code></td></tr><tr><td>Controller / BSP</td><td><code>pwr/pwrc/PWRC_PowerImpColor.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>pwr/pwrg/PWRC_Power.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>pwr/pwrg/PWRC_PowerInfoManager.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>pwr/pwrg/PWRC_PowerSequence.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>PWRC_PowerImpColor.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>PWRC_PowerInfoManager.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>PWRC_PowerSequence.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>scpi_debug.c</code></td></tr><tr><td>Controller / BSP</td><td><code>system/pwr/pwrc/PWRC_PowerImpColor.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>system/pwr/pwrg/PWRC_PowerSequence.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>system/pwr/PWRG_InitModuleIf.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>system/sys/sysg/SYSC_SystemInit.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>system/thr/thrcom/THRC_PowerManager.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>thr/thrcom/THRC_PowerManager.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>THRC_PowerManager.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>THRC_PowerManager.h</code></td></tr><tr><td>Controller / BSP</td><td><code>THRC_PowerManagerDevice.cpp</code></td></tr><tr><td>Controller / BSP</td><td><code>unloadUSBModule.sh</code></td></tr><tr><td>Linux kernel / driver</td><td><code>drivers/firmware/km_scpi.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>drivers/firmware/psci/psci.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>drivers/net/ethernet/marvell/mvri_nonpci.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>kernel/power/suspend.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>Kernel/Src/drivers/mfp/pmu/mdels800_pmu.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>mdels800_pmu.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>mdels800_pmu.h</code></td></tr><tr><td>Linux kernel / driver</td><td><code>mvri_fw.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>mvri_user.h</code></td></tr><tr><td>Linux kernel / driver</td><td><code>osm.h</code></td></tr><tr><td>Linux kernel / driver</td><td><code>psci_suspend.c</code></td></tr><tr><td>Linux kernel / driver</td><td><code>suspend.c</code></td></tr><tr><td>ATF</td><td><code>atf/atf_s800/plat/marvell/a8k/quartz/plat_pm.c</code></td></tr><tr><td>ATF</td><td><code>atf_s800/plat/marvell/a8k/quartz/plat_pm.c</code></td></tr><tr><td>ATF</td><td><code>include/plat/marvell/a8k/common/arm_def.h</code></td></tr><tr><td>ATF</td><td><code>lib/psci/psci_main.c</code></td></tr><tr><td>ATF</td><td><code>plat/marvell/a8k/common/include/platform_def.h</code></td></tr><tr><td>ATF</td><td><code>plat_pm.c</code></td></tr><tr><td>ATF</td><td><code>psci_main.c</code></td></tr><tr><td>ATF</td><td><code>scpi.c</code></td></tr><tr><td>LPPP / R4</td><td><code>app_gpio.c</code></td></tr><tr><td>LPPP / R4</td><td><code>app_scpi.c</code></td></tr><tr><td>LPPP / R4</td><td><code>Application/hostcmd/app_hostcmd.c</code></td></tr><tr><td>LPPP / R4</td><td><code>ApplicationKM/LPPP_Matrix.c</code></td></tr><tr><td>LPPP / R4</td><td><code>Hal/quartz/asic/build/power.c</code></td></tr><tr><td>LPPP / R4</td><td><code>Hal/quartz/src/hal_wol.c</code></td></tr><tr><td>LPPP / R4</td><td><code>LPPP_I2C.c</code></td></tr><tr><td>LPPP / R4</td><td><code>LPPP_Matrix.c</code></td></tr><tr><td>LPPP / R4</td><td><code>lppp_s800/ApplicationKM/LPPP_Flash.h</code></td></tr><tr><td>LPPP / R4</td><td><code>lppp_s800/ApplicationKM/LPPP_I2C.c</code></td></tr><tr><td>LPPP / R4</td><td><code>lppp_s800/ApplicationMrvl/Test/app_scpi.c</code></td></tr><tr><td>LPPP / R4</td><td><code>lppp_s800/Hal/quartz/asic/build/power.c</code></td></tr><tr><td>LPPP / R4</td><td><code>power.c</code></td></tr><tr><td>LPPP / R4</td><td><code>Sys/hostcmd/sys_hostcmd.c</code></td></tr><tr><td>PS-CPU</td><td><code>km_extend_io.c</code></td></tr><tr><td>PS-CPU</td><td><code>PS-CPU/FINAL_MCU_DESIGN_DOCUMENTATION.md</code></td></tr><tr><td>PS-CPU</td><td><code>PS-CPU/pscpu_s800/main/App/km_extend_io.c</code></td></tr></tbody></table></div>
+<p class="cap">Layer được phân nhóm tự động theo đường dẫn file.</p></details>
+<details id="appx-c"><summary>Appendix C. Register / ioctl index (từ §21)</summary><div class="scroll"><table>
+<thead><tr><th>Mục</th><th>Giá trị</th><th>Ý nghĩa</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>B013</td><td>flash offset 0x000FF01A, 2 byte</td><td>ErP ghi 0x87E7; bit chưa có định nghĩa</td><td><span class="tag t-code">CODE</span> <span class="tag t-unk">bit</span></td></tr>
+<tr><td>B014</td><td>flash offset 0x000FF01C</td><td>DeepSleep ghi 0x80FF; bit theo LPPP_Flash.h</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU I2C slave</td><td>0x3E</td><td>LPPP và kernel cùng dùng</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU 0x68</td><td>0x00 normal, 0x01 sleep2/erp, 0x02 boot; +0x04 Eagle3</td><td>INTERNAL_STS</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU 0x6C</td><td>0x0001 SLEEP_STATUS_REM=0, 0x0002 =1</td><td>INTERNAL_CTL (LPPP→PS-CPU)</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>PS-CPU 0x70 / 0x74 / 0x78</td><td>GET / SET / CLR</td><td>Extend output; bit0 IR_P_ON, bit1 /ERP, bit2 /RESET, bit5 MC_P_ON, bit9 /RST_SLP2, bit10 /USB2_OE (kernel) hoặc /ENG_STATUS1 (PS-CPU), bit11 /ENG_STATUS2, bit12 MC_PWR_EN</td><td><span class="tag t-code">CODE</span> <span class="tag t-risk">bit10 lệch tên</span></td></tr>
+<tr><td>SCPI 0x03</td><td>payload cpu|cluster|state</td><td>SET_CSS_POWER_STATE, không reply</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>SCPI 0x80</td><td>wake int number</td><td>Đăng ký wake interrupt cho LPPP</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>KM SCPI 0x81-0x8C</td><td>GET_PROTOCOL_VER … SET_WDT_CA72_EXT</td><td>km_scpi.h:23-35</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>THRD_PMU_IOC*</code></td><td>5 REQESTFACTOR, 6 PWRSUBINT, 10 SUBSWINT, 11 GETWAKEINFO, 14 GET_IRQ_DISABLE_FLG, 15 GET_DETAILFLG, 31 SET_STR_STATUS</td><td>THRC_PowerManager.h:191-214</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>pmuEvent</td><td>0x1262 phím nguồn bắt đầu, 0x1263 timer, 0x1264 WOL, 0x126A main OFF, 0x1305 LAN/huỷ, 0x1306 phím ngắn, 0x1308 SNMP2</td><td>theo comment code</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div></details>
+<details id="appx-d"><summary>Appendix D. Signal index (từ §14)</summary><div class="scroll"><table>
+<thead><tr><th>Tín hiệu</th><th>Nguồn → đích</th><th>Active</th><th>Chuyển trong ErP entry</th><th>Code ghi / đọc</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td><code>AP_PWR_REQ</code> (tên trong SRS)</td><td>LPPP → AP / PS-CPU</td><td class="unk">—</td><td>1 → 0</td><td>Không có symbol này trong code; tương ứng <code>AP_PWR_EN</code></td><td><span class="tag t-doc">DOC</span> <span class="tag t-inf">tên lệch</span></td></tr>
+<tr><td><code>AP_PWR_EN</code></td><td>LPPP GPIOC[1] → regulator AP, PS-CPU PA? (<code>AP_PWR_EN_Pin GPIO_PIN_2</code>)</td><td>HIGH = bật AP</td><td>1 → 0</td><td>LPPP <code>ap806_power_on</code>; PS-CPU đọc</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>AP_PG</code></td><td>regulator → LPPP GPIOH[19]</td><td>HIGH = good</td><td>đọc khi bật lại, timeout 500 ms</td><td><code>ap806_power_good(500)</code> power.c:290-313</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>ERP_SENSOR_ON</code></td><td>PS-CPU → cảm biến engine</td><td>HIGH = sensor on</td><td>→ LOW</td><td><code>erp_sensor_proc</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>MC_PWR_EN</code></td><td>PS-CPU → nguồn engine 3.3 V</td><td>HIGH</td><td>→ LOW (tự động khi AP_PWR_EN=0)</td><td><code>mc_pwr_en_proc</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>MC_P_ON</code></td><td>PS-CPU → nguồn engine 24 V</td><td>HIGH</td><td class="unk">UNKNOWN trong ErP entry</td><td>kernel PIN_ATTR ENG_POWER (bit 0x0020)</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+<tr><td><code>IR_P_ON</code></td><td>PS-CPU → nguồn IR</td><td>HIGH</td><td class="unk">UNKNOWN</td><td>PIN_ATTR IR_RY (bit 0x0001)</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+<tr><td><code>SB_PWR_EN</code></td><td>PS-CPU → nguồn South Bridge (AON)</td><td>HIGH</td><td>giữ 1 (chỉ 0 khi main power off)</td><td>PS-CPU</td><td><span class="tag t-doc">DOC</span> sheet 2.1</td></tr>
+<tr><td><code>/RESET</code></td><td>PS-CPU → SB</td><td>LOW = reset</td><td>giữ 1</td><td><code>sb_reset_proc</code></td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td><code>/RST_SLP2</code></td><td>PS-CPU</td><td>LOW</td><td>→ LOW khi AP_PWR_EN=0 (rst_usb_proc STATE_INT)</td><td>km_extend_io.c:713-718; kernel <code>PMU_I2cSet_RST_SLP2n</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>/USB2_OE</code></td><td>PS-CPU</td><td>LOW</td><td>theo <code>/RST_SLP2</code> (<code>usb2_oe_proc</code>)</td><td>kernel <code>PMU_I2cSet_USB2_OE</code></td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td><code>WAKEUP</code> (WAKE_UP)</td><td>→ GPIOB[19]</td><td class="unk">—</td><td>LPPP luôn mở làm wake event</td><td>app_gpio.c:212; kernel PMU_resume bit 19</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>24V11_MON</code> (24V11_MONI)</td><td>Nguồn → PS-CPU PA8</td><td>HIGH = có 24 V</td><td>SRS: 24V11_MONI=1 trước MC_PWR_EN=0</td><td>PS-CPU debounce; kernel bit 0x0100</td><td><span class="tag t-doc">DOC</span></td></tr>
+<tr><td><code>ENG_STATUS1/2</code></td><td>PS-CPU / LPPP → Fiery</td><td>LOW</td><td>DeepSleep: <code>/ENG_STATUS1=1, /ENG_STATUS2=1</code> (SRS)</td><td>PS-CPU bit10/11; LPPP TR7 ghi 1</td><td><span class="tag t-doc">DOC</span> <span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>ENG_STATUS7</code></td><td colspan="4">Không tìm thấy trong code đã đọc</td><td><span class="tag t-unk">UNKNOWN</span></td></tr>
+</tbody>
+</table></div></details>
+<details id="appx-e"><summary>Appendix E. Error / detail code index (từ §19)</summary><div class="scroll"><table>
+<thead><tr><th>Điều kiện</th><th>Detail code</th><th>Vị trí</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td><code>open(/dev/PMU0)</code> lỗi (không phải SnapShot)</td><td>ASSERT <code>0x0CEA</code></td><td class="ref">5265</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>ioctl PMU lỗi (SUBSWINT, PWRSUBINT, REQESTFACTOR)</td><td>ASSERT <code>0x0CEB</code>, <code>setFA14_PmuDriverIoError(0x01..0x07, errno)</code></td><td class="ref">5292, 5305, 5775, 6012, 6019, 6103</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>mioPreChangeModeToSleep</code> lỗi</td><td><code>CFA14_DetailCode0x2008</code> + new detail <code>0x22 020 …</code> (bit8 err sleep, bit7 err normal, bit5-6 adapter, bit4 WLAN, bit1-3 MioWakeupMode, bit0 USB busy) + reboot</td><td class="ref">6045-6071</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>irq_disable_flg == 1</code> (đã có IRQ power-down / mất AC) hoặc ioctl lỗi</td><td>new detail <code>0x22 011</code> + reboot</td><td class="ref">5853-5877; kernel mdels800_pmu.c:2738</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Spawn <code>TASK_WakeupUSB</code> lỗi 3 lần</td><td>new detail <code>0x22 037</code> + reboot</td><td class="ref">5972-6003</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td><code>mioPostChangeModeToNormal</code> lỗi</td><td>Assert <code>0x0961</code></td><td class="ref">4502-4504</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>LPPP: AP link up lỗi hai lần</td><td><code>pmu_resume</code> trả -1, <code>power_cpu</code> trả false</td><td class="ref">power.c:1718-1726; app_scpi.c:293-297</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>LPPP: suspend khi không AWAKE / resume khi không SLEEP</td><td><code>while(1)</code> trên R4</td><td class="ref">power.c:1456, 1701</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>CA72 WDT hết hạn (LPPP)</td><td>ghi cờ CA72WDT reboot vào flash (<code>LPPP_SpiFlashWrite_Ca72wdt_Reboot</code>)</td><td class="ref">LPPP_Matrix.c:443-480</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div></details>
+<details id="appx-f"><summary>Appendix F. Wake-source index (từ §17)</summary><div class="scroll"><table>
+<thead><tr><th>Nguồn</th><th>Phát hiện ở</th><th>Đường vào LPPP</th><th>App event</th><th>Nhãn</th></tr></thead>
+<tbody>
+<tr><td>Phím nguồn</td><td>INTP4 (wake GPIO)</td><td>ITER1 GPIO → <code>gpio_isr</code></td><td>INT_SOURCE 0x0002 → <code>0x1262/0x1306</code></td><td><span class="tag t-code">CODE</span> <span class="tag t-inf">đường ITER1</span></td></tr>
+<tr><td>RTC</td><td>PS-CPU RTC → <code>WAKE_UP</code> GPIOB[19]</td><td><code>gpio_isr</code></td><td>kernel đặt <code>PMU_INTRTC</code></td><td><span class="tag t-code">CODE</span> PMU_resume</td></tr>
+<tr><td>Ethernet</td><td>GMAC → LPPP filter</td><td><code>FILTER_FLAG_WAKE_SYSTEM</code></td><td><code>0x1264</code> (WOL)</td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>WLAN</td><td>card WLAN → <code>WAKE_WLAN</code> GPIOB[26]</td><td><code>gpio_isr</code> (nếu flag)</td><td>kernel đặt <code>PMU_INTKR0</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>Fiery</td><td><code>WAKE_FIERY</code> GPIOB[20]</td><td><code>gpio_isr</code></td><td><code>PMU_INTKR4</code></td><td><span class="tag t-code">CODE</span></td></tr>
+<tr><td>FAX</td><td>KR1 bị tắt trong ErP</td><td>—</td><td>—</td><td><span class="tag t-code">CODE</span></td></tr>
+</tbody>
+</table></div></details>
+<details id="appx-g"><summary>Appendix G. Jira / bug / CQ references (6)</summary><div class="scroll"><table><thead><tr><th>Mã</th><th>Ghi chú</th></tr></thead><tbody><tr><td><code>AR.1066939</code></td><td>Được nhắc trong source comment / phân tích (xem tìm kiếm để thấy vị trí)</td></tr><tr><td><code>CQ.519866</code></td><td>Được nhắc trong source comment / phân tích (xem tìm kiếm để thấy vị trí)</td></tr><tr><td><code>OP_BTS-16624</code></td><td>Được nhắc trong source comment / phân tích (xem tìm kiếm để thấy vị trí)</td></tr><tr><td><code>OP_BTS-21251</code></td><td>Được nhắc trong source comment / phân tích (xem tìm kiếm để thấy vị trí)</td></tr><tr><td><code>OP_BTS-30528</code></td><td>Được nhắc trong source comment / phân tích (xem tìm kiếm để thấy vị trí)</td></tr><tr><td><code>OP_BTS-4583</code></td><td>Được nhắc trong source comment / phân tích (xem tìm kiếm để thấy vị trí)</td></tr></tbody></table></div></details>
+<details id="appx-h"><summary>Appendix H. Change history</summary><div class="scroll"><table><thead><tr><th>Version</th><th>Date</th><th>Nội dung</th><th>Author</th></tr></thead><tbody>
+<tr><td>0.9</td><td>18/11/2026</td><td>Bản phân tích gốc “ErP Mode trên MFP (S800 / Quartz)”, 25 mục</td><td>Dung Nguyen Van</td></tr>
+<tr><td>1.0</td><td>18/11/2026</td><td>Chuẩn hoá theo Prompt 2: layout sidebar, dark mode, search, collapse, copy code, callout, dashboard, phụ lục, print mode</td><td>Dung Nguyen Van</td></tr>
+</tbody></table></div></details>
+</div></section>
+
+<footer class="foot">ErP Mode on MFP · Complete Guide v1.0 · Tài liệu nội bộ</footer>
+</main>
+</div>
+<button type="button" class="to-top" id="toTop" aria-label="Về đầu trang" hidden>↑</button>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>(function(){
+  'use strict';
+  var root = document.documentElement;
+  var $ = function(s, c){ return (c||document).querySelector(s); };
+  var $$ = function(s, c){ return Array.prototype.slice.call((c||document).querySelectorAll(s)); };
+
+  /* ---------- Theme ---------- */
+  var themeBtn = $('#themeBtn');
+  function stored(){ try { return localStorage.getItem('erp-guide-theme'); } catch(e){ return null; } }
+  function applyTheme(t){
+    root.setAttribute('data-theme', t);
+    themeBtn.textContent = t === 'dark' ? '☀️ Light' : '🌙 Dark';
+    try { localStorage.setItem('erp-guide-theme', t); } catch(e){}
+    renderMermaid();
+  }
+  var initTheme = stored() || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  root.setAttribute('data-theme', initTheme);
+  themeBtn.textContent = initTheme === 'dark' ? '☀️ Light' : '🌙 Dark';
+  themeBtn.addEventListener('click', function(){ applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
+
+  /* ---------- Sidebar drawer ---------- */
+  var sidebar = $('#sidebar'), backdrop = $('#backdrop'), menuBtn = $('#menuBtn');
+  function openSb(o){
+    sidebar.classList.toggle('open', o);
+    backdrop.hidden = !o;
+    menuBtn.setAttribute('aria-expanded', o ? 'true' : 'false');
+  }
+  menuBtn.addEventListener('click', function(){ openSb(!sidebar.classList.contains('open')); });
+  $('#closeBtn').addEventListener('click', function(){ openSb(false); });
+  backdrop.addEventListener('click', function(){ openSb(false); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') openSb(false); });
+
+  /* ---------- Collapse / expand ---------- */
+  function setOpen(btn, open){
+    var body = document.getElementById(btn.getAttribute('aria-controls'));
+    body.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.textContent = open ? 'Thu gọn' : 'Mở rộng';
+    if(open) renderMermaid();
+  }
+  $$('.ch-toggle').forEach(function(b){
+    b.addEventListener('click', function(){ setOpen(b, b.getAttribute('aria-expanded') !== 'true'); });
+  });
+  $('#expandAll').addEventListener('click', function(){
+    $$('.ch-toggle').forEach(function(b){ setOpen(b, true); });
+    $$('main details').forEach(function(d){ d.open = true; });
+  });
+  $('#collapseAll').addEventListener('click', function(){
+    $$('.ch-toggle').forEach(function(b){ setOpen(b, false); });
+  });
+  function ensureVisible(el){
+    var sec = el.closest('.chapter');
+    if(sec){ var b = $('.ch-toggle', sec); if(b && b.getAttribute('aria-expanded') !== 'true') setOpen(b, true); }
+    var d = el.closest('details'); while(d){ d.open = true; d = d.parentElement ? d.parentElement.closest('details') : null; }
+  }
+
+  /* ---------- Print ---------- */
+  var printState = null;
+  window.addEventListener('beforeprint', function(){
+    printState = $$('main details').map(function(d){ return d.open; });
+    $$('main details').forEach(function(d){ d.open = true; });
+  });
+  window.addEventListener('afterprint', function(){
+    if(printState) $$('main details').forEach(function(d, i){ d.open = printState[i]; });
+  });
+  $('#printBtn').addEventListener('click', function(){ window.print(); });
+
+  /* ---------- Copy code ---------- */
+  $$('.copy-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      var pre = b.closest('.codewrap').querySelector('pre');
+      var text = pre.innerText;
+      function done(){ b.textContent = 'Copied'; b.classList.add('done'); setTimeout(function(){ b.textContent = 'Copy'; b.classList.remove('done'); }, 1500); }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else fallback();
+      function fallback(){
+        var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch(e){ b.textContent = 'Lỗi'; }
+        document.body.removeChild(ta);
+      }
+    });
+  });
+
+  /* ---------- TOC active + progress + back to top ---------- */
+  var links = $$('#toc a');
+  var chapters = links.map(function(a){ return document.getElementById(a.getAttribute('data-target')); }).filter(Boolean);
+  var bar = $('#progressBar'), pct = $('#readPct'), toTop = $('#toTop');
+  function onScroll(){
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    var p = h > 0 ? Math.min(100, Math.max(0, Math.round(window.scrollY / h * 100))) : 0;
+    bar.style.width = p + '%'; pct.textContent = p + '%';
+    toTop.hidden = window.scrollY < 600;
+    var y = window.scrollY + 90, cur = null;
+    chapters.forEach(function(s){ if(s.offsetTop <= y) cur = s.id; });
+    links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('data-target') === cur); });
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', onScroll);
+  toTop.addEventListener('click', function(){ window.scrollTo({top:0, behavior:'smooth'}); });
+  links.forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var t = document.getElementById(a.getAttribute('data-target'));
+      ensureVisible(t);
+      t.scrollIntoView({behavior:'smooth', block:'start'});
+      if(history.replaceState) history.replaceState(null, '', '#' + t.id);
+      openSb(false);
+    });
+  });
+  // in-content anchors (e.g. §x)
+  $$('main a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(){
+      var t = document.getElementById(a.getAttribute('href').slice(1));
+      if(t) ensureVisible(t);
+    });
+  });
+  if(location.hash){
+    var t0 = document.getElementById(location.hash.slice(1));
+    if(t0){ ensureVisible(t0); setTimeout(function(){ t0.scrollIntoView(); }, 50); }
+  }
+
+  /* ---------- Dashboard KPIs (computed) ---------- */
+  function count(sel){ return $$('.chapter ' + sel).length; }
+  function rowsOf(id){ var d = document.getElementById(id); return d ? $$('tbody tr', d).length : 0; }
+  var kpis = [
+    ['Chapter', $$('.chapter').length - 1, ''],
+    ['Function trong Code map', rowsOf('appx-a'), ''],
+    ['Wake source đã lần theo', rowsOf('appx-f'), ''],
+    ['Error / reboot path', rowsOf('appx-e'), 'k-risk'],
+    ['Nhãn CONFIRMED BY CODE', count('.ch-body .tag.t-code') - $$('#appx .tag.t-code').length, 'k-code'],
+    ['Nhãn CONFIRMED BY DOCUMENT', count('.ch-body .tag.t-doc') - $$('#appx .tag.t-doc').length, 'k-doc'],
+    ['Nhãn INFERENCE', count('.ch-body .tag.t-inf') - $$('#appx .tag.t-inf').length, 'k-inf'],
+    ['Nhãn UNKNOWN', count('.ch-body .tag.t-unk') - $$('#appx .tag.t-unk').length, 'k-unk'],
+    ['Nhãn WARNING / RISK', count('.ch-body .tag.t-risk') - $$('#appx .tag.t-risk').length, 'k-risk'],
+    ['Sơ đồ Mermaid', $$('pre.mermaid').length, '']
+  ];
+  $('#kpis').innerHTML = kpis.map(function(k){
+    return '<div class="kpi ' + k[2] + '"><b>' + k[1] + '</b><span>' + k[0] + '</span></div>';
+  }).join('');
+
+  /* ---------- Search ---------- */
+  var input = $('#searchInput'), meta = $('#searchMeta'), list = $('#searchResults');
+  var marks = [], timer = null;
+  function clearMarks(){
+    marks.forEach(function(m){
+      var p = m.parentNode; if(!p) return;
+      p.replaceChild(document.createTextNode(m.textContent), m); p.normalize();
+    });
+    marks = []; list.innerHTML = ''; meta.textContent = '';
+  }
+  function esc(s){ return s.replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function doSearch(q){
+    clearMarks();
+    q = q.trim();
+    if(q.length < 2){ if(q.length) meta.textContent = 'Nhập ít nhất 2 ký tự'; return; }
+    var lq = q.toLowerCase();
+    var scope = $('#content');
+    var walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(n){
+        var p = n.parentElement;
+        if(!p || p.closest('pre.mermaid, .mmd-out, script, style, .codebar, .ch-toggle')) return NodeFilter.FILTER_REJECT;
+        return n.nodeValue.toLowerCase().indexOf(lq) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var nodes = []; while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function(n){
+      var text = n.nodeValue, low = text.toLowerCase(), i = 0, idx, frag = document.createDocumentFragment();
+      while((idx = low.indexOf(lq, i)) >= 0){
+        if(idx > i) frag.appendChild(document.createTextNode(text.slice(i, idx)));
+        var m = document.createElement('mark'); m.className = 'hl'; m.textContent = text.slice(idx, idx + q.length);
+        frag.appendChild(m); marks.push(m); i = idx + q.length;
+      }
+      if(i < text.length) frag.appendChild(document.createTextNode(text.slice(i)));
+      n.parentNode.replaceChild(frag, n);
+    });
+    meta.textContent = marks.length ? marks.length + ' kết quả cho “' + q + '”' : 'Không tìm thấy “' + q + '”';
+    var shown = marks.slice(0, 60);
+    list.innerHTML = shown.map(function(m, i){
+      var sec = m.closest('.chapter, .hero, .dash');
+      var title = sec ? (sec.getAttribute('data-title') || (sec.classList.contains('hero') ? 'Mở đầu' : 'Dashboard')) : '';
+      var ctx = (m.parentElement.textContent || '').replace(/\s+/g, ' ');
+      var pos = ctx.toLowerCase().indexOf(lq);
+      var snip = ctx.slice(Math.max(0, pos - 28), pos + q.length + 32);
+      return '<li><button type="button" data-i="' + i + '">' + esc(snip) + '<small>' + esc(title) + '</small></button></li>';
+    }).join('') + (marks.length > 60 ? '<li class="cap" style="padding:4px 8px">… và ' + (marks.length - 60) + ' kết quả khác</li>' : '');
+  }
+  input.addEventListener('input', function(){ clearTimeout(timer); timer = setTimeout(function(){ doSearch(input.value); }, 220); });
+  input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); var b = $('button', list); if(b) b.click(); } });
+  $('#searchClear').addEventListener('click', function(){ input.value = ''; clearMarks(); input.focus(); });
+  list.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-i]'); if(!b) return;
+    var m = marks[+b.getAttribute('data-i')]; if(!m) return;
+    marks.forEach(function(x){ x.classList.remove('cur'); });
+    m.classList.add('cur'); ensureVisible(m);
+    m.scrollIntoView({behavior:'smooth', block:'center'});
+    if(window.innerWidth <= 960) openSb(false);
+  });
+
+  /* ---------- Mermaid (single init, fallback to source) ---------- */
+  var mmdItems = $$('pre.mermaid').map(function(pre){
+    var out = document.createElement('div'); out.className = 'mmd-out';
+    pre.parentNode.insertBefore(out, pre);
+    return {pre:pre, out:out, src:pre.textContent.replace(/^\s*\n/, ''), done:'', };
+  });
+  var mmdReady = typeof window.mermaid !== 'undefined', mmdSeq = 0, inited = false;
+  if(!mmdReady){
+    mmdItems.forEach(function(it){
+      it.out.innerHTML = '<div class="mmd-err">Không tải được Mermaid (cần Internet). Đang hiển thị source của sơ đồ.</div>';
+    });
+  }
+  function renderMermaid(){
+    if(!mmdReady || !mmdItems) return;
+    var dark = root.getAttribute('data-theme') === 'dark';
+    var key = dark ? 'd' : 'l';
+    var font = getComputedStyle(document.body).fontFamily;
+    if(!inited || renderMermaid.key !== key){
+      window.mermaid.initialize({
+        startOnLoad:false, securityLevel:'strict', theme: dark ? 'dark' : 'default',
+        fontFamily:font, flowchart:{useMaxWidth:true, htmlLabels:true}, sequence:{useMaxWidth:true, mirrorActors:false},
+        themeVariables: dark ? {background:'#111827', primaryColor:'#1e293b', primaryTextColor:'#e5e7eb', lineColor:'#94a3b8', primaryBorderColor:'#60a5fa'}
+                             : {primaryColor:'#e6edfd', primaryTextColor:'#172033', lineColor:'#526076', primaryBorderColor:'#1d4ed8'}
+      });
+      inited = true; renderMermaid.key = key;
+    }
+    mmdItems.forEach(function(it){
+      if(it.done === key) return;
+      var body = it.pre.closest('.ch-body');
+      if(body && body.hidden) return; // render when opened
+      var id = 'mmd-' + (mmdSeq++);
+      it.done = key;
+      window.mermaid.render(id, it.src).then(function(r){
+        it.out.innerHTML = r.svg; it.pre.style.display = 'none';
+      }).catch(function(err){
+        var s = document.getElementById(id); if(s) s.remove();
+        var s2 = document.getElementById('d' + id); if(s2) s2.remove();
+        it.out.innerHTML = '<div class="mmd-err">Sơ đồ không render được, hiển thị source.</div>';
+        it.pre.style.display = '';
+        if(window.console) console.warn('Mermaid error', err);
+      });
+    });
+  }
+  window.renderMermaid = renderMermaid;
+  renderMermaid();
+  onScroll();
+})();
+</script>
+</body>
+</html>

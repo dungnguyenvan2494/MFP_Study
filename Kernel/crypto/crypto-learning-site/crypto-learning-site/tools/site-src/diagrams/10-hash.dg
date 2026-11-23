@@ -1,0 +1,131 @@
+=== dg-hash-seq-shash
+type: sequence
+status: verified
+title: shash — init, update nhiều lần, final
+purpose: Cho thấy trạng thái băm nằm trong `shash_desc` của caller (không ở tfm), và core chỉ làm hai việc: kiểm `NEED_KEY` và xử lý dữ liệu lệch căn.
+caption: `SHASH_DESC_ON_STACK` cấp desc trên stack với kích thước tối đa `HASH_MAX_DESCSIZE`. Nếu `data` hoặc `out` lệch `alignmask`, core chép qua buffer tạm trên stack (`shash_update_unaligned`, `shash_final_unaligned`) rồi xoá buffer. Toàn bộ là **đồng bộ**: không có request, không có callback. Sau khi xong, `shash_desc_zero()` xoá trạng thái trên stack.
+refs: `include/crypto/hash.h:165-168` (`SHASH_DESC_ON_STACK`) · `include/crypto/hash.h:940-948` (`crypto_shash_init`) · `crypto/shash.c:121-133` (`crypto_shash_update`) · `crypto/shash.c:163-173` (`crypto_shash_final`) · `include/crypto/sha256_base.h:37-72`
+explain: ch-hash
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant SH as shash.c / hash.h
+    participant A as sha256-ce<br/>(shash_alg)
+    Note over C,SH: SHASH_DESC_ON_STACK(desc, tfm)<br/>desc->tfm = tfm
+    C->>SH: crypto_shash_init(desc)
+    alt tfm còn NEED_KEY (MAC chưa setkey)
+        SH-->>C: -ENOKEY
+    end
+    SH->>A: alg->init(desc)
+    Note over A: đặt H0, count = 0<br/>(trong desc ctx)
+    loop mỗi phần dữ liệu
+        C->>SH: crypto_shash_update(desc, data, len)
+        Note over SH: data lệch alignmask?<br/>→ chép qua buffer tạm
+        SH->>A: alg->update(desc, data, len)
+        Note over SH,A: nén các block 64 byte đầy đủ<br/>giữ phần dư trong desc
+    end
+    C->>SH: crypto_shash_final(desc, out)
+    SH->>A: alg->final(desc, out)
+    A-->>C: 0, digest 32 byte trong out
+    Note over C,SH: shash_desc_zero(desc) — xoá trạng thái
+
+=== dg-hash-sha256-update
+type: flowchart
+status: verified
+title: sha256_base_do_update() — phần dư và các block đầy đủ
+purpose: Giải thích vì sao hash nhận dữ liệu từng phần được: chỉ cần nhớ trạng thái H, tổng độ dài và phần dư chưa đủ một block.
+caption: Dùng chung cho `sha256-generic`, `sha256-arm64`, `sha256-ce`; mỗi implementation chỉ khác `block_fn` (C thuần, asm, hay lệnh SHA2 của CPU). `SHA256_BLOCK_SIZE` = 64.
+refs: `include/crypto/sha256_base.h:37-72`
+---
+flowchart TD
+    %% @classdefs
+    S(["update(data, len)"]):::api --> P["partial = count % 64<br/>count += len"]:::core
+    P --> Q1{{"partial + len ≥ 64 ?"}}:::dec
+    Q1 -- "không" --> KEEP(["chép data vào buf + partial<br/>(chưa nén gì)"]):::ok
+    Q1 -- "có" --> Q2{{"partial > 0 ?"}}:::dec
+    Q2 -- "có" --> FILL["lấp đầy buf bằng 64 − partial byte<br/>block_fn(buf, 1)"]:::impl
+    Q2 -- "không" --> BL
+    FILL --> BL["blocks = len / 64<br/>block_fn(data, blocks)"]:::impl
+    BL --> Q3{{"còn dư len % 64 ?"}}:::dec
+    Q3 -- "có" --> REST(["chép phần dư vào buf"]):::ok
+    Q3 -- "không" --> DONE(["xong"]):::ok
+
+=== dg-hash-ahash-init
+type: flowchart
+status: verified
+title: crypto_ahash_init_tfm() — ahash thật hay shash được bọc?
+purpose: Giải thích vì sao `crypto_alloc_ahash("sha256")` trả về tfm hoạt động đồng bộ: frontend ahash chấp nhận cả alg loại shash và bọc nó lại.
+caption: `crypto_ahash_type.maskset = CRYPTO_ALG_TYPE_AHASH_MASK (0xe)` bỏ qua bit 0 của loại; vì `SHASH = 0xe`, `AHASH = 0xf` nên lookup chấp nhận cả hai. Trên sản phẩm không có ahash async nào cho `sha256` (không có driver phần cứng; cryptd chỉ được dùng khi gọi tên `cryptd(...)` tường minh) → **[I]** gần như mọi `crypto_alloc_ahash` trên máy này đi theo nhánh shash.
+refs: `crypto/ahash.c:455-484` · `crypto/ahash.c:541` (maskset) · `crypto/shash.c:377-414` (`crypto_init_shash_ops_async`)
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_ahash_init_tfm(tfm)"]):::api --> Q{{"alg->cra_type ==<br/>&crypto_ahash_type ?"}}:::dec
+    Q -- "có: ahash thật<br/>(cryptd, driver HW)" --> A["copy init/update/final/digest<br/>từ ahash_alg; finup mặc định<br/>nếu thiếu; NEED_KEY nếu có setkey"]:::impl
+    A --> RA(["có thể trả -EINPROGRESS"]):::cb
+    Q -- "không: shash" --> B["crypto_init_shash_ops_async():<br/>tạo shash tfm con, gán shash_async_*<br/>reqsize = shash_desc + descsize"]:::core
+    B --> Q2{{"crypto_mod_get / tạo<br/>shash con thành công?"}}:::dec
+    Q2 -- "không" --> E(["-EAGAIN hoặc lỗi tạo tfm"]):::err
+    Q2 -- "có" --> RB(["luôn đồng bộ: trả 0 / lỗi"]):::ok
+
+=== dg-hash-seq-ahash
+type: sequence
+status: verified
+title: crypto_ahash_digest() trên một shash được bọc
+purpose: Theo một digest qua scatterlist khi implementation thật là shash `sha256-ce`.
+caption: Desc của shash nằm **trong ctx của ahash request** (`reqsize`), nên caller không thấy nó. Nhánh nhanh: toàn bộ dữ liệu nằm trong một page của mục scatterlist đầu tiên → map một lần và gọi `crypto_shash_digest`. Nhánh chung dùng `crypto_hash_walk` (`kmap_atomic` từng page). Nếu `req->result` lệch căn, `crypto_ahash_op` dùng buffer tạm và tự lưu/khôi phục callback của caller.
+refs: `crypto/ahash.c:328-338` (`crypto_ahash_op`) · `crypto/ahash.c:368-383` (`crypto_ahash_digest`) · `crypto/shash.c:321-353` (`shash_ahash_digest`, `shash_async_digest`) · `crypto/ahash.c:41-135` (`crypto_hash_walk_*`)
+explain: ch-hash
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant AH as ahash.c
+    participant BR as shash.c<br/>(cầu nối async)
+    participant A as sha256-ce
+    C->>AH: crypto_ahash_digest(req)
+    Note over AH,BR: NEED_KEY? → -ENOKEY<br/>result lệch căn? → buffer tạm
+    AH->>BR: tfm->digest = shash_async_digest
+    Note over BR,A: desc = ahash_request_ctx(req)<br/>desc->tfm = shash con
+    alt dữ liệu nằm gọn trong một page
+        BR->>A: crypto_shash_digest(<br/>kmap(page) + offset)
+    else nhiều đoạn
+        BR->>A: crypto_shash_init(desc)
+        loop crypto_hash_walk: mỗi page
+            BR->>A: update (đoạn giữa)<br/>finup (đoạn cuối)
+        end
+    end
+    A-->>BR: 0, digest ghi vào req->result
+    BR-->>AH: 0
+    AH-->>C: 0 (không có callback)
+
+=== dg-hash-hmac
+type: sequence
+status: verified
+title: hmac(sha256) — setkey lưu sẵn trạng thái ipad/opad
+purpose: Cho thấy template HMAC tận dụng `export/import` của hash con để mỗi lần tính HMAC tiết kiệm hai lần nén block khoá.
+caption: `ipad`, `opad` là hai vùng `statesize` byte trong ctx của tfm `hmac(...)`; `HMAC_IPAD_VALUE = 0x36`, `HMAC_OPAD_VALUE = 0x5c`. Vì trạng thái khoá nằm trong **ctx của tfm**, gọi `setkey` song song với `digest` trên cùng tfm là không an toàn. `hmac_final` = final(trong) → import(opad) → finup(digest trong).
+refs: `crypto/hmac.c:40-81` (`hmac_setkey`) · `crypto/hmac.c:100-139` (`hmac_init`, `hmac_final`, `hmac_finup`) · `crypto/hmac.c:165-236` (`hmac_create`)
+explain: ch-templates
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant H as hmac.c<br/>(instance)
+    participant S as sha256-ce<br/>(shash con)
+    C->>H: crypto_shash_setkey(tfm, key, keylen)
+    alt keylen > blocksize (64)
+        H->>S: crypto_shash_digest(key) → ipad
+        Note over H,S: khoá dài được băm trước
+    end
+    Note over H,S: đệm 0 tới 64 byte<br/>ipad ^= 0x36, opad ^= 0x5c
+    H->>S: init · update(ipad) · export
+    S-->>H: trạng thái ipad → ctx tfm
+    H->>S: init · update(opad) · export
+    S-->>H: trạng thái opad → ctx tfm
+    H-->>C: 0
+    C->>H: digest(desc, data)
+    H->>S: import(ipad) · update(data) · final
+    H->>S: import(opad) · finup(digest trong)
+    S-->>C: HMAC

@@ -1,0 +1,43 @@
+====================================== Image 1 ========================
+
+                         S800 (SoC nền Marvell AP806/Armada)                                    |          +-------------------------+-------------------------+          |                         |                         |        LPPP                     ATF (ble)                 U-Boot  (mv_lpddr4_sleep.c)   (mv_lpddr4_apn806.c, 13778 dòng)  (qspi_winbond.c ❓)          |                         |                         |mc_configure_dram(warm)    ble_main()→lpddr4_config()   đọc pmem@0x200000000mc_save_state() ──┐        →lpddr4_dynamic_config()      →ghi vào QSPImc_restore_state()─┼─ BOOT_SYNC_DDR_WARMBOOT/CONT_BOOT/READY   |(Self-Refresh,      │            |          |                 | Power-Down)         │    +-------+----------+                 |                      │    |                 |                 |                      │  Memory Controller   PHY                |                      │  (MC6_REGS_t,      (DDR_PHY_REGS_t,     |                      │   0xf0020000)       0xf0011000)         |                      │    |                 |                 |                      │    +-------+----------+                 |                      │            |                            |                      │    LPDDR4 DRAM (Micron/Samsung)          |                      │            |                            |                      └────────────┴────────────────────────────┘                        (dữ liệu sống qua Sleep nhờ Self-Refresh)
+
+
+====================================== Image 2 ========================
+BootROM
+  ↓
+ble_main(bootrom_flags)                          [ble_main.c:52]
+  ↓  xoá p_sram, get_it(), console_init(), plat_delay_timer_init()
+lpddr4_config()                                   [mv_lpddr4_apn806.c:8751]
+  ↓  warmboot=syncronize_boot_get(...) ; GPIO/QSPI/swizzle (ch.13) ; start Timer3
+  ├─ [cold] for i in 0..6: lpddr4_dynamic_config(warmboot=0)   ★ TẦNG NGOÀI
+  └─ [warm] lpddr4_dynamic_config(warmboot=1)  (gọi 1 lần)
+  ↓
+return MV_OK → U-Boot đọc pmem → ghi QSPI (qspi_winbond.c, ❓chưa đọc)
+
+┌─ lpddr4_dynamic_config(staticOrDynamic, warmboot) ────────────────┐
+│  đọc chip_info_reg (FORCE_*, KM_*_SHMOO, TRAIN_RETRY_NUM)         │
+│  reset PHY, pad_cal() → TRN_B0/B1 (ch.04) ; MCConfig_..._dpi()→B2 │
+│  retry: for (train_err_cnt=0; train_err_cnt<retry_num; ...) {    │  ★ TẦNG TRONG
+│    lpddr4_ca_training()               → TRN_C0-C5 (ch.05)        │
+│    lpddr4_write_leveling() ×ch×cs     → TRN_D0/D1 (ch.06)         │
+│    lpddr4_dqs_gate_training[_preamble]() → TRN_E0 (ch.07)        │
+│    lpddr4_read_centering(FIFO,PBS)    → TRN_GX (ch.08)            │
+│    lpddr4_read_find_deskew_start/dm_deskew/deskew/                │
+│      find_deskew_end/deskew_center_align → TRN_H0-H4 (ch.09)     │
+│    lpddr4_read_centering(FIFO,noPBS)  → TRN_H5 (ch.08)            │
+│    lpddr4_write_centering(skip=1)     → TRN_I0/I1/IX (ch.10)      │
+│    lpddr4_write_find_deskew_start/dm_deskew/deskew → TRN_J0-J2 (11)│
+│    lpddr4_write_centering(skip=1)     → TRN_KX (ch.10)            │
+│    backup_train_area()                                            │
+│    [!warmboot]: common_memfill()→TRN_L0 ; read/write centering DMA│
+│                 → TRN_L1/L2/M0 (ch.08/10/12)                      │
+│    if FAIL: restore_train_area()+return_100mhz() ; else: thoát sớm│
+│  }                                                                  │
+│  [!warmboot]: restore_train_area(); lpddr4_backup_train_result()  │──┐
+│  [warmboot]: check_warm_training(); nếu sai → goto retry          │  │
+└─────────────────────────────────────────────────────────────────────┘  │
+                                                                            ↓
+                                            lpddr4_backup_train_result() (ch.16)
+                                            gTrainRegReadTbl[576] → pmem+pmem2
+                                            so sánh → lpddr4_training_Error

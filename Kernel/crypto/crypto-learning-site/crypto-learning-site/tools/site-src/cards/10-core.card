@@ -1,0 +1,161 @@
+=== st-crypto_larval
+kind: struct
+name: struct crypto_larval
+loc: crypto/internal.h:25-30
+sig: struct crypto_larval { struct crypto_alg alg; struct crypto_alg *adult; struct completion completion; u32 mask; };
+---
+Là gì:: Một `crypto_alg` "giả" được chèn vào `crypto_alg_list` để giữ chỗ. Ai lookup gặp nó thì **chờ** `completion` thay vì tự tạo.
+Hai loại:: **Request larval** — tạo bởi `crypto_larval_add()` khi lookup trượt; `cra_driver_name` rỗng, `mask` = mask của người hỏi. **Test larval** — tạo trong `__crypto_register_alg()`; `cra_driver_name` = driver name của alg mới, cờ có sẵn `CRYPTO_ALG_TESTED`.
+adult:: Kết quả trao cho người chờ: alg thật, `ERR_PTR(-EAGAIN)` (có alg tốt hơn đang test) hoặc `NULL` (→ `-ENOENT`).
+Nhận biết:: `crypto_is_larval()` (cờ `CRYPTO_ALG_LARVAL`), `crypto_is_test_larval()` (driver name khác rỗng) — `crypto/internal.h:121-124`, `crypto/api.c:50-53`.
+
+=== fn-crypto_register_alg
+kind: fn
+name: crypto_register_alg()
+loc: crypto/algapi.c:425-445
+sig: int crypto_register_alg(struct crypto_alg *alg)
+---
+Làm gì:: Kiểm tham số (`crypto_check_alg`), chèn alg + test larval vào registry dưới write lock, rồi **chờ self-test** (`crypto_wait_for_test`) trước khi trả về.
+Trả về:: `0`; `-EINVAL` (tham số sai); `-EEXIST` (trùng tên — xem sơ đồ); `-EAGAIN` (alg đã DEAD); `-ENOENT` (không lấy được ref module).
+Context:: Process context, có thể ngủ (rwsem, `wait_for_completion_killable`). Thường gọi từ `module_init`.
+Ai gọi:: Mọi `crypto_register_<type>()` sau `*_prepare_alg()`; `crypto_register_instance()` cho instance của template.
+Lưu ý:: Hàm chờ test **xong** mới trả về: kể cả khi `CONFIG_CRYPTO_MANAGER_DISABLE_TESTS=y`, vẫn có một kthread `cryptomgr_test` được tạo cho mỗi alg.
+
+=== fn-crypto_alg_tested
+kind: fn
+name: crypto_alg_tested()
+loc: crypto/algapi.c:296-391
+sig: void crypto_alg_tested(const char *name, int err)
+---
+Làm gì:: Kết thúc self-test của alg có driver name `name`: đặt `CRYPTO_ALG_TESTED` nếu `err == 0`, trao `adult` cho request larval đang chờ, gỡ instance dựng trên alg kém hơn, `complete_all()` test larval.
+Context:: Gọi từ kthread `cryptomgr_test` (hoặc tại chỗ khi không có cryptomgr). Giữ `crypto_alg_sem` (write) trong gần như toàn bộ hàm.
+Lỗi in ra:: `Unexpected test result for <name>: <err>` khi không tìm thấy test larval tương ứng.
+
+=== fn-crypto_unregister_alg
+kind: fn
+name: crypto_unregister_alg()
+loc: crypto/algapi.c:461-481
+sig: void crypto_unregister_alg(struct crypto_alg *alg)
+vendor: yes
+---
+Làm gì:: Đánh dấu `DEAD`, rút khỏi `crypto_alg_list`, gỡ dây chuyền instance phụ thuộc, gọi `cra_destroy`, thả ref các instance bị gỡ.
+Vendor:: `crypto_remove_alg()` phát thêm `crypto_notify(CRYPTO_MSG_ALG_UNREGISTER)` khi **đang giữ write lock** (`crypto/algapi.c:454`).
+Cảnh báo:: `WARN("Algorithm %s is not registered")` nếu alg không có trong danh sách; `WARN_ON(refcount != 1)` nếu còn người giữ struct — khi đó hàm trả về **không** gọi `cra_destroy`.
+Context:: Process context (rwsem). Thường gọi từ `module_exit` hoặc `remove()` của driver.
+
+=== fn-crypto_alg_mod_lookup
+kind: fn
+name: crypto_alg_mod_lookup()
+loc: crypto/api.c:261-288
+sig: struct crypto_alg *crypto_alg_mod_lookup(const char *name, u32 type, u32 mask)
+---
+Làm gì:: Điểm tra cứu đầy đủ: ẩn alg `INTERNAL` (nếu caller không nhắc), tra registry, nạp module `crypto-<name>`, tạo request larval và nhờ cryptomgr dựng instance từ template, rồi chờ.
+Trả về:: Alg đã `crypto_mod_get()` (giữ module + `cra_refcnt`), hoặc `ERR_PTR`: `-ENOENT`, `-ELIBBAD`, `-EAGAIN`, `-ETIMEDOUT`, `-EINTR`.
+Context:: Có thể ngủ tới 60 s (`crypto_larval_wait`) và gọi `request_module` → chỉ dùng trong process context.
+Ai gọi:: `crypto_find_alg()` (từ `crypto_alloc_tfm_node`), `crypto_grab_spawn()`, `crypto_has_alg()`.
+
+=== fn-__crypto_alg_lookup
+kind: fn
+name: __crypto_alg_lookup()
+loc: crypto/api.c:55-93
+sig: static struct crypto_alg *__crypto_alg_lookup(const char *name, u32 type, u32 mask)
+---
+Làm gì:: Duyệt `crypto_alg_list` một lượt, áp quy tắc chọn: bỏ alg moribund; bỏ alg có `(cra_flags ^ type) & mask`; request larval phải cùng mask; driver name trùng thì thắng ngay, cra_name trùng thì chọn priority cao nhất; phải `crypto_mod_get()` được.
+Khoá:: Caller phải giữ `crypto_alg_sem` (đọc hoặc ghi).
+Hoà priority:: Ứng viên gặp trước (gần đầu danh sách = đăng ký sau) được giữ, vì chỉ thay khi priority **lớn hơn hẳn**.
+
+=== fn-crypto_larval_wait
+kind: fn
+name: crypto_larval_wait()
+loc: crypto/api.c:166-191
+sig: static struct crypto_alg *crypto_larval_wait(struct crypto_alg *alg)
+---
+Làm gì:: Chờ `larval->completion` tối đa `60 * HZ` (killable), rồi ánh xạ kết quả sang mã lỗi.
+Ánh xạ:: bị signal → `-EINTR`; hết giờ → `-ETIMEDOUT`; `adult == NULL` → `-ENOENT`; `adult` là lỗi → lỗi đó; test larval mà adult chưa `TESTED` → `-EAGAIN`; không get được module → `-EAGAIN`.
+Lưu ý:: `-EAGAIN` khiến `crypto_alloc_tfm_node()` lặp lại toàn bộ lookup.
+
+=== fn-crypto_alloc_tfm_node
+kind: fn
+name: crypto_alloc_tfm_node()
+loc: crypto/api.c:517-550
+sig: void *crypto_alloc_tfm_node(const char *alg_name, const struct crypto_type *frontend, u32 type, u32 mask, int node)
+---
+Làm gì:: Vòng lặp: `crypto_find_alg()` (áp `maskclear/maskset/type` của frontend rồi `crypto_alg_mod_lookup`) → `crypto_create_tfm_node()`. Gặp `-EAGAIN` thì lặp lại, trừ khi có fatal signal (→ `-EINTR`).
+Trả về:: Con trỏ tới **đầu khối nhớ** (tfm theo loại, ví dụ `struct crypto_skcipher *`), hoặc `ERR_PTR`.
+Ai gọi:: `crypto_alloc_skcipher`, `crypto_alloc_aead`, `crypto_alloc_shash`, `crypto_alloc_ahash`, `crypto_alloc_rng`… (qua `crypto_alloc_tfm()` với `NUMA_NO_NODE`).
+
+=== fn-crypto_create_tfm_node
+kind: fn
+name: crypto_create_tfm_node()
+loc: crypto/api.c:436-476
+sig: void *crypto_create_tfm_node(struct crypto_alg *alg, const struct crypto_type *frontend, int node)
+---
+Làm gì:: `kzalloc_node(GFP_KERNEL)` một khối `tfmsize + sizeof(struct crypto_tfm) + extsize(alg)`; gắn alg; gọi `frontend->init_tfm()`; gọi `alg->cra_init()` **chỉ khi** frontend chưa đặt `tfm->exit`.
+Lỗi:: Init trả `-EAGAIN` → `crypto_shoot_alg(alg)` (đặt `DYING`) để lần lookup sau bỏ qua alg này.
+Bộ nhớ:: `tfm` nằm **sau** phần `tfmsize` (struct theo loại); ctx của implementation nằm sau `struct crypto_tfm` (`__crt_ctx[]`).
+
+=== fn-crypto_destroy_tfm
+kind: fn
+name: crypto_destroy_tfm()
+loc: crypto/api.c:561-575
+sig: void crypto_destroy_tfm(void *mem, struct crypto_tfm *tfm)
+---
+Làm gì:: Bỏ qua `NULL`/`ERR_PTR`; gọi `cra_exit` (nếu `tfm->exit` chưa đặt) và `crypto_exit_ops()` (→ `tfm->exit`), thả ref alg (`crypto_mod_put`), rồi `kfree_sensitive(mem)` — **xoá trắng** ctx chứa khoá.
+Ai gọi:: `crypto_free_skcipher`, `crypto_free_aead`, `crypto_free_shash`… (inline trong `include/crypto/*.h`).
+Lưu ý:: Không được gọi khi còn request đang bay trên tfm đó.
+
+=== fn-crypto_req_done
+kind: fn
+name: crypto_req_done()
+loc: crypto/api.c:592-601
+sig: void crypto_req_done(struct crypto_async_request *req, int err)
+---
+Làm gì:: Callback chuẩn để chờ đồng bộ một request async: bỏ qua thông báo `-EINPROGRESS` (rời backlog), lưu `err` vào `struct crypto_wait` (`req->data`) và `complete()`.
+Dùng cùng:: `DECLARE_CRYPTO_WAIT(wait)` + `skcipher_request_set_callback(req, flags, crypto_req_done, &wait)` + `crypto_wait_req(crypto_skcipher_encrypt(req), &wait)`.
+Context:: Có thể chạy trong softirq/hardirq (gọi từ driver) — chỉ làm việc nhẹ.
+
+=== fn-crypto_wait_req
+kind: fn
+name: crypto_wait_req()
+loc: include/linux/crypto.h:591-620
+sig: static inline int crypto_wait_req(int err, struct crypto_wait *wait)
+vendor: yes
+---
+Làm gì:: Nếu `err` là `-EINPROGRESS` hoặc `-EBUSY` thì chờ `wait->completion`, trả `wait->err`; các giá trị khác trả nguyên.
+Vendor:: Upstream dùng `wait_for_completion()`. Bản này lặp `wait_for_completion_timeout(..., 2000)`; mỗi lần hết 2000 jiffies in `@@@[CHK]timeout crypto_wait_req L601 <jiffies>` rồi **chờ tiếp** (vẫn chờ vô hạn, không ngắt được). Nhánh "giá trị âm" là code chết.
+Context:: Ngủ → chỉ process context.
+Debug:: Mỗi dòng `@@@[CHK]timeout` ≈ 2000 jiffies (10 s khi `HZ=200` theo defconfig sản phẩm — **[I]** cần xác nhận `CONFIG_HZ` trên máy thật).
+
+=== fn-crypto_enqueue_request
+kind: fn
+name: crypto_enqueue_request()
+loc: crypto/algapi.c:932-952
+sig: int crypto_enqueue_request(struct crypto_queue *queue, struct crypto_async_request *request)
+---
+Làm gì:: Thêm request vào cuối `queue`. Nếu `qlen ≥ max_qlen`: không có `CRYPTO_TFM_REQ_MAY_BACKLOG` → `-ENOSPC` (không xếp); có → vẫn xếp, đánh dấu backlog, trả `-EBUSY`.
+Trả về:: `-EINPROGRESS`, `-EBUSY` hoặc `-ENOSPC`.
+Khoá:: **Không** tự khoá — caller bảo vệ queue (cryptd: `local_bh_disable()` + queue per-CPU).
+Đi cùng:: `crypto_dequeue_request()` (`:963-979`), `crypto_get_backlog()` (`include/crypto/algapi.h:234-239`).
+
+=== st-crypto_tfm
+kind: struct
+name: struct crypto_tfm
+loc: include/linux/crypto.h:646-657
+sig: struct crypto_tfm { u32 crt_flags; int node; void (*exit)(struct crypto_tfm *tfm); struct crypto_alg *__crt_alg; void *__crt_ctx[] CRYPTO_MINALIGN_ATTR; };
+---
+crt_flags:: Cờ của tfm: `CRYPTO_TFM_NEED_KEY`, `CRYPTO_TFM_REQ_FORBID_WEAK_KEYS`, … (đặt/xoá bằng `crypto_*_set_flags/clear_flags`).
+exit:: Hàm huỷ do type frontend đặt (ví dụ `crypto_skcipher_exit_tfm`). Khi đã đặt, core **không** gọi `cra_init`/`cra_exit` kiểu cũ.
+__crt_alg:: Alg đã chọn; tfm giữ một ref (`crypto_mod_get`) suốt đời.
+__crt_ctx[]:: Vùng ctx của implementation (`cra_ctxsize` byte) — nơi chứa khoá đã xử lý (round keys, ipad/opad…). Căn theo `CRYPTO_MINALIGN`.
+Bao ngoài:: Tfm theo loại nhúng `struct crypto_tfm base` làm thành viên **cuối**, ví dụ `struct crypto_skcipher { unsigned int reqsize; struct crypto_tfm base; }` (`include/crypto/skcipher.h:37-41`).
+
+=== st-skcipher_request
+kind: struct
+name: struct skcipher_request
+loc: include/crypto/skcipher.h:24-35
+sig: struct skcipher_request { unsigned int cryptlen; u8 *iv; struct scatterlist *src; struct scatterlist *dst; struct crypto_async_request base; void *__ctx[] CRYPTO_MINALIGN_ATTR; };
+---
+cryptlen, iv, src, dst:: Một thao tác: số byte, con trỏ IV (có thể bị implementation ghi đè), scatterlist vào/ra (`src == dst` → tại chỗ). Đặt bằng `skcipher_request_set_crypt()`.
+base:: `struct crypto_async_request` (`include/linux/crypto.h:179-186`): `list` (xếp hàng), `complete` + `data` (callback và ngữ cảnh), `tfm`, `flags` (`MAY_SLEEP`, `MAY_BACKLOG`).
+__ctx[]:: Vùng nháp riêng của implementation, kích thước `crypto_skcipher_reqsize(tfm)`. Vì vậy request phải được cấp **cho đúng tfm** (`skcipher_request_alloc(tfm, gfp)`).
+Giải phóng:: `skcipher_request_free()` = `kfree_sensitive()`; request trên stack thì `skcipher_request_zero()`.

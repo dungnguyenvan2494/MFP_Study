@@ -1,0 +1,39 @@
+=== dg-src-deps
+type: graph
+status: conceptual
+title: Các nhóm file trong crypto/ và hướng phụ thuộc
+purpose: Biết đọc nhóm nào trước: mũi tên `A → B` nghĩa là "A dùng B", nên đọc B trước A.
+caption: Nhóm G1–G16 theo bảng khảo sát (SOURCE_TREE_MAP). Mũi tên đứt là liên lạc qua notifier `crypto_chain` (không phải lời gọi hàm trực tiếp). Các nhóm userspace (G12), test (G13), key management (G14), async_tx (G15) và build (G16) không vẽ để giữ hình gọn.
+refs: `crypto/Makefile` · `crypto/Kconfig` · `crypto/api.c` · `crypto/algboss.c`
+explain: ch-source-tree
+---
+flowchart TB
+    %% @classdefs
+    CALL["caller ngoài crypto/<br/>dm-crypt, ESP, …"]:::ext
+    AK["asymmetric_keys/<br/>X.509, PKCS#7"]:::ext
+    G6["<b>G6 · AEAD</b><br/>gcm, ccm, authenc"]:::impl
+    G9["<b>G9 · RNG</b><br/>drbg, jitterentropy"]:::impl
+    ARCH["arch/arm64/crypto<br/>CE / NEON"]:::drv
+    G4["<b>G4 · cipher + mode</b><br/>aes_generic, cbc, xts"]:::impl
+    G5["<b>G5 · hash + MAC</b><br/>sha256_generic, hmac"]:::impl
+    G7["<b>G7 · public key</b><br/>rsa, rsa-pkcs1pad"]:::impl
+    G8["<b>G8 · KPP</b><br/>dh, ecdh"]:::impl
+    G11["<b>G11 · wrapper</b><br/>cryptd, simd, pcrypt"]:::impl
+    G2["<b>G2 · type frontends</b><br/>skcipher.c aead.c shash.c<br/>ahash.c akcipher.c kpp.c rng.c"]:::api
+    G1[("<b>G1 · core</b><br/>api.c algapi.c internal.h")]:::core
+    G3["<b>G3 · cryptomgr</b><br/>algboss.c testmgr.c"]:::core
+    G6 --> G4
+    G6 --> G5
+    G9 --> G5
+    AK --> G7
+    ARCH --> G11
+    G4 --> G2
+    G5 --> G2
+    G7 --> G2
+    G8 --> G2
+    G11 --> G2
+    CALL ---> G2
+    ARCH ---> G2
+    G2 --> G1
+    G3 --> G1
+    G1 -. "notifier" .-> G3

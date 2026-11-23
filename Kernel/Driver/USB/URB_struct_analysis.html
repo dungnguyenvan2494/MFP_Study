@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><title>Phân tích struct urb trong USB Linux</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;max-width:1000px;margin:auto;padding:20px;line-height:1.6;color:#222}
+h1{color:#0b5394;border-bottom:3px solid #0b5394}h2{color:#0b5394;margin-top:32px}h3{color:#38761d}
+table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;vertical-align:top}
+th{background:#e8f0fe}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-family:Consolas,monospace}
+.note{background:#fff8e1;border-left:4px solid #f9a825;padding:10px}
+</style>
+<script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';mermaid.initialize({startOnLoad:true});</script>
+</head><body>
+<h1>Phân tích cấu trúc URB (USB Request Block) trong Linux kernel</h1>
+<p><b>URB</b> là <code>struct urb</code> khai báo trong <code>include/linux/usb.h</code>. Driver dùng cấu trúc này để gửi một yêu cầu truyền dữ liệu bất đồng bộ tới USB core. Có thể hình dung URB như <b>một phiếu gửi hàng</b>: gửi tới đâu (device/endpoint), gửi gì (buffer), gửi kiểu nào (control/bulk/interrupt/isochronous), và xong thì báo ai (callback).</p>
+
+<h2>1. Vị trí của URB trong luồng USB</h2>
+<pre class="mermaid">
+sequenceDiagram
+    participant D as Class Driver
+    participant C as USB Core (hcd.c)
+    participant H as HCD (xhci-hcd)
+    participant HW as Controller HW
+    D->>C: usb_alloc_urb + usb_fill_*_urb
+    D->>C: usb_submit_urb(urb)
+    C->>C: map DMA (usb_hcd_map_urb_for_dma)
+    C->>H: hcd->driver->urb_enqueue()
+    H->>HW: URB chuyen thanh TD/TRB tren ring
+    HW-->>H: Transfer Event (IRQ)
+    H->>C: usb_hcd_giveback_urb(urb, status)
+    C->>D: urb->complete(urb)
+</pre>
+<p>Ở tầng xHCI, một URB được chuyển thành một <b>TD (Transfer Descriptor)</b>, và TD gồm nhiều <b>TRB</b> trên ring. Đây là chỗ liên quan tới lỗi <code>Transfer event TRB DMA ptr not part of current TD</code>.</p>
+
+<h2>2. Các trường của <code>struct urb</code></h2>
+<h3>a) Quản lý nội bộ (core dùng, driver không động vào)</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>struct kref kref</code></td><td>Đếm tham chiếu. <code>usb_get_urb</code>/<code>usb_free_urb</code> tăng/giảm, về 0 thì giải phóng</td></tr>
+<tr><td><code>void *hcpriv</code></td><td>Dữ liệu riêng của HCD (xHCI gắn <code>urb_priv</code> chứa danh sách TD)</td></tr>
+<tr><td><code>atomic_t use_count</code></td><td>URB có đang được submit hay không</td></tr>
+<tr><td><code>atomic_t reject</code></td><td>Khác 0 thì mọi lần submit bị từ chối (dùng khi <code>usb_kill_urb</code>)</td></tr>
+<tr><td><code>int unlinked</code></td><td>Mã lỗi khi URB bị unlink</td></tr>
+<tr><td><code>struct list_head urb_list</code></td><td>Nối URB vào hàng đợi endpoint (<code>ep-&gt;urb_list</code>)</td></tr>
+<tr><td><code>anchor_list</code>, <code>struct usb_anchor *anchor</code></td><td>Nhóm nhiều URB để kill/chờ cùng lúc</td></tr></table>
+
+<h3>b) Địa chỉ đích</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>struct usb_device *dev</code></td><td>Thiết bị đích</td></tr>
+<tr><td><code>struct usb_host_endpoint *ep</code></td><td>Endpoint đích, core tự điền</td></tr>
+<tr><td><code>unsigned int pipe</code></td><td>Mã hóa hướng IN/OUT, loại transfer, địa chỉ device, số endpoint. Tạo bằng <code>usb_sndbulkpipe()</code>, <code>usb_rcvintpipe()</code>, …</td></tr>
+<tr><td><code>unsigned int stream_id</code></td><td>Stream ID cho USB 3.x bulk streams (UAS)</td></tr></table>
+
+<h3>c) Trạng thái và cờ</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>int status</code></td><td><code>0</code>, <code>-ENOENT</code> (bị kill), <code>-ECONNRESET</code> (bị unlink), <code>-EPIPE</code> (stall), <code>-EPROTO</code>, <code>-ESHUTDOWN</code>, <code>-EOVERFLOW</code>, …</td></tr>
+<tr><td><code>unsigned int transfer_flags</code></td><td><code>URB_SHORT_NOT_OK</code>, <code>URB_ZERO_PACKET</code>, <code>URB_NO_TRANSFER_DMA_MAP</code>, <code>URB_ISO_ASAP</code>, <code>URB_FREE_BUFFER</code>, …</td></tr></table>
+
+<h3>d) Dữ liệu</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>void *transfer_buffer</code></td><td>Địa chỉ ảo (CPU) của buffer</td></tr>
+<tr><td><code>dma_addr_t transfer_dma</code></td><td>Địa chỉ DMA. Core tự điền qua <code>dma_map_single</code>, hoặc driver tự điền nếu đặt <code>URB_NO_TRANSFER_DMA_MAP</code></td></tr>
+<tr><td><code>sg</code>, <code>num_sgs</code>, <code>num_mapped_sgs</code></td><td>Dùng khi buffer là scatter-gather</td></tr>
+<tr><td><code>u32 transfer_buffer_length</code></td><td>Số byte muốn truyền</td></tr>
+<tr><td><code>u32 actual_length</code></td><td>Số byte thực sự đã truyền (HCD điền khi hoàn tất)</td></tr></table>
+
+<h3>e) Riêng cho control transfer</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>unsigned char *setup_packet</code></td><td>Gói SETUP 8 byte (<code>struct usb_ctrlrequest</code>)</td></tr>
+<tr><td><code>dma_addr_t setup_dma</code></td><td>Địa chỉ DMA của gói SETUP</td></tr></table>
+
+<h3>f) Riêng cho interrupt / isochronous</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>int interval</code></td><td>Chu kỳ polling (frame/microframe)</td></tr>
+<tr><td><code>int start_frame</code></td><td>Frame bắt đầu của ISO</td></tr>
+<tr><td><code>int number_of_packets</code></td><td>Số packet ISO</td></tr>
+<tr><td><code>int error_count</code></td><td>Số packet ISO bị lỗi</td></tr>
+<tr><td><code>iso_frame_desc[]</code></td><td>Mảng mô tả từng packet (<code>offset</code>, <code>length</code>, <code>actual_length</code>, <code>status</code>). Flexible array ở cuối struct, cấp phát bằng <code>usb_alloc_urb(iso_packets, …)</code></td></tr></table>
+
+<h3>g) Callback</h3>
+<table><tr><th>Trường</th><th>Ý nghĩa</th></tr>
+<tr><td><code>void *context</code></td><td>Con trỏ dữ liệu riêng của driver</td></tr>
+<tr><td><code>usb_complete_t complete</code></td><td>Hàm callback, thường chạy trong ngữ cảnh ngắt/BH, không được sleep</td></tr></table>
+
+<h2>3. Vòng đời của một URB</h2>
+<ol>
+<li><b>Cấp phát:</b> <code>usb_alloc_urb(iso_packets, GFP_KERNEL)</code>.</li>
+<li><b>Điền thông tin:</b> <code>usb_fill_control_urb()</code>, <code>usb_fill_bulk_urb()</code>, <code>usb_fill_int_urb()</code>. ISO thì điền tay.</li>
+<li><b>Submit:</b> <code>usb_submit_urb()</code> kiểm tra pipe/endpoint/độ dài, map DMA (có thể dùng swiotlb bounce buffer, nơi sinh log <code>swiotlb buffer is full</code>), rồi gọi <code>urb_enqueue</code> của HCD.</li>
+<li><b>Hoàn tất:</b> <code>usb_hcd_giveback_urb()</code> unmap DMA (copy về từ bounce buffer nếu có), đặt <code>status</code>/<code>actual_length</code>, gọi <code>complete()</code>.</li>
+<li><b>Hủy:</b> <code>usb_unlink_urb()</code> (bất đồng bộ) hoặc <code>usb_kill_urb()</code> (chờ xong, được sleep).</li>
+<li><b>Giải phóng:</b> <code>usb_free_urb()</code> giảm <code>kref</code>, về 0 mới thật sự giải phóng.</li>
+</ol>
+
+<h2>4. Những điểm hay gây bug</h2>
+<div class="note"><ul>
+<li><b>Buffer phải DMA-able:</b> không dùng stack/vmalloc; dùng <code>kmalloc</code> hoặc <code>usb_alloc_coherent</code>.</li>
+<li><b>Không đụng vào buffer khi URB đang submit:</b> buffer thuộc quyền HCD.</li>
+<li><b><code>complete()</code> chạy trong ngữ cảnh atomic:</b> resubmit trong callback phải dùng <code>GFP_ATOMIC</code>.</li>
+<li><b>Short packet:</b> <code>actual_length</code> có thể nhỏ hơn <code>transfer_buffer_length</code>; chỉ báo lỗi khi có <code>URB_SHORT_NOT_OK</code>.</li>
+<li><b>Khi disconnect:</b> phải <code>usb_kill_urb</code>/<code>usb_kill_anchored_urbs</code>, nếu không callback có thể chạy sau khi <code>context</code> đã free (use-after-free, KASAN bắt được).</li>
+</ul></div>
+</body></html>

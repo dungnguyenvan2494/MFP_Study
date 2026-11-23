@@ -1,0 +1,106 @@
+=== dg-aead-layout
+type: graph
+status: verified
+title: Bố cục src/dst của một aead_request
+purpose: AAD, dữ liệu và tag nằm **liền nhau** trong cùng scatterlist; `cryptlen` mang nghĩa khác nhau giữa encrypt và decrypt.
+caption: Encrypt: `cryptlen` = độ dài plaintext; dst nhận ciphertext **và** tag (authsize byte) ngay sau. Decrypt: `cryptlen` = ciphertext + tag; dst nhận plaintext dài `cryptlen − authsize`. Vùng AAD trong dst chỉ là chỗ giữ (implementation có thể chép AAD sang nếu src ≠ dst). Với `rfc4106`, `rfc4309`, `rfc4543`, `rfc7539esp`, `ivsize` byte cuối của AAD phải là bản sao IV.
+refs: `include/crypto/aead.h:44-73` · `include/crypto/aead.h:87-99` (`struct aead_request`)
+---
+flowchart TB
+    %% @classdefs
+    subgraph ENC["Encrypt"]
+        direction LR
+        ES["<b>src</b><br/>AAD (assoclen)<br/>plaintext (cryptlen)"]:::api
+        ED["<b>dst</b><br/>AAD (giữ chỗ)<br/>ciphertext (cryptlen)<br/>tag (authsize)"]:::ok
+        ES --> ED
+    end
+    subgraph DEC["Decrypt"]
+        direction LR
+        DS["<b>src</b><br/>AAD (assoclen)<br/>ciphertext + tag<br/>cryptlen = len(C) + authsize"]:::api
+        DD["<b>dst</b><br/>AAD (giữ chỗ)<br/>plaintext<br/>(cryptlen − authsize)"]:::ok
+        DS --> DD
+    end
+    ENC ~~~ DEC
+
+=== dg-aead-decrypt
+type: flowchart
+status: verified
+title: crypto_aead_decrypt() — các mã trả về
+purpose: Phân biệt lỗi do tham số (core phát hiện), lỗi xác thực (implementation phát hiện) và trường hợp bất đồng bộ.
+caption: `-EBADMSG` nghĩa là **tag không khớp**: dữ liệu (hoặc AAD, IV, khoá) sai hay bị sửa. Khi đó nội dung `dst` không được dùng. Với implementation async, `-EBADMSG` đến qua callback chứ không phải giá trị trả về.
+refs: `crypto/aead.c:99-115` · `crypto/gcm.c:465-478` (`crypto_gcm_verify`) · `arch/arm64/crypto/ghash-ce-glue.c:561-568`
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_aead_decrypt(req)"]):::api --> Q1{{"tfm còn NEED_KEY?"}}:::dec
+    Q1 -- "có" --> E1(["-ENOKEY"]):::err
+    Q1 -- "không" --> Q2{{"cryptlen < authsize?"}}:::dec
+    Q2 -- "có" --> E2(["-EINVAL"]):::err
+    Q2 -- "không" --> D["alg->decrypt(req)"]:::impl
+    D --> Q3{{"kết quả?"}}:::dec
+    Q3 -- "0" --> OK(["plaintext hợp lệ trong dst"]):::ok
+    Q3 -- "-EBADMSG" --> E3(["tag sai: KHÔNG dùng dst"]):::err
+    Q3 -- "-EINPROGRESS / -EBUSY" --> CB(["kết quả (kể cả -EBADMSG)<br/>đến qua callback"]):::cb
+
+=== dg-aead-gcm-dec
+type: sequence
+status: verified
+title: gcm(aes) generic — decrypt là chuỗi GHASH rồi CTR rồi so tag
+purpose: Ví dụ điển hình của chuỗi async lồng nhau: mỗi bước con có thể trả `-EINPROGRESS` và callback của nó tự gọi bước kế tiếp.
+caption: Đây là đường của **template** `gcm_base(ctr…, ghash…)`. Mỗi `*_done` callback nhận `-EINPROGRESS` từ con thì trả thẳng lên trên; bước kế tiếp chỉ chạy khi bước trước xong. So tag dùng `crypto_memneq` (thời gian hằng). Trên CPU có PMULL, `gcm(aes)` được phục vụ bởi `gcm-aes-ce` nguyên khối và không đi qua sơ đồ này.
+refs: `crypto/gcm.c:398-438` (`gcm_hash` và các `*_done`) · `crypto/gcm.c:480-519` (`gcm_dec_hash_continue`, `crypto_gcm_decrypt`) · `crypto/gcm.c:465-478`
+explain: ch-aead
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant AE as aead.c
+    participant G as gcm instance<br/>(crypto/gcm.c)
+    participant GH as ahash con<br/>ghash
+    participant CTR as skcipher con<br/>ctr(aes)
+    C->>AE: crypto_aead_decrypt(req)
+    AE->>G: crypto_gcm_decrypt(req)
+    Note over G,GH: cryptlen −= authsize<br/>gctx->complete = gcm_dec_hash_continue
+    G->>GH: gcm_hash(): AAD, ciphertext, độ dài
+    alt ghash trả -EINPROGRESS
+        GH--)G: callback *_done nối bước kế
+    end
+    G->>CTR: gcm_dec_hash_continue():<br/>crypto_skcipher_decrypt(skreq)
+    alt ctr trả -EINPROGRESS
+        CTR--)G: gcm_decrypt_done → verify
+    end
+    Note over G,GH: crypto_gcm_verify():<br/>crypto_memneq(tag tính, tag nhận)
+    G-->>AE: 0 hoặc -EBADMSG
+    AE-->>C: 0 / -EBADMSG / -EINPROGRESS
+
+=== dg-aead-gcm-select
+type: flowchart
+status: inferred
+title: gcm(aes) trên sản phẩm — implementation nào phục vụ?
+purpose: Cùng một tên, hai kiến trúc rất khác nhau tuỳ CPU có lệnh PMULL hay không.
+caption: `ghash_ce_mod_init()` đăng ký **một trong hai**: `gcm-aes-ce` (nếu có PMULL) hoặc shash `ghash-neon` (nếu không). Nhánh template là **suy luận**: cryptomgr dựng `gcm_base(<ctr tốt nhất>,<ghash tốt nhất>)` với priority = trung bình hai con. Xác nhận trên máy thật bằng `grep -A3 'gcm(aes)' /proc/crypto`.
+refs: `arch/arm64/crypto/ghash-ce-glue.c:570-600` · `crypto/gcm.c:576-672` (`crypto_gcm_create_common`, `crypto_gcm_create`)
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_alloc_aead(<br/>gcm(aes), 0, 0)"]):::api --> Q1{{"CPU có ASIMD?"}}:::dec
+    Q1 -- "không" --> T0(["ghash-ce không đăng ký gì<br/>→ template gcm_base(<br/>ctr…, ghash-generic)"]):::core
+    Q1 -- "có" --> Q2{{"CPU có PMULL?"}}:::dec
+    Q2 -- "có" --> CE(["gcm-aes-ce, prio 300<br/>nguyên khối, sync"]):::ok
+    Q2 -- "không" --> T1(["ghash-neon (150) đăng ký<br/>→ template gcm_base(<br/>ctr…, ghash-neon)"]):::core
+
+=== dg-aead-esp
+type: flowchart
+status: verified
+title: IPsec ESP xử lý mã trả về của crypto_aead_encrypt()
+purpose: Một caller async thật không dùng backlog: hàng đợi đầy thì bỏ gói.
+caption: ESP đặt callback flags = 0 → **không** có `CRYPTO_TFM_REQ_MAY_BACKLOG`, nên khi hàng đợi đầy implementation trả `-ENOSPC` và gói tin bị bỏ (`NET_XMIT_DROP`). Không có nhánh `-EBUSY`. So sánh với dm-crypt (chương Request), nơi `MAY_BACKLOG` được bật.
+refs: `net/ipv4/esp4.c:615-641` · `net/ipv4/esp4.c:1027-1029` (tên `seqiv(rfc4106(gcm(aes)))`)
+---
+flowchart TD
+    %% @classdefs
+    S(["err = crypto_aead_encrypt(req)<br/>callback flags = 0"]):::api --> Q{{"err = ?"}}:::dec
+    Q -- "-EINPROGRESS" --> A(["esp_output_done()<br/>sẽ gửi gói sau"]):::cb
+    Q -- "-ENOSPC" --> B(["hàng đợi đầy:<br/>NET_XMIT_DROP"]):::err
+    Q -- "0" --> C(["xong đồng bộ:<br/>gửi gói ngay"]):::ok
+    Q -- "lỗi khác" --> D(["trả lỗi, giải phóng"]):::err

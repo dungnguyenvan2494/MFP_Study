@@ -1,0 +1,107 @@
+=== dg-kc-build
+type: flowchart
+status: verified
+title: Từ Kconfig tới /proc/crypto — đường đi của template cbc
+purpose: Theo một file (`crypto/cbc.c`) qua Kconfig, Makefile, link, initcall và lúc chạy — để phân biệt "có trong repo" với "đang được dùng".
+caption: Template **không** xuất hiện trong `/proc/crypto`; chỉ **instance** (vd `cbc(aes-ce)`) xuất hiện khi có caller hỏi. Trên Eagle `CONFIG_CRYPTO_CBC=y` nên nhánh module không xảy ra với `cbc`; nhánh này áp dụng cho `cmac` (`=m`).
+refs: `crypto/Kconfig` (`config CRYPTO_CBC`) · `crypto/Makefile:87` · `crypto/cbc.c:207-217` · `crypto/api.c:230` (`request_module`) · `crypto/algapi.c:612-617`
+explain: ch-kconfig
+---
+flowchart TD
+    %% @classdefs
+    K["Kconfig: config CRYPTO_CBC<br/>select SKCIPHER, MANAGER"]:::core --> C[".config<br/>CONFIG_CRYPTO_CBC<br/>= y / m / n"]:::core
+    C --> M["crypto/Makefile<br/>obj-$(CONFIG_CRYPTO_CBC) += cbc.o"]:::core
+    M --> Y{{"=y hay =m ?"}}:::dec
+    Y -- "y" --> V["link vào vmlinux"]:::impl
+    Y -- "m" --> KO["cbc.ko + alias crypto-cbc"]:::impl
+    V --> IC["boot: subsys_initcall<br/>crypto_cbc_module_init()"]:::impl
+    KO --> MP["request_module(crypto-cbc)<br/>→ modprobe → module_init"]:::impl
+    IC --> REG["crypto_register_template(cbc)"]:::api
+    MP --> REG
+    REG --> USE["caller xin cbc(aes)<br/>→ cryptomgr dựng instance"]:::api
+    USE --> PROC(["/proc/crypto:<br/>name cbc(aes)<br/>driver cbc(aes-ce)"]):::ok
+
+=== dg-kc-select
+type: graph
+status: verified
+title: Chuỗi select — bật DM_CRYPT kéo theo những gì
+purpose: Cho thấy vì sao một tuỳ chọn của subsystem kéo cả API skcipher, manager và RNG vào kernel.
+caption: Mũi tên = `select`. Các symbol `*2` là symbol **ẩn** chỉ để build code của type (`skcipher.o`, `algapi.o`…); symbol không có `2` nghĩa là "tôi cần API này **và** algapi". `CRYPTO_MANAGER2` còn kéo mọi type `*2` (không vẽ để giữ hình gọn).
+refs: `drivers/md/Kconfig:269-275` · `security/keys/Kconfig:87-95` · `crypto/Kconfig:56-64` · `crypto/Kconfig:371-374` (`CRYPTO_CBC`) · `crypto/Kconfig:123-130` (`CRYPTO_MANAGER2`)
+explain: ch-kconfig
+---
+flowchart LR
+    %% @classdefs
+    DM["DM_CRYPT"]:::ext --> ESS["CRYPTO_ESSIV"]:::impl
+    DM --> CBC["CRYPTO_CBC"]:::impl
+    EK["ENCRYPTED_KEYS"]:::ext --> CBC
+    EK --> HM["CRYPTO_HMAC"]:::impl
+    EK --> RNG["CRYPTO_RNG"]:::api
+    CBC --> SK["CRYPTO_SKCIPHER"]:::api
+    CBC --> MGR["CRYPTO_MANAGER"]:::core
+    SK --> SK2["CRYPTO_SKCIPHER2<br/>(ẩn)"]:::core
+    SK --> AA["CRYPTO_ALGAPI"]:::core
+    SK2 --> AA2["CRYPTO_ALGAPI2<br/>(ẩn)"]:::core
+    SK2 --> RNG2["CRYPTO_RNG2<br/>(ẩn)"]:::core
+    MGR --> MGR2["CRYPTO_MANAGER2<br/>(ẩn)"]:::core
+
+=== dg-kc-states
+type: flowchart
+status: conceptual
+title: Bảy trạng thái của một thuật toán — và cách kiểm từng trạng thái
+purpose: Tránh kết luận sai kiểu "có file nên kernel hỗ trợ" hay "có trong /proc/crypto nên caller đang dùng".
+caption: Mỗi bước chỉ **cho phép** bước sau, không đảm bảo nó. Ví dụ `crypto/cmac.c`: có trong repo, `=m` trên Eagle, thành `cmac.ko`; module chỉ được nạp khi có người xin `cmac(...)`, và vì là template nên chỉ instance (`cmac(aes)`) mới xuất hiện trong `/proc/crypto`.
+refs: `arch/arm64/configs/Eagle_defconfig` · `crypto/Makefile` · `crypto/proc.c`
+explain: ch-kconfig
+---
+flowchart TD
+    %% @classdefs
+    S1["1 · có trong repo<br/><i>ls crypto/x.c</i>"]:::core --> S2["2 · bật trong .config<br/><i>grep CONFIG_X .config</i>"]:::core
+    S2 --> S3["3 · được biên dịch<br/><i>có x.o trong thư mục build</i>"]:::core
+    S3 --> S4["4 · được link<br/><i>vmlinux (y) hoặc x.ko (m)</i>"]:::core
+    S4 --> S5["5 · module đã nạp<br/><i>lsmod</i>"]:::impl
+    S5 --> S6["6 · algorithm đã đăng ký<br/><i>/proc/crypto: name, driver</i>"]:::impl
+    S6 --> S7(["7 · được caller chọn<br/><i>crypto_tfm_alg_driver_name(tfm)</i>"]):::ok
+
+=== dg-kc-initcall
+type: flowchart
+status: verified
+title: Thứ tự đăng ký lúc boot (built-in)
+purpose: Vì sao cryptomgr có trước mọi thuật toán, và bản tăng tốc đăng ký sau bản generic.
+caption: `cryptomgr_init` là `arch_initcall` để self-test chạy được cho alg đăng ký ở `subsys_initcall` (chú thích trong `crypto/algboss.c:283-287`). Khi một file được build thành module, mọi macro trên đều trở thành `module_init` và chạy lúc `modprobe`. `aes-ce` dùng `module_cpu_feature_match(AES, …)` → không đăng ký nếu CPU thiếu feature.
+refs: `crypto/algboss.c:283-288` · `crypto/cbc.c:217` · `crypto/aes_generic.c:1314` · `crypto/cryptd.c:1097` · `arch/arm64/crypto/aes-glue.c:1048` · `arch/arm64/crypto/aes-ce-glue.c:178`
+explain: ch-kconfig
+---
+flowchart LR
+    %% @classdefs
+    A["<b>mức 3 · arch_initcall</b><br/>cryptomgr_init<br/>(notifier cryptomgr)"]:::core --> B["<b>mức 4 · subsys_initcall</b><br/>aes_generic, cbc, cryptd,<br/>sha256_generic …"]:::impl
+    B --> C["<b>mức 6 · module_init</b><br/>arch/arm64/crypto:<br/>aes-ce, aes-glue (simd)…"]:::drv
+    C --> D(["sẵn sàng phục vụ caller"]):::ok
+
+=== dg-kc-autoload
+type: sequence
+status: verified
+title: Tự nạp module — crypto_alloc_shash("cmac(aes)") khi CMAC=m
+purpose: Hai lần `request_module` khác nhau: một cho tên thuật toán (không có alias), một cho tên template (có alias).
+caption: `MODULE_ALIAS_CRYPTO("cmac")` sinh hai alias `cmac` và `crypto-cmac`; kernel chỉ yêu cầu dạng có tiền tố `crypto-`. Mask `CRYPTO_NOLOAD` tắt việc tự nạp. Với code built-in, `request_module` vẫn được gọi nhưng `modprobe` không có gì để nạp.
+refs: `crypto/api.c:217-245` (`crypto_larval_lookup`) · `crypto/algapi.c:612-617` (`crypto_lookup_template`) · `crypto/cmac.c:300-316` · `include/linux/crypto.h:32-34` (`MODULE_ALIAS_CRYPTO`)
+explain: ch-kconfig
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant API as api.c
+    participant MP as modprobe<br/>(userspace)
+    participant MGR as cryptomgr_probe
+    participant CM as cmac.ko
+    C->>API: crypto_alloc_shash("cmac(aes)")
+    API->>MP: request_module("crypto-cmac(aes)")
+    MP-->>API: không có alias này
+    Note over API,MP: tạo request larval<br/>notifier ALG_REQUEST
+    API-)MGR: kthread: template "cmac", tham số "aes"
+    MGR->>MP: crypto_lookup_template("cmac")<br/>→ request_module("crypto-cmac")
+    MP->>CM: nạp cmac.ko → module_init
+    CM->>API: crypto_register_template(cmac)
+    MGR->>CM: tmpl->create() → instance cmac(aes-ce)
+    Note over MGR,CM: đăng ký instance, test,<br/>đánh thức larval
+    API-->>C: tfm cmac(aes)

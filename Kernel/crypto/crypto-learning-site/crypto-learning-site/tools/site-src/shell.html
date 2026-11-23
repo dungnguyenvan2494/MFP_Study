@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linux Kernel Crypto API (5.10) — Tài liệu học</title>
+<meta name="description" content="Website học Linux Kernel Crypto API 5.10 (baseline v5.10.240 + thay đổi vendor): kiến trúc, registry, transform, request, skcipher, hash, AEAD, template, tăng tốc phần cứng, debug — kèm sơ đồ Mermaid đối chiếu source.">
+<meta name="color-scheme" content="light dark">
+<!-- File này được sinh bởi build.py từ docs/crypto-learning (xem README.md "Chỉnh sửa nội dung").
+     Có thể sửa trực tiếp HTML; mỗi chương là một <article class="chapter">. -->
+<script>
+  /* Chạy sớm để tránh nháy giao diện: bật chế độ JS và áp theme đã lưu. */
+  document.documentElement.className += ' js';
+  try {
+    var t = JSON.parse(localStorage.getItem('cryptoSite.theme.v1'));
+    if (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+    document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+  } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+</script>
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Bỏ qua tới nội dung</a>
+<header class="topbar">
+  <button type="button" class="icon-btn" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="Bật/tắt mục lục chương" title="Bật/tắt mục lục chương">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <a class="brand" href="#ch-overview">
+    <span class="brand-title">Linux Kernel Crypto API</span>
+    <span class="brand-sub">5.10 (v5.10.240 + vendor) · tài liệu học</span>
+  </a>
+  <div class="search" role="search">
+    <label class="visually-hidden" for="search-input">Tìm kiếm</label>
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="search-input" type="search" placeholder="Tìm chương, hàm, struct, file, thuật ngữ, sơ đồ…  ( / )" autocomplete="off" spellcheck="false"
+           role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+    <div id="search-results" class="search-results" role="listbox" aria-label="Kết quả tìm kiếm" hidden></div>
+  </div>
+  <span class="topbar-spacer"></span>
+  <button type="button" class="icon-btn" id="toc-toggle" aria-controls="toc" aria-expanded="false" aria-label="Mục lục trang" title="Mục lục trang">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>
+  </button>
+  <button type="button" class="icon-btn" id="theme-toggle" aria-pressed="false" aria-label="Chuyển giao diện sáng/tối" title="Chuyển giao diện sáng/tối">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+  <button type="button" class="icon-btn" id="print-btn" aria-label="In chương hiện tại" title="In chương hiện tại (sơ đồ được vẽ trước khi in)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg>
+  </button>
+</header>
+<noscript><p class="noscript-note">JavaScript đang tắt: mọi chương được hiển thị liên tiếp, sơ đồ Mermaid không được vẽ (source vẫn có trong HTML), tìm kiếm/zoom/copy không hoạt động.</p></noscript>
+<div class="layout">
+  <nav id="sidebar" class="sidebar" aria-label="Danh sách chương">
+    <div class="progress">
+      <div><span id="progress-text">0 chương đã mở</span></div>
+      <div class="progress-bar" role="progressbar" aria-label="Tiến độ đọc" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progress-bar"></span></div>
+      <p class="progress-note">Chỉ đếm chương đã <em>mở</em>, lưu trong trình duyệt này (localStorage); không đo mức hiểu. <button type="button" class="progress-reset" id="progress-reset">Đặt lại</button></p>
+    </div>
+    @@NAV@@
+  </nav>
+  <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+  <main id="main" class="content" tabindex="-1">
+    <div class="content-inner">
+      <nav id="breadcrumbs" class="breadcrumbs" aria-label="Vị trí hiện tại"></nav>
+@@CONTENT@@
+    </div>
+  </main>
+  <aside id="toc" class="toc" aria-label="Mục lục chương hiện tại">
+    <p class="toc-title">Trong chương này</p>
+    <ol id="toc-list"></ol>
+  </aside>
+</div>
+<div id="diagram-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="diagram-modal-title" hidden>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <p class="modal-title" id="diagram-modal-title">Sơ đồ</p>
+      <button type="button" class="text-btn" data-zoom="out" aria-label="Thu nhỏ">−</button>
+      <span class="zoom-level" aria-live="polite">100%</span>
+      <button type="button" class="text-btn" data-zoom="in" aria-label="Phóng to">+</button>
+      <button type="button" class="text-btn" data-zoom="reset">100%</button>
+      <button type="button" class="text-btn" data-zoom="fit">Vừa khung</button>
+      <button type="button" class="text-btn" data-modal-close aria-label="Đóng (Esc)">✕ Đóng</button>
+    </div>
+    <div class="modal-body" tabindex="0" aria-label="Kéo để di chuyển; phím + / − để phóng to, thu nhỏ"></div>
+  </div>
+</div>
+<button type="button" class="back-to-top" id="back-to-top" aria-label="Lên đầu trang" hidden>↑</button>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="assets/vendor/highlight/highlight.min.js"></script>
+<script src="assets/vendor/mermaid/mermaid.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/mermaid-config.js"></script>
+<script src="assets/js/diagrams.js"></script>
+<script src="assets/js/search.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

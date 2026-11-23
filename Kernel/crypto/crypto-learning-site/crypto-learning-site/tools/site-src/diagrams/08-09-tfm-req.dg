@@ -1,0 +1,251 @@
+=== dg-tfm-state
+type: state
+status: verified
+title: Vòng đời transform theo cờ CRYPTO_TFM_NEED_KEY
+purpose: Cho thấy khi nào tfm dùng được để mã hoá, và vì sao một lần setkey lỗi làm tfm "mất khoá".
+caption: NeedKey = cờ `CRYPTO_TFM_NEED_KEY` đang bật; Keyed = cờ đã xoá; Freed = tfm đã huỷ (`kfree_sensitive`). `NEED_KEY` được đặt trong `crypto_skcipher_init_tfm` nếu `max_keysize != 0`, xoá khi setkey thành công, đặt lại khi setkey lỗi. Encrypt/decrypt khi còn `NEED_KEY` trả `-ENOKEY`. Trạng thái là **cờ thật** trong `crt_flags`, không phải state machine khai báo trong kernel.
+refs: `crypto/skcipher.c:572-576` (`skcipher_set_needkey`) · `crypto/skcipher.c:599-621` (setkey) · `crypto/skcipher.c:624-638` (encrypt) · `crypto/skcipher.c:666-680` (init) · `crypto/api.c:561-575` (destroy)
+---
+stateDiagram-v2
+    direction TB
+    state "NeedKey · encrypt trả -ENOKEY" as NeedKey
+    state "Keyed · encrypt / decrypt chạy" as Keyed
+    [*] --> NeedKey: crypto_alloc_skcipher()
+    NeedKey --> Keyed: setkey OK
+    Keyed --> NeedKey: setkey lỗi
+    Keyed --> Freed: crypto_free_skcipher()
+    NeedKey --> Freed: crypto_free_skcipher()
+    Freed --> [*]
+
+=== dg-tfm-seq-create
+type: sequence
+status: verified
+title: Tạo tfm (crypto_create_tfm_node) cho instance cbc(aes-ce)
+purpose: Thứ tự chính xác các callback khởi tạo, và vì sao một tfm `cbc(aes)` thực chất là hai khối bộ nhớ.
+caption: `cra_init` chỉ được gọi khi type frontend **chưa** đặt `tfm->exit`; với `cbc(...)` thì `crypto_skcipher_init_tfm` đã đặt `exit` (vì instance có `alg->exit`), nên `cra_init` bị bỏ qua. Tfm cipher con đi theo **đường cũ** `__crypto_alloc_tfm` vì loại CIPHER không có `cra_type`.
+refs: `crypto/api.c:436-476` · `crypto/skcipher.c:666-680` · `crypto/skcipher.c:890-903` · `include/crypto/algapi.h:220-227` · `crypto/algapi.c:738-786` · `crypto/api.c:344-377`
+next: Sau khi có tfm, bước tiếp theo là [đặt khoá](#dg-tfm-seq-setkey).
+---
+sequenceDiagram
+    autonumber
+    box rgb(241,245,249) Crypto core
+        participant API as api.c
+        participant SK as skcipher.c<br/>(type frontend)
+    end
+    box rgb(255,247,237) Implementation
+        participant I as cbc instance
+        participant CI as aes-ce<br/>(cipher con)
+    end
+    Note over API,SK: kzalloc_node(GFP_KERNEL):<br/>tfmsize + sizeof(crypto_tfm) + extsize
+    API->>SK: frontend->init_tfm(tfm)
+    Note over SK,I: NEED_KEY nếu max_keysize ≠ 0<br/>tfm->exit = crypto_skcipher_exit_tfm
+    SK->>I: alg->init(skcipher)<br/>= skcipher_init_tfm_simple
+    I->>API: crypto_spawn_cipher(spawn)
+    Note over API,SK: crypto_spawn_alg(): spawn còn sống?<br/>try_module_get(aes-ce)?
+    API->>CI: __crypto_alloc_tfm(aes-ce)
+    CI-->>API: tfm cipher con (ctx = round keys)
+    API-->>I: crypto_cipher *
+    I-->>SK: 0 (lưu vào ctx->cipher)
+    SK-->>API: 0
+    alt init lỗi
+        Note over API,SK: -EAGAIN → crypto_shoot_alg(alg)<br/>kfree(mem), caller thử lookup lại
+    end
+
+=== dg-tfm-seq-setkey
+type: sequence
+status: verified
+title: Đặt khoá — crypto_skcipher_setkey() qua template cbc tới aes-ce
+purpose: Cho thấy core kiểm tra gì trước khi gọi implementation, khoá thực sự được lưu ở đâu, và cờ NEED_KEY được quản lý thế nào.
+caption: `crypto_cipher_setkey()` (`crypto/cipher.c`) chỉ kiểm độ dài/căn lề rồi gọi `cia_setkey`, nên được gộp vào một mũi tên. Khoá **không** nằm trong tfm `cbc(...)` (ctx chỉ chứa con trỏ cipher con) mà được mở rộng thành round keys trong ctx của tfm `aes-ce`. Nếu địa chỉ khoá không thoả `alignmask`, core chép khoá vào buffer `kmalloc(GFP_ATOMIC)` rồi `kfree_sensitive`.
+refs: `crypto/skcipher.c:599-621` · `crypto/skcipher.c:578-597` (unaligned) · `crypto/skcipher.c:879-888` (`skcipher_setkey_simple`) · `crypto/cipher.c:41-54` · `arch/arm64/crypto/aes-ce-glue.c:142-148`
+---
+sequenceDiagram
+    autonumber
+    box rgb(239,246,255) Caller
+        participant C as encrypted.c
+    end
+    box rgb(241,245,249) Crypto core
+        participant SK as skcipher.c
+    end
+    box rgb(255,247,237) Implementation
+        participant I as cbc instance
+        participant A as aes-ce
+    end
+    C->>SK: crypto_skcipher_setkey(<br/>tfm, key, len)
+    alt len ngoài [min, max]_keysize
+        SK-->>C: -EINVAL
+    end
+    SK->>I: alg->setkey()<br/>= skcipher_setkey_simple
+    Note over I,A: chép cờ CRYPTO_TFM_REQ_* sang tfm con
+    I->>A: crypto_cipher_setkey(child)<br/>→ cia_setkey = ce_aes_setkey
+    Note over I,A: ce_aes_expandkey(): -EINVAL<br/>nếu len ∉ {16, 24, 32}
+    A-->>I: 0 hoặc -EINVAL
+    I-->>SK: kết quả
+    alt lỗi
+        Note over C,SK: đặt lại NEED_KEY
+        SK-->>C: lỗi
+    else thành công
+        Note over C,SK: xoá NEED_KEY
+        SK-->>C: 0
+    end
+
+=== dg-tfm-seq-free
+type: sequence
+status: verified
+title: Giải phóng tfm — crypto_free_skcipher()
+purpose: Thứ tự huỷ: exit của type → exit của implementation → thả tham chiếu → xoá trắng bộ nhớ.
+caption: `cra_exit` chỉ chạy khi `tfm->exit` chưa được đặt (không phải trường hợp này). `kfree_sensitive` xoá trắng ctx trước khi trả bộ nhớ; tfm con cũng được xoá trắng theo cùng đường `crypto_destroy_tfm`.
+refs: `include/crypto/skcipher.h:202-205` · `crypto/api.c:561-575` · `crypto/api.c:303-309` (`crypto_exit_ops`) · `crypto/skcipher.c:658-664` · `crypto/skcipher.c:905-910` · `crypto/api.c:41-47`
+---
+sequenceDiagram
+    autonumber
+    box rgb(239,246,255) Caller
+        participant C as caller
+    end
+    box rgb(241,245,249) Crypto core
+        participant API as api.c
+        participant SK as skcipher.c
+    end
+    box rgb(255,247,237) Implementation
+        participant I as cbc instance
+    end
+    C->>API: crypto_free_skcipher(tfm)<br/>→ crypto_destroy_tfm(mem, tfm)
+    API->>SK: crypto_exit_ops()<br/>→ tfm->exit()<br/>= crypto_skcipher_exit_tfm
+    SK->>I: alg->exit() = skcipher_exit_tfm_simple
+    I->>API: crypto_free_cipher(ctx->cipher)
+    Note over API,SK: (đệ quy) huỷ tfm aes-ce:<br/>mod_put + kfree_sensitive
+    API-->>I: xong
+    I-->>SK: xong
+    SK-->>API: xong
+    Note over API,SK: crypto_mod_put(cbc instance):<br/>thả cra_refcnt + module ref
+    Note over API,SK: kfree_sensitive(mem)
+    API-->>C: (void)
+
+=== dg-req-state
+type: state
+status: verified
+title: Vòng đời một request theo mã trả về
+purpose: Một request đi qua các trạng thái nào và khi nào caller **được phép** giải phóng nó.
+caption: Trạng thái suy ra từ **mã trả về** và quy ước callback của Crypto API (không có biến trạng thái trong `struct skcipher_request`). Với `-EBUSY` (chỉ khi có `CRYPTO_TFM_REQ_MAY_BACKLOG`), callback được gọi **hai lần**: lần đầu với `-EINPROGRESS` khi rời backlog, lần sau với kết quả cuối. `-ENOSPC` nghĩa là request bị từ chối, không có callback.
+refs: `crypto/algapi.c:932-952` (`crypto_enqueue_request`) · `crypto/cryptd.c:162-185` · `drivers/md/dm-crypt.c:2154-2170` · `include/crypto/skcipher.h:493-583`
+---
+stateDiagram-v2
+    direction TB
+    [*] --> Configured: alloc + set_callback + set_crypt
+    Configured --> Done: trả 0 hoặc lỗi đồng bộ
+    Configured --> InFlight: trả -EINPROGRESS
+    Configured --> Backlogged: trả -EBUSY
+    Configured --> Rejected: trả -ENOSPC
+    Backlogged --> InFlight: callback(-EINPROGRESS)
+    InFlight --> Done: callback(kết quả)
+    Rejected --> Done: không có callback
+    Done --> Configured: tái sử dụng
+    Done --> [*]: skcipher_request_free()
+
+=== dg-req-seq-sync
+type: sequence
+status: verified
+title: Request đồng bộ — kết quả có ngay khi hàm trả về
+purpose: Mô hình đơn giản nhất: dispatcher gọi implementation, implementation xử lý xong rồi mới trả về.
+caption: Dispatcher `crypto_skcipher_encrypt` chỉ kiểm `NEED_KEY` rồi gọi `alg->encrypt`. Với implementation đồng bộ, callback **không** được gọi (quy ước); vì vậy caller dùng `mask = CRYPTO_ALG_ASYNC` có thể truyền callback `NULL`.
+refs: `crypto/skcipher.c:624-638` · `security/keys/encrypted-keys/encrypted.c:406, 476`
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant API as dispatcher<br/>(skcipher.c)
+    participant IMPL as alg->encrypt (sync)
+    C->>API: encrypt(req)
+    alt tfm còn NEED_KEY
+        API-->>C: -ENOKEY
+    end
+    API->>IMPL: alg->encrypt(req)
+    Note over API,IMPL: xử lý toàn bộ dữ liệu<br/>(skcipher_walk, cipher)
+    IMPL-->>API: 0 hoặc -EINVAL ...
+    API-->>C: kết quả cuối cùng
+    Note over C,API: Caller có thể đọc dst và<br/>free request ngay sau đó
+
+=== dg-req-seq-async
+type: sequence
+status: verified
+title: Request bất đồng bộ — -EINPROGRESS rồi callback
+purpose: Chỉ ra rằng hàm submit trả về **trước** khi có kết quả, và mọi bộ nhớ của request phải sống tới callback.
+caption: Thứ tự giữa "submit trả về" và "callback được gọi" **không được đảm bảo**: worker hoặc IRQ có thể chạy trên CPU khác (hoặc chiếm CPU sau khi bật lại BH/preempt) và gọi callback trước khi caller kịp xử lý mã trả về. Vì vậy caller phải chuẩn bị mọi trạng thái **trước** khi submit. Callback nên chỉ dùng `base->data` (với vỏ `simd`, con trỏ `base` là bản sao của request gốc).
+refs: `crypto/skcipher.c:624-638` · `crypto/cryptd.c:130-185` · `crypto/simd.c:62-81` · `crypto/api.c:592-601` (`crypto_req_done`)
+next: Trường hợp hàng đợi đầy: [backlog và -EBUSY](#dg-req-seq-backlog).
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant API as dispatcher<br/>(skcipher.c)
+    participant IMPL as alg->encrypt (async)
+    participant W as worker / IRQ
+    C->>API: encrypt(req)<br/>callback = cb, data = ctx
+    API->>IMPL: alg->encrypt(req)
+    IMPL-)W: xếp request vào hàng đợi
+    IMPL-->>API: -EINPROGRESS
+    API-->>C: -EINPROGRESS
+    Note over C,API: KHÔNG free req, src/dst, iv, tfm
+    Note over W: xử lý dữ liệu
+    W-)C: cb(&req->base, err)
+    Note over C,W: Bước callback có thể xảy ra trước khi<br/>caller xử lý xong mã -EINPROGRESS
+
+=== dg-req-seq-backlog
+type: sequence
+status: verified
+title: Hàng đợi đầy — -EBUSY, backlog, callback hai lần
+purpose: Giải thích ngữ nghĩa thật của `-EBUSY` trong Crypto API (khác ý nghĩa thông thường "thử lại sau").
+caption: `-EBUSY` chỉ xuất hiện khi request có `CRYPTO_TFM_REQ_MAY_BACKLOG`: request **đã được nhận** vào backlog. Không có cờ đó, hàng đợi đầy trả `-ENOSPC` và request bị bỏ. dm-crypt dùng callback `-EINPROGRESS` để biết lúc được gửi request tiếp.
+refs: `crypto/algapi.c:932-952` · `crypto/cryptd.c:171-181` · `drivers/md/dm-crypt.c:1579-1609, 2167-2170`
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant Q as crypto_queue
+    participant W as worker
+    C->>Q: crypto_enqueue_request(req)<br/>qlen ≥ max_qlen
+    alt req có MAY_BACKLOG
+        Q-->>C: -EBUSY (đã vào backlog)
+        Note over C,Q: chờ tín hiệu, không gửi thêm
+        W->>Q: dequeue + crypto_get_backlog()
+        W-)C: cb(backlog, -EINPROGRESS)
+        Note over C,Q: được phép gửi request tiếp
+        W-)C: cb(req, kết quả cuối)
+    else không có MAY_BACKLOG
+        Q-->>C: -ENOSPC (bị từ chối, không callback)
+    end
+
+=== dg-req-handle
+type: flowchart
+status: verified
+title: Caller xử lý mã trả về (mẫu dm-crypt)
+purpose: Mẫu xử lý đầy đủ cho caller muốn dùng implementation bất đồng bộ.
+caption: Rút gọn từ `crypt_convert()` của dm-crypt. Callback `kcryptd_async_done` xử lý `-EINPROGRESS` bằng `complete(&ctx->restart)` rồi return; các giá trị khác là kết quả cuối. Caller muốn đơn giản hơn dùng `crypto_wait_req()` (xem chương Debugging về bản vendor).
+refs: `drivers/md/dm-crypt.c:1574-1632` · `drivers/md/dm-crypt.c:2154-2200`
+---
+flowchart TD
+    %% @classdefs
+    S(["r = crypto_skcipher_encrypt(req)"]):::api --> D{{"r = ?"}}:::dec
+    D -- "0" --> A0(["xong đồng bộ:<br/>dùng dst, request tiếp"]):::ok
+    D -- "-EINPROGRESS" --> A1(["callback sẽ báo kết quả:<br/>không đụng req nữa"]):::cb
+    D -- "-EBUSY" --> A2["đã vào backlog:<br/>chờ callback(-EINPROGRESS)"]:::cb
+    A2 --> A3(["sau đó coi như -EINPROGRESS"]):::cb
+    D -- "-EBADMSG" --> A4(["lỗi toàn vẹn dữ liệu"]):::err
+    D -- "lỗi khác" --> A5(["lỗi I/O: dọn dẹp"]):::err
+
+=== dg-req-enqueue
+type: flowchart
+status: verified
+title: crypto_enqueue_request() — nguồn gốc của -EINPROGRESS / -EBUSY / -ENOSPC
+purpose: Hàm helper mà cryptd và nhiều driver dùng để xếp hàng; quyết định ba mã trả async.
+caption: Hàm **không** tự khoá; người gọi tự bảo vệ hàng đợi (cryptd: `local_bh_disable` trên queue per-CPU; SafeXcel: `spin_lock_bh`). `queue->backlog` trỏ tới request đầu tiên vượt `max_qlen`.
+refs: `crypto/algapi.c:932-952` · `crypto/algapi.c:963-979` · `include/crypto/algapi.h:234-239`
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_enqueue_request(queue, req)"]):::api --> F{{"qlen ≥ max_qlen?"}}:::dec
+    F -- "không" --> A["qlen++, list_add_tail"]:::core --> R1(["-EINPROGRESS"]):::cb
+    F -- "có" --> B{{"req có MAY_BACKLOG?"}}:::dec
+    B -- "không" --> R3(["-ENOSPC, không xếp hàng"]):::err
+    B -- "có" --> C["nếu chưa có backlog:<br/>backlog = req"]:::core
+    C --> D["qlen++, list_add_tail"]:::core --> R2(["-EBUSY"]):::cb

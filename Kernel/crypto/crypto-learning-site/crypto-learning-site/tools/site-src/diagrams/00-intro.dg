@@ -1,0 +1,160 @@
+=== dg-ov-layers
+type: architecture
+status: conceptual
+title: Sáu lớp từ caller tới phần cứng
+purpose: Cho người mới một "bản đồ tầng": mỗi lớp làm gì, file nào thuộc lớp nào, và lớp nào chỉ nói chuyện với lớp nào.
+caption: Caller không bao giờ thấy `struct crypto_alg`; implementation không biết caller là ai; core không biết toán học của thuật toán — chỉ biết tên, cờ, priority, kích thước ctx và gọi callback. Template (`cbc.c`, `gcm.c`…) và vỏ async (`cryptd.c`, `simd.c`) cũng nằm ở lớp implementation vì chúng đăng ký `crypto_alg` như mọi thuật toán.
+refs: `include/crypto/*.h` · `crypto/api.c` · `crypto/algapi.c` · `crypto/algboss.c` · `crypto/testmgr.c` · `arch/arm64/crypto/` · `drivers/crypto/`
+explain: ch-architecture
+---
+flowchart TB
+    %% @classdefs
+    L5["<b>L5 · Caller</b><br/>dm-crypt, IPsec ESP<br/>encrypted-keys, X.509"]:::ext
+    L4["<b>L4 · API theo loại</b><br/>include/crypto/*.h<br/>skcipher.c, aead.c, shash.c …<br/>kiểm keylen, NEED_KEY"]:::api
+    L3["<b>L3 · Core</b><br/>crypto/api.c, algapi.c<br/>registry, lookup, larval<br/>tạo/huỷ tfm, refcount<br/>template, instance, spawn"]:::core
+    L2["<b>L2 · Manager</b><br/>crypto/algboss.c, testmgr.c<br/>dựng instance theo tên<br/>chạy self-test"]:::core
+    L1["<b>L1 · Implementation</b><br/>generic C · arm64 CE/NEON<br/>template · cryptd/simd<br/>driver phần cứng"]:::impl
+    L0["<b>L0 · Thực thi</b><br/>CPU · lệnh CE/NEON<br/>engine HW (MMIO/DMA/IRQ)"]:::drv
+    L5 -- "crypto_alloc_*(), encrypt(req)" --> L4
+    L4 -- "crypto_alloc_tfm_node()<br/>alg->encrypt(req)" --> L3
+    L3 -. "notifier" .-> L2
+    L2 -- "tmpl->create()<br/>crypto_alg_tested()" --> L3
+    L3 -. "con trỏ hàm" .-> L1
+    L1 --> L0
+
+=== dg-ov-journey
+type: sequence
+status: conceptual
+title: Một lần dùng Crypto API — năm bước của caller
+purpose: Toàn cảnh ở mức caller trước khi đi vào chi tiết: xin tfm theo tên, đặt khoá, tạo request, gửi request, giải phóng.
+caption: Rút gọn từ encrypted-keys (`security/keys/encrypted-keys/encrypted.c:377-480`), một caller **đồng bộ**. Mỗi bước có chương riêng: lookup (bước 1), transform (bước 2, 5), request (bước 3–4). Với caller bất đồng bộ, bước 4 có thể trả `-EINPROGRESS` và kết quả đến sau qua callback.
+refs: `security/keys/encrypted-keys/encrypted.c:377-480` · `crypto/skcipher.c:758` (`crypto_alloc_skcipher`) · `crypto/skcipher.c:599-638` · `include/crypto/skcipher.h:493-583`
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller<br/>(encrypted-keys)
+    participant API as API skcipher
+    participant CORE as Core<br/>(registry)
+    participant I as Implementation<br/>cbc(aes-ce)
+    C->>API: crypto_alloc_skcipher(<br/>"cbc(aes)", 0, ASYNC)
+    API->>CORE: lookup theo tên + mask
+    CORE-->>API: alg tốt nhất → tạo tfm
+    API-->>C: tfm
+    C->>API: crypto_skcipher_setkey(tfm, key)
+    API->>I: alg->setkey() — mở rộng khoá vào ctx
+    C->>API: skcipher_request_alloc()<br/>+ set_crypt(src, dst, len, iv)
+    C->>API: crypto_skcipher_encrypt(req)
+    API->>I: alg->encrypt(req)
+    I-->>API: 0
+    API-->>C: 0 (xong, đồng bộ)
+    C->>API: request_free + crypto_free_skcipher
+    Note over API,CORE: thả ref alg, xoá trắng ctx
+
+=== dg-fund-choose
+type: flowchart
+status: conceptual
+title: Chọn loại API theo nhu cầu
+purpose: Dẫn người mới từ câu hỏi "tôi cần gì" tới đúng loại API kernel và tên thuật toán điển hình.
+caption: Tên trong ngoặc là ví dụ `cra_name` có trong repo. Ưu tiên `aead` khi cần cả bí mật lẫn toàn vẹn — `skcipher` một mình **không** phát hiện được dữ liệu bị sửa. `cipher` (một block) chỉ dành cho người viết mode/template, không dùng cho dữ liệu thật.
+refs: `include/crypto/skcipher.h` · `include/crypto/aead.h` · `include/crypto/hash.h` · `include/crypto/akcipher.h` · `include/crypto/kpp.h` · `include/crypto/rng.h` · `include/linux/crypto.h` (`crypto_cipher`)
+explain: ch-fundamentals
+---
+flowchart TD
+    %% @classdefs
+    S(["Bạn cần gì?"]):::api --> Q1{{"Giữ bí mật dữ liệu?"}}:::dec
+    Q1 -- "có" --> Q2{{"Cũng phải phát hiện<br/>dữ liệu bị sửa?"}}:::dec
+    Q2 -- "có" --> AEAD(["<b>aead</b><br/>gcm(aes), ccm(aes)<br/>authenc(hmac(sha256),cbc(aes))"]):::ok
+    Q2 -- "không" --> Q3{{"Chỉ mã một block<br/>(viết mode/template)?"}}:::dec
+    Q3 -- "có" --> CI(["<b>cipher</b><br/>aes, des"]):::core
+    Q3 -- "không" --> SK(["<b>skcipher</b><br/>xts(aes), cbc(aes), ctr(aes)"]):::ok
+    Q1 -- "không" --> Q4{{"Thoả thuận khoá chung<br/>với bên kia?"}}:::dec
+    Q4 -- "có" --> KPP(["<b>kpp</b><br/>dh, ecdh, curve25519"]):::ok
+    Q4 -- "không" --> Q5{{"Ký hoặc<br/>kiểm chữ ký?"}}:::dec
+    Q5 -- "có" --> AK(["<b>akcipher</b><br/>rsa, pkcs1pad(rsa,sha256)"]):::ok
+    Q5 -- "không" --> Q6{{"Kiểm toàn vẹn<br/>bằng khoá chung?"}}:::dec
+    Q6 -- "có" --> MAC(["<b>shash / ahash</b> có khoá<br/>hmac(sha256), cmac(aes)"]):::ok
+    Q6 -- "không" --> Q7{{"Cần số<br/>ngẫu nhiên?"}}:::dec
+    Q7 -- "có" --> RNG(["<b>rng</b><br/>stdrng (DRBG)"]):::ok
+    Q7 -- "không" --> HASH(["<b>shash / ahash</b><br/>sha256, crc32c"]):::ok
+
+=== dg-fund-cbc
+type: graph
+status: conceptual
+title: CBC — mỗi block phụ thuộc block trước
+purpose: Cho thấy vì sao CBC cần IV, vì sao không mã hoá song song được, và vì sao lật bit IV làm đổi plaintext block đầu (lý do cần AEAD).
+caption: `C1 = E_K(P1 ⊕ IV)`, `C2 = E_K(P2 ⊕ C1)`. Khi giải mã, `P1 = D_K(C1) ⊕ IV` — lật một bit trong IV lật đúng bit đó trong P1 mà không cần biết K. Trong kernel, template `cbc` cài đặt chuỗi này trong `crypto_cbc_encrypt_segment()`; IV sau cùng (chính là block ciphertext cuối) được ghi lại vào `req->iv`.
+refs: `crypto/cbc.c:16-89` (`crypto_cbc_encrypt_segment`, `crypto_cbc_encrypt_inplace`, `crypto_cbc_encrypt`)
+explain: ch-skcipher
+---
+flowchart LR
+    %% @classdefs
+    IV["IV"]:::cb
+    P1["P1"]:::api
+    P2["P2"]:::api
+    X1(("⊕")):::core
+    X2(("⊕")):::core
+    E1["E_K"]:::impl
+    E2["E_K"]:::impl
+    C1["C1"]:::drv
+    C2["C2"]:::drv
+    IV --> X1
+    P1 --> X1 --> E1 --> C1
+    C1 --> X2
+    P2 --> X2 --> E2 --> C2
+    C2 -. "IV cho request kế tiếp<br/>(ghi vào req->iv)" .-> NEXT["…"]:::ext
+
+=== dg-why-before
+type: graph
+status: conceptual
+title: Không có Crypto API — mỗi subsystem tự làm
+purpose: Minh hoạ vấn đề: ba bản AES, không ai tận dụng được lệnh CPU hay phần cứng, sửa lỗi phải sửa ba nơi.
+caption: Tình huống giả định để so sánh; Linux không tổ chức như vậy.
+refs: —
+---
+flowchart LR
+    %% @classdefs
+    N1["IPsec"]:::ext --> I1["AES riêng #1"]:::err
+    S1["dm-crypt"]:::ext --> I2["AES riêng #2<br/>+ code phần cứng riêng"]:::err
+    K1["encrypted-keys"]:::ext --> I3["AES riêng #3"]:::err
+
+=== dg-why-after
+type: graph
+status: verified
+title: Có Crypto API — xin theo tên, registry chọn implementation
+purpose: Cùng ba caller, nhưng chỉ có một điểm vào và nhiều implementation cạnh tranh bằng priority.
+caption: Priority lấy từ source. `aes-ce` chỉ được đăng ký khi CPU có AES Crypto Extensions (`module_cpu_feature_match`). Driver phần cứng có trong repo nhưng **không build** trên sản phẩm. Mũi tên đứt: registry **chọn** một implementation (không phải gọi hàm).
+refs: `crypto/aes_generic.c:1285-1302` · `arch/arm64/crypto/aes-cipher-glue.c:32-34` · `arch/arm64/crypto/aes-ce-glue.c:151-178` · `crypto/api.c:55-93`
+---
+flowchart LR
+    %% @classdefs
+    N2["IPsec"]:::ext --> API["crypto_alloc_*()<br/>theo tên"]:::api
+    S2["dm-crypt"]:::ext --> API
+    K2["encrypted-keys"]:::ext --> API
+    API --> REG[("registry<br/>+ priority")]:::core
+    REG -.-> G["aes-generic · 100"]:::impl
+    REG -.-> A["aes-arm64 · 200"]:::impl
+    REG -.-> CE["aes-ce · 250"]:::impl
+    REG -.-> HW["driver HW<br/>(không build)"]:::ext
+
+=== dg-why-dmcrypt
+type: sequence
+status: inferred
+title: Một dòng cấu hình dm-crypt đi tới implementation nào
+purpose: Ví dụ thật về "xin theo tên": dm-crypt ghép tên, đặt mask, và không cần biết implementation là gì.
+caption: Bước chọn `xts-aes-ce` là **suy luận** từ defconfig + priority (cần xác minh bằng `/proc/crypto` trên máy thật). Mask `CRYPTO_ALG_ALLOCATES_MEMORY` loại các alg có cờ này — ví dụ alg SafeXcel nếu được build — dù priority bằng nhau.
+refs: `drivers/md/dm-crypt.c:2965-2972` (ghép tên) · `drivers/md/dm-crypt.c:2296-2298` (alloc) · `arch/arm64/crypto/aes-glue.c` · `drivers/crypto/inside-secure/safexcel_cipher.c:1322-1324`
+explain: ch-why
+---
+sequenceDiagram
+    autonumber
+    participant U as cryptsetup<br/>(userspace)
+    participant DM as dm-crypt
+    participant API as API skcipher<br/>(skcipher.c)
+    participant R as registry
+    U->>DM: bảng dm: "aes-xts-plain64"
+    Note over DM,API: snprintf("%s(%s)", chainmode,<br/>cipher) → "xts(aes)"
+    DM->>API: crypto_alloc_skcipher("xts(aes)",<br/>0, ALLOCATES_MEMORY)
+    API->>R: lookup: bit<br/>ALLOCATES_MEMORY phải = 0
+    R-->>API: xts-aes-ce (prio 300, async)
+    API-->>DM: tfm
+    Note over DM,API: dm-crypt không biết đó là<br/>lệnh ARMv8 hay C thuần

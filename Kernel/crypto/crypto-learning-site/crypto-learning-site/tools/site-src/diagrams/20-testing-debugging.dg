@@ -1,0 +1,114 @@
+=== dg-test-cryptomgr
+type: flowchart
+status: verified
+title: cryptomgr_schedule_test() và cryptomgr_test() — test có thật sự chạy không?
+purpose: Ba lý do khiến `alg_test()` không chạy, và vì sao trên sản phẩm mọi alg vẫn được đánh dấu `TESTED`.
+caption: Trên Eagle `CONFIG_CRYPTO_MANAGER_DISABLE_TESTS=y` → luôn đi nhánh `skiptest` với `err = 0`. Alg `INTERNAL` (ví dụ `__cbc-aes-ce`) không bao giờ được test trực tiếp; nó được kiểm gián tiếp qua vỏ simd khi test được bật. Nếu không tạo được kthread, notifier trả `NOTIFY_OK` và core tự gọi `crypto_alg_tested(driver, 0)`.
+refs: `crypto/algboss.c:193-250` · `crypto/algapi.c:405-423` (`crypto_wait_for_test`) · `crypto/testmgr.c:60-66` (bản nop)
+explain: ch-testing
+---
+flowchart TD
+    %% @classdefs
+    S(["notifier ALG_REGISTER<br/>→ cryptomgr_schedule_test(alg)"]):::api --> I{{"alg có cờ INTERNAL?"}}:::dec
+    I -- "có" --> T1["type |= TESTED"]:::core
+    I -- "không" --> K
+    T1 --> K{{"kthread_run(cryptomgr_test)<br/>thành công?"}}:::dec
+    K -- "không" --> NO(["NOTIFY_OK → core tự gọi<br/>crypto_alg_tested(driver, 0)"]):::err
+    K -- "có" --> D{{"DISABLE_TESTS=y ?"}}:::dec
+    D -- "có (sản phẩm)" --> SK(["skiptest: err = 0"]):::ok
+    D -- "không" --> Q{{"type đã có TESTED?"}}:::dec
+    Q -- "có" --> SK2(["skiptest: err = 0"]):::ok
+    Q -- "không" --> AT["err = alg_test(driver, name,<br/>type, CRYPTO_ALG_TESTED)"]:::impl
+    AT --> FIN(["crypto_alg_tested(driver, err)"]):::api
+
+=== dg-test-algtest
+type: flowchart
+status: verified
+title: alg_test() khi self-test được bật
+purpose: Cách testmgr tìm bộ test vector cho một alg, và khi nào "không có test" vẫn được coi là pass.
+caption: Bảng `alg_test_descs[]` phải sắp xếp theo tên (tìm nhị phân). Tìm theo **cả** `cra_name` và `cra_driver_name`; chạy cả hai nếu khác nhau. Alg loại `CIPHER` (một block) được test bằng vector của `ecb(<name>)`. `panic_on_fail` là module param của cryptomgr.
+refs: `crypto/testmgr.c:5631-5696` · `crypto/testmgr.c:5606-5629` (`alg_find_test`)
+explain: ch-testing
+---
+flowchart TD
+    %% @classdefs
+    S(["alg_test(driver, name, type, mask)"]):::api --> N{{"notests và không FIPS?"}}:::dec
+    N -- "có" --> P0(["return 0<br/>(self-tests disabled)"]):::ok
+    N -- "không" --> C{{"loại CIPHER<br/>(một block)?"}}:::dec
+    C -- "có" --> E["tìm vector ecb(name)<br/>→ alg_test_cipher"]:::impl
+    C -- "không" --> F["i = tìm theo cra_name<br/>j = tìm theo driver name"]:::core
+    F --> Q{{"có mục nào?"}}:::dec
+    Q -- "không" --> P1(["'alg: No test for …'<br/>return 0 (coi như pass)"]):::ok
+    Q -- "có" --> R["rc = desc->test(...) cho i và j"]:::impl
+    E --> RC{{"rc ≠ 0 và<br/>(FIPS hoặc panic_on_fail)?"}}:::dec
+    R --> RC
+    RC -- "có" --> PANIC(["panic"]):::err
+    RC -- "không" --> RET(["return rc"]):::api
+
+=== dg-dbg-cleanup
+type: flowchart
+status: verified
+title: Xử lý lỗi và dọn dẹp — alloc, setkey, request, encrypt
+purpose: Mỗi điểm thất bại cần dọn đúng những gì đã cấp, theo thứ tự ngược; và điểm duy nhất **không được** dọn: khi request còn đang bay.
+caption: `crypto_free_skcipher()` và `skcipher_request_free()` an toàn với `NULL`/`ERR_PTR`, nhưng cấu trúc goto-ngược vẫn rõ ràng hơn. Sau `-EINPROGRESS`/`-EBUSY` chỉ được dọn **sau** callback cuối (hoặc sau `crypto_wait_req`). Setkey lỗi đưa tfm về `NEED_KEY` nên tfm vẫn phải được free.
+refs: `crypto/skcipher.c:599-638` · `crypto/api.c:561-575` · `include/crypto/skcipher.h:493-514`
+explain: ch-debugging
+---
+flowchart TD
+    %% @classdefs
+    A(["tfm = crypto_alloc_skcipher(…)"]):::api --> QA{{"IS_ERR(tfm)?"}}:::dec
+    QA -- "có:<br/>-ENOENT, -ELIBBAD<br/>-ETIMEDOUT, -EINTR<br/>-ENOMEM" --> XA(["return lỗi<br/>(chưa có gì để free)"]):::err
+    QA -- "không" --> B["crypto_skcipher_setkey(<br/>tfm, key)"]:::api
+    B --> QB{{"lỗi?"}}:::dec
+    QB -- "có: -EINVAL, -ENOMEM" --> XB(["free tfm → return"]):::err
+    QB -- "không" --> C["req = skcipher_request_alloc(<br/>tfm, gfp)"]:::api
+    C --> QC{{"req == NULL?"}}:::dec
+    QC -- "có" --> XC(["free tfm → -ENOMEM"]):::err
+    QC -- "không" --> E["set_callback + set_crypt<br/>err = crypto_skcipher_encrypt(<br/>req)"]:::api
+    E --> QE{{"err = ?"}}:::dec
+    QE -- "-EINPROGRESS / -EBUSY" --> W(["chờ callback / crypto_wait_req<br/>KHÔNG free gì lúc này"]):::cb
+    QE -- "0" --> OK(["dùng dst → free req → free tfm"]):::ok
+    QE -- "-EINVAL, -ENOKEY,<br/>-ENOSPC …" --> XE(["free req → free tfm<br/>→ return lỗi"]):::err
+
+=== dg-dbg-enoent
+type: flowchart
+status: verified
+title: crypto_alloc_*() trả -ENOENT — thu hẹp nguyên nhân
+purpose: Một quy trình kiểm tra theo thứ tự từ rẻ tới đắt cho lỗi thường gặp nhất.
+caption: Lệnh chạy trên target. Thứ tự dựa trên bảy trạng thái của một thuật toán. "Mask loại hết" là bẫy hay gặp nhất: ứng viên có trong `/proc/crypto` nhưng mang cờ `async` hoặc `internal` mà caller loại trừ. Tên không có dạng `tmpl(...)` thì cryptomgr không thể dựng gì.
+refs: `crypto/api.c:217-288` · `crypto/algboss.c:96-101` · `crypto/proc.c`
+explain: ch-debugging
+---
+flowchart TD
+    %% @classdefs
+    S(["-ENOENT"]):::err --> Q1{{"/proc/crypto có dòng<br/>name hoặc driver khớp?"}}:::dec
+    Q1 -- "có" --> Q2{{"cờ của ứng viên khớp<br/>type/mask của caller?<br/>(async, internal …)"}}:::dec
+    Q2 -- "không" --> R2(["mask loại hết ứng viên:<br/>đổi mask hoặc đổi caller"]):::drv
+    Q2 -- "có" --> R2b(["đúng frontend chưa?<br/>(vd shash cho tên skcipher)"]):::drv
+    Q1 -- "không" --> Q3{{"tên dạng tmpl(...)?"}}:::dec
+    Q3 -- "có" --> Q4{{"template và alg con<br/>đều có sẵn?"}}:::dec
+    Q4 -- "không" --> R4(["bật Kconfig template/alg con<br/>hoặc nạp module"]):::drv
+    Q4 -- "có" --> R4b(["create() thất bại:<br/>xem dmesg, tên quá dài, loại sai"]):::drv
+    Q3 -- "không" --> Q5{{"CONFIG_… bật?<br/>CPU có feature?"}}:::dec
+    Q5 -- "không" --> R5(["bật config / chọn<br/>implementation khác"]):::drv
+    Q5 -- "có" --> R5b(["đăng ký thất bại lúc init:<br/>dmesg -EEXIST / -EINVAL"]):::drv
+
+=== dg-dbg-wait-req
+type: flowchart
+status: verified
+title: crypto_wait_req() bản vendor — nguồn gốc log @@@[CHK]timeout
+purpose: Hiểu chính xác vòng chờ của vendor để đọc log: mỗi dòng log là một chu kỳ 2000 jiffies mà callback chưa đến.
+caption: Upstream chỉ gọi `wait_for_completion()` một lần. Bản vendor lặp vô hạn; `wait_for_completion_timeout()` không bao giờ trả số âm nên nhánh "âm" là code chết. Trên Eagle `CONFIG_HZ=200` → mỗi dòng log ≈ 10 giây. Task ngủ ở trạng thái `D` (không kill được) trong lúc chờ. Dòng log không có mức `KERN_*`.
+refs: `include/linux/crypto.h:591-620` · `arch/arm64/configs/Eagle_defconfig` (`CONFIG_HZ=200`)
+explain: ch-debugging
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_wait_req(err, wait)"]):::api --> Q0{{"err là -EINPROGRESS<br/>hoặc -EBUSY?"}}:::dec
+    Q0 -- "không" --> R0(["trả err ngay"]):::ok
+    Q0 -- "có" --> W["r = wait_for_completion_<br/>timeout(completion, 2000)"]:::core
+    W --> Q1{{"r = 0 (hết giờ)?"}}:::dec
+    Q1 -- "có" --> LOG["printk @@@[CHK]timeout<br/>crypto_wait_req L601 jiffies"]:::drv
+    LOG --> W
+    Q1 -- "không: r > 0" --> R1["reinit_completion(completion)"]:::core
+    R1 --> R2(["trả wait->err<br/>(do crypto_req_done ghi)"]):::ok

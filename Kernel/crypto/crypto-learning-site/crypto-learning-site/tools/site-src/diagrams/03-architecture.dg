@@ -1,0 +1,166 @@
+=== dg-arch-overview
+type: architecture
+status: conceptual
+title: Kiến trúc Crypto API — các khối và hướng gọi
+purpose: Một hình để định vị mọi thứ khác: caller chỉ thấy API theo loại; core giữ registry và tạo tfm; implementation đăng ký vào registry và được gọi qua con trỏ hàm.
+caption: Mũi tên liền = lời gọi hàm trực tiếp; mũi tên đứt = gọi gián tiếp (notifier `CRYPTO_MSG_ALG_REQUEST`, hoặc con trỏ hàm trong `skcipher_alg`). cryptomgr nằm ở `crypto/algboss.c` nhưng được vẽ trong khối Core vì nó chỉ giao tiếp với core. `drivers/crypto` có trong repo nhưng **không được build** trên sản phẩm (`CONFIG_CRYPTO_HW` tắt). Đây là sơ đồ khái niệm: mỗi khối gom nhiều file.
+refs: `crypto/api.c` · `crypto/algapi.c` · `crypto/algboss.c` · `crypto/skcipher.c` · `include/crypto/*.h` · `arch/arm64/crypto/` · `crypto/simd.c` · `crypto/cryptd.c`
+---
+flowchart TB
+    %% @classdefs
+    C["<b>Caller</b> — ngoài crypto/<br/>dm-crypt · IPsec ESP<br/>encrypted-keys · X.509"]:::ext
+    subgraph API["API theo loại — include/crypto/*.h, crypto/skcipher.c, aead.c, shash.c …"]
+        direction LR
+        ALLOC["crypto_alloc_*()"]:::api
+        KEY["*_setkey()"]:::api
+        OP["encrypt / decrypt<br/>digest / verify"]:::api
+    end
+    subgraph CORE["Core — crypto/api.c, algapi.c, algboss.c"]
+        LOOK["lookup + larval"]:::core
+        TFM["tạo / huỷ tfm"]:::core
+        MGR["cryptomgr<br/>dựng instance từ template<br/>chạy self-test"]:::core
+        REG[("crypto_alg_list<br/>+ crypto_alg_sem")]:::core
+    end
+    IMPL["<b>Implementation</b><br/>generic C: aes_generic.c …<br/>arm64 CE / NEON<br/>template: cbc.c, gcm.c, hmac.c<br/>vỏ async: simd.c, cryptd.c<br/>drivers/crypto: không build"]:::impl
+    C --> ALLOC & KEY & OP
+    ALLOC --> TFM
+    ALLOC --> LOOK
+    LOOK --> REG
+    LOOK -. "notifier" .-> MGR
+    MGR -- "register<br/>instance" --> REG
+    OP -. "alg->encrypt(req)" .-> IMPL
+    IMPL -- "crypto_register_*()" --> REG
+
+=== dg-arch-class-core
+type: class
+status: verified
+title: Đối tượng lõi — alg, type, tfm, request
+purpose: Cho thấy "kế thừa bằng struct lồng": struct theo loại nhúng struct chung làm thành viên `base`, và các con trỏ nối caller-side (tfm, request) với implementation-side (alg, type).
+caption: Hình thoi đặc (`*--`) = nhúng (thành viên `base`); mũi tên = con trỏ. Lấy struct theo loại từ struct chung bằng `container_of` (ví dụ `crypto_skcipher_alg()`). Chỉ liệt kê trường quan trọng.
+refs: `include/linux/crypto.h:469-509` (`crypto_alg`) · `include/linux/crypto.h:646-657` (`crypto_tfm`) · `include/linux/crypto.h:179-186` (`crypto_async_request`) · `include/crypto/skcipher.h:24-41, 104-119` · `include/crypto/algapi.h:32-45` (`crypto_type`)
+---
+classDiagram
+    direction TB
+    class skcipher_alg {
+        setkey() encrypt() decrypt()
+        init() exit()
+        min_keysize, max_keysize, ivsize
+        crypto_alg base
+    }
+    class crypto_alg {
+        char cra_name[128]
+        char cra_driver_name[128]
+        int cra_priority
+        u32 cra_flags
+        unsigned cra_ctxsize, cra_alignmask
+        refcount_t cra_refcnt
+        list_head cra_list, cra_users
+    }
+    class crypto_type {
+        extsize() init_tfm() show() free()
+        type, maskclear, maskset, tfmsize
+    }
+    class module
+    class crypto_skcipher {
+        unsigned reqsize
+        crypto_tfm base
+    }
+    class crypto_tfm {
+        u32 crt_flags
+        exit()
+        crypto_alg* __crt_alg
+        void* __crt_ctx[]
+    }
+    class skcipher_request {
+        unsigned cryptlen
+        u8* iv
+        scatterlist* src, dst
+        crypto_async_request base
+        void* __ctx[]
+    }
+    class crypto_async_request {
+        complete()
+        void* data
+        crypto_tfm* tfm
+        u32 flags
+    }
+    skcipher_alg *-- crypto_alg : base
+    crypto_alg --> crypto_type : cra_type
+    crypto_alg --> module : cra_module
+    crypto_skcipher *-- crypto_tfm : base
+    crypto_tfm --> crypto_alg : __crt_alg
+    skcipher_request *-- crypto_async_request : base
+    crypto_async_request --> crypto_tfm : tfm
+
+=== dg-arch-class-tmpl
+type: class
+status: verified
+title: Template, instance, spawn và larval
+purpose: Các struct cho phép core "lắp" thuật toán theo tên (`cbc(aes)`) và giữ chỗ trong registry khi đang chờ.
+caption: Instance **là** một `crypto_alg` (nhúng `alg`), nên được đăng ký và tra cứu như mọi alg. Spawn nằm trong ctx của instance và được móc vào `cra_users` của alg con — đây là sợi dây để gỡ dây chuyền. Trước khi đăng ký, `crypto_instance` dùng con trỏ `spawns`; sau đó dùng nút `list` (union). Larval cũng nhúng `crypto_alg` để nằm chung danh sách.
+refs: `include/crypto/algapi.h:47-87` · `crypto/internal.h:25-30` (`crypto_larval`) · `crypto/algapi.c:619-660` (`crypto_register_instance`) · `crypto/algapi.c:688-720` (`crypto_grab_spawn`)
+---
+classDiagram
+    direction LR
+    class crypto_template {
+        list_head list
+        hlist_head instances
+        module* module
+        create(tmpl, tb)
+        char name[128]
+    }
+    class crypto_instance {
+        crypto_alg alg
+        crypto_template* tmpl
+        hlist_node list hoặc spawns
+        void* __ctx[]
+    }
+    class crypto_spawn {
+        crypto_alg* alg
+        crypto_instance* inst
+        crypto_type* frontend
+        u32 mask
+        bool dead, registered
+    }
+    class crypto_alg {
+        list_head cra_users
+        u32 cra_flags
+    }
+    class crypto_larval {
+        crypto_alg alg
+        crypto_alg* adult
+        completion completion
+        u32 mask
+    }
+    crypto_template o-- crypto_instance : instances
+    crypto_instance --> crypto_template : tmpl
+    crypto_instance *-- crypto_alg : alg
+    crypto_instance o-- crypto_spawn : trong __ctx
+    crypto_spawn --> crypto_alg : alg con
+    crypto_alg o-- crypto_spawn : cra_users
+    crypto_larval *-- crypto_alg : alg
+    crypto_larval --> crypto_alg : adult
+
+=== dg-arch-tmpl
+type: graph
+status: verified
+title: Ví dụ lắp ghép — template cbc + aes-ce thành instance cbc(aes-ce)
+purpose: Gắn các struct ở sơ đồ trên vào một trường hợp có thật trên sản phẩm.
+caption: Spawn vừa trỏ tới alg con (`spawn->alg`) vừa nằm trong danh sách `cra_users` của alg con — chiều ngược này là thứ cho phép gỡ dây chuyền. Template và các alg `aes` được đăng ký lúc boot; instance chỉ được tạo khi có caller hỏi `cbc(aes)` với mask loại trừ các bản async (ví dụ encrypted-keys). Priority của instance = priority của alg con tốt nhất (`aes-ce` 250) — **[I]** giả định CPU có AES Crypto Extensions.
+refs: `crypto/cbc.c:173-210` · `crypto/skcipher.c:934-984` (`skcipher_alloc_instance_simple`) · `arch/arm64/crypto/aes-ce-glue.c:151-166` · `crypto/aes_generic.c:1285-1302`
+explain: ch-templates
+---
+flowchart TB
+    %% @classdefs
+    T["template <b>cbc</b> — crypto/cbc.c<br/>(đăng ký lúc boot)"]:::core
+    I["instance — tạo khi có người hỏi<br/>cra_name = cbc(aes)<br/>driver = cbc(aes-ce)<br/>prio 250"]:::api
+    S["spawn<br/>(nằm trong ctx của instance)"]:::cb
+    subgraph AES["Các alg có cra_name = aes (đăng ký lúc boot)"]
+        direction LR
+        A3["aes-ce<br/>prio 250"]:::impl
+        A2["aes-arm64<br/>prio 200"]:::impl
+        A1["aes-generic<br/>prio 100"]:::impl
+    end
+    T -- "create()<br/>= crypto_cbc_create()" --> I
+    I -- "chứa" --> S
+    S -- "spawn->alg = aes-ce (prio cao nhất)<br/>spawn được móc vào aes-ce->cra_users" --> A3

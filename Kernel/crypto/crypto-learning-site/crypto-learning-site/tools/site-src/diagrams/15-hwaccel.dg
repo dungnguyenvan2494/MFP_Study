@@ -1,0 +1,142 @@
+=== dg-hw-select
+type: flowchart
+status: verified
+title: Một implementation phải qua những "cửa" nào để được chọn
+purpose: Gom mọi yếu tố quyết định implementation thành một chuỗi lọc: từ Kconfig tới priority.
+caption: Hai cửa đầu xảy ra **trước** khi có caller (build time và lúc module init/probe); các cửa sau xảy ra trong mỗi lần lookup (`__crypto_alg_lookup`, `crypto_alg_lookup`). Gọi bằng `cra_driver_name` bỏ qua so sánh priority nhưng **không** bỏ qua type/mask.
+refs: `crypto/Makefile` · `arch/arm64/crypto/Makefile` · `include/linux/cpufeature.h:44-55` (`module_cpu_feature_match`) · `arch/arm64/crypto/ghash-ce-glue.c:589-598` · `crypto/api.c:55-93, 193-215`
+explain: ch-lookup
+---
+flowchart TD
+    %% @classdefs
+    S(["implementation X trong repo"]):::api --> G1{{"Kconfig bật<br/>(=y hoặc =m)?"}}:::dec
+    G1 -- "không" --> N1(["không tồn tại lúc chạy"]):::err
+    G1 -- "có" --> G2{{"đăng ký được lúc init?<br/>CPU feature / probe thiết bị"}}:::dec
+    G2 -- "không" --> N2(["không có trong /proc/crypto"]):::err
+    G2 -- "có" --> G3{{"(cra_flags ^ type) & mask = 0 ?<br/>ẩn INTERNAL nếu không xin"}}:::dec
+    G3 -- "không" --> N3(["bị loại với caller này"]):::err
+    G3 -- "có" --> G4{{"không DEAD/DYING<br/>và đã TESTED?"}}:::dec
+    G4 -- "không" --> N4(["bỏ qua, hoặc -ELIBBAD<br/>nếu chỉ còn bản chưa TESTED"]):::err
+    G4 -- "có" --> G5{{"trùng driver name, hoặc<br/>priority cao nhất?"}}:::dec
+    G5 -- "không" --> N5(["thua ứng viên khác"]):::core
+    G5 -- "có" --> OK(["được chọn<br/>(hoà priority: đăng ký sau thắng)"]):::ok
+
+=== dg-hw-aes-candidates
+type: flowchart
+status: inferred
+title: cbc(aes) trên sản phẩm — mask của caller quyết định implementation
+purpose: Cùng tên `cbc(aes)`, ba caller thật nhận ba implementation khác nhau chỉ vì `mask`.
+caption: Giả định **[H]** CPU có AES Crypto Extensions. `cbc-aes-ce` mang cờ `ASYNC` (vỏ simd) nhưng **không** mang `ALLOCATES_MEMORY` (cờ kế thừa từ `__cbc-aes-ce`), nên dm-crypt vẫn nhận nó. Lựa chọn thực tế cần xác nhận trên máy bằng `/proc/crypto`. `safexcel-cbc-aes` (300, `ASYNC | ALLOCATES_MEMORY`) không được build.
+refs: `security/keys/encrypted-keys/encrypted.c:384` · `drivers/md/dm-crypt.c:2296-2298` · `crypto/simd.c:174-175` · `include/crypto/algapi.h:251-253` · `arch/arm64/crypto/aes-glue.c:1003-1036`
+explain: ch-hwaccel
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_alloc_skcipher(<br/>cbc(aes), 0, mask)"]):::api --> Q1{{"mask chứa<br/>CRYPTO_ALG_ASYNC?"}}:::dec
+    Q1 -- "có (encrypted-keys)" --> T(["cbc(aes-ce) · 250<br/>template cbc + aes-ce, sync"]):::impl
+    Q1 -- "không" --> Q2{{"mask chứa<br/>ALLOCATES_MEMORY?"}}:::dec
+    Q2 -- "có (dm-crypt)" --> A1(["cbc-aes-ce · 300<br/>simd, ASYNC, không cấp phát"]):::impl
+    Q2 -- "không (mask = 0)" --> A2(["cbc-aes-ce · 300<br/>(hoặc driver HW 300 nếu được build:<br/>quy tắc hoà quyết định)"]):::impl
+
+=== dg-hw-cryptd-submit
+type: sequence
+status: verified
+title: simd → cryptd (1/2) — submit khi NEON không dùng được
+purpose: Request được chuyển sang hàng đợi per-CPU của cryptd; caller nhận `-EINPROGRESS` và **không** được giải phóng gì.
+caption: cryptd thay `req->base.complete` bằng hàm của nó và cất callback gốc vào `rctx->complete`. Queue per-CPU dài tối đa `cryptd_max_cpu_qlen` (1000). Bị từ chối (`-ENOSPC`) thì không có callback. Mỗi request đang xếp hàng giữ thêm một ref trên tfm cryptd.
+refs: `crypto/simd.c:62-81` · `crypto/cryptd.c:305-325` (`cryptd_skcipher_enqueue`) · `crypto/cryptd.c:130-157` (`cryptd_enqueue_request`) · `crypto/cryptd.c:30-32`
+explain: ch-hwaccel
+next: Tiếp theo: [simd → cryptd (2/2) — worker và callback](#dg-hw-cryptd-complete).
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant S as simd.c<br/>cbc-aes-ce
+    participant D as cryptd.c
+    participant Q as per-CPU queue
+    C->>S: crypto_skcipher_encrypt(req)<br/>callback = my_done, data = ctx
+    Note over S,D: *subreq = *req<br/>NEON không dùng được → tfm con = cryptd
+    S->>D: crypto_skcipher_encrypt(subreq)<br/>→ cryptd_skcipher_encrypt_enqueue
+    Note over D,Q: rctx->complete = my_done<br/>base.complete = cryptd_skcipher_encrypt
+    D->>Q: local_bh_disable<br/>crypto_enqueue_request()
+    D->>Q: queue_work_on(CPU hiện tại, cryptd_wq)
+    Q-->>D: -EINPROGRESS / -EBUSY / -ENOSPC
+    D-->>S: mã đó
+    S-->>C: -EINPROGRESS (thường gặp)
+    Note over C,S: KHÔNG free req, src, dst, iv, tfm
+
+=== dg-hw-cryptd-complete
+type: sequence
+status: verified
+title: simd → cryptd (2/2) — kworker xử lý và gọi callback
+purpose: Ai chạy phần việc thật, trong ngữ cảnh nào, và callback của caller được gọi với con trỏ nào.
+caption: Worker chỉ xử lý **một** request mỗi lần rồi tự xếp lại nếu còn. Phần mã hoá thật chạy đồng bộ trong kworker (process context, `MAY_SLEEP`). Callback của caller chạy với **BH bị tắt** → không được ngủ. Con trỏ `base` truyền vào callback là của **subreq** (bản sao do simd tạo), không phải `&req->base` gốc → callback chỉ nên dùng `base->data`.
+refs: `crypto/cryptd.c:162-185` (`cryptd_queue_worker`) · `crypto/cryptd.c:255-281` (`cryptd_skcipher_encrypt`) · `crypto/cryptd.c:240-253` (`cryptd_skcipher_complete`)
+explain: ch-hwaccel
+---
+sequenceDiagram
+    autonumber
+    participant K as kworker<br/>(cryptd_wq)
+    participant Q as per-CPU queue
+    participant D as cryptd.c
+    participant I as __cbc-aes-ce<br/>(NEON, sync)
+    participant C as my_done<br/>(callback caller)
+    K->>Q: cryptd_queue_worker():<br/>get_backlog + dequeue (BH tắt)
+    opt có request backlog
+        K->>C: backlog->complete(-EINPROGRESS)<br/>(qua cryptd → my_done)
+    end
+    K->>D: req->complete(req, 0)<br/>= cryptd_skcipher_encrypt
+    D->>I: encrypt(subreq2)<br/>MAY_SLEEP, không callback
+    I-->>D: 0
+    Note over D,I: request_zero(subreq2)<br/>khôi phục base.complete
+    D->>C: local_bh_disable<br/>my_done(&subreq->base, 0)
+    Note over C: chỉ dùng base->data
+    Note over K,Q: còn request → queue_work lại
+
+=== dg-hw-safexcel-submit
+type: sequence
+status: verified
+title: SafeXcel (1/2) — xếp request vào ring và "bấm nút" engine
+purpose: Mẫu điển hình của driver engine phần cứng: queue có khoá, workqueue đẩy descriptor, DMA map dữ liệu. **Không build trên sản phẩm** — chỉ để tham khảo.
+caption: Queue của ring được bảo vệ bằng `spin_lock_bh`. Context record cấp từ `dma_pool` lần đầu dùng tfm. `send()` map scatterlist bằng `dma_map_sg` (src và dst riêng nếu khác nhau) và ghi command/result descriptor; ghi `PREP_COUNT` vào thanh ghi CDR/RDR để engine bắt đầu. Thiếu descriptor thì request được giữ lại cho lần sau.
+refs: `drivers/crypto/inside-secure/safexcel_cipher.c:1137-1184` · `drivers/crypto/inside-secure/safexcel_cipher.c:667-760` (`safexcel_send_req`) · `drivers/crypto/inside-secure/safexcel.c:812-888` (`safexcel_dequeue`)
+explain: ch-hwaccel
+next: Tiếp theo: [SafeXcel (2/2) — IRQ và hoàn tất](#dg-hw-safexcel-complete).
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant D as safexcel_cipher.c
+    participant WQ as ring workqueue
+    participant HW as engine EIP197
+    C->>D: crypto_skcipher_encrypt(req)<br/>→ safexcel_queue_req()
+    Note over D,WQ: spin_lock_bh(queue_lock)<br/>crypto_enqueue_request(ring queue)
+    D->>WQ: queue_work(ring workqueue)
+    D-->>C: -EINPROGRESS / -EBUSY / -ENOSPC
+    WQ->>D: safexcel_dequeue() → ctx->send()
+    Note over D,WQ: dma_map_sg(src, dst)<br/>ghi command + result descriptor
+    WQ->>HW: writel(PREP_COUNT) vào CDR / RDR
+    Note over HW: đọc dữ liệu qua DMA,<br/>xử lý, ghi kết quả
+
+=== dg-hw-safexcel-complete
+type: sequence
+status: verified
+title: SafeXcel (2/2) — IRQ, threaded handler và callback
+purpose: Kết quả từ phần cứng quay về caller qua hai tầng xử lý ngắt; callback chạy với BH tắt.
+caption: Hard IRQ chỉ đọc/ACK trạng thái rồi đánh thức thread; phần nặng (unmap DMA, kiểm lỗi, gọi callback) ở threaded IRQ. Sau khi xử lý xong một loạt kết quả, driver xếp lại work để đẩy request kế tiếp. Đây là **một** thiết kế; driver khác có thể dùng `crypto_engine`, tasklet hay polling.
+refs: `drivers/crypto/inside-secure/safexcel.c:1090-1125` (`safexcel_irq_ring`) · `drivers/crypto/inside-secure/safexcel.c:1127-1139` (`safexcel_irq_ring_thread`) · `drivers/crypto/inside-secure/safexcel.c:1014-1075` (`safexcel_handle_result_descriptor`)
+explain: ch-hwaccel
+---
+sequenceDiagram
+    autonumber
+    participant HW as engine EIP197
+    participant IRQ as hard IRQ
+    participant T as threaded IRQ
+    participant WQ as ring workqueue
+    participant C as Caller callback
+    HW-)IRQ: ngắt ring
+    Note over IRQ: đọc + ACK trạng thái
+    IRQ->>T: IRQ_WAKE_THREAD
+    Note over T,WQ: safexcel_handle_result_descriptor():<br/>ctx->handle_result — dma_unmap, kiểm lỗi
+    T->>C: local_bh_disable<br/>req->complete(req, err)
+    T->>WQ: queue_work — đẩy request kế

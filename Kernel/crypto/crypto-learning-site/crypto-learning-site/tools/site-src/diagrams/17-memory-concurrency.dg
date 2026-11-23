@@ -1,0 +1,97 @@
+=== dg-mem-nesting
+type: sequence
+status: verified
+title: Lồng nhau về thời gian sống — buffer ⊂ request ⊂ tfm ⊂ alg
+purpose: Thanh kích hoạt (activation) cho thấy đối tượng trong phải kết thúc trước đối tượng ngoài; vi phạm thứ tự này là nguồn gốc của use-after-free.
+caption: Tfm giữ ref tới alg (`cra_refcnt`) và module (`try_module_get`) suốt đời, nên `rmmod` bị từ chối khi còn tfm. Request phải được cấp **sau** tfm (vì `reqsize`) và giải phóng **trước** tfm. Buffer `src/dst/iv` thuộc caller và phải sống tới callback cuối cùng nếu request trả `-EINPROGRESS`/`-EBUSY`.
+refs: `crypto/api.c:35-47` (`crypto_mod_get/put`) · `crypto/api.c:561-575` · `include/crypto/skcipher.h:493-521` · `crypto/algapi.c:461-481`
+explain: ch-memory
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant A as alg<br/>(registry)
+    participant T as tfm
+    participant R as request
+    participant B as buffer<br/>src / dst / iv
+    Note over A: crypto_register_*()<br/>(module init)
+    activate A
+    C->>T: crypto_alloc_*()<br/>+ref alg, +ref module
+    activate T
+    C->>R: *_request_alloc(tfm)
+    activate R
+    C->>B: cấp buffer · set_crypt
+    activate B
+    C->>R: submit → -EINPROGRESS
+    R--)C: callback(err)
+    C->>B: giải phóng buffer
+    deactivate B
+    C->>R: *_request_free (xoá trắng)
+    deactivate R
+    C->>T: crypto_free_*()<br/>−ref, xoá trắng ctx
+    deactivate T
+    Note over A,T: crypto_unregister_*()<br/>chỉ sạch khi refcnt = 1
+    deactivate A
+
+=== dg-cc-callback-ctx
+type: flowchart
+status: verified
+title: Callback của caller chạy trong ngữ cảnh nào?
+purpose: Biết callback được phép làm gì (ngủ? cấp phát GFP_KERNEL?) tuỳ theo implementation đã được chọn.
+caption: Caller thường **không biết** implementation nào được chọn, nên callback phải viết cho trường hợp xấu nhất: không ngủ, không giữ lock có thể ngủ, chỉ dùng `base->data`. `crypto_req_done` (chỉ `complete()`) là ví dụ an toàn. Với template lồng nhau (GCM, authenc), callback của con gọi `*_done` của cha rồi tới callback của caller — ngữ cảnh là của nguồn sâu nhất.
+refs: `crypto/cryptd.c:240-253` · `drivers/crypto/inside-secure/safexcel.c:1044-1046` · `crypto/crypto_engine.c` · `crypto/gcm.c:200-450` · `crypto/api.c:592-601`
+explain: ch-concurrency
+---
+flowchart TD
+    %% @classdefs
+    S(["implementation trả về gì?"]):::api --> Q{{"0 / lỗi đồng bộ?"}}:::dec
+    Q -- "có" --> N(["không có callback:<br/>kết quả là giá trị trả về"]):::ok
+    Q -- "không:<br/>-EINPROGRESS<br/>-EBUSY" --> W{{"nguồn async là gì?"}}:::dec
+    W -- "cryptd (vỏ simd)" --> K(["kworker cryptd<br/>BH tắt → không ngủ"]):::cb
+    W -- "SafeXcel" --> I(["threaded IRQ<br/>BH tắt → không ngủ"]):::cb
+    W -- "crypto_engine" --> E(["kthread của engine<br/>(xem driver)"]):::cb
+    W -- "template lồng (GCM …)" --> G(["ngữ cảnh của bước con<br/>hoàn tất cuối cùng"]):::cb
+
+=== dg-cc-locks
+type: graph
+status: verified
+title: Bản đồ khoá — primitive nào bảo vệ dữ liệu nào
+purpose: Biết cái gì core đã khoá cho bạn, và cái gì **không** ai khoá (trách nhiệm caller).
+caption: Nét đứt đỏ: **không có khoá** trong core — ctx của tfm chỉ được đọc khi encrypt/decrypt, nên `setkey` song song với thao tác khác trên cùng tfm là lỗi của caller. Vendor phát `crypto_notify(...UNREGISTER...)` khi đang giữ write lock của `crypto_alg_sem`.
+refs: `crypto/api.c:25-30` · `crypto/rng.c:26` · `crypto/drbg.c:1501` · `crypto/cryptd.c:137-154, 171-174` · `drivers/crypto/inside-secure/safexcel_cipher.c:1164-1166`
+explain: ch-concurrency
+---
+flowchart LR
+    %% @classdefs
+    L1["crypto_alg_sem<br/>(rwsem)"]:::core --> D1["crypto_alg_list, template list<br/>cờ DEAD/DYING/TESTED<br/>cra_users, larval->adult"]:::api
+    L2["crypto_chain<br/>(notifier, rwsem riêng)"]:::core --> D2["danh sách listener"]:::api
+    L3["crypto_default_rng_lock<br/>(mutex)"]:::core --> D3["crypto_default_rng + refcnt"]:::api
+    L4["drbg_mutex<br/>(mutex, per tfm)"]:::core --> D4["trạng thái DRBG"]:::api
+    L5["local_bh_disable<br/>+ queue per-CPU"]:::core --> D5["hàng đợi cryptd"]:::api
+    L6["queue_lock<br/>(spin_lock_bh)"]:::drv --> D6["hàng đợi ring SafeXcel"]:::api
+    L7["(không có)"]:::err -.-> D7["ctx của tfm: khoá đã xử lý<br/>crt_flags (NEED_KEY)"]:::err
+
+=== dg-sec-stack-bug
+type: sequence
+status: verified
+title: Một bug lifetime điển hình — request trên stack với tfm có thể async
+purpose: Đọc từ source một kịch bản use-after-free: tfm `cbc(aes)` lấy bằng mask 0 có thể rẽ sang cryptd, trong khi request nằm trên stack của hàm đã trả về.
+caption: Kịch bản suy ra từ code (không phải log thực tế). Điều kiện: tfm là `cbc-aes-ce` (ASYNC) và lúc gọi NEON không dùng được. Sửa bằng `crypto_alloc_sync_skcipher()` (ép sync, kiểm `reqsize`) **hoặc** cấp request bằng `skcipher_request_alloc()` và chờ bằng `crypto_req_done` + `crypto_wait_req()`. `SYNC_SKCIPHER_REQUEST_ON_STACK` chỉ cấp 384 byte ctx.
+refs: `crypto/simd.c:72-74` · `crypto/cryptd.c:162-185` · `include/crypto/skcipher.h:121-132` · `crypto/skcipher.c:765-786` (`crypto_alloc_sync_skcipher`)
+explain: ch-security
+---
+sequenceDiagram
+    autonumber
+    participant F as bad()<br/>(stack frame)
+    participant S as simd.c
+    participant Q as cryptd queue
+    participant K as kworker cryptd
+    Note over F,S: SYNC_SKCIPHER_REQUEST_<br/>ON_STACK(req), callback = NULL
+    F->>S: crypto_skcipher_encrypt(req)
+    Note over S,Q: NEON không dùng được → cryptd
+    S->>Q: enqueue(&subreq->base)<br/>(subreq nằm trong req, trên stack)
+    S-->>F: -EINPROGRESS (bị bỏ qua)
+    Note over F,S: hàm trả về — stack bị tái sử dụng
+    K->>Q: dequeue
+    Q-->>K: con trỏ tới vùng stack cũ
+    Note over Q,K: đọc request là rác,<br/>gọi complete = NULL → oops / UAF

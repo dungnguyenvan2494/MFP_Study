@@ -1,0 +1,193 @@
+=== dg-lk-alloc-loop
+type: flowchart
+status: verified
+title: crypto_alloc_tfm_node() — vòng lặp lookup + tạo tfm
+purpose: Khung điều khiển chung của mọi `crypto_alloc_<type>()` kiểu mới: tra cứu, tạo tfm, và **thử lại** khi gặp `-EAGAIN`.
+caption: `-EAGAIN` là tín hiệu nội bộ (alg vừa bị thay, spawn chết, larval trả `-EAGAIN`), caller không bao giờ nhận được nó. Mọi mã lỗi khác được trả thẳng cho caller dưới dạng `ERR_PTR`. Mỗi lần thử lại đều kiểm `fatal_signal_pending`.
+refs: `crypto/api.c:517-550` (`crypto_alloc_tfm_node`) · `crypto/api.c:479-491` (`crypto_find_alg`) · `crypto/api.c:436-476` (`crypto_create_tfm_node`) · `crypto/skcipher.c:758-762`
+next: Chi tiết bước lookup ở [crypto_alg_mod_lookup — larval và cryptomgr](#dg-lk-modlookup); chi tiết tạo tfm ở chương [Vòng đời transform](#ch-transform).
+---
+flowchart TD
+    %% @classdefs
+    A(["crypto_alloc_skcipher(name, type, mask)"]):::api --> B["crypto_alloc_tfm_node(name,<br/>&crypto_skcipher_type, type, mask, NUMA_NO_NODE)"]:::core
+    B --> C["crypto_find_alg():<br/>type = SKCIPHER, mask |= 0xf"]:::core
+    C --> D{{"lookup<br/>thành công?"}}:::dec
+    D -- "không" --> E{{"err == -EAGAIN?"}}:::dec
+    D -- "có (đã +ref alg & module)" --> F["crypto_create_tfm_node(alg, frontend, node)"]:::core
+    F --> G{{"tạo tfm<br/>thành công?"}}:::dec
+    G -- "có" --> OK(["trả struct crypto_skcipher *"]):::ok
+    G -- "không" --> P["crypto_mod_put(alg)"]:::core --> E
+    E -- "không" --> ERR(["ERR_PTR(err)"]):::err
+    E -- "có" --> S{{"fatal_signal_pending?"}}:::dec
+    S -- "có" --> EINTR(["ERR_PTR(-EINTR)"]):::err
+    S -- "không: thử lại" --> C
+
+=== dg-lk-select
+type: flowchart
+status: verified
+title: __crypto_alg_lookup() — lọc và chọn một ứng viên
+purpose: Quy tắc "priority cao nhất thắng" chỉ áp dụng **sau** khi lọc. Sơ đồ cho thấy thứ tự lọc áp dụng cho từng phần tử của `crypto_alg_list`.
+caption: Hàm duyệt toàn bộ danh sách dưới read lock và giữ ứng viên tốt nhất (`best` khởi tạo −2). Khớp `cra_driver_name` thắng ngay và dừng duyệt. Vì phép so sánh là `>` nghiêm ngặt, khi hoà priority thì ứng viên gặp trước (gần đầu danh sách, tức đăng ký sau) được giữ.
+refs: `crypto/api.c:55-93` · `crypto/internal.h:131-134` (`crypto_is_moribund`) · `crypto/api.c:35-39` (`crypto_mod_get`)
+---
+flowchart TD
+    %% @classdefs
+    Q(["Phần tử q tiếp theo trong crypto_alg_list"]):::core --> M{{"q DEAD hoặc DYING?"}}:::dec
+    M -- "có" --> S1(["bỏ qua q"]):::ext
+    M -- "không" --> T{{"(q->cra_flags ^ type)<br/>& mask ≠ 0 ?"}}:::dec
+    T -- "có: cờ không thoả" --> S2(["bỏ qua q"]):::ext
+    T -- "không" --> LV{{"q là request larval của mask khác?"}}:::dec
+    LV -- "có" --> S3(["bỏ qua q"]):::ext
+    LV -- "không" --> N{{"Khớp driver name, hoặc khớp cra_name với priority > best?"}}:::dec
+    N -- "không" --> S4(["bỏ qua q"]):::ext
+    N -- "có" --> G{{"crypto_mod_get(q) thành công?"}}:::dec
+    G -- "không: module đang gỡ" --> S5(["bỏ qua q"]):::ext
+    G -- "có" --> K["q thành ứng viên mới<br/>best = q->cra_priority<br/>thả ứng viên cũ"]:::ok
+    K --> X{{"q khớp driver name?"}}:::dec
+    X -- "có" --> STOP(["dừng duyệt, trả q"]):::ok
+    X -- "không" --> NEXT(["xét phần tử kế tiếp"]):::core
+
+=== dg-lk-modlookup
+type: flowchart
+status: verified
+title: crypto_alg_mod_lookup() — larval, nạp module, cryptomgr
+purpose: Cho thấy chuyện gì xảy ra khi tên chưa có trong registry: nạp module, tạo request larval, nhờ cryptomgr dựng instance từ template, rồi chờ.
+caption: `crypto_alg_lookup` (bước "tìm") ưu tiên alg đã `TESTED`; nếu chỉ thấy alg chưa TESTED mà không phải larval thì trả `-ELIBBAD`. Bước "tạo larval" tra cứu lại dưới write lock để hai thread không tạo hai larval cùng tên. Cryptomgr chỉ trả `NOTIFY_STOP` khi tên có dạng `tmpl(...)` và kthread được tạo.
+refs: `crypto/api.c:261-291` (`crypto_alg_mod_lookup`) · `crypto/api.c:217-245` (`crypto_larval_lookup`) · `crypto/api.c:193-215` · `crypto/api.c:125-152` (`crypto_larval_add`) · `crypto/algboss.c:80-191`
+next: Kết quả chờ được ánh xạ thành mã lỗi ở [crypto_larval_wait — kết quả](#dg-lk-wait).
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_alg_mod_lookup(name, type, mask)"]):::api --> I["mask |= INTERNAL nếu caller<br/>không nhắc tới INTERNAL"]:::core
+    I --> F1{{"crypto_alg_lookup():<br/>có alg phù hợp?"}}:::dec
+    F1 -- "có" --> RET1(["trả alg"]):::ok
+    F1 -- "chưa TESTED" --> EL(["-ELIBBAD"]):::err
+    F1 -- "larval khác" --> W1(["crypto_larval_wait()"]):::core
+    F1 -- "không có" --> RM["request_module()<br/>alias crypto-NAME<br/>(bỏ qua nếu CRYPTO_NOLOAD)"]:::core
+    RM --> F2{{"tìm lại:<br/>có chưa?"}}:::dec
+    F2 -- "alg thật" --> RET2(["trả alg"]):::ok
+    F2 -- "larval" --> W2(["crypto_larval_wait()"]):::core
+    F2 -- "vẫn không" --> LA["crypto_larval_add():<br/>chèn request larval"]:::core
+    LA --> NT{{"notifier ALG_REQUEST<br/>trả NOTIFY_STOP?"}}:::dec
+    NT -- "không (tên không dạng tmpl(...))" --> EN(["-ENOENT"]):::err
+    NT -- "có: cryptomgr_probe đang chạy" --> W3(["crypto_larval_wait()"]):::core
+
+=== dg-lk-wait
+type: flowchart
+status: verified
+title: crypto_larval_wait() — ánh xạ kết quả chờ thành mã trả về
+purpose: Mọi lần chờ larval đều kết thúc ở đúng một trong sáu nhánh này. Đây là nguồn của `-ETIMEDOUT`, `-EINTR`, `-ENOENT` và `-EAGAIN` khi cấp phát.
+caption: Chờ bằng `wait_for_completion_killable_timeout(..., 60 * HZ)` — chỉ fatal signal mới ngắt. `-EAGAIN` không tới caller: `crypto_alloc_tfm_node` lặp lại lookup.
+refs: `crypto/api.c:166-191`
+---
+flowchart TD
+    %% @classdefs
+    W(["wait_for_completion_<br/>killable_timeout(60 s)"]):::core --> A{{"timeout < 0?<br/>(bị kill)"}}:::dec
+    A -- "có" --> R1(["-EINTR"]):::err
+    A -- "không" --> B{{"hết 60 s?"}}:::dec
+    B -- "có" --> R2(["-ETIMEDOUT"]):::err
+    B -- "không" --> C{{"larval->adult?"}}:::dec
+    C -- "NULL" --> R3(["-ENOENT"]):::err
+    C -- "ERR_PTR" --> R4(["lỗi đó, thường -EAGAIN"]):::err
+    C -- "alg" --> D{{"test larval và<br/>alg chưa TESTED?"}}:::dec
+    D -- "có" --> R5(["-EAGAIN"]):::err
+    D -- "không" --> E{{"crypto_mod_get(alg)?"}}:::dec
+    E -- "thất bại" --> R6(["-EAGAIN"]):::err
+    E -- "thành công" --> OK(["trả alg"]):::ok
+
+=== dg-lk-seq-miss
+type: sequence
+status: inferred
+title: Lần đầu cấp phát cbc(aes) (1/3) — caller không tìm thấy, tạo larval
+purpose: Theo dõi một lời gọi thật trên sản phẩm (encrypted-keys) từ lúc tra cứu thất bại tới lúc ngủ chờ cryptomgr.
+caption: Trạng thái registry giả định **[I]**: CPU có AES CE nên `cbc-aes-ce` (300) và `cbc-aes-neon` (200) đã đăng ký, nhưng cả hai mang cờ `CRYPTO_ALG_ASYNC` nên bị loại bởi `mask = CRYPTO_ALG_ASYNC`; chưa ai từng tạo `cbc(aes-ce)`. Call graph của từng bước đã được kiểm trong source; phần "lần đầu" và tên driver phụ thuộc runtime.
+refs: `security/keys/encrypted-keys/encrypted.c:384` · `crypto/api.c:217-245` · `crypto/api.c:125-152` · `crypto/algboss.c:80-191`
+next: Cryptomgr làm gì trong lúc caller ngủ: [(2/3) cryptomgr dựng instance](#dg-lk-seq-probe).
+---
+sequenceDiagram
+    autonumber
+    box rgb(239,246,255) Caller
+        participant C as encrypted.c
+    end
+    box rgb(241,245,249) Crypto core
+        participant API as api.c
+        participant R as crypto_alg_list
+    end
+    box rgb(236,253,245) Crypto manager
+        participant MGR as cryptomgr
+    end
+    C->>API: crypto_alloc_skcipher("cbc(aes)",<br/>0, CRYPTO_ALG_ASYNC)
+    API->>R: crypto_alg_lookup() (read lock)
+    R-->>API: không có cbc(aes) đồng bộ
+    Note over API,R: request_module("crypto-cbc(aes)")<br/>không thêm được gì (built-in)
+    API->>R: crypto_larval_add(): chèn request larval<br/>(write lock, tra cứu lại trước khi chèn)
+    API->>MGR: crypto_probing_notify(<br/>ALG_REQUEST, larval)
+    MGR-->>API: NOTIFY_STOP (đã tạo kthread probe)
+    Note over C,API: crypto_larval_wait(): caller ngủ ≤ 60 s
+
+=== dg-lk-seq-probe
+type: sequence
+status: verified
+title: Lần đầu cấp phát cbc(aes) (2/3) — cryptomgr dựng instance từ template
+purpose: Cho thấy instance `cbc(aes-ce)` được tạo trong kthread `cryptomgr_probe` như thế nào, và làm sao request larval nhận được nó.
+caption: `crypto_grab_cipher` chọn cipher `"aes"` tốt nhất theo priority: `aes-ce` (250) nếu CPU có AES, nếu không thì `aes-arm64` (200). Đăng ký instance lại đi qua luồng [Đăng ký (2/2)](#dg-reg-test), nơi `crypto_alg_tested` đặt `larval->adult = cbc(aes-ce)`.
+refs: `crypto/algboss.c:57-78` (`cryptomgr_probe`) · `crypto/cbc.c:173-199` · `crypto/skcipher.c:934-984` · `crypto/algapi.c:688-720` (`crypto_grab_spawn`) · `crypto/algapi.c:619-670` (`crypto_register_instance`)
+next: Caller được đánh thức: [(3/3) caller nhận alg và tạo tfm](#dg-lk-seq-wake).
+---
+sequenceDiagram
+    autonumber
+    box rgb(236,253,245) Crypto manager
+        participant K as kthread<br/>cryptomgr_probe
+    end
+    box rgb(255,247,237) Template
+        participant T as cbc.c
+        participant SK as skcipher.c
+    end
+    box rgb(241,245,249) Crypto core
+        participant AA as algapi.c
+    end
+    K->>AA: crypto_lookup_template("cbc")
+    AA-->>K: template cbc (+module ref)
+    K->>T: tmpl->create(tmpl, tb)<br/>= crypto_cbc_create
+    T->>SK: skcipher_alloc_instance_simple()
+    SK->>AA: crypto_grab_cipher(spawn, "aes")
+    AA-->>SK: spawn → aes-ce (prio 250)
+    Note over SK,AA: crypto_inst_setname():<br/>"cbc(aes)" / "cbc(aes-ce)", prio 250
+    SK-->>T: instance
+    T->>SK: skcipher_register_instance()
+    SK->>AA: crypto_register_instance()
+    Note over SK,AA: test → crypto_alg_tested():<br/>larval->adult = cbc(aes-ce)
+    AA-->>K: 0
+    Note over K,AA: complete_all(larval), crypto_alg_put(larval)
+
+=== dg-lk-seq-wake
+type: sequence
+status: verified
+title: Lần đầu cấp phát cbc(aes) (3/3) — caller nhận alg và tạo tfm
+purpose: Hoàn tất lời gọi: từ lúc caller thức dậy tới khi có tfm, gồm cả tfm cipher con mà template `cbc` cần.
+caption: `crypto_larval_kill` gỡ request larval khỏi danh sách. Lần cấp phát sau sẽ tìm thấy `cbc(aes-ce)` ngay ở bước tra cứu đầu tiên, không còn larval hay cryptomgr.
+refs: `crypto/api.c:166-191` · `crypto/api.c:154-164` · `crypto/api.c:436-476` · `crypto/skcipher.c:666-680` · `crypto/skcipher.c:890-903` · `crypto/algapi.c:763-786`
+next: Vòng đời của tfm vừa tạo: [chương Vòng đời transform](#ch-transform).
+---
+sequenceDiagram
+    autonumber
+    box rgb(239,246,255) Caller
+        participant C as encrypted.c
+    end
+    box rgb(241,245,249) Crypto core
+        participant API as api.c
+        participant SK as skcipher.c
+    end
+    box rgb(255,247,237) Instance
+        participant I as cbc(aes-ce)
+    end
+    Note over C,API: crypto_larval_wait(): adult = cbc(aes-ce),<br/>crypto_mod_get(adult)
+    Note over API,SK: crypto_larval_kill(larval)
+    Note over API,SK: crypto_create_tfm_node(alg):<br/>kzalloc_node(tfmsize + tfm + ctx)
+    API->>SK: frontend->init_tfm()<br/>= crypto_skcipher_init_tfm
+    Note over SK,I: đặt CRYPTO_TFM_NEED_KEY<br/>tfm->exit = crypto_skcipher_exit_tfm
+    SK->>I: alg->init() = skcipher_init_tfm_simple
+    Note over SK,I: crypto_spawn_cipher() →<br/>__crypto_alloc_tfm(aes-ce)
+    I-->>SK: 0
+    SK-->>API: 0
+    API-->>C: struct crypto_skcipher *

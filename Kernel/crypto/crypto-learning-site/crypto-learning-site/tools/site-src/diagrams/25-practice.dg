@@ -1,0 +1,86 @@
+=== dg-ex-reason
+type: flowchart
+status: conceptual
+title: Quy trình suy luận chung cho mọi bài tập
+purpose: Một vòng lặp có kỷ luật: từ câu hỏi, qua bảy trạng thái và code lookup, tới xác minh trên máy thật.
+caption: Kết luận chỉ là **fact** khi đã đối chiếu source **và** (với câu hỏi về lúc chạy) xác minh trên target. Nếu chưa khớp, quay lại bước xác định tên và type/mask — đó là chỗ hay sai nhất.
+refs: `crypto/api.c` · `crypto/algboss.c` · `/proc/crypto`
+explain: ch-exercises
+---
+flowchart TD
+    %% @classdefs
+    Q(["câu hỏi / triệu chứng"]):::api --> N["xác định tên + type/mask<br/>mà caller dùng"]:::core
+    N --> S["bảy trạng thái:<br/>repo → config → build<br/>→ link → load<br/>→ register → chọn"]:::core
+    S --> L["đọc lookup: api.c, algboss.c"]:::core
+    L --> I["đọc implementation được chọn"]:::impl
+    I --> V["xác minh trên target:<br/>/proc/crypto, dmesg, ftrace"]:::drv
+    V --> C{{"kết quả khớp<br/>suy luận?"}}:::dec
+    C -- "có" --> F(["kết luận (fact)"]):::ok
+    C -- "không" --> H["giả thuyết mới"]:::err
+    H -.-> N
+
+=== dg-ex-timeline
+type: sequence
+status: verified
+title: Bài 4 — timeline một request async qua simd → cryptd
+purpose: Đánh dấu chính xác lúc nào request và buffer phải còn sống, và callback đến từ ngữ cảnh nào.
+caption: Kịch bản hợp lệ: submit trong vùng IRQ tắt với callback riêng không ngủ, chờ **sau** khi mở khoá. kworker cryptd chạy trên **cùng CPU** (`queue_work_on(smp_processor_id())`). `req`, scatterlist, dữ liệu, `iv`, `ctx` và tfm phải sống từ bước 1 tới bước callback cuối; free sớm hơn → use-after-free trong kworker. `-ENOSPC` (không có `MAY_BACKLOG`) thì không có callback.
+refs: `crypto/simd.c:62-81` · `crypto/cryptd.c:130-185, 240-281, 305-325`
+explain: ch-exercises
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller (CPU0)
+    participant S as simd.c
+    participant D as cryptd queue
+    participant K as kworker cryptd (CPU0)
+    Note over C,S: IRQ tắt · set_callback(MAY_BACKLOG,<br/>my_done, ctx) · set_crypt
+    C->>S: crypto_skcipher_encrypt(req)
+    Note over S,D: *subreq = *req<br/>crypto_simd_usable() = false
+    S->>D: enqueue · rctx->complete = my_done
+    D-->>C: -EINPROGRESS (hoặc -EBUSY)
+    Note over C,S: mở khoá IRQ · chờ my_done
+    K->>D: dequeue (BH tắt)
+    opt request nằm trong backlog
+        K-)C: my_done(-EINPROGRESS)
+    end
+    Note over D,K: cryptd_skcipher_encrypt:<br/>__cbc-aes-ce, NEON, MAY_SLEEP
+    K-)C: my_done(&subreq->base, 0) — BH tắt
+    Note over C,S: đọc dst → free req → free tfm
+    Note over C,K: req, src/dst, iv, ctx, tfm phải sống<br/>từ bước 1 tới callback cuối cùng
+
+=== dg-rm-deps
+type: graph
+status: conceptual
+title: Thứ tự học — chương nào cần chương nào
+purpose: Chọn đường đọc ngắn nhất cho mục tiêu của bạn; mũi tên `A → B` nghĩa là nên đọc A trước B.
+caption: Đường tối thiểu để debug một caller: Tổng quan → Kiến trúc → Lookup → Transform → Request → Debugging. Đường cho người viết driver: thêm Đăng ký, Templates, Tăng tốc phần cứng, Concurrency.
+refs: —
+explain: ch-roadmap
+---
+flowchart TD
+    %% @classdefs
+    OV["Tổng quan"]:::api --> FU["Nền tảng mật mã"]:::api
+    FU --> WHY["Vì sao cần Crypto API"]:::api
+    WHY --> AR["Kiến trúc core"]:::core
+    AR --> SRC["Bản đồ crypto/"]:::core
+    AR --> REG["Đăng ký"]:::core
+    AR --> LK["Lookup"]:::core
+    REG --> LK
+    LK --> TF["Transform"]:::core
+    TF --> RQ["Request sync/async"]:::core
+    RQ --> SK["skcipher"]:::impl
+    RQ --> HS["Hash"]:::impl
+    SK --> AE["AEAD"]:::impl
+    HS --> AE
+    RQ --> AS["Asymmetric"]:::impl
+    HS --> RN["RNG & khác"]:::impl
+    LK --> TP["Templates"]:::impl
+    SK --> TP
+    TP --> HW["Tăng tốc phần cứng"]:::drv
+    LK --> KC["Kconfig & Kbuild"]:::drv
+    HW --> MC["Memory · Concurrency · Security"]:::err
+    RQ --> MC
+    KC --> TD["Testing & Debugging"]:::err
+    MC --> TD
+    TD --> EX["Bài thực hành"]:::ok

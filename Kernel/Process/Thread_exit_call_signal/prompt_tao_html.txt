@@ -1,0 +1,1264 @@
+Thông tin môi trường:
+
+Kernel repository: \Kernel\K-S800\Src
+Architecture: arm64
+Kernel version: hãy đọc từ Makefile
+glibc source: không có, sử dụng tài liệu glibc tham khảo và đánh dấu rõ
+Ngôn ngữ: Tiếng Việt
+Mức độ phân tích: Chuyên sâu nhưng giải thích cho người mới hiểu
+Tên file đầu ra: linux_exit_group_flow.html
+Mermaid: Ưu tiên sequence diagram, flowchart và call graph
+Yêu cầu quan trọng: Mọi kết luận phải dựa trên source code thực tế
+
+
+Bạn hãy đóng vai đồng thời là:
+
+1. Kỹ sư Linux kernel cấp cao.
+2. Chuyên gia về Linux process, thread lifecycle và signal subsystem.
+3. Technical writer chuyên viết tài liệu cho kỹ sư BSP/Linux kernel.
+4. Front-end developer có kinh nghiệm thiết kế tài liệu kỹ thuật bằng HTML.
+5. Chuyên gia trực quan hóa call flow bằng Mermaid.
+
+Nhiệm vụ của bạn là nghiên cứu và tạo trực tiếp một file HTML hoàn chỉnh về chủ đề:
+
+“Luồng một thread trong process đa luồng gọi exit(), _exit(), SYS_exit hoặc exit_group(), dẫn tới do_group_exit(), zap_other_threads(), SIGKILL các thread còn lại và do_exit().”
+
+Tài liệu phải tập trung vào luồng chính:
+
+exit()
+    -> libc cleanup
+    -> _exit()
+    -> SYS_exit_group
+    -> do_group_exit()
+    -> zap_other_threads()
+    -> đánh dấu group exit
+    -> đặt SIGKILL pending cho các thread còn lại
+    -> wake up các thread phù hợp
+    -> từng thread phát hiện fatal signal hoặc group exit
+    -> từng thread tự đi vào do_exit()
+    -> cleanup tài nguyên
+    -> thread cuối cùng kết thúc
+    -> parent nhận SIGCHLD
+    -> wait/waitpid
+    -> release_task
+
+==================================================
+I. FILE ĐẦU RA
+==================================================
+
+Hãy tạo trực tiếp một file có tên:
+
+linux_exit_group_flow.html
+
+Yêu cầu:
+
+- Đây phải là một file HTML hoàn chỉnh.
+- Có thể mở trực tiếp bằng trình duyệt.
+- Không yêu cầu web server.
+- Không tách CSS hoặc JavaScript thành file riêng.
+- CSS và JavaScript phải đặt trong cùng file HTML.
+- Toàn bộ nội dung phải hiển thị tốt trên Chrome, Edge và Firefox.
+- Không chỉ in source HTML trong câu trả lời.
+- Phải thực sự tạo file để người dùng tải xuống.
+- Sau khi tạo, kiểm tra file có tồn tại và có nội dung hợp lệ.
+- Nếu môi trường hỗ trợ, hãy render hoặc preview để kiểm tra layout.
+- Không tạo dữ liệu hoặc kết luận giả nếu chưa kiểm tra source code.
+
+==================================================
+II. NGUỒN DỮ LIỆU VÀ ĐỘ CHÍNH XÁC
+==================================================
+
+Nếu có Linux kernel repository, hãy đọc source thực tế trước khi viết tài liệu.
+
+Thông tin repository:
+
+- Kernel repository: {{KERNEL_REPOSITORY_PATH}}
+- Architecture: {{ARCHITECTURE}}
+- Kernel version: hãy xác định từ Makefile nếu chưa được cung cấp
+- glibc version: {{GLIBC_VERSION_OR_PATH}}
+- Output language: Tiếng Việt
+
+Nếu chưa có repository, hãy:
+
+1. Nêu rõ tài liệu đang dùng Linux mainline làm mô hình tham khảo.
+2. Không tự bịa line number.
+3. Không khẳng định code của một kernel version cụ thể.
+4. Đánh dấu các nội dung theo ba mức:
+
+   - Confirmed from source
+   - Inference
+   - Version-dependent
+
+5. Ghi rõ các điểm cần kiểm tra lại trên kernel repository thực tế.
+
+Trong tài liệu, luôn phân biệt rõ:
+
+- Fact đã xác nhận bằng source.
+- Giải thích đơn giản hóa.
+- Suy luận từ source.
+- Hành vi phụ thuộc kernel version.
+- Hành vi thuộc glibc, không thuộc kernel.
+- Hành vi thuộc userspace.
+- Hành vi thuộc kernel.
+
+==================================================
+III. MỤC TIÊU THIẾT KẾ HTML
+==================================================
+
+Thiết kế tài liệu theo phong cách:
+
+- Hiện đại.
+- Chuyên nghiệp.
+- Tối giản nhưng có chiều sâu.
+- Đọc tốt với tài liệu kỹ thuật dài.
+- Phù hợp kỹ sư BSP/Linux kernel.
+- Dễ dùng cho người mới nhưng vẫn đủ chi tiết cho người review source.
+- Không sử dụng màu quá sặc sỡ.
+- Không tạo quá nhiều hiệu ứng gây mất tập trung.
+
+Bảng màu đề xuất:
+
+Light mode:
+
+- Background chính: #f5f7fb
+- Surface/card: #ffffff
+- Text chính: #172033
+- Text phụ: #586174
+- Primary: #2563eb
+- Kernel color: #7c3aed
+- Userspace color: #0891b2
+- Signal color: #dc2626
+- Success/confirmed: #15803d
+- Warning/inference: #d97706
+- Border: #dbe2ea
+
+Dark mode:
+
+- Background chính: #0b1120
+- Surface/card: #111827
+- Text chính: #e5e7eb
+- Text phụ: #9ca3af
+- Primary: #60a5fa
+- Kernel color: #c084fc
+- Userspace color: #22d3ee
+- Signal color: #f87171
+- Border: #263244
+
+Sử dụng CSS variables để quản lý theme.
+
+==================================================
+IV. LAYOUT TỔNG THỂ
+==================================================
+
+HTML phải có các khu vực sau:
+
+1. Header
+
+Bao gồm:
+
+- Tiêu đề tài liệu.
+- Mô tả ngắn.
+- Kernel version.
+- Architecture.
+- Ngày tạo tài liệu.
+- Badge thể hiện trạng thái:
+  - Source verified
+  - Mainline reference
+  - Version-dependent
+- Nút Dark/Light mode.
+- Nút mở hoặc đóng sidebar trên màn hình nhỏ.
+- Nút Expand all.
+- Nút Collapse all.
+- Nút Print hoặc Export PDF bằng window.print().
+
+2. Left sidebar
+
+Bao gồm:
+
+- Mục lục tự động.
+- Các heading chính.
+- Highlight section đang được xem.
+- Có thể thu gọn.
+- Sticky khi cuộn trên desktop.
+- Có ô tìm kiếm.
+- Có bộ lọc theo loại nội dung:
+  - Overview
+  - Userspace
+  - Kernel
+  - Signal
+  - Cleanup
+  - Race condition
+  - Experiment
+  - Diagram
+
+3. Main content
+
+- Chiều rộng đọc hợp lý.
+- Các section được chia thành card.
+- Mỗi section có anchor.
+- Có nút copy link tới section.
+- Các phần dài có thể collapse/expand.
+- Code block có nút Copy.
+- Table có thể cuộn ngang trên màn hình nhỏ.
+- Diagram có container riêng.
+- Không để diagram tràn khỏi màn hình.
+
+4. Right-side quick navigation nếu đủ không gian
+
+Bao gồm:
+
+- Các ký hiệu màu.
+- Legend.
+- Thuật ngữ quan trọng.
+- Current section.
+- Back to top.
+
+Trên màn hình nhỏ, right-side navigation có thể bị ẩn.
+
+==================================================
+V. TÍNH NĂNG TƯƠNG TÁC
+==================================================
+
+HTML phải có JavaScript thuần để hỗ trợ:
+
+1. Dark mode và light mode.
+2. Lưu theme bằng localStorage.
+3. Search toàn bộ nội dung.
+4. Highlight từ khóa tìm kiếm.
+5. Không dùng innerHTML thiếu kiểm soát với input tìm kiếm.
+6. Expand/collapse từng section.
+7. Expand all và collapse all.
+8. Copy code.
+9. Copy đường dẫn section.
+10. Back to top.
+11. Theo dõi section đang hiển thị bằng IntersectionObserver.
+12. Đồng bộ active item trong sidebar.
+13. Nút reset search.
+14. Hiển thị số section phù hợp với từ khóa.
+15. Filter theo category.
+16. Zoom diagram bằng nút:
+    - Zoom in
+    - Zoom out
+    - Reset
+17. Fullscreen diagram nếu trình duyệt hỗ trợ.
+18. Print stylesheet để xuất PDF rõ ràng.
+19. Không để sidebar và button che nội dung trên mobile.
+20. Không tạo lỗi JavaScript nếu Mermaid không load được.
+
+==================================================
+VI. CẤU TRÚC NỘI DUNG
+==================================================
+
+Tài liệu phải có các chương sau:
+
+1. Executive Summary
+2. Mental Model cho người mới
+3. Process, thread và task_struct
+4. PID, TID, TGID và thread group leader
+5. Phân biệt exit(), _exit(), _Exit() và pthread_exit()
+6. Phân biệt SYS_exit và SYS_exit_group
+7. Luồng từ userspace vào kernel
+8. Phân tích SYSCALL_DEFINE1(exit)
+9. Phân tích SYSCALL_DEFINE1(exit_group)
+10. Phân tích do_group_exit()
+11. Phân tích zap_other_threads()
+12. SIGKILL được đặt pending như thế nào
+13. Thread khác được wake up như thế nào
+14. Thread khác phát hiện fatal signal như thế nào
+15. Đường từ pending SIGKILL tới do_exit()
+16. Phân tích do_exit()
+17. Cleanup per-thread và shared resource
+18. Thread cuối cùng trong thread group
+19. exit_notify, SIGCHLD và zombie
+20. wait, waitpid và release_task
+21. TASK_INTERRUPTIBLE
+22. TASK_KILLABLE
+23. TASK_UNINTERRUPTIBLE
+24. Thread chạy trên CPU khác
+25. Locking và concurrency
+26. Race conditions
+27. So sánh zap_other_threads với kill -9
+28. Chương trình C kiểm chứng
+29. Trace bằng strace
+30. Trace bằng ftrace
+31. Trace bằng perf
+32. Trace bằng bpftrace
+33. Checklist kiểm tra trên kernel repository
+34. Câu hỏi thường gặp
+35. Kết luận
+36. Các điểm chưa xác nhận
+
+==================================================
+VII. EXECUTIVE SUMMARY
+==================================================
+
+Phần đầu phải có một flow card ngắn gọn:
+
+Userspace:
+
+exit()
+    -> chạy atexit handler
+    -> flush stdio
+    -> libc _exit()
+    -> SYS_exit_group
+
+Kernel:
+
+SYS_exit_group
+    -> do_group_exit()
+    -> thiết lập SIGNAL_GROUP_EXIT
+    -> lưu group_exit_code
+    -> zap_other_threads()
+    -> đánh dấu hoặc đưa SIGKILL vào pending state của các thread khác
+    -> wake các thread có thể wake
+    -> calling thread gọi do_exit()
+    -> các thread khác tự đi vào exit path
+    -> thread group kết thúc
+    -> parent được thông báo
+
+Phải có cảnh báo nổi bật:
+
+“SIGKILL pending không có nghĩa task biến mất ngay lập tức. Task đang ở TASK_UNINTERRUPTIBLE có thể chưa thoát cho tới khi operation trong kernel hoàn thành.”
+
+Phải có một card “Kết luận nhanh” trả lời:
+
+- exit() có phải syscall không?
+- _exit() của glibc có giống SYS_exit không?
+- SYS_exit kết thúc thread hay process?
+- SYS_exit_group kết thúc toàn process thế nào?
+- zap_other_threads() có gọi send_sig(SIGKILL) không?
+- Thread bị zap đi vào do_exit() bằng đường nào?
+- Thread ở D state có chết ngay không?
+
+==================================================
+VIII. PHÂN BIỆT CÁC API VÀ SYSCALL
+==================================================
+
+Tạo bảng so sánh:
+
+| API hoặc syscall | Nằm ở đâu | atexit | Flush stdio | Kết thúc calling thread | Kết thúc cả process | Kernel entry |
+|------------------|-----------|--------|-------------|--------------------------|----------------------|--------------|
+| exit() | libc | Có | Có | Có | Thông thường có | exit_group |
+| _exit() | libc | Không | Không | Phụ thuộc implementation libc | Thông thường có trên glibc hiện đại | exit_group |
+| _Exit() | libc | Không | Không | Tương tự _exit | Thông thường có | exit_group |
+| pthread_exit() | pthread/libc | Không kết thúc process ngay | Không | Có | Chỉ khi thread cuối cùng kết thúc | SYS_exit hoặc internal path |
+| SYS_exit | kernel syscall | Không | Không | Có | Không nhất thiết | do_exit |
+| SYS_exit_group | kernel syscall | Không | Không | Có | Có | do_group_exit |
+
+Không được coi bảng trên là chân lý tuyệt đối nếu chưa kiểm tra glibc/kernel version.
+
+Bên dưới bảng phải có phần giải thích:
+
+- glibc `_exit()` không đồng nghĩa với `SYS_exit`.
+- `exit()` là API của C library.
+- `SYS_exit` là syscall kernel.
+- `SYS_exit_group` yêu cầu toàn thread group kết thúc.
+- `pthread_exit()` chỉ kết thúc calling thread.
+- `return` từ `main()` thường tương đương với gọi `exit()`.
+
+==================================================
+IX. PHÂN TÍCH do_group_exit()
+==================================================
+
+Trình bày:
+
+1. Source code rút gọn.
+2. Pseudo-code.
+3. Giải thích từng block.
+4. Data structure được thay đổi.
+5. Lock cần giữ.
+6. Race condition liên quan.
+7. Exit code được lưu ở đâu.
+8. Điều gì xảy ra nếu group exit đã bắt đầu.
+9. Điều gì xảy ra khi hai thread đồng thời gọi exit_group().
+10. Vì sao calling thread vẫn phải gọi do_exit() sau zap_other_threads().
+
+Tạo bảng dữ liệu:
+
+| Field | Structure | Shared/per-thread | Vai trò | Ai cập nhật | Lock bảo vệ |
+|-------|-----------|-------------------|---------|-------------|-------------|
+| flags | signal_struct | Shared | Trạng thái group exit | do_group_exit | siglock |
+| group_exit_code | signal_struct | Shared | Exit status toàn group | do_group_exit | siglock |
+| pending | task_struct hoặc sigpending | Per-thread | Signal pending riêng | Signal path | siglock |
+| shared_pending | signal_struct | Shared | Signal pending cho group | Signal path | siglock |
+| flags/PF_EXITING | task_struct | Per-thread | Task đang exit | do_exit | Theo exit path |
+
+Field chính xác phải được cập nhật theo source thực tế.
+
+==================================================
+X. PHÂN TÍCH zap_other_threads()
+==================================================
+
+Đây phải là section nổi bật nhất.
+
+Giải thích theo từng bước:
+
+1. Xác định thread group hiện tại.
+2. Duyệt các thread khác.
+3. Bỏ qua calling thread.
+4. Kiểm tra thread đã exit hoặc đang exit.
+5. Xử lý pending signal.
+6. Thiết lập SIGKILL hoặc fatal exit state.
+7. Wake target thread nếu cần.
+8. Cập nhật group state.
+9. Thả lock.
+10. Calling thread tiếp tục vào do_exit().
+
+Phải trả lời cụ thể:
+
+- Iterator nào được sử dụng?
+- SIGKILL được đặt vào `pending` hay `shared_pending`?
+- Kernel có gọi `send_sig()` hay thao tác trực tiếp không?
+- Có permission check giống kill syscall không?
+- Có đi qua `group_send_sig_info()` không?
+- Có đi qua `complete_signal()` không?
+- Function nào wake target?
+- Có gửi reschedule IPI không?
+- Thread đang chạy trên CPU khác phản ứng thế nào?
+- Thread ở trạng thái D phản ứng thế nào?
+- Thread có chạy signal handler không?
+- Vì sao SIGKILL không thể bị block hoặc ignore?
+
+Nếu implementation khác theo kernel version, tạo tab hoặc callout riêng:
+
+- Kernel version hiện tại.
+- Linux mainline tham khảo.
+- Điểm khác biệt.
+
+==================================================
+XI. KHOẢNG TRỐNG QUAN TRỌNG: SIGKILL TỚI do_exit()
+==================================================
+
+Đây là phần quan trọng nhất của tài liệu.
+
+Không được viết đơn giản:
+
+zap_other_threads()
+    -> SIGKILL
+    -> do_exit()
+
+Phải giải thích các giai đoạn riêng biệt:
+
+1. Signal generation hoặc forced group-exit state.
+2. Signal pending.
+3. Recalculate pending state.
+4. Wakeup.
+5. Task được scheduler chạy.
+6. Task kiểm tra pending signal.
+7. Kernel nhận biết SIGKILL là fatal.
+8. Kernel nhận biết SIGNAL_GROUP_EXIT.
+9. Task chọn group exit code.
+10. Task tự gọi do_group_exit() hoặc do_exit().
+11. Task thực hiện cleanup.
+12. Task rời scheduler vĩnh viễn.
+
+Phân biệt rõ:
+
+- Việc Thread A đánh dấu Thread B phải chết.
+- Việc Thread B được wake.
+- Việc Thread B được scheduler chạy.
+- Việc Thread B kiểm tra signal.
+- Việc Thread B tự thực hiện exit path.
+
+==================================================
+XII. SEQUENCE DIAGRAMS
+==================================================
+
+Sử dụng Mermaid để tạo các sequence diagram đẹp, rõ và chính xác.
+
+Mermaid phải được cấu hình:
+
+- themeVariables phù hợp light/dark mode.
+- actorBorder rõ ràng.
+- actorBkg phân biệt userspace và kernel.
+- noteBkgColor dễ đọc.
+- signalColor nổi bật.
+- sequenceNumberColor rõ ràng.
+- fontFamily dùng system font.
+- wrap text.
+- width responsive.
+- Security level phù hợp.
+- Không cho phép nội dung không tin cậy thực thi JavaScript.
+
+Mỗi diagram phải nằm trong một card riêng gồm:
+
+- Tên diagram.
+- Mục tiêu.
+- Mermaid diagram.
+- Giải thích từng bước.
+- Key takeaway.
+- Nút zoom.
+- Nút reset zoom.
+- Nút fullscreen.
+- Nút copy Mermaid source.
+
+Tạo ít nhất các diagram sau.
+
+--------------------------------------------------
+Diagram 1: Tổng quan exit() tới process termination
+--------------------------------------------------
+
+Participants:
+
+- Application Thread
+- libc exit
+- atexit Handlers
+- stdio Cleanup
+- libc _exit
+- Syscall Entry
+- do_group_exit
+- zap_other_threads
+- Other Threads
+- do_exit
+- Parent
+
+Phải phân biệt userspace và kernel bằng `rect`.
+
+--------------------------------------------------
+Diagram 2: SYS_exit chỉ kết thúc calling thread
+--------------------------------------------------
+
+Participants:
+
+- Thread A
+- Syscall Entry
+- do_exit
+- Thread B
+- Thread C
+- Parent
+
+Thể hiện Thread B và Thread C vẫn tiếp tục chạy.
+
+--------------------------------------------------
+Diagram 3: SYS_exit_group kết thúc toàn thread group
+--------------------------------------------------
+
+Participants:
+
+- Thread A
+- do_group_exit
+- zap_other_threads
+- Thread B
+- Thread C
+- Scheduler
+- Parent
+
+--------------------------------------------------
+Diagram 4: Thread B đang chạy trên CPU khác
+--------------------------------------------------
+
+Participants:
+
+- CPU0 Thread A
+- Signal Subsystem
+- Scheduler or IPI
+- CPU1 Thread B
+- do_exit
+
+Thể hiện rõ:
+
+- Thread A không trực tiếp gọi do_exit thay Thread B.
+- Thread B tự vào exit path.
+- IPI chỉ ghi nếu được source xác nhận.
+- Nếu chưa xác nhận, đánh dấu version-dependent.
+
+--------------------------------------------------
+Diagram 5: Thread B ở TASK_INTERRUPTIBLE
+--------------------------------------------------
+
+Thể hiện:
+
+- SIGKILL pending.
+- Wakeup.
+- Scheduler chọn Thread B.
+- Thread B kiểm tra pending signal.
+- Thread B vào group exit.
+- Thread B gọi do_exit.
+
+--------------------------------------------------
+Diagram 6: Thread B ở TASK_KILLABLE
+--------------------------------------------------
+
+Thể hiện sự khác nhau với TASK_INTERRUPTIBLE.
+
+--------------------------------------------------
+Diagram 7: Thread B ở TASK_UNINTERRUPTIBLE
+--------------------------------------------------
+
+Thể hiện:
+
+- SIGKILL bị pending.
+- Wakeup không nhất thiết thành công ngay.
+- Thread vẫn chờ I/O hoặc driver condition.
+- Sau khi wait hoàn thành, task mới có thể tiếp tục exit path.
+
+Không được mô tả SIGKILL có thể bị ignore.
+
+--------------------------------------------------
+Diagram 8: Hai thread đồng thời gọi exit_group()
+--------------------------------------------------
+
+Thể hiện:
+
+- Thread A và Thread B cùng vào do_group_exit.
+- siglock serialize.
+- Thread thắng thiết lập group_exit_code.
+- Thread còn lại sử dụng code đã được thiết lập.
+- Kết luận phải dựa trên source.
+
+--------------------------------------------------
+Diagram 9: do_exit và cleanup resource
+--------------------------------------------------
+
+Participants:
+
+- Exiting Thread
+- Signal State
+- Memory
+- Files
+- Filesystem
+- Namespaces
+- Parent
+- Scheduler
+
+Phân biệt:
+
+- Per-thread cleanup.
+- Shared resource reference counting.
+- Last-thread behavior.
+
+--------------------------------------------------
+Diagram 10: Parent waitpid và release zombie
+--------------------------------------------------
+
+Participants:
+
+- Last Thread
+- exit_notify
+- Parent
+- SIGCHLD
+- waitpid
+- release_task
+
+--------------------------------------------------
+Diagram 11: exit() so với _exit()
+--------------------------------------------------
+
+Tạo luồng song song:
+
+- exit(): atexit và stdio cleanup.
+- _exit(): bỏ qua userspace cleanup.
+- Sau đó thể hiện syscall thực tế của libc.
+
+--------------------------------------------------
+Diagram 12: kill -9 so với zap_other_threads()
+--------------------------------------------------
+
+Tạo hai luồng song song:
+
+Flow A:
+
+kill -9
+    -> syscall
+    -> permission check
+    -> signal subsystem
+    -> generate SIGKILL
+    -> target exit
+
+Flow B:
+
+exit_group
+    -> do_group_exit
+    -> zap_other_threads
+    -> internal group-exit handling
+    -> target threads exit
+
+Phải làm rõ điểm giống và khác.
+
+==================================================
+XIII. QUY TẮC VIẾT MERMAID
+==================================================
+
+Mỗi sequence diagram phải:
+
+- Bắt đầu bằng `sequenceDiagram`.
+- Có `autonumber`.
+- Tên participant ngắn, không chứa code C phức tạp.
+- Dùng alias để tránh tên dài.
+- Không chứa dấu ngoặc hoặc ký tự dễ gây Mermaid parse error trong participant ID.
+- Dùng `Note over` hoặc `Note right of` cho trạng thái quan trọng.
+- Dùng `alt`, `else`, `opt`, `loop`, `par` đúng mục đích.
+- Không lạm dụng màu nền.
+- Không để nội dung trong một message quá dài.
+- Không dùng HTML phức tạp trong Mermaid label.
+- Escape các ký tự đặc biệt nếu cần.
+- Kiểm tra từng diagram có thể render.
+- Nếu một diagram bị lỗi, phải sửa trước khi hoàn tất file.
+- Không bỏ qua diagram chỉ vì Mermaid render lỗi.
+- Không dùng emoji bên trong Mermaid nếu có nguy cơ gây parse error.
+
+Ví dụ cấu trúc mong muốn:
+
+sequenceDiagram
+    autonumber
+    participant APP as Application Thread
+    participant LIBC as libc exit
+    participant SYS as Syscall Entry
+    participant GROUP as do_group_exit
+    participant ZAP as zap_other_threads
+    participant WORKER as Other Thread
+    participant EXIT as do_exit
+
+    rect rgb(230, 245, 255)
+        Note over APP,LIBC: Userspace
+        APP->>LIBC: exit(status)
+        LIBC->>LIBC: Run atexit handlers
+        LIBC->>LIBC: Flush stdio
+    end
+
+    rect rgb(245, 235, 255)
+        Note over SYS,EXIT: Kernel space
+        LIBC->>SYS: exit_group(status)
+        SYS->>GROUP: do_group_exit(code)
+        GROUP->>ZAP: zap_other_threads(current)
+        ZAP-->>WORKER: Mark fatal group exit
+        GROUP->>EXIT: do_exit(code)
+    end
+
+Lưu ý:
+
+- Ví dụ trên chỉ là skeleton.
+- Nội dung cuối phải đối chiếu source.
+- Không khẳng định target signal path nếu chưa xác nhận.
+
+==================================================
+XIV. FLOWCHART VÀ ACTIVITY DIAGRAM
+==================================================
+
+Ngoài sequence diagram, tạo Mermaid flowchart cho:
+
+1. Decision flow trong do_group_exit().
+2. Vòng lặp trong zap_other_threads().
+3. Task nhận pending SIGKILL.
+4. Quyết định wakeup theo task state.
+5. do_exit cleanup flow.
+6. Kiểm tra last thread.
+7. Parent wait và release zombie.
+8. So sánh SYS_exit với SYS_exit_group.
+9. Race giữa exit_group và coredump.
+10. Race giữa exit_group và execve.
+
+Flowchart phải:
+
+- Có màu phân biệt decision, signal, cleanup và terminal state.
+- Không quá rộng.
+- Chia thành subgraph nếu cần.
+- Có legend.
+- Có giải thích bằng văn bản ngay dưới diagram.
+
+==================================================
+XV. CALL GRAPH
+==================================================
+
+Tạo call graph cho:
+
+Call graph A:
+
+exit()
+    -> libc cleanup
+    -> libc _exit()
+    -> SYS_exit_group
+    -> do_group_exit()
+    -> zap_other_threads()
+    -> do_exit()
+
+Call graph B:
+
+SYS_exit
+    -> do_exit()
+
+Call graph C:
+
+zap_other_threads()
+    -> mark/wake Thread B
+    -> Thread B detects fatal condition
+    -> do_group_exit() hoặc do_exit()
+
+Call graph D:
+
+do_exit()
+    -> exit_signals()
+    -> exit_mm()
+    -> exit_files()
+    -> exit_fs()
+    -> exit_task_namespaces()
+    -> exit_notify()
+    -> schedule()
+
+Call graph E:
+
+waitpid()
+    -> kernel wait path
+    -> release_task()
+    -> put_task_struct()
+
+Mỗi node quan trọng cần hiển thị:
+
+- Function name.
+- File path.
+- Line number nếu xác nhận được.
+- Vai trò ngắn gọn.
+- Userspace hoặc kernel.
+- Version-dependent nếu cần.
+
+==================================================
+XVI. SOURCE CODE BLOCKS
+==================================================
+
+Code block cần có:
+
+- Header chứa file path.
+- Ngôn ngữ code.
+- Nút Copy.
+- Line number giả lập nếu không làm phức tạp layout.
+- Highlight các dòng quan trọng.
+- Annotation bên dưới.
+- Không copy toàn bộ function quá dài.
+- Chỉ trích phần cần phân tích.
+
+Các function cần trích:
+
+- SYSCALL_DEFINE1(exit, ...)
+- SYSCALL_DEFINE1(exit_group, ...)
+- do_group_exit()
+- zap_other_threads()
+- do_exit()
+- Signal detection path phù hợp kernel version.
+- exit_notify()
+- release_task()
+
+Mỗi code block phải có bảng:
+
+| Dòng hoặc block | Ý nghĩa | Shared/per-thread | Lock liên quan | Side effect |
+|-----------------|---------|-------------------|----------------|-------------|
+
+==================================================
+XVII. TRẠNG THÁI TASK
+==================================================
+
+Tạo một section trực quan so sánh:
+
+| Task state | SIGKILL pending | Có thể wake ngay | Khi nào thoát | Rủi ro |
+|------------|-----------------|------------------|--------------|--------|
+| Running | Có | Không cần wake | Khi vào kernel/check signal | Thường nhanh |
+| TASK_INTERRUPTIBLE | Có | Thường có | Sau wake và schedule | Phụ thuộc scheduler |
+| TASK_KILLABLE | Có | Có với fatal signal | Sau wake và schedule | Phù hợp killable waits |
+| TASK_UNINTERRUPTIBLE | Có | Không nhất thiết | Khi wait condition kết thúc | Có thể tồn tại lâu |
+| Stopped/Traced | Có | Phụ thuộc signal path | Sau khi xử lý trạng thái | Cần xem ptrace logic |
+
+Thêm một diagram giải thích:
+
+“Signal pending không đồng nghĩa với signal delivered và không đồng nghĩa task đã exit.”
+
+==================================================
+XVIII. RACE CONDITION VÀ LOCKING
+==================================================
+
+Tạo các case card riêng:
+
+1. Hai thread cùng gọi exit_group().
+2. Một thread gọi exit_group(), thread khác gọi SYS_exit.
+3. exit_group() chạy đồng thời với SIGSEGV.
+4. exit_group() chạy đồng thời với coredump.
+5. exit_group() chạy đồng thời với execve().
+6. Thread leader thoát trước.
+7. Thread khác đã có PF_EXITING.
+8. Parent gọi wait khi các thread chưa exit hết.
+9. Thread bị ptrace.
+10. Thread đang giữ spinlock hoặc disable preemption.
+
+Mỗi card cần có:
+
+- Scenario.
+- Shared state.
+- Lock.
+- Thread thắng.
+- Exit code được giữ.
+- Nguy cơ.
+- Kết luận từ source.
+- Điểm chưa xác nhận.
+
+==================================================
+XIX. THỰC NGHIỆM C
+==================================================
+
+Tạo chương trình C hoàn chỉnh sử dụng pthread.
+
+Phải có các test:
+
+1. Worker gọi exit(99).
+2. Worker gọi _exit(98).
+3. Worker gọi syscall(SYS_exit, 97).
+4. Worker gọi syscall(SYS_exit_group, 96).
+5. Worker gọi pthread_exit().
+6. Main gọi pthread_exit().
+7. Worker chờ condition variable.
+8. Worker ngủ bằng nanosleep.
+9. Worker blocked trong I/O mô phỏng nếu có thể.
+
+Cung cấp:
+
+- Source code.
+- Lệnh compile.
+- Lệnh chạy.
+- Output dự kiến.
+- Cách lấy PID và TID.
+- Cách quan sát thread.
+- Kết quả cần kiểm tra.
+- Giới hạn của test.
+
+Lệnh compile mẫu:
+
+gcc -Wall -Wextra -O0 -g -pthread exit_test.c -o exit_test
+
+==================================================
+XX. HƯỚNG DẪN TRACE
+==================================================
+
+Tạo command card cho:
+
+1. strace
+
+strace -ff -e trace=process,signal -o trace ./exit_test
+
+2. ps
+
+ps -eLo pid,tid,tgid,ppid,state,wchan,comm
+
+3. procfs
+
+cat /proc/<PID>/status
+ls /proc/<PID>/task
+cat /proc/<PID>/task/<TID>/status
+cat /proc/<PID>/task/<TID>/stack
+
+4. ftrace
+
+Trace các function phù hợp kernel version:
+
+- do_group_exit
+- zap_other_threads
+- do_exit
+- exit_notify
+- release_task
+
+5. perf
+
+Trace event nếu kernel hỗ trợ:
+
+- syscalls:sys_enter_exit
+- syscalls:sys_enter_exit_group
+- signal:signal_generate
+- signal:signal_deliver
+- sched:sched_process_exit
+
+6. bpftrace
+
+Hiển thị:
+
+- Timestamp.
+- CPU.
+- PID.
+- TID.
+- TGID.
+- comm.
+- Function.
+- Exit code.
+
+Mỗi command phải có:
+
+- Ý nghĩa.
+- Điều kiện cần.
+- Output mẫu.
+- Cách đọc output.
+- Quyền root có cần hay không.
+- Cảnh báo overhead.
+
+==================================================
+XXI. BADGE VÀ CALLOUT
+==================================================
+
+Sử dụng các loại badge:
+
+- USERSPACE
+- KERNEL
+- LIBC
+- SYSCALL
+- SIGNAL
+- SCHEDULER
+- PER-THREAD
+- SHARED
+- VERSION-DEPENDENT
+
+Sử dụng các callout:
+
+1. Confirmed from source
+   - Màu xanh lá.
+
+2. Important
+   - Màu xanh dương.
+
+3. Warning
+   - Màu vàng/cam.
+
+4. Common misunderstanding
+   - Màu đỏ nhạt.
+
+5. Version-dependent
+   - Màu tím.
+
+6. Beginner explanation
+   - Màu cyan.
+
+Các callout phải có icon bằng CSS hoặc Unicode đơn giản, không phụ thuộc thư viện icon bên ngoài.
+
+==================================================
+XXII. GIẢI THÍCH CHO NGƯỜI MỚI
+==================================================
+
+Mỗi chương khó phải có box:
+
+“Giải thích đơn giản”
+
+Sử dụng ví dụ:
+
+- Process giống một công ty.
+- Các thread giống nhân viên dùng chung tài nguyên.
+- `SYS_exit` giống một nhân viên tự nghỉ.
+- `SYS_exit_group` giống lệnh đóng toàn bộ công ty.
+- `zap_other_threads()` giống đánh dấu tất cả nhân viên còn lại phải rời đi.
+- SIGKILL pending giống thông báo bắt buộc đã được ghi nhận.
+- Scheduler giống người quyết định khi nào từng nhân viên được xử lý thủ tục rời đi.
+- `do_exit()` giống quy trình bàn giao và đóng hồ sơ của từng nhân viên.
+- `waitpid()` giống công ty mẹ thu hồi hồ sơ cuối cùng.
+
+Phải ghi rõ analogy chỉ giúp hiểu, không thay thế behavior kỹ thuật.
+
+==================================================
+XXIII. CHECKLIST REVIEW
+==================================================
+
+Tạo checklist tương tác để người đọc đánh dấu:
+
+- Đã xác định kernel version.
+- Đã xác định architecture.
+- Đã tìm SYSCALL_DEFINE1(exit).
+- Đã tìm SYSCALL_DEFINE1(exit_group).
+- Đã đọc do_group_exit().
+- Đã đọc zap_other_threads().
+- Đã xác nhận signal pending queue.
+- Đã xác nhận wakeup function.
+- Đã trace đường tới do_exit().
+- Đã kiểm tra TASK_UNINTERRUPTIBLE.
+- Đã xác nhận exit status.
+- Đã kiểm tra parent notification.
+- Đã chạy chương trình test.
+- Đã trace bằng strace.
+- Đã trace bằng ftrace hoặc perf.
+- Đã kiểm tra các khác biệt với Linux mainline.
+
+Lưu trạng thái checklist bằng localStorage.
+
+==================================================
+XXIV. CÂU HỎI BẮT BUỘC
+==================================================
+
+Cuối tài liệu phải có FAQ trả lời:
+
+1. exit() có trực tiếp là syscall không?
+2. _exit() của glibc gọi SYS_exit hay SYS_exit_group?
+3. SYS_exit kết thúc một thread hay toàn process?
+4. SYS_exit_group kết thúc thread khác thế nào?
+5. zap_other_threads() có thực sự gọi send_sig(SIGKILL) không?
+6. SIGKILL được đặt ở pending queue nào?
+7. Thread bị zap có chạy signal handler không?
+8. Thread nào gọi do_exit() cho target thread?
+9. Calling thread có chờ các thread khác exit không?
+10. Thread ở TASK_UNINTERRUPTIBLE có chết ngay không?
+11. Parent nhận exit status nào?
+12. Thread leader có bắt buộc exit cuối cùng không?
+13. Thread cuối cùng được xác định như thế nào?
+14. Resource shared được giải phóng bằng reference count nào?
+15. kill -9 và zap_other_threads() khác nhau thế nào?
+16. Vì sao signal pending không có nghĩa task đã exit?
+17. Vì sao gọi exit() sau fork trong process đa luồng có thể deadlock?
+18. Vì sao child sau fork thường dùng _exit()?
+19. Zombie đại diện cho thread hay process?
+20. Khi nào release_task() được gọi?
+
+Mỗi câu trả lời cần có nhãn:
+
+- Confirmed.
+- Inference.
+- Version-dependent.
+- Needs repository verification.
+
+==================================================
+XXV. RESPONSIVE DESIGN
+==================================================
+
+HTML phải hoạt động tốt ở:
+
+- Desktop 1920x1080.
+- Laptop 1366x768.
+- Tablet.
+- Mobile từ 320px.
+
+Yêu cầu:
+
+- Không horizontal scroll toàn trang.
+- Chỉ table hoặc code block được scroll ngang.
+- Sidebar chuyển thành drawer trên mobile.
+- Button đủ lớn để bấm bằng cảm ứng.
+- Font tối thiểu 14px trên mobile.
+- Diagram container có thể scroll hoặc zoom.
+- Heading không bị che bởi sticky header.
+- Dùng `scroll-margin-top`.
+- Không sử dụng chiều rộng cố định gây overflow.
+
+==================================================
+XXVI. ACCESSIBILITY
+==================================================
+
+Phải hỗ trợ:
+
+- Semantic HTML.
+- Nav, main, aside, section, article.
+- aria-label cho button.
+- Keyboard navigation.
+- Focus style rõ ràng.
+- Contrast tốt.
+- prefers-reduced-motion.
+- Không phụ thuộc hoàn toàn vào màu sắc để thể hiện trạng thái.
+- Search status có aria-live.
+- Collapse button có aria-expanded.
+- Theme toggle có accessible label.
+- Diagram có caption hoặc mô tả text.
+
+==================================================
+XXVII. PRINT VÀ EXPORT PDF
+==================================================
+
+Tạo `@media print`:
+
+- Ẩn sidebar.
+- Ẩn toolbar không cần thiết.
+- Mở tất cả section.
+- Nền trắng.
+- Text đen.
+- Không cắt đôi diagram nếu có thể.
+- Không cắt đôi code block.
+- Hiển thị URL của section nếu phù hợp.
+- Chuyển card thành layout phù hợp A4.
+- Có page break trước các chương lớn.
+- Header/footer in đơn giản.
+
+==================================================
+XXVIII. CHẤT LƯỢNG CODE HTML
+==================================================
+
+Yêu cầu:
+
+- HTML5 hợp lệ.
+- CSS có tổ chức.
+- JavaScript được chia thành function rõ ràng.
+- Không khai báo biến global không cần thiết.
+- Không có button không hoạt động.
+- Không có link anchor bị sai.
+- Không có ID trùng.
+- Không có Mermaid diagram lỗi parse.
+- Không tham chiếu element không tồn tại.
+- Không dùng framework nặng.
+- Không dùng React, Vue hoặc Angular.
+- Có thể dùng Mermaid qua CDN nếu môi trường cho phép.
+- Nếu dùng Mermaid qua CDN, phải có thông báo fallback khi offline.
+- Nếu cần file hoàn toàn offline, hãy nhúng Mermaid bundle nếu môi trường cho phép.
+- Không sử dụng nội dung từ nguồn ngoài mà không ghi nguồn.
+- Không chèn secret, password, token hoặc đường dẫn nội bộ nhạy cảm.
+
+==================================================
+XXIX. KIỂM TRA TRƯỚC KHI HOÀN TẤT
+==================================================
+
+Trước khi trả file, phải kiểm tra:
+
+1. File HTML tồn tại.
+2. File mở được.
+3. Header hiển thị đúng.
+4. Sidebar hoạt động.
+5. Search hoạt động.
+6. Dark mode hoạt động.
+7. Expand/collapse hoạt động.
+8. Copy code hoạt động.
+9. Anchor navigation hoạt động.
+10. Back to top hoạt động.
+11. Không có lỗi JavaScript nghiêm trọng.
+12. Mọi Mermaid diagram render thành công.
+13. Diagram không bị cắt.
+14. Table responsive.
+15. Mobile layout không overflow.
+16. Print preview có thể đọc.
+17. Nội dung không nhầm exit() với SYS_exit.
+18. Nội dung không nói SIGKILL trực tiếp gọi do_exit().
+19. Nội dung không khẳng định task D state chết ngay.
+20. Mọi kết luận quan trọng có source hoặc nhãn mức độ xác nhận.
+
+Nếu có thể, hãy tạo screenshot preview để kiểm tra bố cục.
+
+==================================================
+XXX. KẾT QUẢ CUỐI CÙNG
+==================================================
+
+Kết quả cuối cùng phải bao gồm:
+
+1. File `linux_exit_group_flow.html`.
+2. Mô tả ngắn về nội dung file.
+3. Kernel version được sử dụng.
+4. Architecture được sử dụng.
+5. Số lượng sequence diagram.
+6. Số lượng flowchart.
+7. Danh sách các phần chưa xác nhận.
+8. Cảnh báo nếu Mermaid cần kết nối Internet để tải từ CDN.
+9. Hướng dẫn mở file.
+10. Hướng dẫn xuất PDF.
+
+Không trả về một bản HTML sơ sài.
+
+Không được chỉ tạo template trống.
+
+Không được dùng placeholder như:
+
+- Nội dung sẽ được bổ sung.
+- TODO.
+- Add diagram here.
+- Source code here.
+- Coming soon.
+
+Nếu chưa đủ dữ liệu source, vẫn phải tạo tài liệu hoàn chỉnh ở mức Linux mainline reference, nhưng phải đánh dấu rõ phần nào cần xác nhận lại.
+
+Bắt đầu bằng cách:
+
+1. Kiểm tra repository.
+2. Xác định kernel version và architecture.
+3. Tìm definition thực tế của:
+   - SYSCALL_DEFINE1(exit, ...)
+   - SYSCALL_DEFINE1(exit_group, ...)
+   - do_group_exit()
+   - zap_other_threads()
+   - do_exit()
+4. Xây dựng call flow từ source.
+5. Viết nội dung.
+6. Tạo Mermaid diagram.
+7. Tạo file HTML.
+8. Kiểm tra HTML và Mermaid.
+9. Trả file cho người dùng.

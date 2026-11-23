@@ -1,0 +1,71 @@
+=== dg-rng-map
+type: graph
+status: verified
+title: Ba nguồn "ngẫu nhiên" khác nhau trong kernel
+purpose: Phân biệt `get_random_bytes()` (random driver), `crypto_rng` (API DRBG của Crypto API) và jitterentropy — và chúng nạp cho nhau thế nào.
+caption: Mũi tên `A → B` nghĩa là "A lấy dữ liệu/seed từ B". DRBG HMAC dùng `hmac(sha256)` qua shash. Trên sản phẩm chỉ bật `CONFIG_CRYPTO_DRBG_HMAC` (cùng `JITTERENTROPY`); `stdrng` tốt nhất **[I]** là `drbg_nopr_hmac_sha256` (priority 207).
+refs: `crypto/rng.c:31-54, 116-145` · `crypto/drbg.c:1511-1528` (`drbg_prepare_hrng`) · `crypto/drbg.c:165-187` · `crypto/geniv.c:118-122` · `crypto/ecc.c:1367-1370`
+---
+flowchart TB
+    %% @classdefs
+    U1["geniv.c (salt IV)"]:::ext
+    U2["ecc.c (sinh khoá)"]:::ext
+    DEF["crypto_get_default_rng()<br/>crypto_default_rng (stdrng)"]:::api
+    DRBG["drbg.c<br/>drbg_nopr_hmac_sha256 …"]:::impl
+    HMAC["hmac(sha256)<br/>(shash)"]:::impl
+    JENT["jitterentropy_rng<br/>(crypto/jitterentropy.c)"]:::impl
+    RD["random driver<br/>get_random_bytes()"]:::core
+    U1 --> DEF
+    U2 --> DEF
+    DEF --> DRBG
+    DRBG -- "thuật toán lõi" --> HMAC
+    DRBG -- "seed" --> RD
+    DRBG -- "seed bổ sung" --> JENT
+
+=== dg-rng-default
+type: sequence
+status: verified
+title: crypto_get_default_rng() — RNG dùng chung, cấp phát lười
+purpose: Cho thấy lần gọi đầu tiên cấp và seed `stdrng`, các lần sau chỉ tăng bộ đếm; và vì sao hàm có thể ngủ.
+caption: Toàn bộ chạy dưới `mutex crypto_default_rng_lock`. `crypto_rng_reset(rng, NULL, seedsize)` tự lấy seed bằng `get_random_bytes_wait()` — **có thể ngủ** tới khi random pool sẵn sàng — và `kfree_sensitive` buffer seed. Caller trả lại bằng `crypto_put_default_rng()`.
+refs: `crypto/rng.c:116-145` · `crypto/rng.c:31-54` (`crypto_rng_reset`) · `crypto/drbg.c:1942-1960` (`drbg_kcapi_seed`)
+explain: ch-rng-others
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller<br/>(vd geniv.c)
+    participant R as rng.c
+    participant D as DRBG<br/>(stdrng)
+    participant RD as random driver
+    C->>R: crypto_get_default_rng()
+    Note over R,D: mutex_lock(<br/>crypto_default_rng_lock)
+    alt chưa có crypto_default_rng
+        R->>D: crypto_alloc_rng("stdrng", 0, 0)
+        R->>RD: get_random_bytes_wait(seedsize)
+        Note over R,RD: có thể ngủ chờ pool sẵn sàng
+        R->>D: alg->seed(buf) = drbg_kcapi_seed
+        D-->>R: 0 (hoặc lỗi → free rng)
+    end
+    Note over R,D: refcnt++ · mutex_unlock
+    R-->>C: 0
+    C->>R: crypto_rng_get_bytes(<br/>crypto_default_rng, buf, n)
+    R->>D: alg->generate() (giữ drbg_mutex)
+    D-->>C: 0, buf đầy byte ngẫu nhiên
+    C->>R: crypto_put_default_rng()
+
+=== dg-rng-drbg-state
+type: state
+status: verified
+title: Trạng thái seed của DRBG (enum drbg_seed_state)
+purpose: Một state machine thật trong kernel: DRBG seed sớm khi random pool chưa sẵn sàng thì reseed thường xuyên hơn.
+caption: Trạng thái lưu trong `drbg->seeded`. `PARTIAL` đặt ngưỡng reseed 50 lần generate; `FULL` dùng ngưỡng tối đa (`drbg_max_requests`). Vượt ngưỡng → về `UNSEEDED` và reseed ngay trong lần generate đó. Bản prediction-resistance (`drbg_pr_*`) reseed trước **mọi** lần generate.
+refs: `include/crypto/drbg.h:108-112` · `crypto/drbg.c:1037-1071` (`__drbg_seed`) · `crypto/drbg.c:1161-1162` · `crypto/drbg.c:1399-1419`
+---
+stateDiagram-v2
+    direction TB
+    [*] --> UNSEEDED: drbg_instantiate()
+    UNSEEDED --> PARTIAL: seed khi random pool<br/>chưa sẵn sàng
+    UNSEEDED --> FULL: seed khi pool đã sẵn sàng
+    PARTIAL --> FULL: pool sẵn sàng<br/>drbg_seed_from_random()
+    PARTIAL --> UNSEEDED: reseed_ctr > 50
+    FULL --> UNSEEDED: reseed_ctr > max_requests

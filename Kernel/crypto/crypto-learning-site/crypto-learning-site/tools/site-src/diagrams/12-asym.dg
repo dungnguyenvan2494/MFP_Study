@@ -1,0 +1,94 @@
+=== dg-asym-verify-setup
+type: sequence
+status: verified
+title: Kiểm chữ ký (1/2) — chọn thuật toán, cấp tfm, nạp khoá công khai
+purpose: Cho thấy cách `public_key.c` biến thông tin chữ ký thành tên `pkcs1pad(rsa,sha256)` và lần đầu tiên cần cryptomgr dựng instance.
+caption: `rsa_init()` đăng ký cả alg `rsa-generic` lẫn template `pkcs1pad`. Khoá công khai truyền dạng DER và được parse bằng bộ giải mã ASN.1 (`rsapubkey.asn1`, `rsa_helper.c`). akcipher **không** có cờ `NEED_KEY`: thiếu khoá thì RSA tự trả `-EINVAL`.
+refs: `crypto/asymmetric_keys/public_key.c:65-94` (`software_key_determine_akcipher`) · `crypto/asymmetric_keys/public_key.c:313-360` · `crypto/rsa.c:258-273` · `crypto/rsa-pkcs1pad.c:596-685`
+next: Tiếp theo: [Kiểm chữ ký (2/2)](#dg-asym-verify-run).
+---
+sequenceDiagram
+    autonumber
+    participant PK as public_key.c
+    participant AK as akcipher API
+    participant P1 as pkcs1pad instance
+    participant RSA as rsa-generic
+    Note over PK,AK: software_key_determine_akcipher(<br/>"pkcs1", "sha256") → "pkcs1pad(rsa,sha256)"
+    PK->>AK: crypto_alloc_akcipher(alg_name, 0, 0)
+    Note over AK,P1: lần đầu: cryptomgr dựng instance<br/>từ template pkcs1pad, con = rsa
+    AK-->>PK: tfm
+    PK->>AK: akcipher_request_alloc(tfm, GFP_KERNEL)
+    PK->>AK: crypto_akcipher_set_pub_key(tfm, DER key)
+    AK->>P1: pkcs1pad_set_pub_key()
+    P1->>RSA: set_pub_key cho tfm con
+    Note over RSA: parse ASN.1 (n, e)<br/>kiểm độ dài modulus
+    RSA-->>PK: 0 hoặc lỗi
+
+=== dg-asym-verify-run
+type: sequence
+status: verified
+title: Kiểm chữ ký (2/2) — request verify và mẫu "async → sync"
+purpose: Theo request verify: dữ liệu vào là chữ ký nối với digest, pkcs1pad chạy phép RSA công khai trên chữ ký rồi kiểm phần đệm.
+caption: Quy ước 5.10: `src` = chữ ký ‖ digest (`src_len` = độ dài chữ ký, `dst_len` = độ dài digest), `dst = NULL`. Caller dùng `crypto_req_done` + `crypto_wait_req` nên chịu được implementation async; với `rsa-generic` (sync) không phải chờ. Trên vendor kernel, nếu request async không bao giờ hoàn tất, log `@@@[CHK]timeout` lặp lại. Kết quả dương bị ép thành `-EINVAL`.
+refs: `crypto/asymmetric_keys/public_key.c:360-393` · `crypto/rsa-pkcs1pad.c:530-560` (`pkcs1pad_verify`) · `crypto/rsa-pkcs1pad.c:433-506` (`pkcs1pad_verify_complete`)
+explain: ch-asymmetric
+---
+sequenceDiagram
+    autonumber
+    participant PK as public_key.c
+    participant AK as akcipher API
+    participant P1 as pkcs1pad instance
+    participant RSA as rsa-generic
+    Note over PK,AK: buf = chữ ký ‖ digest<br/>set_crypt(req, sg, NULL, s_size, digest_size)
+    PK->>AK: crypto_wait_req(<br/>crypto_akcipher_verify(req))
+    AK->>P1: pkcs1pad_verify(req)
+    P1->>RSA: crypto_akcipher_encrypt(child_req)<br/>(phép công khai s^e mod n)
+    RSA-->>P1: 0 (sync) — EM trong out_buf
+    Note over P1,RSA: pkcs1pad_verify_complete():<br/>kiểm 00 01 FF…FF 00, DigestInfo, digest
+    P1-->>AK: 0 / -EINVAL / -EBADMSG / -EKEYREJECTED
+    AK-->>PK: ret (không phải chờ vì sync)
+    Note over PK,AK: free buf, request, tfm
+
+=== dg-asym-pkcs1-codes
+type: flowchart
+status: verified
+title: pkcs1pad_verify_complete() — mỗi mã lỗi nghĩa là gì
+purpose: Khi verify thất bại, mã lỗi cho biết sai ở tầng nào: độ dài, định dạng đệm, hay digest không khớp.
+caption: `EM` là kết quả của phép RSA công khai trên chữ ký, dài `key_size` (hoặc `key_size − 1` nếu byte 0 đầu bị lược). Cần ít nhất 8 byte `FF`. So DigestInfo bằng `crypto_memneq`, so digest cuối bằng `memcmp` (dữ liệu công khai nên không cần thời gian hằng). `out_buf` luôn được `kfree_sensitive`.
+refs: `crypto/rsa-pkcs1pad.c:433-506`
+---
+flowchart TD
+    %% @classdefs
+    S(["verify_complete(req, err)"]):::api --> Q0{{"err từ RSA ≠ 0 ?"}}:::dec
+    Q0 -- "có" --> R0(["trả err của RSA"]):::err
+    Q0 -- "không" --> Q1{{"độ dài EM < key_size − 1<br/>hoặc byte đầu ≠ 00?"}}:::dec
+    Q1 -- "có" --> E1(["-EINVAL"]):::err
+    Q1 -- "không" --> Q2{{"đệm 01 FF…FF 00 đúng<br/>(≥ 8 byte FF)?"}}:::dec
+    Q2 -- "không" --> E2(["-EBADMSG"]):::err
+    Q2 -- "có" --> Q3{{"DigestInfo của hash<br/>khớp?"}}:::dec
+    Q3 -- "không" --> E3(["-EBADMSG"]):::err
+    Q3 -- "có" --> Q4{{"độ dài digest khớp<br/>và nội dung khớp?"}}:::dec
+    Q4 -- "không" --> E4(["-EKEYREJECTED"]):::err
+    Q4 -- "có" --> OK(["0: chữ ký hợp lệ"]):::ok
+
+=== dg-asym-kpp
+type: sequence
+status: conceptual
+title: kpp — hai bên thoả thuận khoá chung
+purpose: Thứ tự ba thao tác của API `kpp` và dữ liệu nào đi qua mạng.
+caption: Sơ đồ khái niệm (hai bên có thể là hai máy). Tên đầy đủ: `crypto_kpp_set_secret()`, `crypto_kpp_generate_public_key(req)`, `crypto_kpp_compute_shared_secret(req)`. `set_secret` nhận private key đã đóng gói bằng `crypto_dh_encode_key()` / `crypto_ecdh_encode_key()`. Trên sản phẩm `CONFIG_CRYPTO_DH` và `CONFIG_CRYPTO_ECDH` **không** bật; các caller trong cây (Bluetooth SMP, keyctl DH) cũng không được build.
+refs: `include/crypto/kpp.h:71-84` · `crypto/dh_helper.c` · `crypto/ecdh_helper.c` · `crypto/kpp.c`
+---
+sequenceDiagram
+    autonumber
+    participant A as Bên A (kpp tfm)
+    participant B as Bên B (kpp tfm)
+    Note over A: set_secret(<br/>private key A)
+    Note over B: set_secret(<br/>private key B)
+    Note over A: generate_public_key<br/>→ pubA
+    Note over B: generate_public_key<br/>→ pubB
+    A-)B: gửi pubA
+    B-)A: gửi pubB
+    Note over A: compute_shared_<br/>secret(src = pubB)
+    Note over B: compute_shared_<br/>secret(src = pubA)
+    Note over A,B: cùng một shared secret<br/>(thường đưa qua KDF trước khi dùng)

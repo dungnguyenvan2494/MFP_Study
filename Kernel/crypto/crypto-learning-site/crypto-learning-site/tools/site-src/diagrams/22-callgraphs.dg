@@ -1,0 +1,190 @@
+=== dg-cg-lookup
+type: callgraph
+status: verified
+title: Call graph — crypto_alloc_skcipher() tới lookup
+purpose: Mọi hàm được gọi khi cấp một tfm skcipher, phần tìm alg (chưa gồm dựng instance và tạo tfm).
+caption: Mũi tên liền = gọi trực tiếp; mũi tên đứt = gián tiếp (notifier, kthread, con trỏ hàm). Màu: xanh dương = API công khai, xám = core, xanh lá = implementation. `crypto_alloc_tfm` là inline trong `crypto/internal.h`. Nhánh `crypto_probing_notify` được vẽ tiếp ở [Call graph — dựng instance](#dg-cg-instantiate).
+refs: `crypto/skcipher.c:758` · `crypto/internal.h:86` · `crypto/api.c:517, 479, 261, 217, 193, 55, 125, 166, 154, 247`
+explain: ch-lookup
+---
+flowchart TD
+    %% @classdefs
+    A["crypto_alloc_skcipher<br/>skcipher.c:758"]:::api --> B["crypto_alloc_tfm (inline)<br/>internal.h:86"]:::core
+    B --> C["crypto_alloc_tfm_node<br/>api.c:517 · lặp khi -EAGAIN"]:::core
+    C --> D["crypto_find_alg<br/>api.c:479"]:::core
+    C --> TF["crypto_create_tfm_node<br/>api.c:436 (xem call graph tạo tfm)"]:::core
+    D --> E["crypto_alg_mod_lookup<br/>api.c:261"]:::core
+    E --> F["crypto_larval_lookup<br/>api.c:217"]:::core
+    E --> N["crypto_probing_notify<br/>api.c:247"]:::core
+    E --> W["crypto_larval_wait<br/>api.c:166"]:::core
+    E --> KL["crypto_larval_kill<br/>api.c:154"]:::core
+    F --> G["crypto_alg_lookup<br/>api.c:193"]:::core
+    G --> H["__crypto_alg_lookup<br/>api.c:55"]:::core
+    F --> RM["request_module<br/>crypto-%s"]:::ext
+    F --> LA["crypto_larval_add<br/>api.c:125"]:::core
+    F --> W
+    N -. "notifier" .-> MGR["cryptomgr_notify<br/>algboss.c:252"]:::core
+
+=== dg-cg-instantiate
+type: callgraph
+status: verified
+title: Call graph — cryptomgr dựng instance cbc(aes-ce)
+purpose: Phần gián tiếp của lookup: notifier → kthread → `tmpl->create()` → đăng ký instance.
+caption: Hai bước gián tiếp: `kthread_run` (hàm chạy trên thread khác, caller đang chờ larval) và `tmpl->create` (con trỏ hàm trong `struct crypto_template`). `crypto_grab_cipher` là inline trong `include/crypto/algapi.h`. Đăng ký instance đi lại luồng đăng ký thông thường (`crypto_wait_for_test` → `crypto_alg_tested`).
+refs: `crypto/algboss.c:57-191, 252-265` · `crypto/cbc.c:173-199` · `crypto/skcipher.c:863, 934-984` · `crypto/algapi.c:619, 688, 856, 908`
+explain: ch-templates
+---
+flowchart TD
+    %% @classdefs
+    A["cryptomgr_notify<br/>algboss.c:252"]:::core --> B["cryptomgr_schedule_probe<br/>algboss.c:80"]:::core
+    B -. "kthread_run" .-> C["cryptomgr_probe<br/>algboss.c:57"]:::core
+    C -. "tmpl->create" .-> D["crypto_cbc_create<br/>cbc.c:173"]:::impl
+    C --> LT["crypto_lookup_template<br/>algapi.c:612"]:::core
+    D --> E["skcipher_alloc_instance_simple<br/>skcipher.c:934"]:::core
+    E --> E1["crypto_check_attr_type<br/>algapi.c:856"]:::core
+    E --> E2["crypto_grab_cipher (inline)<br/>→ crypto_grab_spawn<br/>algapi.c:688"]:::core
+    E --> E3["crypto_inst_setname<br/>algapi.c:908"]:::core
+    D --> F["skcipher_register_instance<br/>skcipher.c:863"]:::core
+    F --> G["crypto_register_instance<br/>algapi.c:619"]:::core
+    G --> H["__crypto_register_alg :232<br/>crypto_wait_for_test :405"]:::core
+
+=== dg-cg-create
+type: callgraph
+status: verified
+title: Call graph — tạo tfm cbc(aes-ce) và đặt khoá
+purpose: Chuỗi init lồng: frontend → instance → spawn → tfm cipher con; rồi setkey đi qua ba lớp con trỏ hàm.
+caption: Ba cạnh đứt là ba lần dispatch qua con trỏ: `frontend->init_tfm` (trong `crypto_skcipher_type`), `alg->init` (trong `skcipher_alg` của instance), và `cia_setkey` (trong `cipher_alg` của aes-ce). Tfm cipher con đi theo đường cũ `__crypto_alloc_tfm`.
+refs: `crypto/api.c:344, 436` · `crypto/skcipher.c:599, 666, 879, 890` · `include/crypto/algapi.h:220-227` · `crypto/algapi.c:738, 763` · `crypto/cipher.c:41` · `arch/arm64/crypto/aes-ce-glue.c:142`
+explain: ch-transform
+---
+flowchart TD
+    %% @classdefs
+    A["crypto_create_tfm_node<br/>api.c:436"]:::core -. "frontend->init_tfm" .-> B["crypto_skcipher_init_tfm<br/>skcipher.c:666"]:::core
+    B -. "alg->init" .-> C["skcipher_init_tfm_simple<br/>skcipher.c:890"]:::core
+    C --> D["crypto_spawn_cipher (inline)<br/>algapi.h:220"]:::core
+    D --> E["crypto_spawn_tfm<br/>algapi.c:763"]:::core
+    E --> E1["crypto_spawn_alg<br/>algapi.c:738"]:::core
+    E --> E2["__crypto_alloc_tfm<br/>api.c:344 (tfm aes-ce)"]:::core
+    S["crypto_skcipher_setkey<br/>skcipher.c:599"]:::api -. "alg->setkey" .-> T["skcipher_setkey_simple<br/>skcipher.c:879"]:::core
+    T --> U["crypto_cipher_setkey<br/>cipher.c:41"]:::core
+    U -. "cia_setkey" .-> V["ce_aes_setkey<br/>aes-ce-glue.c:142"]:::impl
+
+=== dg-cg-encrypt
+type: callgraph
+status: verified
+title: Call graph — crypto_skcipher_encrypt() qua template cbc
+purpose: Đường đồng bộ đầy đủ tới lệnh AES của CPU, phân biệt rõ gọi trực tiếp và dispatch.
+caption: `crypto_cbc_encrypt` chọn `_segment` (src ≠ dst) hoặc `_inplace` (src = dst). `aes_cipher_encrypt` dùng `__aes_ce_encrypt` trong `kernel_neon_begin/end` khi `crypto_simd_usable()`, ngược lại `aes_encrypt()` từ `lib/crypto`.
+refs: `crypto/skcipher.c:104, 343, 431, 448, 476, 624` · `crypto/cbc.c:16, 44, 72` · `arch/arm64/crypto/aes-ce-glue.c:46-58`
+explain: ch-skcipher
+---
+flowchart TD
+    %% @classdefs
+    A["crypto_skcipher_encrypt<br/>skcipher.c:624"]:::api -. "alg->encrypt" .-> B["crypto_cbc_encrypt<br/>cbc.c:72"]:::impl
+    B --> W1["skcipher_walk_virt<br/>skcipher.c:476"]:::core
+    W1 --> W2["skcipher_walk_skcipher :448<br/>→ walk_first :431<br/>→ walk_next :343"]:::core
+    B --> S["crypto_cbc_encrypt_segment<br/>cbc.c:16<br/>(hoặc _inplace · cbc.c:44)"]:::impl
+    B --> WD["skcipher_walk_done<br/>skcipher.c:104"]:::core
+    S -. "cia_encrypt" .-> AE["aes_cipher_encrypt<br/>aes-ce-glue.c:46"]:::impl
+    AE --> N1["__aes_ce_encrypt (asm)<br/>trong kernel_neon_begin/end"]:::drv
+    AE --> N2["aes_encrypt (lib/crypto)<br/>khi SIMD không dùng được"]:::impl
+
+=== dg-cg-encrypt-simd
+type: callgraph
+status: verified
+title: Call graph — biến thể cbc-aes-ce (mask = 0)
+purpose: Cùng lời gọi `crypto_skcipher_encrypt`, nhưng implementation là vỏ simd: hai nhánh đồng bộ / bất đồng bộ.
+caption: `cbc_encrypt` của arm64 nằm trong `aes-glue.c` (biên dịch thành `aes-ce-blk` với `-DUSE_V8_CRYPTO_EXTENSIONS`). Nhánh cryptd được vẽ chi tiết ở [Call graph — cryptd](#dg-cg-cryptd).
+refs: `crypto/skcipher.c:624-638` · `crypto/simd.c:62-81` · `arch/arm64/crypto/aes-glue.c:213-240` · `crypto/cryptd.c:325`
+explain: ch-hwaccel
+---
+flowchart TD
+    %% @classdefs
+    A["crypto_skcipher_encrypt(req)<br/>skcipher.c:624"]:::api -. "alg->encrypt" .-> B["simd_skcipher_encrypt<br/>simd.c:62"]:::core
+    B --> C["crypto_skcipher_encrypt(subreq)"]:::api
+    C -. "alg->encrypt<br/>(NEON dùng được)" .-> D["cbc_encrypt<br/>aes-glue.c:231"]:::impl
+    D --> D2["cbc_encrypt_walk<br/>aes-glue.c:213"]:::impl
+    D2 --> D3["aes_cbc_encrypt (asm)<br/>nhiều block / lần"]:::drv
+    C -. "alg->encrypt<br/>(NEON không dùng được)" .-> E["cryptd_skcipher_encrypt_enqueue<br/>cryptd.c:325"]:::core
+
+=== dg-cg-cryptd
+type: callgraph
+status: verified
+title: Call graph — đường bất đồng bộ qua cryptd
+purpose: Hai nửa của cryptd: phần chạy trong ngữ cảnh caller (enqueue) và phần chạy trong kworker (xử lý, callback).
+caption: Cạnh "workqueue" nối hai ngữ cảnh khác nhau: `queue_work_on` chỉ lên lịch, `cryptd_queue_worker` chạy sau trên kworker. `req->complete` và `rctx->complete` là hai con trỏ khác nhau: cái đầu do cryptd đặt (`cryptd_skcipher_encrypt`), cái sau là callback gốc của caller.
+refs: `crypto/cryptd.c:130, 162, 240, 255, 311, 325` · `crypto/algapi.c:932, 963` · `include/crypto/algapi.h:234`
+explain: ch-hwaccel
+---
+flowchart TD
+    %% @classdefs
+    A["cryptd_skcipher_encrypt_enqueue<br/>cryptd.c:325"]:::core --> B["cryptd_skcipher_enqueue<br/>cryptd.c:311"]:::core
+    B --> C["cryptd_enqueue_request<br/>cryptd.c:130"]:::core
+    C --> D["crypto_enqueue_request<br/>algapi.c:932"]:::core
+    C -. "queue_work_on<br/>(workqueue)" .-> K["cryptd_queue_worker<br/>cryptd.c:162"]:::core
+    K --> K1["crypto_get_backlog<br/>algapi.h:234<br/>crypto_dequeue_request<br/>algapi.c:963"]:::core
+    K -. "req->complete" .-> E["cryptd_skcipher_encrypt<br/>cryptd.c:255"]:::core
+    E --> F["crypto_skcipher_encrypt(subreq)<br/>→ __cbc-aes-ce (sync)"]:::impl
+    E --> G["cryptd_skcipher_complete<br/>cryptd.c:240"]:::core
+    G -. "rctx->complete" .-> H["callback của caller"]:::cb
+
+=== dg-cg-free
+type: callgraph
+status: verified
+title: Call graph — crypto_free_skcipher()
+purpose: Đường huỷ tfm, kể cả tfm cipher con, và nơi xoá trắng khoá.
+caption: `crypto_free_skcipher` là inline. Vì frontend đã đặt `tfm->exit`, `cra_exit` không được gọi. Tfm con được huỷ đệ quy qua `crypto_free_cipher` → `crypto_destroy_tfm` (cũng `kfree_sensitive`).
+refs: `include/crypto/skcipher.h:202-205` · `crypto/api.c:41, 303, 561-575` · `crypto/skcipher.c:658, 905`
+explain: ch-transform
+---
+flowchart TD
+    %% @classdefs
+    A["crypto_free_skcipher (inline)<br/>skcipher.h:202"]:::api --> B["crypto_destroy_tfm<br/>api.c:561"]:::core
+    B --> C["crypto_exit_ops<br/>api.c:303"]:::core
+    C -. "tfm->exit" .-> D["crypto_skcipher_exit_tfm<br/>skcipher.c:658"]:::core
+    D -. "alg->exit" .-> E["skcipher_exit_tfm_simple<br/>skcipher.c:905"]:::core
+    E --> F["crypto_free_cipher (tfm con)<br/>→ crypto_destroy_tfm"]:::core
+    B --> G["crypto_mod_put<br/>api.c:41"]:::core
+    B --> H["kfree_sensitive(mem)<br/>xoá trắng ctx"]:::ok
+
+=== dg-cg-register
+type: callgraph
+status: verified
+title: Call graph — crypto_register_alg() (alg đơn, ví dụ aes_generic)
+purpose: Toàn bộ lời gọi khi một module đăng ký thuật toán, gồm phần gián tiếp qua cryptomgr.
+caption: Khi không có listener (notifier trả `NOTIFY_DONE`), `crypto_wait_for_test` tự gọi `crypto_alg_tested(name, 0)`. Các hàm đăng ký theo loại (`crypto_register_skcipher`, `crypto_register_shash`…) đều gọi `*_prepare_alg` rồi vào `crypto_register_alg`.
+refs: `crypto/aes_generic.c:1304-1314` · `crypto/algapi.c:32, 232, 296, 405, 425` · `crypto/api.c:35, 105, 154, 247` · `crypto/algboss.c:193, 215, 252`
+explain: ch-registration
+---
+flowchart TD
+    %% @classdefs
+    A["aes_init (subsys_initcall)<br/>aes_generic.c:1304"]:::impl --> B["crypto_register_alg<br/>algapi.c:425"]:::api
+    B --> C["crypto_check_alg<br/>algapi.c:32"]:::core
+    B --> D["__crypto_register_alg<br/>algapi.c:232"]:::core
+    D --> D1["crypto_larval_alloc · api.c:105<br/>crypto_mod_get · api.c:35"]:::core
+    B --> E["crypto_wait_for_test<br/>algapi.c:405"]:::core
+    E --> F["crypto_probing_notify<br/>api.c:247"]:::core
+    F -. "notifier" .-> G["cryptomgr_notify → cryptomgr_schedule_test<br/>algboss.c:252, 215"]:::core
+    G -. "kthread_run" .-> H["cryptomgr_test<br/>algboss.c:193"]:::core
+    H --> I["crypto_alg_tested<br/>algapi.c:296"]:::core
+    E --> J["crypto_larval_kill<br/>api.c:154"]:::core
+
+=== dg-cg-unregister
+type: callgraph
+status: verified
+title: Call graph — crypto_unregister_alg()
+purpose: Lời gọi khi gỡ thuật toán, gồm gỡ dây chuyền instance và giải phóng bất đồng bộ.
+caption: `crypto_notify(ALG_UNREGISTER)` là thay đổi của vendor, phát khi đang giữ write lock. Instance bị gỡ được giải phóng qua workqueue khi refcount về 0.
+refs: `crypto/algapi.c:72-90, 125, 152, 393, 447, 461-481`
+explain: ch-registration
+---
+flowchart TD
+    %% @classdefs
+    A["crypto_unregister_alg<br/>algapi.c:461"]:::api --> B["crypto_remove_alg<br/>algapi.c:447"]:::core
+    B --> B1["crypto_notify(ALG_UNREGISTER)<br/>vendor · đang giữ lock"]:::drv
+    B --> C["crypto_remove_spawns<br/>algapi.c:152 (DFS cra_users)"]:::core
+    C --> C1["crypto_remove_instance<br/>algapi.c:125"]:::core
+    A --> D["alg->cra_destroy<br/>(nếu có)"]:::impl
+    A --> E["crypto_remove_final<br/>algapi.c:393"]:::core
+    E --> F["crypto_alg_put từng instance"]:::core
+    F -. "schedule_work" .-> G["crypto_destroy_instance_workfn<br/>algapi.c:72"]:::core

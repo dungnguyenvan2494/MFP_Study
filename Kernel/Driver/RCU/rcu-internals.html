@@ -1,0 +1,1153 @@
+<title>RCU Internals</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#eef0ee;
+    --surface:#ffffff;
+    --surface-2:#e4e7e3;
+    --ink:#182420;
+    --ink-soft:#48564f;
+    --ink-faint:#7c8a83;
+    --rule:#d2d8d3;
+    --rule-strong:#b9c1ba;
+    --accent:#a8631a;
+    --accent-soft:#f2e2ce;
+    --teal:#1c6b70;
+    --teal-soft:#dcebe9;
+    --danger:#a63a2c;
+    --danger-soft:#f5ddd6;
+    --danger-ink:#5c1e14;
+    --code-bg:#161c1a;
+    --code-ink:#dfe6e1;
+    --diagram-bg:#fbfaf6;
+    --shadow: 0 1px 2px rgba(20,30,25,.06), 0 6px 20px -8px rgba(20,30,25,.16);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12181a; --surface:#171e20; --surface-2:#1e2628;
+      --ink:#e7ece8; --ink-soft:#aab6ae; --ink-faint:#788782;
+      --rule:#2a3436; --rule-strong:#3a464a;
+      --accent:#dd9a4c; --accent-soft:#3a2c17;
+      --teal:#5fb8b2; --teal-soft:#173432;
+      --danger:#e08069; --danger-soft:#3a231c; --danger-ink:#ffe3d8;
+      --code-bg:#0b0f0e; --code-ink:#dbe4de;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px -10px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12181a; --surface:#171e20; --surface-2:#1e2628;
+    --ink:#e7ece8; --ink-soft:#aab6ae; --ink-faint:#788782;
+    --rule:#2a3436; --rule-strong:#3a464a;
+    --accent:#dd9a4c; --accent-soft:#3a2c17;
+    --teal:#5fb8b2; --teal-soft:#173432;
+    --danger:#e08069; --danger-soft:#3a231c; --danger-ink:#ffe3d8;
+    --code-bg:#0b0f0e; --code-ink:#dbe4de;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px -10px rgba(0,0,0,.6);
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    font-size:16px; line-height:1.64;
+  }
+  h1,h2,h3,h4{ font-family:'IBM Plex Serif', Georgia, serif; text-wrap:balance; color:var(--ink); margin:0; }
+  code, pre, .mono{ font-family:'IBM Plex Mono','SFMono-Regular',Consolas,monospace; }
+  a{ color:var(--teal); }
+  ::selection{ background:var(--accent-soft); }
+  img,svg{ max-width:100%; }
+
+  .layout{ display:grid; grid-template-columns: 276px 1fr; max-width:1280px; margin:0 auto; align-items:start; }
+
+  .toc{
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+    padding: 1.8rem 1.15rem 2rem; border-right:1px solid var(--rule);
+  }
+  .toc-brand{ display:flex; align-items:baseline; gap:.5rem; margin-bottom:.15rem; }
+  .toc-brand .mark{ font-family:'IBM Plex Serif'; font-weight:700; font-size:1.03rem; }
+  .toc-brand .ver{ font-size:.66rem; color:var(--ink-faint); }
+  .toc-sub{ font-size:.76rem; color:var(--ink-faint); margin-bottom:1.35rem; line-height:1.5; }
+  .toc-group{ margin-bottom:1.05rem; }
+  .toc-group h6{
+    font-family:'IBM Plex Mono'; font-size:.64rem; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 .32rem; font-weight:600;
+  }
+  .toc a{ display:flex; gap:.5rem; align-items:baseline; text-decoration:none; color:var(--ink-soft); font-size:.84rem; padding:.27rem .4rem; border-radius:3px; }
+  .toc a:hover{ background:var(--surface-2); color:var(--ink); }
+  .toc a .n{ font-family:'IBM Plex Mono'; color:var(--accent); font-size:.72rem; min-width:1.5em; }
+  .toc-warn a, .toc-warn a .n{ color:var(--danger); }
+
+  main{ padding: 0 0 5rem; min-width:0; }
+
+  .masthead{ padding: 3.2rem clamp(1.1rem,4vw,3.3rem) 2.2rem; border-bottom:1px solid var(--rule); }
+  .masthead .eyebrow{ font-family:'IBM Plex Mono'; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:.9rem; display:flex; gap:.6rem; align-items:center; }
+  .masthead .eyebrow::before{ content:''; width:26px; height:1px; background:var(--accent); display:inline-block; }
+  .masthead h1{ font-size:clamp(2rem,4.2vw,3rem); font-weight:600; line-height:1.06; max-width:18ch; }
+  .masthead .dek{ margin-top:1.05rem; max-width:64ch; font-size:1.05rem; color:var(--ink-soft); }
+  .specrow{ margin-top:1.9rem; display:flex; flex-wrap:wrap; gap: 1.5rem 2.2rem; font-family:'IBM Plex Mono'; font-size:.76rem; border-top:1px solid var(--rule); padding-top:1.1rem; }
+  .specrow div{ display:flex; flex-direction:column; gap:.2rem; }
+  .specrow span.k{ color:var(--ink-faint); letter-spacing:.06em; text-transform:uppercase; font-size:.62rem; }
+  .specrow span.v{ color:var(--ink); }
+
+  section.chapter{ padding: 2.5rem clamp(1.1rem,4vw,3.3rem); border-bottom:1px solid var(--rule); }
+  .chapter-head{ display:flex; align-items:baseline; gap:.8rem; margin-bottom:1rem; }
+  .chapter-head .num{ font-family:'IBM Plex Mono'; color:var(--accent); font-size:1rem; font-weight:600; }
+  .chapter-head h2{ font-size:1.55rem; font-weight:600; }
+  .lede{ max-width:66ch; color:var(--ink-soft); font-size:1rem; margin-bottom:1.2rem; }
+  .prose{ max-width:68ch; }
+  .prose p{ margin:.85rem 0; }
+  .prose h4{ font-size:1rem; margin-top:1.6rem; margin-bottom:.5rem; }
+  .prose ul, .prose ol{ padding-left:1.2rem; }
+  .prose li{ margin:.35rem 0; }
+
+  .cite{ margin: 1.1rem 0 1.4rem; border:1px solid var(--rule-strong); border-radius:4px; overflow:hidden; background:var(--surface); box-shadow:var(--shadow); max-width:100%; }
+  .cite-bar{ display:flex; align-items:center; gap:.6rem; justify-content:space-between; padding:.48rem .8rem; background:var(--surface-2); border-bottom:1px solid var(--rule); font-family:'IBM Plex Mono'; font-size:.72rem; color:var(--ink-soft); }
+  .cite-bar .path{ color:var(--ink); font-weight:500; }
+  .cite-bar .path .fn{ color:var(--accent); }
+  .cite-bar .dots{ display:flex; gap:.3rem; }
+  .cite-bar .dots i{ width:6px; height:6px; border-radius:50%; background:var(--rule-strong); display:block; }
+  .cite pre{ margin:0; padding:.8rem 1rem 1rem; overflow-x:auto; background:var(--code-bg); color:var(--code-ink); font-size:.79rem; line-height:1.6; }
+  .cite pre code{ font-family:'IBM Plex Mono'; white-space:pre; }
+
+  .note{ margin:1.1rem 0; padding:.9rem 1.05rem; border-top:2px solid var(--teal); background:var(--teal-soft); border-radius:3px; max-width:68ch; }
+  .note .lbl{ font-family:'IBM Plex Mono'; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--teal); font-weight:600; margin-bottom:.3rem; display:block; }
+  .note p{ margin:.3rem 0; font-size:.92rem; color:var(--ink); }
+
+  .advisory{ margin:1.3rem 0; padding:1.05rem 1.2rem; border-top:2px solid var(--danger); border-bottom:2px solid var(--danger); background:var(--danger-soft); max-width:100%; }
+  .advisory .lbl{ font-family:'IBM Plex Mono'; font-size:.68rem; letter-spacing:.09em; text-transform:uppercase; color:var(--danger); font-weight:700; margin-bottom:.4rem; }
+  .advisory p{ margin:.5rem 0; color:var(--danger-ink); font-size:.92rem; max-width:70ch; }
+  .advisory code{ background:rgba(0,0,0,.08); padding:.05em .3em; border-radius:2px; }
+
+  .takeaway{ margin:1.5rem 0 .5rem; padding:1.05rem 1.2rem; border:1px dashed var(--rule-strong); border-radius:4px; max-width:68ch; background:var(--surface); }
+  .takeaway .lbl{ font-family:'IBM Plex Mono'; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin-bottom:.5rem; }
+  .takeaway ul{ margin:0; padding-left:1.1rem; }
+  .takeaway li{ margin:.35rem 0; font-size:.9rem; }
+
+  .qagrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:.8rem; margin:1.2rem 0 1.6rem; }
+  .qa{ border:1px solid var(--rule); border-radius:5px; padding:.85rem .95rem; background:var(--surface); }
+  .qa .q{ font-family:'IBM Plex Mono'; font-size:.74rem; color:var(--accent); display:block; margin-bottom:.35rem; letter-spacing:.01em; }
+  .qa .a{ font-size:.86rem; color:var(--ink-soft); }
+
+  figure.diagram{ margin: 1.3rem 0 1.5rem; padding: 1rem .9rem .6rem; background:var(--diagram-bg); border:1px solid var(--rule-strong); border-radius:5px; max-width:100%; overflow-x:auto; box-shadow:var(--shadow); }
+  figure.diagram .mermaid{ display:flex; justify-content:center; }
+  figure.diagram svg.hand{ display:block; margin:0 auto; }
+  figcaption{ font-size:.8rem; color:var(--ink-soft); margin-top:.65rem; padding-top:.55rem; border-top:1px solid var(--rule); }
+
+  table.matrix{ width:100%; border-collapse:collapse; font-size:.85rem; margin:1.1rem 0 1.5rem; min-width:640px; }
+  table.matrix caption{ text-align:left; font-size:.76rem; color:var(--ink-faint); margin-bottom:.5rem; font-family:'IBM Plex Mono'; }
+  table.matrix th, table.matrix td{ border:1px solid var(--rule); padding:.5rem .6rem; text-align:left; vertical-align:top; }
+  table.matrix thead th{ background:var(--surface-2); font-family:'IBM Plex Mono'; font-size:.7rem; letter-spacing:.03em; text-transform:uppercase; color:var(--ink-soft); }
+  table.matrix tbody tr:nth-child(odd){ background: var(--surface-2); }
+  .scroll-x{ overflow-x:auto; }
+
+  .fieldgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:.65rem; margin:1.05rem 0 1.4rem; }
+  .field{ border:1px solid var(--rule); border-radius:4px; padding:.65rem .75rem; background:var(--surface); }
+  .field .k{ font-family:'IBM Plex Mono'; font-size:.76rem; color:var(--accent); display:block; margin-bottom:.22rem; }
+  .field .d{ font-size:.8rem; color:var(--ink-soft); }
+
+  .tree-map{ background:var(--code-bg); color:var(--code-ink); border-radius:5px; padding:1rem 1.1rem; font-family:'IBM Plex Mono'; font-size:.76rem; line-height:1.65; overflow-x:auto; box-shadow:var(--shadow); margin: 1.1rem 0 1.5rem; white-space:pre; }
+
+  .end{ padding: 3rem clamp(1.1rem,4vw,3.3rem) 4rem; }
+  .end h3{ font-size:1.25rem; margin-bottom:.8rem; }
+  .colophon{ margin-top:2.4rem; padding-top:1.3rem; border-top:1px solid var(--rule); font-size:.8rem; color:var(--ink-faint); max-width:62ch; }
+
+  @media (max-width:900px){
+    .layout{ grid-template-columns:1fr; }
+    .toc{ position:static; height:auto; border-right:none; border-bottom:1px solid var(--rule); display:flex; overflow-x:auto; gap:.3rem; padding:.9rem; white-space:nowrap; align-items:center; }
+    .toc-brand, .toc-sub{ display:none; }
+    .toc-group{ display:flex; gap:.2rem; margin:0; }
+    .toc-group h6{ display:none; }
+    .toc a{ font-size:.76rem; padding:.32rem .5rem; border:1px solid var(--rule); }
+  }
+  @media (max-width:520px){
+    .masthead, section.chapter, .end{ padding-left:1rem; padding-right:1rem; }
+  }
+</style>
+
+<div class="layout">
+  <nav class="toc" aria-label="Mục lục">
+    <div class="toc-brand"><span class="mark">RCU // internals</span><span class="ver">v3</span></div>
+    <div class="toc-sub">Tài liệu tổng hợp toàn bộ phiên trace source thật trên <code>kernel/rcu/</code> của Konica&nbsp;Minolta bizhub (MFP), đối chiếu mainline TREE_RCU.</div>
+
+    <div class="toc-group">
+      <h6>Nhập môn</h6>
+      <a href="#concept"><span class="n">00</span> Khái niệm cốt lõi</a>
+      <a href="#map"><span class="n">01</span> Bản đồ source</a>
+      <a href="#arch"><span class="n">02</span> rcu_state / node / data</a>
+    </div>
+    <div class="toc-group">
+      <h6>Reader</h6>
+      <a href="#readside"><span class="n">03</span> Read-side critical section</a>
+      <a href="#dynticks"><span class="n">04</span> Interrupt/NMI &amp; dynticks</a>
+    </div>
+    <div class="toc-group">
+      <h6>Writer &amp; Grace Period</h6>
+      <a href="#gp"><span class="n">05</span> Grace-period state machine</a>
+      <a href="#ordering"><span class="n">06</span> Memory ordering</a>
+      <a href="#sync"><span class="n">07</span> synchronize_rcu &amp; rcu_barrier</a>
+    </div>
+    <div class="toc-group">
+      <h6>Callback</h6>
+      <a href="#callback"><span class="n">08</span> rcu_core &amp; rcu_do_batch</a>
+      <a href="#nocb"><span class="n">09</span> NOCB — rcuo / rcuog</a>
+    </div>
+    <div class="toc-group">
+      <h6>Vòng đời hệ thống</h6>
+      <a href="#hotplug"><span class="n">10</span> CPU hotplug</a>
+      <a href="#boost"><span class="n">11</span> Priority boosting</a>
+      <a href="#stall"><span class="n">12</span> Stall detection</a>
+    </div>
+    <div class="toc-group">
+      <h6>Phát hiện</h6>
+      <a href="#vendor" class="toc-warn"><span class="n">13</span> Vendor / BSP patch ⚠</a>
+    </div>
+    <div class="toc-group">
+      <h6>Tổng hợp</h6>
+      <a href="#compare"><span class="n">14</span> So sánh các loại RCU</a>
+    </div>
+    <div class="toc-group">
+      <h6>Mở rộng (25 phần gốc)</h6>
+      <a href="#mapping"><span class="n">·</span> Đối chiếu 25 phần</a>
+      <a href="#pattern"><span class="n">15</span> Update pattern &amp; timeline</a>
+      <a href="#race"><span class="n">16</span> Concurrency / race</a>
+      <a href="#locking"><span class="n">17</span> Locking trong RCU</a>
+      <a href="#debug"><span class="n">18</span> Debug RCU</a>
+      <a href="#callgraphs"><span class="n">19</span> Call graph tổng hợp</a>
+      <a href="#fulsequence"><span class="n">20</span> Sequence CPU0/CPU1</a>
+      <a href="#experiments"><span class="n">21</span> Thí nghiệm</a>
+      <a href="#bugs"><span class="n">22</span> Phân tích bug</a>
+      <a href="#conclusion"><span class="n">23</span> Kết luận kiến trúc</a>
+      <a href="#next"><span class="n">24</span> Đọc tiếp</a>
+    </div>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="eyebrow">Kernel source study — TREE_RCU</div>
+      <h1>Bên trong Read-Copy-Update</h1>
+      <p class="dek">Từ <code>rcu_read_lock()</code> đến grace period, từ dynticks counter đến priority boosting — toàn bộ được trace trực tiếp trên source thật trong <code>kernel/rcu/</code>, kèm phát hiện một tuỳ biến firmware hiếm gặp: máy in tự reboot khi RCU phát hiện callback-list hỏng.</p>
+      <div class="specrow">
+        <div><span class="k">Nguồn</span><span class="v">dungnguyenvan2494/Source_MFP</span></div>
+        <div><span class="k">Kernel</span><span class="v">TREE_RCU + PREEMPT_RCU, ước lượng v5.10 – v5.14</span></div>
+        <div><span class="k">File lõi</span><span class="v">tree.c (4671 dòng) · tree_plugin.h (2617) · tree_stall.h · tasks.h</span></div>
+        <div><span class="k">Nền tảng</span><span class="v">Konica Minolta bizhub — <code>CONFIG_KM_BIZHUB</code></span></div>
+      </div>
+    </header>
+
+    <!-- MAP 25 PHẦN GỐC ================================================= -->
+    <section class="chapter" id="mapping">
+      <div class="chapter-head"><span class="num">·</span><h2>Đối chiếu với 25 phần yêu cầu ban đầu</h2></div>
+      <p class="lede">Tài liệu này gồm 24 chương, tổ chức lại theo mạch kỹ thuật (khái niệm → kiến trúc → reader → writer/GP → callback → vòng đời hệ thống) thay vì đúng thứ tự 25 phần gốc. Bảng dưới đây map từng phần gốc sang đúng chương tương ứng, và nói rõ phần nào được gộp/rải rác thay vì tách riêng.</p>
+      <div class="scroll-x">
+      <table class="matrix">
+        <thead><tr><th>Phần gốc</th><th>Nội dung yêu cầu</th><th>Vị trí trong tài liệu</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Bản đồ source code</td><td>→ §01</td></tr>
+          <tr><td>2</td><td>Kiến trúc RCU (khái niệm)</td><td>→ §00</td></tr>
+          <tr><td>3</td><td>Đi từ API vào source, expand macro từng tầng</td><td>Rải rác trong mọi khối trích dẫn file:line ở §03–§13 (mỗi trích dẫn đều đi từ tên hàm xuống đúng dòng code) — không tách mục riêng vì trùng lặp cấu trúc</td></tr>
+          <tr><td>4</td><td>RCU read side</td><td>→ §03</td></tr>
+          <tr><td>5</td><td>Grace Period</td><td>→ §05</td></tr>
+          <tr><td>6</td><td>RCU tree implementation (struct)</td><td>→ §02</td></tr>
+          <tr><td>7</td><td>Quiescent State (context switch/idle/interrupt/softirq)</td><td>→ §00 (khái niệm) + §04 (interrupt/NMI) + §03 (context switch)</td></tr>
+          <tr><td>8</td><td>Callback (call_rcu, kfree_rcu, rcu_barrier, offloading)</td><td>→ §08, §09, §07 — riêng <code>kfree_rcu()</code> không có trích dẫn source riêng trong session này</td></tr>
+          <tr><td>9</td><td>synchronize_rcu()</td><td>→ §07</td></tr>
+          <tr><td>10</td><td>Memory ordering</td><td>→ §06</td></tr>
+          <tr><td>11</td><td>rcu_dereference / rcu_assign_pointer</td><td>→ §06</td></tr>
+          <tr><td>12</td><td>RCU update pattern (timeline)</td><td>→ §15 <em>(mới bổ sung)</em></td></tr>
+          <tr><td>13</td><td>Concurrency / race condition (8 case)</td><td>→ §16 <em>(mới bổ sung)</em></td></tr>
+          <tr><td>14</td><td>Locking trong RCU</td><td>→ §17 <em>(mới bổ sung — lưu ý: khi bạn gõ "tìm hiểu phần 14" giữa hội thoại, tôi đã hiểu nhầm thành "RCU priority boosting", nay giữ lại ở §11 và bổ sung đúng chủ đề Locking ở §17)</em></td></tr>
+          <tr><td>15</td><td>RCU softirq / kthread (rcuc/rcuo/rcuog/rcu_par_gp)</td><td>→ §08 (rcuc/softirq), §09 (rcuo/rcuog) — riêng <code>rcu_par_gp</code> không có trích dẫn source riêng</td></tr>
+          <tr><td>16</td><td>CPU hotplug</td><td>→ §10</td></tr>
+          <tr><td>17</td><td>Stall detection</td><td>→ §12</td></tr>
+          <tr><td>18</td><td>Debug RCU (PROVE_RCU, RCU_TRACE, DEBUG_OBJECTS_RCU_HEAD, RCU_EQS_DEBUG)</td><td>→ §18 <em>(mới bổ sung)</em></td></tr>
+          <tr><td>19</td><td>So sánh các loại RCU</td><td>→ §14</td></tr>
+          <tr><td>20</td><td>Walkthrough call_rcu + rcu_read_lock đầy đủ</td><td>Rải rác trong §03, §05, §08 — không tách mục riêng vì trùng nội dung</td></tr>
+          <tr><td>21</td><td>Call graph Mermaid cho 7 luồng (A–G)</td><td>→ §19 <em>(mới bổ sung, dạng bảng tham chiếu)</em></td></tr>
+          <tr><td>22</td><td>Sequence diagram CPU0/CPU1 đầy đủ</td><td>→ §20 <em>(mới bổ sung)</em></td></tr>
+          <tr><td>23</td><td>Thí nghiệm tự kiểm chứng</td><td>→ §21 <em>(mới bổ sung)</em></td></tr>
+          <tr><td>24</td><td>Phân tích bug thực tế</td><td>→ §22 <em>(mới bổ sung)</em></td></tr>
+          <tr><td>25</td><td>Kết luận kiến trúc</td><td>→ §23 <em>(mới bổ sung)</em></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="note">
+        <span class="lbl">Điểm khác biệt cần lưu ý</span>
+        <p>Phần 3 và 20 không tách mục riêng vì nội dung của chúng — "đi từ API xuống source, không bỏ qua tầng trung gian" — chính là <em>cách trình bày</em> đã áp dụng xuyên suốt mọi chương có trích dẫn code, nên tách riêng sẽ chỉ lặp lại. Phần 12, 13, 14 (đúng chủ đề gốc), 18, 19(→14), 21, 22, 23, 24, 25 là nội dung <strong>mới được viết thêm ở lượt này</strong> — phần lớn tổng hợp/suy luận từ cơ chế đã trace ở các chương khác, không cần đọc thêm source mới, trừ §18 có đối chiếu trực tiếp <code>Kconfig.debug</code>.</p>
+      </div>
+    </section>
+
+    <!-- 00 ================================================= -->
+    <section class="chapter" id="concept">
+      <div class="chapter-head"><span class="num">00</span><h2>Khái niệm cốt lõi</h2></div>
+      <p class="lede">Trước khi đi vào source, đây là những câu hỏi nền tảng nhất — câu trả lời được rút ra trực tiếp từ cơ chế đã trace ở các chương sau, không phải định nghĩa sách giáo khoa.</p>
+
+      <div class="qagrid">
+        <div class="qa"><span class="q">RCU giải quyết vấn đề gì?</span><div class="a">Cho phép hàng nghìn reader đọc một cấu trúc dữ liệu <strong>đồng thời</strong> với một writer đang cập nhật nó, mà reader không phải trả giá lock/unlock — đổi lại, writer phải chờ một khoảng thời gian ("grace period") trước khi được phép giải phóng bản dữ liệu cũ.</div></div>
+        <div class="qa"><span class="q">Tại sao reader không cần mutex?</span><div class="a"><code>rcu_read_lock()</code> chỉ tăng một bộ đếm nesting trên chính task đó (§03) — không có tài nguyên chung nào bị tranh chấp, nên không có gì để lock.</div></div>
+        <div class="qa"><span class="q">Vì sao reader chạy song song được với writer?</span><div class="a">Writer publish con trỏ mới bằng đúng 1 thao tác ghi nguyên tử có release-barrier (§06); reader cũ vẫn giữ con trỏ cũ và tiếp tục đọc an toàn cho tới khi tự rời khỏi vùng CS — không ai phải chờ ai tại thời điểm đó.</div></div>
+        <div class="qa"><span class="q">RCU đảm bảo điều gì?</span><div class="a">Sau khi grace period kết thúc, <strong>mọi</strong> read-side critical section đã tồn tại trước thời điểm bắt đầu GP đó chắc chắn đã hoàn tất — nên object cũ có thể được giải phóng an toàn (§05, §07).</div></div>
+        <div class="qa"><span class="q">RCU KHÔNG đảm bảo điều gì?</span><div class="a">Không đảm bảo mọi reader thấy giá trị "mới nhất" ngay lập tức. Một reader bắt đầu <em>trước</em> khi writer publish có quyền tiếp tục thấy phiên bản cũ cho tới khi tự unlock — RCU đồng bộ về <strong>an toàn bộ nhớ</strong>, không đồng bộ về <strong>thời điểm nhìn thấy giá trị</strong>.</div></div>
+        <div class="qa"><span class="q">Vì sao RCU không đơn giản là "con trỏ lock-free"?</span><div class="a">Vì bài toán khó không nằm ở việc đọc/ghi con trỏ (1 thao tác nguyên tử là đủ) mà nằm ở việc <strong>biết khi nào an toàn để free bộ nhớ cũ</strong> — đây là lý do cần cả một bộ máy grace period, không chỉ một phép gán nguyên tử.</div></div>
+        <div class="qa"><span class="q">Grace Period chính xác là gì?</span><div class="a">Một chu kỳ được theo dõi bởi <code>rcu_gp_kthread</code> (§05), trong đó mọi CPU/task đang tồn tại tại thời điểm GP bắt đầu phải "báo cáo" đã rời read-side CS ít nhất một lần, trước khi GP được coi là hoàn tất.</div></div>
+        <div class="qa"><span class="q">Quiescent State chính xác là gì?</span><div class="a">Một thời điểm mà kernel chứng minh được CPU/task đó <strong>không thể</strong> còn giữ tham chiếu tới dữ liệu cũ — ví dụ: context switch tự nguyện, vào chế độ idle, chạy ở user-mode, hoặc rời khỏi outermost <code>rcu_read_unlock()</code>.</div></div>
+        <div class="qa"><span class="q">Vì sao CPU phải đi qua QS?</span><div class="a">Vì RCU <strong>không đếm reference</strong> như refcounting — nó suy luận gián tiếp qua trạng thái CPU/task. Không có cách nào khác để "biết" một CPU đã rời CS ngoài việc quan sát nó đi qua một điểm mà tại đó CS chắc chắn không thể còn tồn tại.</div></div>
+        <div class="qa"><span class="q">RCU xác định "mọi pre-existing reader đã xong" bằng cách nào?</span><div class="a">Qua bộ đếm dynticks tăng đơn điệu theo watching/idle (§04) kết hợp bitmask <code>qsmask</code> lan truyền trên cây <code>rcu_node</code> (§05) — không có một điểm kiểm tra tập trung duy nhất, mà là một phép suy luận phân tán trên toàn hệ thống.</div></div>
+      </div>
+    </section>
+
+    <!-- 01 ================================================= -->
+    <section class="chapter" id="map">
+      <div class="chapter-head"><span class="num">01</span><h2>Bản đồ source</h2></div>
+      <p class="lede">Toàn bộ <code>kernel/rcu/</code> đã đọc trong repo, xếp theo vai trò — đúng những gì <code>ls -la</code> trả về, không phải sơ đồ trừu tượng.</p>
+
+      <div class="tree-map" aria-label="cây thư mục kernel/rcu">kernel/rcu/
+├── tree.c            4671 dòng — CORE: rcu_state, GP kthread, call_rcu(), rcu_core(), hotplug, rcu_barrier()
+├── tree.h             663 dòng — struct rcu_state / rcu_node / rcu_data
+├── tree_plugin.h     2617 dòng — PREEMPT_RCU: read-side, priority boosting, NOCB kthreads
+├── tree_exp.h         766 dòng — expedited grace period
+├── tree_stall.h       ~830 dòng — bộ phát hiện stall (đã bị vendor patch, xem §13)
+├── rcu_segcblist.c/.h — segmented callback list, dùng chung mọi flavour RCU
+├── update.c          — rcu_barrier() phần chung, các helper debug/lockdep
+├── sync.c            — wait_rcu_gp(), completion helper dùng chung
+├── tiny.c             185 dòng — TINY_RCU (UP), toàn bộ bộ máy GP gần như rỗng
+├── srcutree.c / srcutiny.c — SRCU, cho phép reader ngủ
+└── tasks.h           1283 dòng — Tasks RCU / Tasks-Rude RCU / Tasks-Trace RCU</div>
+
+      <p class="prose">Mỗi file đảm nhiệm một lớp chức năng riêng: <strong>API layer</strong> (update.c, tree.c), <strong>Read-side</strong> (tree_plugin.h), <strong>Update-side</strong> (tree.c — <code>call_rcu()</code>), <strong>Grace Period</strong> (tree.c — <code>rcu_gp_kthread</code>), <strong>Callback</strong> (rcu_segcblist.c + tree.c — <code>rcu_do_batch</code>), <strong>Scheduler interaction</strong> (tree_plugin.h — <code>rcu_note_context_switch</code>), <strong>CPU hotplug</strong> (tree.c — các hàm <code>rcutree_*</code>), <strong>Memory ordering</strong> (rải rác qua <code>smp_mb()</code>/<code>smp_store_release()</code>), <strong>Stall detection</strong> (tree_stall.h), <strong>Debugging</strong> (Kconfig.debug + rcu.h).</p>
+
+      <div class="note">
+        <span class="lbl">Giới hạn nguồn</span>
+        <p>Repo chỉ chứa <code>kernel/</code> và <code>drivers/</code> — không có <code>include/linux/</code>. Vì vậy macro <code>rcu_dereference()</code>/<code>rcu_assign_pointer()</code> ở §06 được trình bày từ kiến thức mainline chuẩn, không phải trích trực tiếp từ file trong session — được đánh dấu rõ tại mục đó.</p>
+      </div>
+    </section>
+
+    <!-- 02 ================================================= -->
+    <section class="chapter" id="arch">
+      <div class="chapter-head"><span class="num">02</span><h2>Kiến trúc: rcu_state, rcu_node, rcu_data</h2></div>
+      <p class="lede">TREE_RCU tồn tại vì một lý do duy nhất: tránh một bộ đếm/lock toàn cục bị hàng nghìn CPU tranh chấp. Lời giải là một cây phân cấp.</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+graph TD
+  RS["rcu_state — mảng phẳng node NUM_RCU_NODES"]
+  RS --> R0["root rcu_node"]
+  R0 --> L1["leaf rcu_node A"]
+  R0 --> L2["leaf rcu_node B"]
+  L1 --> D1["rcu_data CPU0"]
+  L1 --> D2["rcu_data CPU1"]
+  L2 --> D3["rcu_data CPU2"]
+  L2 --> D4["rcu_data CPU3"]
+        </pre>
+        <figcaption>Cây thật được cấp phát một lần, dạng phẳng, trong <code>rcu_state.node[]</code> (tree.h:297) — con trỏ <code>level[]</code> chỉ đánh dấu ranh giới từng tầng, không có cấp phát động cho từng node.</figcaption>
+      </figure>
+
+      <h4>Field then chốt của rcu_node — tree.h:40</h4>
+      <div class="fieldgrid">
+        <div class="field"><span class="k">qsmask</span><div class="d">Bitmask CPU/child còn nợ quiescent state của GP hiện tại. Trung tâm của toàn bộ propagation.</div></div>
+        <div class="field"><span class="k">qsmaskinit / qsmaskinitnext</span><div class="d">Tách "tập CPU của GP này" khỏi "tập CPU online hiện tại" — an toàn khi hotplug xảy ra giữa GP.</div></div>
+        <div class="field"><span class="k">expmask / expmaskinit(next)</span><div class="d">Tương tự qsmask nhưng dành cho expedited GP.</div></div>
+        <div class="field"><span class="k">blkd_tasks</span><div class="d">Danh sách task bị preempt giữa RCU read-side CS (chỉ có ở PREEMPT_RCU).</div></div>
+        <div class="field"><span class="k">gp_tasks / exp_tasks / boost_tasks</span><div class="d">3 con trỏ độc lập cùng trỏ vào blkd_tasks — "ai đang chặn GP thường / expedited / cần boost".</div></div>
+        <div class="field"><span class="k">ofl_seq</span><div class="d">Sequence counter cho CPU-hotplug — số lẻ nghĩa là đang giữa một transition (xem §10).</div></div>
+      </div>
+
+      <h4>rcu_data — dữ liệu per-CPU, tree.h:151</h4>
+      <p class="prose">3 nhóm field chính: (1) QS/GP — <code>gp_seq</code>, <code>cpu_no_qs</code>, <code>core_needs_qs</code>, <code>mynode</code>; (2) batch callback — <code>cblist</code> (struct <code>rcu_segcblist</code>, phân đoạn theo GP đang chờ), <code>blimit</code>; (3) dynticks — <code>dynticks_nesting</code>, <code>dynticks_nmi_nesting</code>, <code>dynticks</code> (atomic_t, xem §04).</p>
+
+      <div class="takeaway">
+        <div class="lbl">Bất biến</div>
+        <ul>
+          <li>Mọi field trên đều nằm dưới <code>rnp-&gt;lock</code> (raw_spinlock, tắt IRQ) — lock của root node còn bảo vệ một số field của chính <code>rcu_state</code>.</li>
+          <li>Propagation trên cây luôn đi từ leaf lên root, và chỉ tiếp tục đi lên khi node hiện tại về 0 hoàn toàn — đây là cơ chế giảm tranh chấp lock theo cấu trúc cây, không phải một tối ưu phụ.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 03 ================================================= -->
+    <section class="chapter" id="readside">
+      <div class="chapter-head"><span class="num">03</span><h2>Read-side critical section</h2></div>
+      <p class="lede">Reader không cần lock vì RCU không đảm bảo "không ai đang đọc" — nó đảm bảo "khi grace period kết thúc, mọi reader từng thấy con trỏ cũ đã rời CS".</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+graph LR
+  subgraph Reader
+    A1["rcu_read_lock"] --> A2["truy cập đối tượng dùng chung"] --> A3["rcu_read_unlock"]
+  end
+  subgraph Writer
+    B1["sửa và công bố con trỏ mới"] --> B2["synchronize_rcu"] --> B3["grace period"] --> B4["giải phóng đối tượng cũ"]
+  end
+        </pre>
+        <figcaption>Hai luồng độc lập về thời gian — writer không bao giờ chờ reader "xong" theo nghĩa của khoá, chỉ chờ grace period xác nhận mọi reader-cũ đã rời CS.</figcaption>
+      </figure>
+
+      <p class="prose">Có 2 bản triển khai hoàn toàn khác nhau cho cùng một API, được chọn theo <code>CONFIG_PREEMPT_RCU</code>.</p>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree_plugin.h</span> : 374–383</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>void __rcu_read_lock(void)
+{
+    rcu_preempt_read_enter();          // chỉ ++current->rcu_read_lock_nesting
+    barrier();  /* compiler barrier -- KHÔNG phải CPU barrier */
+}</code></pre>
+      </div>
+      <p class="prose">Không atomic, không disable preemption, không CPU memory barrier — chỉ cộng/trừ 1 vào một field của <code>task_struct</code>. Cái giá của sự rẻ này: task <strong>có thể</strong> bị preempt giữa CS, và khi đó phải "đăng ký" việc block vào cây.</p>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree_plugin.h</span> : 298–333 — rcu_note_context_switch()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>if (rcu_preempt_depth() > 0 && !t->rcu_read_unlock_special.b.blocked) {
+    t->rcu_read_unlock_special.b.blocked = true;
+    t->rcu_blocked_node = rnp;
+    rcu_preempt_ctxt_queue(rnp, rdp);   // gắn task vào rnp->blkd_tasks
+} else {
+    rcu_preempt_deferred_qs(t);
+}
+rcu_qs();   // CPU vẫn tự báo QS -- nghĩa vụ chuyển sang TASK, không còn là CPU nữa</code></pre>
+      </div>
+
+      <h4>rcu_preempt_ctxt_queue — xếp đúng vị trí trong blkd_tasks</h4>
+      <p class="prose">Hàng đợi <code>blkd_tasks</code> không đơn giản chỉ append vào cuối — <code>rcu_preempt_ctxt_queue()</code> (tree_plugin.h:134) tính một trạng thái 4-bit <code>blkd_state</code> từ tổ hợp "đang chặn GP thường / GP expedited hay không" rồi quyết định <code>list_add</code> (đầu danh sách, cho task đầu tiên chặn một GP) hay <code>list_add_tail</code> (cuối danh sách, cho task chặn thêm vào một GP đã có người chặn) — đảm bảo <code>gp_tasks</code>/<code>exp_tasks</code> luôn trỏ đúng "người chặn đầu tiên còn lại".</p>
+
+      <h4>rcu_read_unlock_special — hoãn xử lý khi đang ở ngữ cảnh atomic</h4>
+      <table class="matrix scroll-x">
+        <caption>tree_plugin.h : 602–648 — 3 nhánh xử lý tuỳ ngữ cảnh lúc unlock</caption>
+        <thead><tr><th>Ngữ cảnh lúc unlock</th><th>Hành động</th></tr></thead>
+        <tbody>
+          <tr><td>Đang trong hardirq (<code>in_irq</code>)</td><td><code>raise_softirq_irqoff(RCU_SOFTIRQ)</code> — xử lý ngay khi thoát khỏi mọi ngắt</td></tr>
+          <tr><td>Preempt/BH đang tắt, không phải hardirq</td><td><code>set_tsk_need_resched()</code> — ép lần <code>schedule()</code> kế tiếp phải xử lý</td></tr>
+          <tr><td>Có expedited GP đang chờ và IRQ đang tắt</td><td><code>irq_work_queue_on()</code> — đảm bảo xử lý sớm, không chờ tick tiếp theo</td></tr>
+        </tbody>
+      </table>
+      <p class="prose">Nếu <strong>không</strong> ở ngữ cảnh atomic, xử lý ngay lập tức: gọi <code>rcu_preempt_deferred_qs_irqrestore()</code> — gỡ task khỏi <code>blkd_tasks</code>, và nếu là task cuối cùng còn chặn GP tại node đó, gọi <code>rcu_report_unblock_qs_rnp()</code> — chính là đường vào <code>rcu_report_qs_rnp()</code> sẽ trace ở §05.</p>
+
+      <div class="note">
+        <span class="lbl">Trường hợp !CONFIG_PREEMPT_RCU</span>
+        <p><code>rcu_read_lock()</code> lúc này chính là <code>preempt_disable()</code>. Không có gì trong <code>blkd_tasks</code> tồn tại vì preemption đã bị cấm ngay từ gốc — bản <code>rcu_note_context_switch()</code> cho trường hợp này (tree_plugin.h:866) chỉ còn lại <code>rcu_qs()</code> vô điều kiện, không có nhánh block nào.</p>
+      </div>
+    </section>
+
+    <!-- 04 ================================================= -->
+    <section class="chapter" id="dynticks">
+      <div class="chapter-head"><span class="num">04</span><h2>Interrupt/NMI và bộ đếm "watching"</h2></div>
+      <p class="lede">Nesting counter của reader và bộ đếm "CPU có đang watching" là hai hệ kế toán độc lập hoàn toàn. Interrupt không bao giờ chạm vào cái đầu.</p>
+
+      <figure class="diagram">
+        <svg class="hand" viewBox="0 0 720 200" role="img" aria-label="Dòng thời gian bộ đếm dynticks: số chẵn nghĩa là idle hoặc extended quiescent state, số lẻ nghĩa là CPU đang watching; interrupt xảy ra khi đang watching chỉ tăng dynticks_nmi_nesting, không đụng vào bộ đếm atomic dynticks">
+          <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><polygon points="0,0 7,3 0,6" fill="#5a6b62"/></marker></defs>
+          <g font-family="IBM Plex Mono" font-size="12" fill="#1c2622">
+            <line x1="40" y1="150" x2="680" y2="150" stroke="#5a6b62" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="686" y="154" fill="#5a6b62">t</text>
+
+            <rect x="40" y="60" width="150" height="70" fill="#dcebe9" stroke="#1c6b70" stroke-width="1"/>
+            <text x="115" y="45" text-anchor="middle" fill="#1c6b70">idle (EQS)</text>
+            <text x="115" y="100" text-anchor="middle" font-weight="600">dynticks = 4 (chẵn)</text>
+
+            <rect x="190" y="60" width="280" height="70" fill="#f2e2ce" stroke="#a8631a" stroke-width="1"/>
+            <text x="330" y="45" text-anchor="middle" fill="#a8631a">watching — reader có thể chạy</text>
+            <text x="330" y="100" text-anchor="middle" font-weight="600">dynticks = 5 (lẻ)</text>
+
+            <rect x="270" y="14" width="150" height="30" fill="none" stroke="#a63a2c" stroke-dasharray="3,2"/>
+            <text x="345" y="10" text-anchor="middle" fill="#a63a2c" font-size="10">IRQ: nmi_nesting += 2, không đụng dynticks</text>
+
+            <rect x="470" y="60" width="210" height="70" fill="#dcebe9" stroke="#1c6b70" stroke-width="1"/>
+            <text x="575" y="45" text-anchor="middle" fill="#1c6b70">idle trở lại (EQS)</text>
+            <text x="575" y="100" text-anchor="middle" font-weight="600">dynticks = 6 (chẵn)</text>
+
+            <line x1="190" y1="150" x2="190" y2="60" stroke="#a8631a" stroke-width="2"/>
+            <text x="190" y="168" text-anchor="middle" font-size="10">eqs_exit()</text>
+            <line x1="470" y1="150" x2="470" y2="60" stroke="#1c6b70" stroke-width="2"/>
+            <text x="470" y="168" text-anchor="middle" font-size="10">eqs_enter()</text>
+          </g>
+        </svg>
+        <figcaption><code>rdp-&gt;dynticks</code> (tree.c:248–292) là một bộ đếm atomic tăng đơn điệu, không phải bitmask: chẵn = idle/EQS, lẻ = watching. <code>force_qs_rnp()</code> chỉ cần so hai snapshot để suy ra reader cũ đã rời CS.</figcaption>
+      </figure>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 248–292 — rcu_dynticks_eqs_enter / exit</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>static noinstr void rcu_dynticks_eqs_enter(void)
+{
+    seq = arch_atomic_add_return(RCU_DYNTICK_CTRL_CTR, &rdp->dynticks);
+    // RCU không còn watching -- phải đang ở extended quiescent state!
+}
+static noinstr void rcu_dynticks_eqs_exit(void)
+{
+    seq = arch_atomic_add_return(RCU_DYNTICK_CTRL_CTR, &rdp->dynticks);
+    // RCU đang watching -- không được ở extended quiescent state!
+}</code></pre>
+      </div>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 983–1034 — rcu_nmi_enter()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>if (rcu_dynticks_curr_cpu_in_eqs()) {      // CPU đang idle khi bị đánh thức
+    rcu_dynticks_eqs_exit();               // atomic dynticks: chẵn -> lẻ
+    incby = 1;
+} else if (!in_nmi()) {                    // CPU vốn ĐANG watching (có thể giữa CS)
+    rcu_irq_enter_check_tick();            // KHÔNG đụng atomic dynticks
+    // incby = 2
+}
+WRITE_ONCE(rdp->dynticks_nmi_nesting, rdp->dynticks_nmi_nesting + incby);</code></pre>
+      </div>
+      <p class="prose">Đối xứng ở <code>rcu_nmi_exit()</code> (tree.c:709): nếu <code>dynticks_nmi_nesting != 1</code> sau khi trừ, vẫn còn nested nên chỉ trừ mà không đụng bộ đếm atomic; chỉ khi là outermost handler xuất phát từ idle mới lật lại <code>rcu_dynticks_eqs_enter()</code>.</p>
+    </section>
+
+    <!-- 05 ================================================= -->
+    <section class="chapter" id="gp">
+      <div class="chapter-head"><span class="num">05</span><h2>Grace-period state machine</h2></div>
+      <p class="lede"><code>rcu_gp_kthread()</code> (tree.c:2112) — một kthread duy nhất, sống suốt vòng đời hệ thống, chạy vòng lặp qua 3 trạng thái chính.</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> WAIT_GPS
+  WAIT_GPS --> DONE_GPS
+  DONE_GPS --> ONOFF
+  ONOFF --> INIT
+  INIT --> WAIT_FQS
+  WAIT_FQS --> DOING_FQS
+  DOING_FQS --> WAIT_FQS
+  DOING_FQS --> CLEANUP
+  CLEANUP --> CLEANED
+  CLEANED --> WAIT_GPS
+  CLEANED --> DONE_GPS
+        </pre>
+        <figcaption>WAIT_GPS/DONE_GPS: chờ có ai request GP mới (cờ RCU_GP_FLAG_INIT). ONOFF/INIT: khởi tạo (chi tiết bên dưới). WAIT_FQS/DOING_FQS: vòng lặp force-quiescent-state. CLEANUP/CLEANED: đóng GP — nếu còn callback đang chờ, quay lại DONE_GPS ngay mà không ngủ lại, đây chính là cơ chế batching tự nhiên.</figcaption>
+      </figure>
+
+      <h4>rcu_gp_init — 3 giai đoạn, tree.c:1748</h4>
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 1778–1881</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>// Giai đoạn 1 -- đánh số hiệu GP mới
+rcu_seq_start(&rcu_state.gp_seq);   // 1 biến duy nhất mã hoá cả số-thứ-tự lẫn trạng-thái-đang-chạy
+
+// Giai đoạn 2 -- chờ hotplug transition xong trước khi đọc qsmaskinitnext
+rcu_for_each_leaf_node(rnp) {
+    if (READ_ONCE(rnp->ofl_seq) & 0x1)
+        while (firstseq == READ_ONCE(rnp->ofl_seq))
+            schedule_timeout_idle(1);     // ofl_seq lẻ -- có CPU đang hotplug, phải chờ
+    rnp->qsmaskinit = rnp->qsmaskinitnext;
+}
+
+// Giai đoạn 3 -- set qsmask breadth-first, TỪ ROOT XUỐNG LEAF
+rcu_for_each_node_breadth_first(rnp) {
+    rnp->qsmask = rnp->qsmaskinit;
+    WRITE_ONCE(rnp->gp_seq, rcu_state.gp_seq);
+}</code></pre>
+      </div>
+      <p class="prose">Duyệt breadth-first từ root xuống leaf (không phải leaf lên root) vì CPU khác chỉ đọc leaf của chính nó — miễn là leaf chưa được khởi tạo, CPU đó thấy "chưa có GP nào" một cách an toàn, không cần lock toàn cục.</p>
+
+      <h4>Propagation quiescent state lên cây — rcu_report_qs_rnp(), tree.c:2181</h4>
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 2192–2217</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>if ((!(rnp->qsmask & mask) && mask) || rnp->gp_seq != gps)
+    return;                       // bit đã clear rồi -- thoát sớm
+WRITE_ONCE(rnp->qsmask, rnp->qsmask & ~mask);
+if (rnp->qsmask != 0 || rcu_preempt_blocked_readers_cgp(rnp)) {
+    return;                       // còn ai khác chưa QS -- DỪNG, không đi lên tiếp
+}
+mask = rnp->grpmask;              // node này đã xong -- mask để clear ở node CHA</code></pre>
+      </div>
+      <p class="prose">Hàng nghìn CPU clear bit ở leaf song song (mỗi leaf có lock riêng); chỉ CPU cuối cùng làm node về 0 mới cần lock lên cha — tranh chấp giảm theo cấp số nhân dọc theo cây.</p>
+
+      <h4>force_qs_rnp — quét chủ động qua snapshot dynticks</h4>
+      <p class="prose">Vòng lặp <code>rcu_gp_fqs_loop()</code> (tree.c:1942) ngủ tối đa <code>jiffies_till_first_fqs</code> rồi gọi <code>force_qs_rnp()</code> (tree.c:2641): lần quét đầu dùng <code>dyntick_save_progress_counter</code> (chỉ chụp snapshot), lần quét sau dùng <code>rcu_implicit_dynticks_qs</code> (so snapshot cũ với hiện tại — khác nhau, hoặc hiện tại là số chẵn, nghĩa là CPU đó đã rời mọi CS cũ).</p>
+
+      <h4>rcu_gp_cleanup — chốt GP và cơ chế batching tự nhiên</h4>
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 2090–2100</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>offloaded = ... rcu_segcblist_is_offloaded(&rdp->cblist);
+if ((offloaded || !rcu_accelerate_cbs(rnp, rdp)) && needgp) {
+    WRITE_ONCE(rcu_state.gp_flags, RCU_GP_FLAG_INIT);   // GP tiếp theo chạy NGAY, không ngủ lại
+}</code></pre>
+      </div>
+
+      <div class="takeaway">
+        <div class="lbl">Key invariants</div>
+        <ul>
+          <li><code>gp_seq</code> mã hoá cả số thứ tự GP lẫn bit "đang chạy hay không" trong cùng một <code>unsigned long</code>.</li>
+          <li>Batching nhiều <code>call_rcu()</code>/<code>synchronize_rcu()</code> vào một GP là hệ quả tự nhiên của việc <code>rcu_gp_cleanup()</code> set lại <code>RCU_GP_FLAG_INIT</code> ngay khi phát hiện <code>needgp</code>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 06 ================================================= -->
+    <section class="chapter" id="ordering">
+      <div class="chapter-head"><span class="num">06</span><h2>Memory ordering — publish/subscribe qua con trỏ</h2></div>
+      <p class="lede"><em>Kiến thức mainline chuẩn — repo không có <code>include/linux/rcupdate.h</code> để trích trực tiếp.</em></p>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">include/linux/<span class="fn">rcupdate.h</span> (mainline)</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>#define rcu_assign_pointer(p, v) \
+    smp_store_release(&(p), RCU_INITIALIZER((v)));     // release -- 1 chiều
+
+#define rcu_dereference(p) \
+    ((typeof(*p) *)READ_ONCE(p));   // + address-dependency ordering, miễn phí trên phần cứng</code></pre>
+      </div>
+
+      <p class="prose"><strong>Vì sao không dùng thẳng READ_ONCE()?</strong> Vì <code>READ_ONCE</code> chỉ đảm bảo "đọc đúng một lần", không biết gì về việc giá trị đọc được sẽ làm địa chỉ cho một load kế tiếp. <code>rcu_dereference()</code> cộng thêm annotation cho <code>sparse</code>/lockdep và tài liệu hoá cho người đọc code — nếu compiler chứng minh được các giá trị khả dĩ của <code>p</code>, nó có thể speculative-load trước khi thực sự đọc <code>p</code>, phá vỡ dependency mà logic đang dựa vào.</p>
+
+      <table class="matrix scroll-x">
+        <caption>x86 (TSO) so với ARM64 (weak ordering)</caption>
+        <thead><tr><th></th><th>x86</th><th>ARM64</th></tr></thead>
+        <tbody>
+          <tr><td>rcu_assign_pointer</td><td><code>barrier()</code> + store thường — x86 tự nhiên không reorder store-store</td><td>lệnh <code>stlr</code> thật — bắt buộc vì ARM64 được phép reorder</td></tr>
+          <tr><td>rcu_dereference</td><td>load thường</td><td>load thường (<code>ldr</code>, không cần <code>ldar</code>) — address-dependency ordering là bất biến độc lập với kiến trúc</td></tr>
+        </tbody>
+      </table>
+      <p class="prose">Sự bất đối xứng "release ở writer / dependency-order ở reader" (thay vì release/acquire) là lý do RCU reader rẻ hơn hẳn seqlock hay spinlock cho cùng một bảo đảm — không tốn thêm một lệnh <code>ldar</code> trên ARM64 cho mỗi lần dereference.</p>
+
+      <div class="note">
+        <span class="lbl">Bug thường gặp</span>
+        <p>Dùng <code>p = global_ptr;</code> trực tiếp thay vì <code>rcu_dereference()</code>: compiler được phép đọc lại nhiều lần (mất tính "một lần đọc"), và trên Alpha lịch sử có thể đọc dữ liệu trước khi con trỏ ổn định trong cache — cả hai đều là bug thật, không phải lý thuyết suông. Trên các kiến trúc Linux hỗ trợ hiện nay, dependency ordering là miễn phí từ phần cứng.</p>
+      </div>
+    </section>
+
+    <!-- 07 ================================================= -->
+    <section class="chapter" id="sync">
+      <div class="chapter-head"><span class="num">07</span><h2>synchronize_rcu() và rcu_barrier()</h2></div>
+      <p class="lede"><code>synchronize_rcu()</code> không phải một grace period "đặc biệt" — nó chỉ là <code>call_rcu()</code> cộng với việc chờ bằng completion.</p>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 3705–3762</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>static int rcu_blocking_is_gp(void)
+{
+    if (IS_ENABLED(CONFIG_PREEMPTION))
+        return rcu_scheduler_active == RCU_SCHEDULER_INACTIVE;
+    return num_online_cpus() <= 1;      // UP thực sự: mọi GP tự động hoàn tất
+}
+void synchronize_rcu(void)
+{
+    if (rcu_blocking_is_gp()) return;   // fast path
+    if (rcu_gp_is_expedited()) synchronize_rcu_expedited();
+    else wait_rcu_gp(call_rcu);
+}</code></pre>
+      </div>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant C as Caller
+  participant CR as call_rcu
+  participant SG as rcu_start_this_gp funnel lock
+  participant GPK as rcu_gp_kthread
+  participant CB as rcu_do_batch
+  C->>CR: call_rcu với wakeme_after_rcu
+  CR->>SG: rcu_accelerate_cbs
+  SG->>SG: đi từ leaf lên root, mỗi tầng kiểm tra gp_seq_needed, thoát sớm nếu đã có
+  SG->>GPK: đánh thức rcu_gp_kthread, chỉ 1 caller thắng
+  C->>C: wait_for_completion, bị chặn
+  GPK->>GPK: rcu_gp_init rồi fqs_loop rồi cleanup
+  GPK->>CB: callback sẵn sàng
+  CB->>CB: wakeme_after_rcu gọi complete
+  CB-->>C: wait_for_completion trả về
+        </pre>
+        <figcaption>Funnel locking trong <code>rcu_start_this_gp()</code> (tree.c:1381) là lý do N task gọi <code>synchronize_rcu()</code> đồng thời chỉ tạo ra đúng một grace period duy nhất.</figcaption>
+      </figure>
+
+      <h4>rcu_barrier — kỹ thuật đếm ngược N+1, không phải một GP</h4>
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 3946–3991</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>/* Initialize the count to two rather than to zero in order
+ * to avoid a too-soon return to zero in case of an immediate
+ * invocation of the just-enqueued callback */
+atomic_set(&rcu_state.barrier_cpu_count, 2);
+smp_call_function_single(cpu, rcu_barrier_func, ...);  // IPI mỗi CPU tự enqueue callback đánh dấu
+if (atomic_sub_and_test(2, &rcu_state.barrier_cpu_count))
+    complete(&rcu_state.barrier_completion);</code></pre>
+      </div>
+      <p class="prose">Khởi tạo bộ đếm bằng 2 (không phải 0) là một pattern kinh điển chống race "về 0 quá sớm" khi công việc còn đang được thêm vào giữa chừng vòng lặp — mỗi <code>rcu_barrier_func</code> chèn <code>rdp-&gt;barrier_head</code> vào <strong>cuối</strong> chính <code>rcu_segcblist</code> của CPU đó, mượn tính chất FIFO-theo-GP sẵn có thay vì viết cơ chế đánh dấu riêng.</p>
+    </section>
+
+    <!-- 08 ================================================= -->
+    <section class="chapter" id="callback">
+      <div class="chapter-head"><span class="num">08</span><h2>rcu_core() và rcu_do_batch()</h2></div>
+      <p class="lede">Callback không chạy ngay trong <code>call_rcu()</code> — nó chờ tới lượt RCU_SOFTIRQ kế tiếp trên đúng CPU đã enqueue nó.</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  Tick["scheduler tick — rcu_sched_clock_irq"] -->|rcu_pending| SI["raise_softirq RCU_SOFTIRQ"]
+  SI --> Core["rcu_core"]
+  Core -->|báo QS bị hoãn| Core
+  Core -->|request GP mới| Core
+  Core -->|kiểm tra stall khi bắt đầu GP| Core
+  Core -->|callback sẵn sàng| Batch["rcu_do_batch"]
+  Batch -->|gọi f rhp| Invoke["callback thực thi"]
+        </pre>
+        <figcaption><code>rcu_core()</code> (tree.c:2734) là điểm hội tụ duy nhất — mọi luồng đã trace ở các mục trước đều đi qua đây.</figcaption>
+      </figure>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 2519–2531 — rcu_do_batch()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>WRITE_ONCE(rhp->func, (rcu_callback_t)0L);  // xoá TRƯỚC khi gọi -- chống double call_rcu()
+f(rhp);
+if (-rcl.len >= bl && need_resched())
+    break;   // giới hạn batch -- không giữ softirq quá lâu</code></pre>
+      </div>
+
+      <div class="note">
+        <span class="lbl">RCU_SOFTIRQ so với kthread rcuc</span>
+        <p><code>invoke_rcu_core()</code> (tree.c:2814): nếu <code>use_softirq</code> (mặc định) thì <code>raise_softirq(RCU_SOFTIRQ)</code>; nếu tắt (cấu hình realtime), chạy trong kthread riêng <code>rcuc/N</code> mỗi CPU để tránh softirq gây độ trễ đột biến.</p>
+      </div>
+    </section>
+
+    <!-- 09 ================================================= -->
+    <section class="chapter" id="nocb">
+      <div class="chapter-head"><span class="num">09</span><h2>NOCB offload — rcuo / rcuog</h2></div>
+      <p class="lede">Hai loại kthread, không phải một — tách biệt "kế toán GP" khỏi "thực thi callback".</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart TD
+  subgraph GRP["Một nhóm NOCB, kích thước xấp xỉ căn bậc hai số CPU"]
+    OG["rcuog kthread — DUY NHẤT cho cả nhóm"]
+    C1["CPU N — rcuo kthread riêng"]
+    C2["CPU N+1 — rcuo kthread riêng"]
+    C3["CPU N+2 — rcuo kthread riêng"]
+  end
+  OG -->|duyệt linked list| C1
+  OG --> C2
+  OG --> C3
+  OG -->|callback sẵn sàng, đánh thức| C1
+  C1 -->|rcu_do_batch, hàm đã dùng ở 08| Inv["callback được thực thi"]
+        </pre>
+        <figcaption><code>rcu_organize_nocb_kthreads()</code> (tree_plugin.h:2334) nhóm CPU theo cụm kích thước căn bậc hai của <code>nr_cpu_ids</code> — giảm số kthread GP từ O(N) xuống O(căn bậc hai của N).</figcaption>
+      </figure>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree_plugin.h</span> : 1969–1970, 2019–2021 — nocb_gp_wait()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>WARN_ON_ONCE(my_rdp->nocb_gp_rdp != my_rdp);   // chỉ rdp ĐẠI DIỆN mới chạy hàm này
+for (rdp = my_rdp; rdp; rdp = rdp->nocb_next_cb_rdp) {   // duyệt qua MỌI thành viên trong nhóm
+    if (rcu_segcblist_ready_cbs(&rdp->cblist)) {
+        WRITE_ONCE(rdp->nocb_cb_sleep, false);   // đánh thức đúng rcuo của CPU đó
+    }
+}</code></pre>
+      </div>
+
+      <div class="takeaway">
+        <div class="lbl">Điểm hội tụ thứ hai</div>
+        <ul>
+          <li><code>nocb_cb_wait()</code> gọi đúng <code>rcu_do_batch()</code> đã trace ở §08 — dù chạy trong softirq hay trong kthread riêng, chỉ có một hàm invoke duy nhất.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 10 ================================================= -->
+    <section class="chapter" id="hotplug">
+      <div class="chapter-head"><span class="num">10</span><h2>CPU hotplug</h2></div>
+      <p class="lede">Đồng bộ với việc khởi tạo GP thông qua một cặp <code>smp_mb()</code> bao quanh <code>ofl_seq</code> chuyển từ lẻ sang chẵn.</p>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant CPU as CPU sắp offline
+  participant RNP as rnp leaf
+  participant GPK as rcu_gp_kthread
+  CPU->>RNP: rcu_report_dead, tăng ofl_seq thành lẻ, smp_mb
+  RNP->>RNP: báo QS trước nếu đang nợ, rồi mới xoá khỏi qsmaskinitnext
+  RNP->>GPK: nếu là CPU cuối cùng nợ QS, đánh thức GP kthread
+  CPU->>RNP: smp_mb, tăng ofl_seq thành chẵn
+  GPK-->>RNP: nếu đang rcu_gp_init thấy ofl_seq lẻ thì chờ
+        </pre>
+        <figcaption>Thứ tự "báo QS trước, xoá mask sau" (tree.c:4246) là bắt buộc — đảo ngược sẽ khiến <code>rcu_report_qs_rnp</code> không tìm đúng bit để clear.</figcaption>
+      </figure>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree.c</span> : 4189–4211 — rcu_cpu_starting()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>WRITE_ONCE(rnp->ofl_seq, rnp->ofl_seq + 1);    // -> LẺ: bắt đầu transition
+smp_mb();
+WRITE_ONCE(rnp->qsmaskinitnext, rnp->qsmaskinitnext | mask);
+smp_mb();
+WRITE_ONCE(rnp->ofl_seq, rnp->ofl_seq + 1);    // -> CHẴN: kết thúc transition</code></pre>
+      </div>
+      <p class="prose">CPU offline không cần lo về "reader đang chạy" nhờ đảm bảo từ CPU hotplug framework (task đã được di dời trước khi RCU cleanup chạy) — RCU chỉ cần lo về task đã bị preempt từ trước và đang nằm trong <code>blkd_tasks</code>, vốn không gắn với một CPU cụ thể nào.</p>
+    </section>
+
+    <!-- 11 ================================================= -->
+    <section class="chapter" id="boost">
+      <div class="chapter-head"><span class="num">11</span><h2>RCU priority boosting</h2></div>
+      <p class="lede">Giải quyết priority inversion bằng cách mượn priority-inheritance protocol có sẵn của <code>rt_mutex</code> — không viết cơ chế boost riêng.</p>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree_plugin.h</span> : 1036–1041 — rcu_boost()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>t = container_of(tb, struct task_struct, rcu_node_entry);
+rt_mutex_init_proxy_locked(&rnp->boost_mtx, t);  // "giả vờ" t đang giữ mutex này
+rt_mutex_lock(&rnp->boost_mtx);      // kthread bị block -> t được nâng priority (PI)
+rt_mutex_unlock(&rnp->boost_mtx);</code></pre>
+      </div>
+
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant Boost as rcu_boost_kthread
+  participant T as Task bị block trong CS
+  Boost->>Boost: rt_mutex_init_proxy_locked gán T là chủ sở hữu giả
+  Boost->>Boost: rt_mutex_lock, bị chặn
+  Note over T: T được nâng priority nhờ Boost đang chờ nó
+  T->>T: rcu_read_unlock gọi rt_mutex_futex_unlock
+  Boost->>Boost: rt_mutex_lock trả về, unlock ngay
+  Note over T: priority của T trở lại bình thường
+        </pre>
+        <figcaption>Chỉ boost khi <code>qsmask == 0</code> (mọi CPU đã QS, chỉ còn nợ task) và đã quá <code>boost_time</code> (khoảng ân hạn theo <code>CONFIG_RCU_BOOST_DELAY</code>) — expedited GP thì boost ngay lập tức, không trì hoãn.</figcaption>
+      </figure>
+    </section>
+
+    <!-- 12 ================================================= -->
+    <section class="chapter" id="stall">
+      <div class="chapter-head"><span class="num">12</span><h2>Stall detection</h2></div>
+      <p class="lede">Một watchdog dựa trên so sánh <code>jiffies</code> với deadline lưu trong <code>rcu_state.jiffies_stall</code>.</p>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">tree_stall.h</span> : 662–677 — check_cpu_stall()</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>// 3 lần đọc xen kẽ smp_rmb() -- chống false-positive quanh biên GP
+gs1 = READ_ONCE(rcu_state.gp_seq);
+smp_rmb();
+js = READ_ONCE(rcu_state.jiffies_stall);
+smp_rmb();
+gps = READ_ONCE(rcu_state.gp_start);
+smp_rmb();
+gs2 = READ_ONCE(rcu_state.gp_seq);
+if (gs1 != gs2 || ULONG_CMP_LT(j, js) || ULONG_CMP_GE(gps, js))
+    return;   // GP đã đổi giữa chừng lúc đang kiểm tra -- bỏ qua
+
+if (rcu_gp_in_progress() && (rnp->qsmask & rdp->grpmask) &&
+    cmpxchg(&rcu_state.jiffies_stall, js, jn) == js) {
+    print_cpu_stall(gps);          // CHÍNH CPU này tự tố cáo mình
+} else if (... ULONG_CMP_GE(j, js + RCU_STALL_RAT_DELAY) ...) {
+    print_other_cpu_stall(gs2, gps);  // tố cáo CPU KHÁC, sau khi chờ thêm thời gian
+}</code></pre>
+      </div>
+      <p class="prose"><code>cmpxchg</code> đảm bảo chỉ một CPU trong số nhiều CPU cùng phát hiện đồng thời thực sự in cảnh báo — các CPU khác thua trong cmpxchg thì bỏ qua, tránh spam log. <code>rcu_jiffies_till_stall_check()</code> (tree_stall.h:28) giới hạn (clamp) timeout trong khoảng [3, 300] giây, cộng thêm 5×HZ nếu <code>CONFIG_PROVE_RCU</code> bật (vì lockdep làm chậm hệ thống, cần nới thời gian).</p>
+
+      <p class="prose"><code>print_cpu_stall_info()</code> (tree_stall.h:407) giải mã dòng log dạng <code>idle=%03x/%ld/%#lx</code> trực tiếp từ <code>rcu_dynticks_snap(rdp)</code>, <code>dynticks_nesting</code>, <code>dynticks_nmi_nesting</code> — chính 3 field đã trace ở §04.</p>
+    </section>
+
+    <!-- 13 ================================================= -->
+    <section class="chapter" id="vendor">
+      <div class="chapter-head"><span class="num">13</span><h2>Phát hiện: các tuỳ biến của vendor trên RCU core</h2></div>
+      <p class="lede">Repo này không phải mainline thuần — đây là firmware Konica Minolta bizhub (<code>CONFIG_KM_BIZHUB</code>). Quét toàn repo cho 2 marker: <code>FUM_LINUX</code> (57 chỗ), <code>CONFIG_KM_BIZHUB</code> (32 chỗ). Dưới đây là toàn bộ điểm chạm vào <code>kernel/rcu/</code>.</p>
+
+      <div class="advisory">
+        <div class="lbl">1 — Reboot khi self-stall — tree_stall.h:598–624, tree_exp.h:577–586</div>
+        <p>Ngay sau khi in cảnh báo self-stall, trên build <code>!FUM_LINUX</code>: gọi <code>rebootCPU()</code> <strong>vô điều kiện</strong>, không phụ thuộc <code>sysctl_panic_on_rcu_stall</code>. Trên build <code>FUM_LINUX</code>: dùng đường gần mainline hơn, <code>panic_on_rcu_stall()</code> (chỉ panic nếu sysctl bật).</p>
+      </div>
+
+      <div class="cite">
+        <div class="cite-bar"><span class="path">drivers/thr_commondrvr/<span class="fn">thr_commondrvr.c</span> : 1568–1575 · tree.c : 1343–1349</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>// rebootCPU() KHÔNG gọi reboot() trực tiếp -- nó gửi message tới một task khác
+void RebootCPUWrapper(void) {
+    int_sendMessageDrv(TID_ReqProcHigh, TM_REQ_RebootCPU, 0, 0);
+}
+static int32_t g_Reboot_Cpu_Count_flg = 0;
+void rebootCPU(void) {
+    if (g_Reboot_Cpu_Count_flg == 0) {
+        g_Reboot_Cpu_Count_flg = 1;      // chỉ cho phép gọi đúng 1 lần
+        RebootCPUWrapper();
+    }
+}</code></pre>
+      </div>
+
+      <div class="advisory">
+        <div class="lbl">2 — Reboot khi callback-list bị hỏng — tree.c:2451–2455, 2585–2594</div>
+        <p>Điểm nghiêm trọng nhất: <code>WARN_ON_ONCE(count == 0 && !rcu_segcblist_empty(&rdp-&gt;cblist))</code> vốn là logic mainline gốc, phát hiện kế toán callback-list bị lệch (dấu hiệu double-<code>call_rcu()</code> hoặc memory corruption) — mainline <strong>chỉ log</strong>. BSP này phản ứng mạnh hơn nhiều:</p>
+        <pre><code>if ((is_reboot_call == false) && (count == 0 && !rcu_segcblist_empty(&rdp->cblist))) {
+    is_reboot_call = true;
+    is_wdt_CA72_softdog_stop = true;   // NGƯNG NUÔI watchdog phần cứng
+    PMU_Reboot_RCU((count == 0) ? 1 : 0, (rcu_segcblist_empty(&rdp->cblist)) ? 1 : 0);
+}</code></pre>
+        <p>Thay vì tin tưởng hệ thống còn đủ khả năng tự reboot sạch, BSP chủ động <strong>ngưng refresh watchdog CA72</strong> để ép phần cứng tự cắn (bite) và full reset toàn SoC — chiến lược khác hẳn phát hiện #1, dành cho tình huống được coi là mất toàn vẹn dữ liệu thật sự, không chỉ đơn thuần "chậm".</p>
+      </div>
+
+      <div class="note">
+        <span class="lbl">3 — Ưu tiên scheduler cho GP kthread — tree.c:4365–4370</span>
+        <p>Nếu <code>kthread_prio</code> không được set qua cmdline, mainline để <code>rcu_gp_kthread</code> chạy <code>SCHED_OTHER</code> bình thường. BSP này <strong>vẫn ép</strong> chạy <code>SCHED_RR</code> với priority <strong>245</strong> — vượt dải chuẩn POSIX RT (1–99), cho thấy scheduler của BSP đã được mở rộng dải priority riêng.</p>
+      </div>
+
+      <div class="note">
+        <span class="lbl">4 — Tinh chỉnh độ trễ SRCU — srcutree.c:1297–1299</span>
+        <p><code>delay = SRCU_INTERVAL;</code> đặt trong <code>#ifdef CONFIG_KM_BIZHUB</code> — tăng khoảng chờ giữa các lần xử lý callback SRCU từ lần thứ 2 trở đi, ưu tiên nhường CPU cho thread khác hơn là tốc độ hoàn tất grace period.</p>
+      </div>
+
+      <div class="takeaway">
+        <div class="lbl">Ý nghĩa thực tế khi debug board thật</div>
+        <ul>
+          <li>Log RCU stall trên bizhub có thể không bao giờ hiện đầy đủ nếu reboot xảy ra ngay sau <code>print_cpu_stall()</code> — cần bật serial console tốc độ cao hoặc persistent log (pstore/ramoops) trước khi tái hiện lỗi.</li>
+          <li>Mức độ phản ứng tăng dần đúng theo mức nghiêm trọng mà chính mainline đã phân loại: stall thông thường → soft-reboot qua message; hỏng dữ liệu nội bộ → ngưng watchdog, ép hardware reset.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 14 ================================================= -->
+    <section class="chapter" id="compare">
+      <div class="chapter-head"><span class="num">14</span><h2>So sánh các loại RCU trong repo</h2></div>
+      <div class="scroll-x">
+      <table class="matrix">
+        <caption>Grounded trên tiny.c (185 dòng), tree.c + tree_plugin.h (7288 dòng), srcutree.c, tasks.h</caption>
+        <thead><tr><th>Loại</th><th>Đơn vị "chờ" trong GP</th><th>Reader ngủ được?</th><th>Use case</th></tr></thead>
+        <tbody>
+          <tr><td>TREE_RCU</td><td>CPU (per-CPU rcu_data)</td><td>Không</td><td>Server/nhiều CPU, không cần realtime</td></tr>
+          <tr><td>PREEMPT_RCU</td><td>CPU hoặc Task (blkd_tasks)</td><td>Không, nhưng có thể bị preempt</td><td>Realtime/desktop, cần độ trễ thấp</td></tr>
+          <tr><td>TINY_RCU</td><td>Không có GP thật — synchronize_rcu() rỗng</td><td>Không</td><td>UP-only, tối thiểu memory footprint</td></tr>
+          <tr><td>SRCU</td><td>Bộ đếm riêng cho từng srcu_struct</td><td>Có</td><td>Critical section cần mutex_lock/wait_event</td></tr>
+          <tr><td>Tasks RCU</td><td>Toàn bộ task list (holdouts)</td><td>n/a — theo dõi code, không phải data</td><td>Vá trampoline ftrace/kprobe</td></tr>
+          <tr><td>Tasks Rude RCU</td><td>Mọi CPU online, kể cả idle (IPI)</td><td>n/a</td><td>Ép context-switch toàn hệ thống</td></tr>
+          <tr><td>Tasks Trace RCU</td><td>Task list + idle loop + hotplug path</td><td>n/a</td><td>Trampoline BPF</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="prose">Bằng chứng rõ nhất: <code>synchronize_rcu()</code> dưới TINY_RCU (tiny.c:146–153) chỉ có đúng một dòng <code>RCU_LOCKDEP_WARN</code> — trên UP, bất kỳ lời gọi hợp lệ nào tới nó tự nó đã là một quiescent state, không có CPU thứ hai nào chạy song song để phải chờ. SRCU trả giá bằng một <code>smp_mb()</code> thật ở read-side (thay vì chỉ <code>barrier()</code>) để đổi lấy quyền được ngủ trong CS. Ba loại Tasks RCU dùng chung một engine <code>rcu_tasks_wait_gp()</code> — chỉ khác nhau ở định nghĩa "task nào đã qua QS" thông qua con trỏ hàm <code>pertask_func</code>.</p>
+    </section>
+
+    <!-- 15 ================================================= -->
+    <section class="chapter" id="pattern">
+      <div class="chapter-head"><span class="num">15</span><h2>RCU update pattern — timeline reader/writer</h2></div>
+      <p class="lede">Mẫu cập nhật kinh điển, từng dòng nối trực tiếp vào cơ chế đã trace ở §05–§07.</p>
+      <div class="cite">
+        <div class="cite-bar"><span class="path">mẫu chuẩn (mainline)</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>old = rcu_dereference(ptr);     // (1) đọc con trỏ hiện tại, có address-dependency ordering
+new = kmalloc(...);             // (2) cấp phát bản sao
+new->data = ...;                // (3) điền dữ liệu -- PHẢI xong trước bước (4)
+rcu_assign_pointer(ptr, new);   // (4) công bố -- release barrier, đảm bảo (3) visible trước (4)
+synchronize_rcu();              // (5) chờ MỌI reader đã bắt đầu trước (4) rời CS
+kfree(old);                     // (6) chỉ an toàn SAU khi (5) trả về</code></pre>
+      </div>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant R as Reader
+  participant W as Writer
+  participant GP as Grace Period
+  R->>R: T0 -- rcu_read_lock, đọc ptr, thấy old
+  W->>W: T0 -- rcu_assign_pointer, ptr trỏ new
+  R->>R: T1 -- reader mới bắt đầu, đọc ptr, thấy new
+  Note over R: reader T0 vẫn tiếp tục dùng old an toàn tới khi tự unlock
+  W->>GP: synchronize_rcu, chờ reader T0 rời CS
+  GP-->>W: GP hoàn tất -- moi reader-cu da xong
+  W->>W: kfree old
+        </pre>
+        <figcaption>Reader bắt đầu ở T0 (trước khi writer công bố) tiếp tục an toàn với bản <code>old</code> cho tới khi tự rời CS — writer không hề "chờ" reader theo nghĩa của khoá, chỉ chờ grace period xác nhận.</figcaption>
+      </figure>
+    </section>
+
+    <!-- 16 ================================================= -->
+    <section class="chapter" id="race">
+      <div class="chapter-head"><span class="num">16</span><h2>Concurrency — các tình huống chồng lấn quan trọng</h2></div>
+      <p class="lede">Với CPU0 = reader (<code>rcu_read_lock(); p = rcu_dereference(ptr); use(p); rcu_read_unlock();</code>) và CPU1 = writer (<code>rcu_assign_pointer(ptr, new); synchronize_rcu(); kfree(old);</code>), 8 tình huống dưới đây đều đã có lời giải nằm sẵn trong cơ chế đã trace.</p>
+      <table class="matrix scroll-x">
+        <thead><tr><th>Tình huống</th><th>Vì sao an toàn</th></tr></thead>
+        <tbody>
+          <tr><td>1. Reader bắt đầu trước writer</td><td>Reader thấy <code>old</code>, writer publish sau — không giao nhau (§15)</td></tr>
+          <tr><td>2. Writer publish trước reader</td><td>Reader thấy <code>new</code> ngay từ đầu nhờ release barrier + address-dependency (§06)</td></tr>
+          <tr><td>3. Reader đọc con trỏ nhưng chưa truy cập object</td><td>Con trỏ đã ổn định (release đảm bảo dữ liệu visible), truy cập sau đó luôn nhất quán</td></tr>
+          <tr><td>4. Reader đang truy cập object thì writer chạy</td><td><code>kfree(old)</code> chỉ xảy ra <strong>sau</strong> <code>synchronize_rcu()</code> — writer publish <code>new</code> không ảnh hưởng object <code>old</code> mà reader đang giữ</td></tr>
+          <tr><td>5. Reader bị preempt giữa CS</td><td>Task được đăng ký vào <code>blkd_tasks</code> (§03) — GP biết phải chờ đúng task đó, không chờ nhầm CPU</td></tr>
+          <tr><td>6. Reader bị interrupt giữa CS</td><td>Bộ đếm <code>dynticks_nmi_nesting</code> tách biệt hoàn toàn khỏi nesting counter của reader (§04) — CS không bị "cắt" bởi interrupt</td></tr>
+          <tr><td>7. Nhiều reader cùng lúc</td><td>Mỗi reader chỉ đụng vào field riêng của <code>task_struct</code>/<code>rcu_data</code> mình — không có tài nguyên chung để tranh chấp</td></tr>
+          <tr><td>8. Nhiều writer cùng lúc</td><td>Funnel locking trong <code>rcu_start_this_gp()</code> (§07) gộp mọi request GP trùng thời điểm thành một GP duy nhất, tránh race giữa các writer</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 17 ================================================= -->
+    <section class="chapter" id="locking">
+      <div class="chapter-head"><span class="num">17</span><h2>Locking trong RCU</h2></div>
+      <p class="lede">"RCU" không có nghĩa là "không có lock" — chỉ có nghĩa là <strong>reader</strong> không cần lock. Phía dưới vẫn là một hệ thống lock nhiều tầng.</p>
+      <table class="matrix scroll-x">
+        <thead><tr><th>Lock</th><th>Loại</th><th>Bảo vệ gì</th><th>Ngữ cảnh truy cập</th></tr></thead>
+        <tbody>
+          <tr><td><code>rnp-&gt;lock</code></td><td>raw_spinlock, tắt IRQ</td><td>Mọi field của <code>rcu_node</code> — <code>qsmask</code>, <code>blkd_tasks</code>, <code>gp_seq</code>...</td><td>Có thể bị acquire từ softirq/hardirq — bắt buộc raw_spinlock, không được ngủ</td></tr>
+          <tr><td><code>rcu_state.barrier_mutex</code></td><td>mutex, có thể ngủ</td><td>Tuần tự hoá các lời gọi <code>rcu_barrier()</code> đồng thời (§07)</td><td>Chỉ process context — <code>rcu_barrier()</code> vốn chậm, không chạy trong ngắt</td></tr>
+          <tr><td><code>rnp-&gt;boost_mtx</code></td><td>rt_mutex "giả"</td><td>Không bảo vệ dữ liệu — dùng làm công cụ mượn priority-inheritance (§11)</td><td>Process context của <code>rcu_boost_kthread</code></td></tr>
+          <tr><td><code>rdp-&gt;nocb_lock</code>, <code>nocb_gp_lock</code>, <code>nocb_bypass_lock</code></td><td>raw_spinlock, per-CPU</td><td>Callback list riêng của NOCB offload (§09)</td><td>Softirq/kthread rcuo/rcuog</td></tr>
+          <tr><td><code>rcu_state.ofl_lock</code></td><td>raw_spinlock, toàn cục</td><td>Tuần tự hoá các thao tác CPU hotplug đồng thời (§10)</td><td>Process context của CPU hotplug framework</td></tr>
+        </tbody>
+      </table>
+      <div class="takeaway">
+        <div class="lbl">Lock ordering</div>
+        <ul>
+          <li>Trên cây <code>rcu_node</code>: luôn <strong>leaf → root</strong>, không bao giờ giữ 2 lock cùng lúc theo chiều ngược lại — <code>rcu_report_qs_rnp()</code> (§05) luôn unlock con trước khi lock cha.</li>
+          <li><code>rnp-&gt;lock</code> của root còn bảo vệ một số field của chính <code>rcu_state</code> — đây là lý do nhiều thao tác ở <code>rcu_gp_init</code>/<code>rcu_gp_cleanup</code> đều lock <code>rcu_get_root()</code>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 18 ================================================= -->
+    <section class="chapter" id="debug">
+      <div class="chapter-head"><span class="num">18</span><h2>Debug RCU</h2></div>
+      <p class="lede">4 cơ chế debug chính — 3 trong số đó xác nhận trực tiếp trong <code>kernel/rcu/Kconfig.debug</code> của repo.</p>
+      <div class="cite">
+        <div class="cite-bar"><span class="path">kernel/rcu/<span class="fn">Kconfig.debug</span></span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre><code>config PROVE_RCU
+    def_bool PROVE_LOCKING     // lockdep kiểm tra rcu_dereference() gọi đúng trong RCU read-side CS
+
+config RCU_CPU_STALL_TIMEOUT
+    int "RCU CPU stall timeout in seconds"
+    range 3 300
+    default 21                 // đúng giá trị dùng trong rcu_jiffies_till_stall_check (§12)
+
+config RCU_TRACE
+    bool "Enable tracing for RCU"
+    default y if TREE_RCU
+    select TRACE_CLOCK          // các tracepoint trace_rcu_* đã xuất hiện xuyên suốt code đã trích ở các chương trên
+
+config RCU_EQS_DEBUG
+    bool "Provide debugging asserts for adding NO_HZ support to an arch"
+    // các WARN_ON_ONCE quanh dynticks_nesting/dynticks_nmi_nesting ở §04
+    // chính là nhờ option này bật lên khi debug</code></pre>
+      </div>
+      <p class="prose"><code>CONFIG_DEBUG_OBJECTS_RCU_HEAD</code> không nằm trong <code>Kconfig.debug</code> của <code>kernel/rcu/</code> (nó là một phần của debug-objects subsystem tổng quát, khai báo ở <code>lib/Kconfig.debug</code> — không có trong repo này) — nhưng hệ quả của nó đã xuất hiện trực tiếp trong code đã trace: <code>debug_rcu_head_queue()</code>/<code>debug_rcu_head_unqueue()</code> ở <code>__call_rcu()</code> và <code>rcu_do_batch()</code> (§08) chính là móc nối (hook) mà option này sử dụng để phát hiện double-<code>call_rcu()</code>.</p>
+
+      <div class="note">
+        <span class="lbl">Ví dụ bug kinh điển</span>
+        <p><code>rcu_read_lock(); p = rcu_dereference(ptr); rcu_read_unlock(); use(p);</code> — dùng <code>p</code> <strong>sau khi</strong> đã rời CS. Đây là bug thật: nghĩa vụ "bảo vệ p còn hợp lệ" của RCU chỉ kéo dài tới đúng <code>rcu_read_unlock()</code> — sau điểm đó, một grace period khác hoàn toàn có thể đã trôi qua và <code>p</code> đã bị <code>kfree()</code>. <code>CONFIG_PROVE_RCU</code> phát hiện được trường hợp gọi <code>rcu_dereference()</code> mà không có <code>rcu_read_lock()</code> bao quanh, nhưng <strong>không</strong> tự động phát hiện việc dùng <code>p</code> trễ sau unlock như trên — đây vẫn là kỷ luật lập trình, không phải thứ compiler/lockdep bắt được toàn bộ.</p>
+      </div>
+    </section>
+
+    <!-- 19 ================================================= -->
+    <section class="chapter" id="callgraphs">
+      <div class="chapter-head"><span class="num">19</span><h2>Call graph tổng hợp — 7 luồng chính</h2></div>
+      <p class="lede">Thay vì vẽ lại (trùng lặp), bảng dưới trỏ đúng tới sơ đồ Mermaid đã có ở từng chương cho mỗi luồng.</p>
+      <table class="matrix scroll-x">
+        <thead><tr><th>Luồng</th><th>Sơ đồ nằm ở</th></tr></thead>
+        <tbody>
+          <tr><td>A. rcu_read_lock()</td><td>§03 — sơ đồ reader/writer + sequence preempt</td></tr>
+          <tr><td>B. rcu_read_unlock()</td><td>§03 — sequence preempt (đoạn cuối, gỡ khỏi blkd_tasks)</td></tr>
+          <tr><td>C. synchronize_rcu()</td><td>§07 — sequence diagram đầy đủ</td></tr>
+          <tr><td>D. call_rcu()</td><td>§07 (một phần) + §08 — flowchart rcu_core</td></tr>
+          <tr><td>E. Grace Period</td><td>§05 — stateDiagram-v2 đầy đủ 8 trạng thái</td></tr>
+          <tr><td>F. Quiescent State</td><td>§04 — SVG bộ đếm dynticks + §05 phần force_qs_rnp</td></tr>
+          <tr><td>G. Callback execution</td><td>§08 (rcu_core/softirq) + §09 (nhánh NOCB)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 20 ================================================= -->
+    <section class="chapter" id="fulsequence">
+      <div class="chapter-head"><span class="num">20</span><h2>Sequence diagram đầy đủ — CPU0 reader / CPU1 writer</h2></div>
+      <p class="lede">Gộp mọi lớp đã trace (scheduler, RCU core, rcu_node, rcu_state, bộ nhớ) vào một sơ đồ duy nhất.</p>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant CPU0 as CPU0 Reader
+  participant Sched as Scheduler
+  participant Core as RCU core
+  participant RNP as rcu_node
+  participant RS as rcu_state gp_kthread
+  participant Mem as Bo nho object
+  participant CPU1 as CPU1 Writer
+
+  CPU0->>CPU0: rcu_read_lock, nesting++
+  CPU0->>Mem: p = rcu_dereference ptr, doc old
+  CPU1->>Mem: new->data = ..., ghi truoc khi cong bo
+  CPU1->>Mem: rcu_assign_pointer ptr new, release barrier
+  CPU1->>Core: call_rcu ben trong synchronize_rcu
+  Core->>RNP: rcu_start_this_gp, funnel lock
+  RNP->>RS: danh thuc rcu_gp_kthread
+  RS->>RNP: rcu_gp_init, set qsmask
+  CPU0->>Sched: preempt xay ra giua CS
+  Sched->>RNP: rcu_note_context_switch, vao blkd_tasks
+  CPU0->>Mem: dung old an toan, roi rcu_read_unlock
+  CPU0->>RNP: rcu_read_unlock_special, go khoi blkd_tasks
+  RNP->>RS: qsmask ve 0, GP hoan tat
+  RS->>CPU1: callback wakeme_after_rcu chay, complete
+  CPU1->>Mem: kfree old, an toan
+        </pre>
+        <figcaption>Toàn bộ 7 tham gia phản ánh đúng các lớp đã trace: reader chỉ chạm vào <code>Scheduler</code>/<code>Bộ nhớ</code>, writer chỉ chạm vào <code>RCU core</code>/<code>Bộ nhớ</code> — <code>rcu_node</code>/<code>rcu_state</code> là lớp trung gian không ai trong hai bên cần biết chi tiết.</figcaption>
+      </figure>
+    </section>
+
+    <!-- 21 ================================================= -->
+    <section class="chapter" id="experiments">
+      <div class="chapter-head"><span class="num">21</span><h2>Thí nghiệm tự kiểm chứng</h2></div>
+      <p class="lede">7 thí nghiệm để tự chạy trên board thật hoặc VM — mỗi thí nghiệm bám vào đúng cơ chế đã trace ở chương tương ứng.</p>
+      <div class="scroll-x">
+      <table class="matrix">
+        <thead><tr><th>#</th><th>Mục tiêu</th><th>Cách thực hiện</th><th>Log/kết quả kỳ vọng</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Reader/writer cơ bản</td><td>Module đơn giản: 1 thread <code>call_rcu()</code> mỗi giây, 1 thread <code>rcu_read_lock()</code>/dereference liên tục</td><td>Không crash, không cảnh báo lockdep</td></tr>
+          <tr><td>2</td><td>Reader bị preempt</td><td>Bật PREEMPT_RCU, giữ CS dài bất thường (busy-loop có kiểm soát) trên hệ thống có RT task khác</td><td>Thấy trace <code>rcu_preempt_task</code> trong ftrace (§09)</td></tr>
+          <tr><td>3</td><td>Nhiều reader đồng thời</td><td>N thread cùng <code>rcu_read_lock()</code> một cấu trúc, đo latency</td><td>Latency không tăng theo N (không có lock tranh chấp)</td></tr>
+          <tr><td>4</td><td>Độ trễ synchronize_rcu()</td><td>Đo thời gian round-trip của <code>synchronize_rcu()</code> khi hệ thống idle vs. bận</td><td>Độ trễ tỉ lệ với <code>jiffies_till_first_fqs</code> khi bận (§05)</td></tr>
+          <tr><td>5</td><td>call_rcu() callback</td><td><code>kfree_rcu()</code> hàng loạt, theo dõi <code>rcu_do_batch</code> qua tracepoint <code>rcu_batch_start/end</code></td><td>Thấy giới hạn <code>blimit</code> hoạt động khi số callback lớn (§08)</td></tr>
+          <tr><td>6</td><td>RCU stall</td><td>Cố tình giữ CS bằng <code>preempt_disable()</code> lâu hơn <code>rcu_cpu_stall_timeout</code></td><td>Log <code>INFO: rcu_sched detected stalls</code> (§12) — <strong>trên bizhub cẩn thận vì có thể tự reboot, xem §13</strong></td></tr>
+          <tr><td>7</td><td>Memory ordering</td><td>Chương trình 2 luồng dùng <code>rcu_assign_pointer</code>/<code>rcu_dereference</code>, chạy lặp hàng triệu lần trên ARM64</td><td>Không bao giờ thấy dữ liệu "nửa khởi tạo" — nếu tự ý thay bằng gán thô sẽ thấy race hiếm gặp</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- 22 ================================================= -->
+    <section class="chapter" id="bugs">
+      <div class="chapter-head"><span class="num">22</span><h2>Phân tích bug RCU thực tế</h2></div>
+      <div class="scroll-x">
+      <table class="matrix">
+        <thead><tr><th>Bug</th><th>Nguyên nhân</th><th>Hệ quả</th></tr></thead>
+        <tbody>
+          <tr><td>Use-after-free</td><td><code>kfree(old)</code> gọi trước khi <code>synchronize_rcu()</code> trả về</td><td>Reader đang giữ <code>old</code> truy cập bộ nhớ đã giải phóng</td></tr>
+          <tr><td>Thiếu rcu_read_lock()</td><td>Dereference con trỏ RCU ngoài CS</td><td>Không có gì đảm bảo GP chờ đúng điểm này — object có thể bị free giữa chừng</td></tr>
+          <tr><td>Thiếu rcu_dereference()</td><td>Đọc con trỏ RCU bằng phép gán thường</td><td>Mất address-dependency ordering — trên Alpha lịch sử có thể đọc dữ liệu cũ (§06)</td></tr>
+          <tr><td>rcu_assign_pointer() sai</td><td>Gán con trỏ trực tiếp thay vì qua macro</td><td>Mất release barrier — reader có thể thấy con trỏ mới nhưng dữ liệu bên trong chưa ghi xong</td></tr>
+          <tr><td>Free quá sớm</td><td>Không gọi <code>synchronize_rcu()</code>/<code>call_rcu()</code> trước khi free</td><td>Giống use-after-free, nhưng do thiếu bước đồng bộ hoàn toàn chứ không phải race hẹp</td></tr>
+          <tr><td>Ngủ trong ngữ cảnh RCU không cho phép</td><td>Gọi hàm có thể block (<code>mutex_lock</code>, <code>msleep</code>) bên trong <code>rcu_read_lock()</code> thường (không phải SRCU)</td><td>Vi phạm giả định "reader không ngủ" mà TREE_RCU/PREEMPT_RCU dựa vào — GP có thể treo vô thời hạn</td></tr>
+          <tr><td>Lồng RCU sai cách</td><td>Trộn lẫn <code>rcu_read_lock()</code> thường với <code>rcu_read_lock_bh()</code>/<code>_sched()</code> không nhất quán</td><td>Nesting counter đúng nhưng ngữ nghĩa quiescent-state bị lẫn giữa các "flavor"</td></tr>
+          <tr><td>Dùng callback sai cách</td><td>Double <code>call_rcu()</code> trên cùng một <code>rcu_head</code></td><td>Phát hiện bởi <code>debug_rcu_head_queue()</code> (§18) — nếu tắt debug, callback thứ 2 làm hỏng con trỏ <code>next</code> của segmented list</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- 23 ================================================= -->
+    <section class="chapter" id="conclusion">
+      <div class="chapter-head"><span class="num">23</span><h2>Kết luận kiến trúc</h2></div>
+      <p class="lede">Vì sao RCU cho phép rất nhiều reader chạy mà không cần đồng bộ hoá kiểu mutex — trả lời bằng đúng source đã trace, không phải lý thuyết chung chung.</p>
+      <div class="prose">
+        <p><strong>Preemption</strong> — reader dưới PREEMPT_RCU không bao giờ bị buộc phải hoàn tất CS nhanh; nếu bị preempt, nghĩa vụ chỉ chuyển từ CPU sang một task cụ thể trong <code>blkd_tasks</code> (§03), không có ai bị "khoá" chờ nó ngoài chính grace period.</p>
+        <p><strong>Quiescent State + Grace Period</strong> — thay vì đếm reference trực tiếp, RCU suy luận gián tiếp: mọi CPU/task phải tự "chứng minh" đã rời CS qua một điểm không thể chối cãi (context switch, idle, dynticks lật số) — §00, §04, §05.</p>
+        <p><strong>Cây rcu_node + rcu_state</strong> — biến bài toán "N CPU cùng tranh chấp 1 bộ đếm" thành "mỗi CPU chỉ tranh chấp với vài CPU anh em trong cùng leaf node", giảm contention theo cấp số nhân dọc cây (§02, §05).</p>
+        <p><strong>rcu_data per-CPU</strong> — mỗi CPU có bản sao trạng thái riêng (<code>dynticks</code>, <code>cblist</code>), loại bỏ nhu cầu đồng bộ giữa các CPU cho những thao tác không cần thiết phải đồng bộ ngay lập tức.</p>
+        <p><strong>Memory ordering bất đối xứng</strong> — release ở writer, address-dependency miễn phí ở reader (§06) — đây là lý do kỹ thuật cụ thể khiến reader rẻ hơn hẳn so với việc dùng acquire/release đối xứng như spinlock.</p>
+        <p><strong>Scheduler</strong> — <code>rcu_note_context_switch()</code> được gọi ngay trong đường context-switch của scheduler (§03), khiến việc "phát hiện QS" gần như miễn phí về mặt hiệu năng — không cần một cơ chế polling riêng tốn kém.</p>
+        <p><strong>Callback mechanism</strong> — tách biệt hoàn toàn "khi nào an toàn để free" (do GP quyết định) khỏi "khi nào thực sự free" (do <code>rcu_do_batch()</code> quyết định, §08) — cho phép batching, giới hạn tải, và offload sang kthread riêng (§09) mà không đụng tới phần logic đúng-đắn của GP.</p>
+        <p>Kết quả: chi phí của <code>rcu_read_lock()</code>/<code>rcu_read_unlock()</code> gần như bằng 0 (§03), toàn bộ "giá phải trả" của RCU dồn hết sang phía writer và bộ máy grace period phía sau — đúng với tinh thần thiết kế cho workload đọc nhiều, ghi hiếm.</p>
+      </div>
+    </section>
+
+    <section class="end" id="next">
+      <h3>24 — Đọc tiếp</h3>
+      <div class="prose">
+        <ul>
+          <li><strong>Expedited GP</strong> (tree_exp.h) — đường IPI trực tiếp thay vì chờ tick, dùng khi cần GP "xong gấp".</li>
+          <li><strong>rcu_segcblist</strong> (rcu_segcblist.c/.h) — cấu trúc segmented-list thực sự đứng sau mọi thao tác "callback sẵn sàng" đã nhắc tới ở §08/§09.</li>
+          <li><strong>SRCU chi tiết</strong> (srcutree.c) — <code>smp_mb()</code> thật ở read-side, khác hẳn <code>barrier()</code> của PREEMPT_RCU.</li>
+          <li><strong>Các build variant FUM_LINUX</strong> — đối chiếu thêm trong <code>drivers/thr_commondrvr/</code> để hiểu đầy đủ 2 đường phản ứng stall khác nhau đã nêu ở §13.</li>
+        </ul>
+      </div>
+      <div class="colophon">Chữ hiển thị: IBM Plex Serif / Sans / Mono — họ font do IBM phát hành, cùng đơn vị đứng tên bản quyền gốc <code>Copyright IBM Corporation</code> trong <code>tiny.c</code> và các tác giả RCU nguyên bản (Paul E. McKenney). Mọi trích dẫn file:line trong tài liệu này được đọc trực tiếp từ <code>kernel/rcu/</code> của repo trong phiên làm việc, trừ macro ở §06 (repo không có thư mục <code>include/</code>).</div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  // Chỉ cần khi file HTML này được mở độc lập (tải về, mở bằng file://),
+  // vì lúc đó không có bộ render Mermaid gốc của nền tảng Artifact.
+  // Nếu trang đã tự render sẵn (trường hợp xem qua link Artifact), các khối
+  // <pre class="mermaid"> sẽ không còn ở dạng "chưa vẽ" nữa nên đoạn dưới sẽ tự bỏ qua.
+  (function(){
+    function renderIfNeeded(){
+      if (!window.mermaid) return;
+      var blocks = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+      var chua_ve = blocks.filter(function(b){ return !b.querySelector('svg'); });
+      if (!chua_ve.length) return;
+      try{
+        mermaid.initialize({ startOnLoad:false, theme:'neutral', securityLevel:'loose',
+          fontFamily:"'IBM Plex Mono', monospace" });
+        mermaid.run({ nodes: chua_ve });
+      }catch(e){}
+    }
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', renderIfNeeded);
+    } else {
+      renderIfNeeded();
+    }
+  })();
+</script>

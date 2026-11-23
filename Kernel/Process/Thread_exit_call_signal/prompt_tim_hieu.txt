@@ -1,0 +1,923 @@
+Cách dùng hiệu quả
+
+Đặt prompt trên vào AI có quyền đọc repository, rồi bổ sung phần đầu:
+Kernel repository: \Kernel\K-S800\Src
+Architecture: arm64
+Kernel version: chưa xác định, hãy đọc Makefile
+Output language: Vietnamese
+
+
+Bạn hãy đóng vai một kỹ sư Linux kernel cấp cao, có kinh nghiệm chuyên sâu về:
+
+- Linux process và thread lifecycle
+- Signal subsystem
+- Thread group
+- Process termination
+- Scheduler
+- glibc và Linux syscall ABI
+- Concurrency, locking và race condition trong kernel
+
+Tôi muốn nghiên cứu thật chi tiết luồng một thread trong một process đa luồng gọi:
+
+- exit()
+- _exit()
+- syscall(SYS_exit)
+- exit_group()
+- syscall(SYS_exit_group)
+
+Trọng tâm nghiên cứu là luồng:
+
+exit()/ _exit()/ exit_group()
+    -> SYSCALL_DEFINE1(exit_group, ...)
+    -> do_group_exit()
+    -> zap_other_threads()
+    -> các thread còn lại bị đánh dấu SIGKILL
+    -> từng thread phát hiện fatal signal hoặc group exit
+    -> từng thread tự đi vào do_exit()
+    -> thread cuối cùng giải phóng tài nguyên dùng chung
+    -> parent nhận thông báo và thu hồi zombie
+
+Hãy phân tích bằng source code thực tế trong Linux kernel repository mà tôi cung cấp. Không được chỉ giải thích dựa trên lý thuyết chung.
+
+Nếu tên hàm, cấu trúc dữ liệu hoặc luồng xử lý khác nhau giữa các phiên bản kernel, hãy:
+
+1. Ưu tiên source code thực tế trong repository hiện tại.
+2. Nêu rõ sự khác biệt với các phiên bản Linux kernel khác nếu cần.
+3. Không khẳng định một luồng nếu chưa tìm thấy bằng chứng trong source.
+4. Ghi rõ:
+   - Confirmed from source
+   - Inference
+   - Chưa xác nhận
+
+==================================================
+I. XÁC ĐỊNH PHẠM VI SOURCE CODE
+==================================================
+
+Trước tiên, hãy xác định:
+
+1. Phiên bản Linux kernel đang được sử dụng.
+2. Kiến trúc CPU mục tiêu:
+   - ARM
+   - ARM64
+   - x86
+   - MIPS
+   - kiến trúc khác
+3. Cơ chế syscall entry của kiến trúc đó.
+4. Các file chính liên quan đến quá trình exit và signal.
+
+Hãy tìm các symbol sau trong toàn bộ repository:
+
+- exit
+- _exit
+- exit_group
+- __NR_exit
+- __NR_exit_group
+- SYS_exit
+- SYS_exit_group
+- SYSCALL_DEFINE1(exit
+- SYSCALL_DEFINE1(exit_group
+- do_exit
+- do_group_exit
+- zap_other_threads
+- exit_signals
+- get_signal
+- get_signal_to_deliver
+- fatal_signal_pending
+- signal_pending
+- complete_signal
+- group_send_sig_info
+- send_sig
+- force_sig
+- dequeue_signal
+- SIGNAL_GROUP_EXIT
+- SIGNAL_GROUP_COREDUMP
+- JOBCTL_PENDING_MASK
+- PF_EXITING
+- PF_POSTCOREDUMP
+- group_exit_code
+- group_exit_task
+- quick_threads
+- notify_count
+- nr_threads
+- live
+- siglock
+- sighand
+- signal_struct
+- task_struct
+- exit_notify
+- release_task
+- do_notify_parent
+- forget_original_parent
+- exit_mm
+- mmput
+- exit_files
+- exit_fs
+- exit_thread
+- exit_task_namespaces
+- exit_task_work
+- schedule
+- schedule_tail
+- make_task_dead
+
+Với mỗi symbol quan trọng, hãy cung cấp:
+
+- File path
+- Function signature
+- Vai trò
+- Caller chính
+- Callee chính
+- Lock cần giữ
+- Cấu trúc dữ liệu được đọc hoặc thay đổi
+
+==================================================
+II. PHÂN BIỆT exit(), _exit(), SYS_exit VÀ exit_group()
+==================================================
+
+Hãy giải thích thật rõ sự khác nhau giữa:
+
+1. exit() của C library
+2. _exit() của C library
+3. _Exit() của C standard library
+4. pthread_exit()
+5. return từ hàm main()
+6. syscall(SYS_exit, status)
+7. syscall(SYS_exit_group, status)
+8. Kernel function do_exit()
+9. Kernel function do_group_exit()
+
+Đặc biệt phải trả lời:
+
+- exit() có phải syscall không?
+- exit() thực hiện những cleanup nào trong userspace?
+- atexit() handler được chạy ở đâu?
+- stdio buffer được flush ở đâu?
+- _exit() có flush stdio hay gọi atexit handler không?
+- glibc _exit() sử dụng SYS_exit hay SYS_exit_group?
+- Việc này có thay đổi theo phiên bản glibc không?
+- SYS_exit chỉ kết thúc calling thread hay toàn bộ process?
+- SYS_exit_group kết thúc toàn bộ thread group như thế nào?
+- pthread_exit() kết thúc thread hiện tại bằng đường nào?
+- Nếu thread cuối cùng gọi pthread_exit(), process kết thúc bằng cơ chế nào?
+- return từ main() tương đương với exit() hay _exit()?
+- Exit status được chuyển từ userspace sang kernel và tới parent như thế nào?
+
+Hãy tạo bảng so sánh có ít nhất các cột:
+
+| API hoặc syscall | Chạy cleanup libc | Gọi atexit | Flush stdio | Kết thúc calling thread | Kết thúc cả process | Kernel entry |
+
+Không được đồng nhất glibc `_exit()` với kernel `SYS_exit`.
+
+==================================================
+III. LUỒNG exit_group() VÀ do_group_exit()
+==================================================
+
+Hãy phân tích từng dòng hoặc từng block logic trong:
+
+- SYSCALL_DEFINE1(exit_group, ...)
+- do_group_exit()
+- zap_other_threads()
+
+Với do_group_exit(), hãy giải thích:
+
+1. Exit code được chuyển đổi thế nào.
+2. Tại sao thường có biểu thức tương tự:
+
+   (error_code & 0xff) << 8
+
+3. `signal->flags & SIGNAL_GROUP_EXIT` có ý nghĩa gì.
+4. Khi group exit đã bắt đầu, thread đến sau xử lý thế nào.
+5. `signal->group_exit_code` được thiết lập khi nào.
+6. Thread nào có quyền thiết lập group exit code.
+7. Lock nào bảo vệ:
+   - signal->flags
+   - group_exit_code
+   - danh sách thread
+8. Tại sao phải giữ `sighand->siglock`.
+9. Khi nào lock được thả.
+10. Sau `zap_other_threads()`, tại sao calling thread vẫn phải gọi `do_exit()`.
+
+Hãy viết pseudo-code đơn giản hóa từ source thực tế, ví dụ:
+
+do_group_exit(code)
+{
+    lock(...);
+
+    if (group exit đã bắt đầu) {
+        code = group_exit_code;
+    } else {
+        group_exit_code = code;
+        flags |= SIGNAL_GROUP_EXIT;
+        zap_other_threads(current);
+    }
+
+    unlock(...);
+    do_exit(code);
+}
+
+Sau pseudo-code, hãy đối chiếu từng dòng với code thật.
+
+==================================================
+IV. PHÂN TÍCH zap_other_threads()
+==================================================
+
+Đây là phần trọng tâm nhất.
+
+Hãy giải thích chi tiết:
+
+1. `zap_other_threads(current)` tìm các thread cùng thread group bằng cách nào.
+2. Macro hoặc iterator nào được dùng:
+   - for_each_thread
+   - while_each_thread
+   - do_each_thread
+   - iterator khác
+3. Thread gọi `exit_group()` có bị gửi SIGKILL cho chính nó không.
+4. Các thread đã có `PF_EXITING` được xử lý thế nào.
+5. Các thread đang coredump được xử lý thế nào.
+6. Pending signal cũ của thread có bị xóa không.
+7. Tại sao cần xóa hoặc thay đổi pending signal trước khi thêm SIGKILL.
+8. SIGKILL được thêm vào:
+   - shared_pending
+   - pending riêng của task
+   - hay bằng một cơ chế đặc biệt
+9. Hàm nào thực sự đặt bit SIGKILL.
+10. Có thực sự gọi `send_sig(SIGKILL, task, ...)` không, hay kernel thao tác trực tiếp lên signal state.
+11. Thread đang ngủ được đánh thức bằng function nào.
+12. `signal_wake_up()` hoặc function tương đương nhận tham số gì.
+13. Thread ở `TASK_INTERRUPTIBLE` phản ứng thế nào.
+14. Thread ở `TASK_KILLABLE` phản ứng thế nào.
+15. Thread ở `TASK_UNINTERRUPTIBLE` phản ứng thế nào.
+16. Thread đang chạy trên CPU khác được xử lý thế nào.
+17. Có gửi reschedule IPI hay không.
+18. Kernel bảo đảm các thread khác cuối cùng thoát bằng cách nào.
+19. Có điều kiện nào làm thread không thoát ngay cả khi SIGKILL đã pending không.
+20. Tại sao SIGKILL từ `zap_other_threads()` không nên được mô tả đơn giản là userspace chạy `kill -9`.
+
+Hãy chỉ ra chính xác các field bị thay đổi trong:
+
+- task_struct
+- signal_struct
+- sighand_struct
+- sigpending
+- thread flags
+
+Đối với mỗi field, giải thích:
+
+| Field | Thuộc cấu trúc nào | Shared hay per-thread | Giá trị trước | Giá trị sau | Ý nghĩa |
+
+==================================================
+V. THREAD CÒN LẠI PHÁT HIỆN SIGKILL NHƯ THẾ NÀO
+==================================================
+
+Hãy trace đầy đủ đường đi của một thread khác, ví dụ Thread B, sau khi Thread A gọi `zap_other_threads()`.
+
+Phải phân tích ít nhất các trường hợp sau:
+
+1. Thread B đang chạy ở userspace.
+2. Thread B đang thực hiện syscall.
+3. Thread B đang ngủ `TASK_INTERRUPTIBLE`.
+4. Thread B đang ngủ `TASK_KILLABLE`.
+5. Thread B đang ở `TASK_UNINTERRUPTIBLE`.
+6. Thread B đang chờ mutex.
+7. Thread B đang chờ completion.
+8. Thread B đang chờ I/O từ driver.
+9. Thread B đang chạy trên CPU khác.
+10. Thread B đang bị stop hoặc ptrace.
+11. Thread B cũng đang gọi exit hoặc do_exit.
+12. Thread B đang xử lý một signal khác.
+13. Thread B đang ở critical section trong kernel.
+14. Thread B đang giữ spinlock.
+15. Thread B đã disable preemption.
+16. Thread B đang trong interruptible wait nhưng chưa được schedule.
+
+Với mỗi trường hợp, hãy trả lời:
+
+- SIGKILL được đặt pending ở đâu?
+- Task có được wake up ngay không?
+- Task có thể chạy signal handler không?
+- Khi nào task kiểm tra pending signal?
+- Function nào phát hiện fatal signal?
+- Task thoát ngay tại đó hay chỉ đánh dấu để thoát sau?
+- Function nào cuối cùng gọi `do_exit()`?
+- Có thể chậm bao lâu?
+- Trường hợp nào có thể bị treo vô thời hạn?
+
+Hãy tìm và giải thích các function liên quan, tùy kernel version:
+
+- get_signal()
+- get_signal_to_deliver()
+- do_signal()
+- arch_do_signal_or_restart()
+- exit_to_user_mode_loop()
+- exit_to_user_mode_prepare()
+- task_work_run()
+- fatal_signal_pending()
+- signal_pending_state()
+- recalc_sigpending()
+- dequeue_signal()
+- handle_signal()
+- do_group_exit()
+- do_exit()
+
+Không được bỏ qua khoảng trống giữa:
+
+zap_other_threads()
+    -> SIGKILL pending
+    -> thread khác thực sự gọi do_exit()
+
+Đây là phần quan trọng nhất của nghiên cứu.
+
+==================================================
+VI. SIGKILL TRONG GROUP EXIT CÓ GIỐNG kill -9 KHÔNG?
+==================================================
+
+Hãy so sánh hai luồng:
+
+Luồng A:
+
+kill -9 <pid>
+
+Luồng B:
+
+Một thread gọi exit_group()
+    -> do_group_exit()
+    -> zap_other_threads()
+
+So sánh:
+
+- Ai khởi tạo signal
+- Có syscall gửi signal hay không
+- Có permission check hay không
+- Có đi qua kill_something_info() không
+- Có đi qua group_send_sig_info() không
+- Có đi qua complete_signal() không
+- Signal được đặt vào pending queue nào
+- Target là PID, TID hay thread group
+- Có thể catch không
+- Có thể ignore không
+- Có thể block không
+- Cách wake target
+- Exit code cuối cùng
+- Parent nhìn thấy trạng thái gì
+- Audit hoặc tracing có quan sát được như nhau không
+
+Hãy kết luận chính xác xem câu sau đúng đến mức nào:
+
+“zap_other_threads() gửi SIGKILL cho các thread còn lại.”
+
+Nếu đây chỉ là cách mô tả high-level, hãy chỉ rõ implementation thực sự làm gì.
+
+==================================================
+VII. PHÂN TÍCH do_exit() CỦA TỪNG THREAD
+==================================================
+
+Hãy phân tích thứ tự cleanup trong `do_exit()`.
+
+Tìm và giải thích ít nhất:
+
+- synchronize_group_exit()
+- exit_signals()
+- PF_EXITING
+- acct_update_integrals()
+- exit_mm()
+- exit_sem()
+- exit_shm()
+- exit_files()
+- exit_fs()
+- exit_task_namespaces()
+- exit_task_work()
+- exit_thread()
+- perf_event_exit_task()
+- cgroup_exit()
+- exit_notify()
+- proc_exit_connector()
+- mpol_put_task_policy()
+- validate_creds_for_do_exit()
+- make_task_dead()
+- schedule()
+
+Tên function có thể khác theo phiên bản kernel. Hãy dùng source thực tế.
+
+Với mỗi bước, hãy cho biết:
+
+1. Cleanup tài nguyên per-thread hay shared.
+2. Chỉ thread cuối cùng mới giải phóng hay mọi thread đều thực hiện.
+3. Có thể sleep không.
+4. Lock quan trọng nào được sử dụng.
+5. Có thể xảy ra race với thread khác không.
+6. Điều gì xảy ra nếu task gọi do_exit() trong trạng thái bất thường.
+7. Tại sao `do_exit()` không return.
+
+==================================================
+VIII. THREAD CUỐI CÙNG VÀ TÀI NGUYÊN DÙNG CHUNG
+==================================================
+
+Hãy giải thích thật rõ:
+
+1. Linux xác định thread cuối cùng bằng cách nào.
+2. Vai trò của:
+   - signal->live
+   - signal->nr_threads
+   - quick_threads
+   - atomic counters
+3. Khi một thread exit:
+   - mm_struct có bị giải phóng ngay không?
+   - files_struct có bị giải phóng ngay không?
+   - fs_struct có bị giải phóng ngay không?
+   - signal_struct có bị giải phóng ngay không?
+   - sighand_struct có bị giải phóng ngay không?
+4. Reference count bảo vệ các resource dùng chung như thế nào.
+5. Thread leader có bắt buộc phải là thread cuối cùng không.
+6. Điều gì xảy ra nếu thread leader thoát trước.
+7. TGID còn tồn tại thế nào khi leader đã exit nhưng thread khác vẫn sống.
+8. Parent nhận notification khi từng thread exit hay chỉ khi thread group kết thúc.
+9. Zombie được tạo cho từng thread hay cho toàn process.
+10. Thread nào mang exit status cuối cùng của process.
+11. Exit code của các thread bị zap là gì.
+12. Exit code của process có phải luôn là code của thread gọi exit_group() không.
+
+==================================================
+IX. EXIT_NOTIFY, ZOMBIE, WAIT VÀ REAP
+==================================================
+
+Hãy trace tiếp từ:
+
+do_exit()
+    -> exit_notify()
+    -> do_notify_parent()
+    -> parent wakeup
+    -> wait()/waitpid()/waitid()
+    -> release_task()
+
+Giải thích:
+
+- Khi nào task chuyển sang EXIT_ZOMBIE.
+- Khi nào task chuyển sang EXIT_DEAD.
+- Parent được thông báo bằng signal gì.
+- SIGCHLD được tạo ở đâu.
+- Parent đọc exit code bằng cách nào.
+- waitpid() thu hồi task nào.
+- Với multithreaded process, parent đợi thread leader hay bất kỳ thread nào.
+- `__WCLONE`, `__WALL`, `__WNOTHREAD` có liên quan thế nào.
+- Nếu parent không gọi wait thì điều gì xảy ra.
+- Nếu parent đã chết thì reparenting diễn ra thế nào.
+- Subreaper và PID namespace ảnh hưởng thế nào.
+- Vai trò của `release_task()` và `put_task_struct()`.
+
+==================================================
+X. CONCURRENCY VÀ RACE CONDITION
+==================================================
+
+Hãy phân tích các race condition sau:
+
+1. Hai thread đồng thời gọi exit_group() với exit code khác nhau.
+2. Một thread gọi exit_group(), thread khác gọi SYS_exit.
+3. Một thread gọi exit_group(), thread khác nhận SIGSEGV.
+4. Một thread gọi exit_group(), thread khác đang coredump.
+5. Một thread gọi execve(), thread khác gọi exit_group().
+6. Một thread gọi fork/clone, thread khác bắt đầu group exit.
+7. Một thread đang được ptrace, thread khác gọi exit_group().
+8. Một thread đã PF_EXITING nhưng vẫn được zap.
+9. Thread leader exit trong khi các thread khác còn chạy.
+10. Parent gọi wait trong lúc các thread đang lần lượt do_exit().
+11. Một thread gọi exit() khi thread khác đang giữ libc lock.
+12. Một thread gọi exit() từ signal handler.
+13. Một thread gọi _exit() sau fork trong process đa luồng.
+14. Một thread chết do coredump trong khi group exit đang bắt đầu.
+
+Với mỗi race:
+
+- Lock nào bảo vệ.
+- Field nào là trạng thái quyết định.
+- Thread nào thắng.
+- Exit code nào được giữ lại.
+- Có nguy cơ deadlock không.
+- Source code ngăn double cleanup như thế nào.
+
+==================================================
+XI. VÌ SAO exit() TRONG PROCESS ĐA LUỒNG CÓ THỂ NGUY HIỂM?
+==================================================
+
+Hãy phân tích các vấn đề userspace trước khi vào kernel:
+
+- atexit handler
+- stdio lock
+- malloc lock
+- pthread cancellation
+- destructor
+- C++ static/global destructor
+- thread đang giữ libc internal lock
+- gọi exit() từ signal handler
+- gọi exit() sau fork trong child của process đa luồng
+
+Giải thích tại sao sau `fork()` trong một process đa luồng, child thường nên dùng:
+
+_exit()
+
+thay vì:
+
+exit()
+
+Hãy cung cấp ví dụ deadlock có thể xảy ra nếu child gọi exit() và atexit handler hoặc stdio flush cần một mutex vốn đang được thread khác giữ trước lúc fork.
+
+==================================================
+XII. THỰC NGHIỆM KIỂM CHỨNG
+==================================================
+
+Hãy viết chương trình C có thể compile để kiểm chứng.
+
+Chương trình gồm ít nhất 4 pthread:
+
+- Main thread
+- Thread A gọi exit(99)
+- Thread B loop và in TID
+- Thread C ngủ bằng nanosleep hoặc condition variable
+- Thread D thực hiện syscall trực tiếp nếu cần
+
+Tạo các test case:
+
+Test 1:
+- Thread A gọi exit(99).
+- Xác nhận toàn bộ process kết thúc.
+
+Test 2:
+- Thread A gọi _exit(98).
+- Xác nhận behavior của glibc hiện tại.
+
+Test 3:
+- Thread A gọi syscall(SYS_exit, 97).
+- Xác nhận chỉ Thread A kết thúc.
+- Các thread khác tiếp tục chạy.
+
+Test 4:
+- Thread A gọi syscall(SYS_exit_group, 96).
+- Xác nhận toàn bộ thread group kết thúc.
+
+Test 5:
+- Thread A gọi pthread_exit().
+- Xác nhận chỉ Thread A kết thúc.
+
+Test 6:
+- Main thread gọi pthread_exit().
+- Kiểm tra các worker thread còn chạy hay không.
+
+Test 7:
+- Một worker thread ở TASK_INTERRUPTIBLE khi thread khác gọi exit_group().
+
+Test 8:
+- Một worker thread bị kẹt trong I/O hoặc mô phỏng trạng thái chờ lâu.
+- Quan sát SIGKILL không nhất thiết làm thread biến mất ngay.
+
+Mỗi test cần cung cấp:
+
+- Source code đầy đủ
+- Lệnh compile
+- Lệnh chạy
+- Output dự kiến
+- Cách lấy PID/TID
+- Cách xác nhận thread còn tồn tại
+- Giải thích kết quả
+- Sai số hoặc phụ thuộc môi trường
+
+Compile ví dụ bằng:
+
+gcc -Wall -Wextra -O0 -g -pthread exit_test.c -o exit_test
+
+==================================================
+XIII. TRACE BẰNG strace, GDB, ftrace, perf VÀ BPFTRACE
+==================================================
+
+Hãy cung cấp hướng dẫn thực hành để quan sát luồng.
+
+1. strace
+
+Theo dõi:
+
+- exit
+- exit_group
+- clone
+- clone3
+- tgkill
+- kill
+
+Ví dụ cần giải thích:
+
+strace -f -e trace=process,signal ./exit_test
+
+Phân biệt output:
+
++++ exited with ... +++
++++ killed by SIGKILL +++
+
+2. GDB
+
+Đặt breakpoint tại:
+
+- exit
+- _exit
+- __GI__exit
+- exit_group syscall wrapper
+- do_group_exit
+- zap_other_threads
+- do_exit
+
+Nếu debug userspace, giải thích giới hạn khi breakpoint vào kernel function.
+
+3. ftrace
+
+Dùng function hoặc function_graph tracer cho:
+
+- __x64_sys_exit_group
+- __arm64_sys_exit_group
+- do_group_exit
+- zap_other_threads
+- do_exit
+- exit_notify
+- release_task
+
+Cung cấp command thực tế dựa theo kernel hiện tại.
+
+4. perf
+
+Quan sát syscall events:
+
+- sys_enter_exit
+- sys_enter_exit_group
+- signal_generate
+- signal_deliver
+- sched_process_exit
+
+5. bpftrace
+
+Viết script để in:
+
+- timestamp
+- CPU
+- PID
+- TID
+- comm
+- function
+- exit code
+- target task nếu lấy được an toàn
+
+Ưu tiên tracepoint ổn định trước kprobe.
+
+6. printk hoặc dynamic debug
+
+Nếu cần sửa kernel, đề xuất vị trí chèn log an toàn.
+
+Log cần thể hiện:
+
+- current->pid
+- current->tgid
+- target->pid
+- target->tgid
+- current->comm
+- signal flags
+- group_exit_code
+- task state
+- task flags
+- pending signal state
+
+Không chèn log làm thay đổi locking hoặc gây deadlock.
+
+==================================================
+XIV. SEQUENCE DIAGRAM BẮT BUỘC
+==================================================
+
+Hãy tạo Mermaid sequence diagram cho ít nhất các luồng sau.
+
+Diagram 1: exit() qua glibc tới exit_group()
+
+Participants:
+
+- Application thread
+- glibc exit()
+- atexit handlers
+- stdio cleanup
+- glibc _exit()
+- syscall entry
+- do_group_exit()
+- zap_other_threads()
+- do_exit()
+
+Diagram 2: SYS_exit chỉ kết thúc calling thread
+
+Participants:
+
+- Thread A
+- syscall entry
+- do_exit()
+- Thread B
+- Thread C
+- parent
+
+Diagram 3: exit_group kết thúc toàn process
+
+Participants:
+
+- Thread A
+- Kernel
+- Thread B
+- Thread C
+- Scheduler
+- Parent
+
+Diagram 4: Thread B đang chạy trên CPU khác
+
+Participants:
+
+- CPU0 Thread A
+- Signal subsystem
+- Scheduler/IPI
+- CPU1 Thread B
+- do_exit()
+
+Diagram 5: Thread B ở TASK_INTERRUPTIBLE
+
+Diagram 6: Thread B ở TASK_UNINTERRUPTIBLE
+
+Diagram 7: Hai thread đồng thời gọi exit_group()
+
+Diagram 8: do_exit và cleanup tài nguyên shared
+
+Diagram 9: Thread cuối cùng exit và parent waitpid
+
+Diagram 10: exit() so với _exit(), SYS_exit và SYS_exit_group
+
+Yêu cầu Mermaid:
+
+- Cú pháp phải hợp lệ.
+- Không dùng ký tự dễ gây parse error trong tên participant.
+- Dùng autonumber.
+- Có note giải thích trạng thái quan trọng.
+- Phân biệt userspace và kernel bằng rect.
+- Không đặt code C phức tạp trực tiếp trong label.
+
+==================================================
+XV. ACTIVITY DIAGRAM BẮT BUỘC
+==================================================
+
+Tạo Mermaid flowchart hoặc activity diagram cho:
+
+1. Quyết định của do_group_exit().
+2. Vòng lặp của zap_other_threads().
+3. Thread nhận pending SIGKILL.
+4. Quyết định wake task theo task state.
+5. Luồng do_exit().
+6. Xác định thread cuối cùng.
+7. Parent wait và release zombie.
+8. So sánh SYS_exit với SYS_exit_group.
+9. Race giữa group exit và coredump.
+10. Race giữa exit_group và execve.
+
+==================================================
+XVI. CALL GRAPH
+==================================================
+
+Hãy xây dựng call graph dựa trên source thực tế.
+
+Call graph A:
+
+exit()
+    -> ...
+    -> exit_group syscall
+    -> do_group_exit()
+    -> zap_other_threads()
+    -> do_exit()
+
+Call graph B:
+
+SYS_exit
+    -> do_exit()
+
+Call graph C:
+
+zap_other_threads()
+    -> đánh dấu/wake Thread B
+    -> đường xử lý signal của Thread B
+    -> do_group_exit() hoặc do_exit()
+
+Call graph D:
+
+do_exit()
+    -> cleanup
+    -> exit_notify()
+    -> schedule()
+
+Call graph E:
+
+waitpid()
+    -> kernel wait path
+    -> release_task()
+
+Mỗi node cần có file path và line number nếu có thể.
+
+==================================================
+XVII. OUTPUT CUỐI CÙNG
+==================================================
+
+Hãy trình bày kết quả theo cấu trúc:
+
+1. Executive summary
+2. Mental model cho người mới
+3. Phân biệt exit(), _exit(), pthread_exit(), SYS_exit và exit_group()
+4. Kiến trúc task và thread group trong Linux
+5. Syscall entry
+6. Phân tích do_group_exit()
+7. Phân tích zap_other_threads()
+8. Cách các thread khác phát hiện SIGKILL
+9. Phân tích do_exit()
+10. Cleanup resource per-thread và shared
+11. Thread cuối cùng
+12. Zombie, notification và wait
+13. Race condition và locking
+14. Trường hợp TASK_UNINTERRUPTIBLE
+15. Thực nghiệm C
+16. Trace bằng strace, ftrace, perf và bpftrace
+17. Sequence diagrams
+18. Activity diagrams
+19. Call graphs
+20. Bảng tổng hợp function và data structure
+21. Kết luận
+22. Các điểm chưa xác nhận từ source
+
+==================================================
+XVIII. QUY TẮC PHÂN TÍCH
+==================================================
+
+1. Không chỉ đưa ra kết luận, phải chỉ rõ bằng chứng trong source.
+2. Mỗi function quan trọng phải ghi:
+   - File path
+   - Prototype
+   - Caller
+   - Callee
+   - Input
+   - Output
+   - Side effect
+   - Locking requirement
+3. Trích code ngắn và đúng trọng tâm.
+4. Không trích nguyên một function dài nếu không cần thiết.
+5. Dùng ngôn ngữ tiếng Việt dễ hiểu.
+6. Khi có thuật ngữ kernel, giải thích bằng ví dụ đời thường trước rồi mới đi vào chi tiết.
+7. Phân biệt rõ:
+   - Process
+   - Thread
+   - task_struct
+   - PID
+   - TID
+   - TGID
+   - Thread group leader
+8. Không nói “process bị kill ngay” nếu task có thể đang ở trạng thái không thể wake ngay.
+9. Không nói “SIGKILL gọi do_exit trực tiếp” nếu source không thể hiện như vậy.
+10. Phải làm rõ chính xác đường từ pending SIGKILL tới do_exit().
+11. Phải phân biệt:
+    - Signal generation
+    - Signal pending
+    - Wakeup
+    - Signal detection
+    - Group-exit decision
+    - do_exit
+12. Nếu source kernel thực tế khác mô hình Linux mainline, lấy source thực tế làm chuẩn.
+13. Nếu không có repository hoặc chưa biết kernel version, hãy yêu cầu tôi cung cấp:
+    - Kernel repository path
+    - Kernel version
+    - Architecture
+    - Toolchain
+14. Cuối cùng, đưa ra danh sách command grep/ripgrep để tôi có thể tự kiểm chứng từng kết luận.
+
+==================================================
+XIX. CÁC CÂU HỎI BẮT BUỘC PHẢI KẾT LUẬN
+==================================================
+
+Cuối báo cáo, hãy trả lời ngắn gọn và chính xác từng câu:
+
+1. exit() có trực tiếp gọi kernel không?
+2. glibc _exit() gọi SYS_exit hay SYS_exit_group?
+3. SYS_exit kết thúc một thread hay cả process?
+4. SYS_exit_group kết thúc các thread khác bằng cách nào?
+5. zap_other_threads() có thực sự gọi send_sig(SIGKILL) không?
+6. SIGKILL được đặt vào pending signal nào?
+7. Thread khác có chạy signal handler của SIGKILL không?
+8. Function nào phát hiện thread cần group exit?
+9. Function nào thực sự gọi do_exit() cho thread bị zap?
+10. Thread gọi exit_group() có chờ các thread khác exit không?
+11. Thread ở TASK_UNINTERRUPTIBLE có chết ngay không?
+12. Thread cuối cùng được xác định bằng field nào?
+13. Exit status cuối cùng của process lấy từ đâu?
+14. Parent được notify khi nào?
+15. Tại sao gọi exit() sau fork trong process đa luồng có thể deadlock?
+16. Điểm khác nhau chính xác giữa kill -9 và zap_other_threads() là gì?
+17. Có trường hợp SIGKILL đã pending nhưng task vẫn tồn tại lâu không?
+18. Thread leader có bắt buộc exit cuối cùng không?
+19. do_exit() giải phóng resource nào cho từng thread?
+20. Resource shared được giải phóng an toàn bằng cơ chế nào?
+
+Bắt đầu bằng việc xác định kernel version và tìm definition thực tế của:
+
+- SYSCALL_DEFINE1(exit, ...)
+- SYSCALL_DEFINE1(exit_group, ...)
+- do_group_exit()
+- zap_other_threads()
+- do_exit()
+
+Sau đó mới xây dựng call flow. Không được xây dựng call flow chỉ dựa trên tên function.

@@ -1,0 +1,137 @@
+=== dg-reg-insert
+type: sequence
+status: verified
+title: Đăng ký (1/2) — kiểm tra tham số và chèn vào registry
+purpose: Cho thấy những gì `crypto_register_alg()` làm **trước** khi algorithm được kiểm thử: validate, chống trùng tên, tạo test larval, chèn vào `crypto_alg_list`.
+caption: Mọi `crypto_register_<type>()` (ví dụ `crypto_register_skcipher`) đều gọi `*_prepare_alg()` rồi đi vào đúng luồng này. `-EINVAL` khi: thiếu `cra_name`/`cra_driver_name`, `cra_alignmask` không có dạng 2ⁿ−1 hoặc > 63, `cra_blocksize` > 160, `cra_priority` < 0. `-EEXIST` khi: chính alg đã có trong danh sách, có test larval cùng driver name, hoặc driver name của alg cũ trùng `cra_name` mới (hay ngược lại). Bước chèn diễn ra dưới **write lock**; cả alg và test larval được `list_add` vào **đầu** danh sách. Test larval mang cờ `CRYPTO_ALG_TESTED` để người đang lookup bắt được nó và chờ.
+refs: `crypto/algapi.c:425-445` (`crypto_register_alg`) · `crypto/algapi.c:32-65` (`crypto_check_alg`) · `crypto/algapi.c:232-294` (`__crypto_register_alg`) · `crypto/api.c:105-122` (`crypto_larval_alloc`)
+next: Sau bước cuối, luồng tiếp tục ở [Đăng ký (2/2) — self-test và hoàn tất](#dg-reg-test).
+---
+sequenceDiagram
+    autonumber
+    box rgb(239,246,255) Implementation
+        participant M as module init<br/>(vd aes_init)
+    end
+    box rgb(241,245,249) Crypto core
+        participant A as algapi.c
+        participant L as api.c (larval)
+        participant R as crypto_alg_list
+    end
+    M->>A: crypto_register_alg(alg)
+    Note right of A: xoá cờ DEAD<br/>crypto_check_alg(alg)
+    alt tham số không hợp lệ
+        A-->>M: -EINVAL
+    end
+    A->>R: down_write(crypto_alg_sem)
+    Note over A,L: __crypto_register_alg():<br/>duyệt danh sách, kiểm trùng tên
+    alt trùng (xem caption)
+        A->>R: up_write
+        A-->>M: -EEXIST
+    end
+    A->>L: crypto_larval_alloc(name, flags | TESTED)
+    L-->>A: test larval
+    Note right of A: larval->adult =<br/>crypto_mod_get(alg)
+    A->>R: list_add(alg), list_add(test larval)
+    A->>R: up_write(crypto_alg_sem)
+    Note over A,L: tiếp theo: crypto_wait_for_test(larval)<br/>— xem sơ đồ Đăng ký (2/2)
+
+=== dg-reg-test
+type: sequence
+status: verified
+title: Đăng ký (2/2) — self-test qua cryptomgr và hoàn tất
+purpose: Cho thấy ai đánh dấu algorithm là `TESTED`, và vì sao `crypto_register_alg()` chỉ trả về sau khi test kết thúc — kể cả khi self-test bị tắt trên sản phẩm.
+caption: Trên các defconfig sản phẩm `CONFIG_CRYPTO_MANAGER_DISABLE_TESTS=y`, nên kthread nhảy thẳng tới `crypto_alg_tested(driver, 0)` — không chạy test vector nào. Mũi tên mở (`-)`) ở bước tạo kthread nghĩa là bất đồng bộ: kthread chạy song song, còn `algapi.c` ngủ chờ completion. Nếu `crypto_probing_notify` trả `NOTIFY_DONE` (không có listener — cryptomgr vắng mặt), core tự gọi `crypto_alg_tested(driver, 0)` thay cho kthread (`crypto/algapi.c:410-414`).
+refs: `crypto/algapi.c:405-423` (`crypto_wait_for_test`) · `crypto/api.c:247-258` (`crypto_probing_notify`) · `crypto/algboss.c:193-250` (`cryptomgr_test`, `cryptomgr_schedule_test`) · `crypto/algapi.c:296-391` (`crypto_alg_tested`)
+explain: ch-registration
+next: Quyết định bên trong `crypto_alg_tested` được vẽ riêng ở [crypto_alg_tested — quyết định](#dg-reg-tested-flow).
+---
+sequenceDiagram
+    autonumber
+    box rgb(241,245,249) Crypto core
+        participant A as algapi.c
+        participant N as crypto_chain<br/>(notifier)
+    end
+    box rgb(236,253,245) Crypto manager
+        participant MGR as cryptomgr<br/>(algboss.c)
+        participant K as kthread<br/>cryptomgr_test
+    end
+    A->>N: crypto_probing_notify(<br/>ALG_REGISTER, alg)
+    N->>MGR: cryptomgr_notify()
+    MGR-)K: kthread_run(cryptomgr_test)
+    MGR-->>A: NOTIFY_STOP
+    Note over A,N: chờ: wait_for_completion_killable(larval)
+    alt DISABLE_TESTS=y (sản phẩm)
+        Note over MGR,K: bỏ qua alg_test()
+    else test được bật
+        Note over MGR,K: alg_test(driver, name, type, TESTED)
+    end
+    K->>A: crypto_alg_tested(driver, err)
+    Note over A,N: dưới write lock: TESTED nếu err = 0,<br/>trao adult cho request larval,<br/>gỡ instance dựng trên alg kém hơn,<br/>complete_all(larval)
+    A->>N: crypto_notify(ALG_LOADED, larval)
+    Note over A,N: crypto_larval_kill(test larval)<br/>crypto_register_alg() trả 0
+
+=== dg-reg-tested-flow
+type: flowchart
+status: verified
+title: crypto_alg_tested() — các quyết định
+purpose: Một hàm quyết định nhiều điều cùng lúc: alg có được dùng không, ai đang chờ sẽ nhận nó, instance cũ nào phải dựng lại. Sơ đồ tách từng quyết định ra.
+caption: Toàn bộ chạy dưới `down_write(&crypto_alg_sem)`; chỉ bước giải phóng cuối (`crypto_remove_final`) chạy ngoài lock. `crypto_remove_spawns(q, ...)` gỡ các **instance dựng trên q**, không gỡ chính q.
+refs: `crypto/algapi.c:296-391` · `crypto/algapi.c:152-229` (`crypto_remove_spawns`) · `crypto/algapi.c:393-403` (`crypto_remove_final`)
+explain: ch-registration
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_alg_tested(name, err)"]):::api --> F{{"Có test larval<br/>tên = name?"}}:::dec
+    F -- "không" --> W(["pr_err: Unexpected test result<br/>up_write, return"]):::err
+    F -- "có" --> D["Đánh dấu larval DEAD"]:::core
+    D --> E{{"err ≠ 0 hoặc<br/>alg đã bị gỡ?"}}:::dec
+    E -- "có" --> C0["complete_all(larval)<br/>(alg không được TESTED)"]:::err --> U0(["up_write, remove_final"]):::core
+    E -- "không" --> T["alg->cra_flags |= TESTED"]:::ok
+    T --> B["best = không có test larval cùng cra_name<br/>với priority cao hơn"]:::core
+    B --> RL["Mỗi request larval cùng tên, chưa có adult,<br/>cờ khớp mask: adult = alg nếu best,<br/>ngược lại adult = -EAGAIN"]:::core
+    RL --> RS["Mỗi alg thật cùng cra_name có priority ≤ alg mới:<br/>crypto_remove_spawns(q, list, alg)"]:::core
+    RS --> C["complete_all(larval)"]:::core
+    C --> U["up_write(crypto_alg_sem)"]:::core
+    U --> RF["crypto_remove_final(list): thả ref instance bị gỡ"]:::core
+
+=== dg-reg-state
+type: state
+status: verified
+title: Vòng đời một crypto_alg suy ra từ cờ cra_flags
+purpose: Tóm tắt các trạng thái mà core phân biệt bằng cờ `CRYPTO_ALG_TESTED`, `CRYPTO_ALG_DYING`, `CRYPTO_ALG_DEAD`.
+caption: Đây **không** phải một state machine được khai báo trong kernel; các trạng thái được suy ra từ cờ trong `cra_flags` và vị trí trong `crypto_alg_list`. "Untested" chỉ tồn tại khi self-test chạy và thất bại — trên sản phẩm (test tắt) mọi alg đăng ký thành công đều đi tới Usable. Lookup gặp alg **Untested** trả `-ELIBBAD`; alg **Dying/Dead** ("moribund") bị lookup bỏ qua. "unregister" = `crypto_unregister_*()`.
+refs: `include/linux/crypto.h:57-79` (cờ) · `crypto/internal.h:121-134` (`crypto_is_larval/dead/moribund`) · `crypto/api.c:193-215` (lookup trả `-ELIBBAD`) · `crypto/api.c:336-342` (`crypto_shoot_alg`)
+---
+stateDiagram-v2
+    direction TB
+    [*] --> Testing: crypto_register_*()
+    Testing --> Usable: tested, err = 0<br/>(cờ TESTED)
+    Testing --> Untested: tested, err ≠ 0
+    Usable --> Dying: crypto_shoot_alg()<br/>(cờ DYING)
+    Usable --> Dead: unregister (cờ DEAD)
+    Dying --> Dead: unregister
+    Untested --> Dead: unregister
+    Dead --> [*]: cra_refcnt = 0
+
+=== dg-reg-unregister
+type: flowchart
+status: verified
+title: crypto_unregister_alg() — gỡ và các điểm cảnh báo
+purpose: Cho thấy thứ tự gỡ, chỗ thông báo vendor được phát dưới lock, và hai điểm `WARN` khiến hàm trả về sớm.
+caption: Thông báo `CRYPTO_MSG_ALG_UNREGISTER` là **thay đổi của vendor** (không có trong v5.10.240 upstream) và được phát khi đang giữ write lock — listener không được lookup/alloc trong callback. Khi `WARN_ON(refcnt != 1)` kích hoạt, alg đã bị rút khỏi registry nhưng `cra_destroy` không được gọi.
+refs: `crypto/algapi.c:447-481` · `crypto/algapi.c:152-229` (`crypto_remove_spawns`)
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_unregister_alg(alg)"]):::api --> L["down_write(crypto_alg_sem)"]:::core
+    L --> Q{{"alg còn trong<br/>crypto_alg_list?"}}:::dec
+    Q -- "không" --> UW1["up_write"]:::core --> W1["WARN: Algorithm ... is not registered<br/>→ return"]:::err
+    Q -- "có" --> D["cờ DEAD"]:::core
+    D --> V["crypto_notify(ALG_UNREGISTER)<br/>(vendor, đang giữ lock)"]:::drv
+    V --> X["list_del_init(cra_list)"]:::core
+    X --> RS["crypto_remove_spawns(alg, list, NULL):<br/>instance phụ thuộc → DEAD"]:::core
+    RS --> UW2["up_write"]:::core
+    UW2 --> R{{"cra_refcnt == 1?"}}:::dec
+    R -- "không: còn người dùng" --> W2["WARN_ON → return<br/>(không gọi cra_destroy)"]:::err
+    R -- "có" --> CD["cra_destroy(alg) nếu có"]:::core
+    CD --> RF["crypto_remove_final(list)"]:::ok

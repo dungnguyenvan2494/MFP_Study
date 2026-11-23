@@ -1,0 +1,95 @@
+=== dg-tp-parse
+type: flowchart
+status: verified
+title: cryptomgr_schedule_probe() — từ tên "tmpl(a,b)" tới tb[]
+purpose: Cho thấy cách một chuỗi tên được tách thành tên template và danh sách tham số, và khi nào yêu cầu bị bỏ qua (caller nhận `-ENOENT`).
+caption: Tham số được tách theo dấu `,` ở mức ngoặc ngoài cùng (cho phép lồng: `authenc(hmac(sha256),cbc(aes))`). `tb[0]` luôn là `CRYPTOA_TYPE` mang type/mask của request larval để template biết caller muốn loại gì. Tối đa `CRYPTO_MAX_ATTRS` (32) tham số. Kthread `cryptomgr_probe` lặp `tmpl->create()` khi gặp `-EAGAIN`; nếu không tìm được template, larval được đánh thức với `adult = NULL` → `-ENOENT`.
+refs: `crypto/algboss.c:80-191` (`cryptomgr_schedule_probe`) · `crypto/algboss.c:57-78` (`cryptomgr_probe`) · `crypto/algapi.c:593-617` (`crypto_lookup_template`)
+explain: ch-templates
+---
+flowchart TD
+    %% @classdefs
+    S(["larval->alg.cra_name<br/>vd authenc(hmac(sha256),cbc(aes))"]):::api --> P["đọc chuỗi [A-Za-z0-9_-]<br/>trước ( đầu tiên"]:::core
+    P --> Q1{{"có tên và ký tự<br/>kế tiếp là ( ?"}}:::dec
+    Q1 -- "không" --> E1(["NOTIFY_OK: không xử lý<br/>→ caller nhận -ENOENT"]):::err
+    Q1 -- "có" --> L["tách tham số theo ',' ở mức ngoặc ngoài"]:::core
+    L --> Q2{{"tham số toàn chữ số?"}}:::dec
+    Q2 -- "có" --> U["CRYPTOA_U32"]:::core
+    Q2 -- "không" --> A["CRYPTOA_ALG (tên alg con)"]:::core
+    U --> T["tb[0] = CRYPTOA_TYPE<br/>{type, mask của larval}"]:::core
+    A --> T
+    T --> K(["kthread_run(cryptomgr_probe)<br/>→ NOTIFY_STOP"]):::ok
+
+=== dg-tp-create
+type: sequence
+status: verified
+title: Dựng instance hmac(sha256) — create(), grab spawn, đăng ký
+purpose: Công thức chung của mọi `create()`: kiểm loại, cấp instance, "grab" alg con (có thể đệ quy tạo instance khác), đặt tên, đăng ký.
+caption: `crypto_grab_shash` → `crypto_grab_spawn` gọi lookup đầy đủ (`crypto_find_alg`), nên có thể **đệ quy** tạo thêm instance (vd `authenc` grab `hmac(sha256)` chưa có → larval thứ hai, kthread khác). Spawn được móc vào `cra_users` của alg con dưới write lock. Khi đăng ký, ref "tạm" lấy lúc grab được thả; từ đó alg con được giữ qua `cra_users` + module của template. Lỗi ở bất kỳ bước nào → `inst->free(inst)`.
+refs: `crypto/hmac.c:165-236` (`hmac_create`) · `crypto/algapi.c:688-720` (`crypto_grab_spawn`) · `crypto/algapi.c:619-670` (`crypto_register_instance`) · `crypto/algapi.c:856-869` (`crypto_check_attr_type`)
+explain: ch-templates
+---
+sequenceDiagram
+    autonumber
+    participant K as cryptomgr_probe<br/>(kthread)
+    participant H as hmac.c
+    participant AP as algapi.c
+    participant R as registry
+    K->>H: tmpl->create(tmpl, tb) = hmac_create
+    H->>AP: crypto_check_attr_type(tb, SHASH, &mask)
+    Note over H,AP: mask con = kế thừa ASYNC /<br/>NEED_FALLBACK / ALLOCATES_MEMORY
+    Note over H,AP: inst = kzalloc(sizeof inst + spawn)
+    H->>AP: crypto_grab_shash(spawn, "sha256", mask)
+    AP->>R: crypto_find_alg() — lookup đầy đủ
+    R-->>AP: sha256-ce (+ ref tạm)
+    Note over AP,R: write lock: spawn vào cra_users<br/>spawn->alg = sha256-ce
+    AP-->>H: 0
+    Note over H,AP: kiểm digestsize ≤ blocksize ≤ statesize<br/>crypto_inst_setname → hmac(sha256-ce)
+    H->>AP: shash_register_instance()<br/>→ crypto_register_instance()
+    Note over AP,R: spawn->dead? → -EAGAIN<br/>thả ref tạm, cờ INSTANCE
+    AP->>R: __crypto_register_alg + chờ test
+    AP-->>H: 0
+    H-->>K: 0
+    Note over K,H: complete_all(request larval)
+
+=== dg-tp-deps
+type: graph
+status: inferred
+title: Cây phụ thuộc instance — gỡ dây chuyền theo cra_users
+purpose: Khi một alg con bị gỡ (hoặc bị alg tốt hơn thay thế), mọi instance dựng trên nó — trực tiếp hay gián tiếp — bị đánh dấu DEAD.
+caption: Ví dụ `authenc(hmac(sha256),cbc(aes))` lần đầu trên sản phẩm; các driver cụ thể (`sha256-ce`, `cbc-aes-ce`) là **suy luận** từ priority và defconfig. Mũi tên liền = spawn (nằm trong `cra_users` của alg đích). Mũi tên đứt **không** phải spawn: vỏ simd tạo tfm cryptd khi **khởi tạo tfm**, không phải khi tạo alg. Gỡ `sha256-ce` → `hmac(sha256-ce)` DEAD → `authenc(...)` DEAD; instance được giải phóng bất đồng bộ khi refcount về 0.
+refs: `crypto/algapi.c:152-229` (`crypto_remove_spawns`) · `crypto/algapi.c:72-90` (`crypto_destroy_instance`) · `crypto/authenc.c:420-421` · `crypto/simd.c:111-135` (`simd_skcipher_init`)
+explain: ch-templates
+---
+flowchart TB
+    %% @classdefs
+    AE["authenc(<br/>hmac(sha256-ce),<br/>cbc-aes-ce)<br/>instance · prio 3200"]:::api
+    HM["hmac(sha256-ce)<br/>instance · prio 200"]:::api
+    CB["cbc-aes-ce<br/>vỏ simd · async · 300"]:::impl
+    S2["sha256-ce<br/>shash · 200"]:::impl
+    CD["cryptd(__cbc-aes-ce)<br/>instance · 350"]:::api
+    INT["__cbc-aes-ce<br/>INTERNAL · sync"]:::impl
+    AE -- "spawn auth" --> HM
+    AE -- "spawn enc" --> CB
+    HM -- "spawn" --> S2
+    CB -. "init tfm:<br/>cryptd_alloc_skcipher" .-> CD
+    CD -- "spawn" --> INT
+
+=== dg-tp-spawn-eagain
+type: flowchart
+status: verified
+title: Tạo tfm của instance khi alg con đang chết — -EAGAIN và dựng lại
+purpose: Giải thích cơ chế tự phục hồi: instance có alg con đã chết bị "bắn hạ" và lookup sau dựng instance mới.
+caption: `crypto_spawn_alg()` chạy dưới read lock. Hai lý do trả `-EAGAIN`: spawn đã `dead` (alg con bị gỡ), hoặc module của alg con đang gỡ (`try_module_get` thất bại — khi đó chính alg con bị bắn hạ). `crypto_create_tfm_node()` thấy `-EAGAIN` thì bắn hạ instance hiện tại; `crypto_alloc_tfm_node()` lặp lại từ đầu.
+refs: `crypto/algapi.c:738-761` (`crypto_spawn_alg`) · `crypto/algapi.c:763-807` (`crypto_spawn_tfm`, `crypto_spawn_tfm2`) · `crypto/api.c:336-342` (`crypto_shoot_alg`) · `crypto/api.c:466-469`
+---
+flowchart TD
+    %% @classdefs
+    S(["init tfm của instance<br/>→ crypto_spawn_tfm(spawn)"]):::api --> Q1{{"spawn->dead ?"}}:::dec
+    Q1 -- "có" --> E1["-EAGAIN"]:::err
+    Q1 -- "không" --> Q2{{"try_module_get<br/>(module alg con)?"}}:::dec
+    Q2 -- "thất bại" --> SH["crypto_shoot_alg(alg con)<br/>→ -EAGAIN"]:::err
+    Q2 -- "được" --> OK(["tạo tfm con, init tiếp"]):::ok
+    E1 --> X["crypto_create_tfm_node:<br/>crypto_shoot_alg(instance), kfree"]:::core
+    SH --> X
+    X --> R(["crypto_alloc_tfm_node lặp lại:<br/>lookup bỏ qua alg DYING<br/>→ dựng instance mới"]):::cb

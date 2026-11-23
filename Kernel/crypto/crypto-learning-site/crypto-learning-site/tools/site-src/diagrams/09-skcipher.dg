@@ -1,0 +1,114 @@
+=== dg-sk-seq-template
+type: sequence
+status: verified
+title: Mã hoá đồng bộ qua template — encrypted-keys với cbc(aes-ce)
+purpose: Theo một request từ caller qua dispatcher, template `cbc`, `skcipher_walk` tới cipher `aes-ce` — từng block một.
+caption: Mỗi block 16 byte gọi `cia_encrypt` qua con trỏ hàm; `aes_cipher_encrypt` (aes-ce) bật/tắt NEON cho **từng block** khi `crypto_simd_usable()`. Không có callback: kết quả là giá trị trả về. `-EINVAL` từ walk khi `cryptlen` không chia hết blocksize.
+refs: `crypto/skcipher.c:624-638` · `crypto/cbc.c:16-89` · `crypto/skcipher.c:476-497` (`skcipher_walk_virt`) · `crypto/skcipher.c:104-178` (`skcipher_walk_done`) · `arch/arm64/crypto/aes-ce-glue.c:46-58`
+explain: ch-skcipher
+---
+sequenceDiagram
+    autonumber
+    box rgb(239,246,255) Caller
+        participant EK as encrypted.c
+    end
+    box rgb(241,245,249) Crypto core
+        participant SK as skcipher.c
+        participant W as skcipher_walk
+    end
+    box rgb(255,247,237) Implementation
+        participant CBC as cbc instance<br/>(crypto/cbc.c)
+        participant AES as aes-ce<br/>(cipher con)
+    end
+    EK->>SK: crypto_skcipher_encrypt(req)
+    Note over SK,W: NEED_KEY? → -ENOKEY
+    SK->>CBC: alg->encrypt(req)<br/>= crypto_cbc_encrypt
+    CBC->>W: skcipher_walk_virt()
+    W-->>CBC: đoạn đầu (đã map)
+    loop mỗi đoạn (walk.nbytes > 0)
+        loop mỗi block 16 byte
+            Note over CBC,AES: crypto_xor(iv, src)
+            CBC->>AES: cia_encrypt(tfm, dst, iv)
+            AES-->>CBC: block đã mã hoá
+            Note over CBC,AES: memcpy(iv, dst)
+        end
+        CBC->>W: skcipher_walk_done()
+        W-->>CBC: đoạn kế / 0 / -EINVAL
+    end
+    CBC-->>SK: 0 hoặc lỗi
+    SK-->>EK: 0 hoặc lỗi (không có callback)
+
+=== dg-sk-seq-simd
+type: sequence
+status: verified
+title: cbc-aes-ce — vỏ simd, đường đồng bộ khi NEON dùng được
+purpose: Giải thích vì sao alg mang cờ `ASYNC` nhưng thường trả kết quả ngay, và khi nào nó rẽ sang cryptd.
+caption: "NEON dùng được" = `crypto_simd_usable()` đúng **và** không phải trường hợp đang atomic mà cryptd còn request xếp hàng (giữ thứ tự). Mỗi lần gọi `aes_cbc_encrypt` nằm giữa `kernel_neon_begin()`/`kernel_neon_end()`. `simd_skcipher_encrypt` chép request vào vùng nháp (`subreq = skcipher_request_ctx(req)`, `*subreq = *req`) rồi chọn tfm con. Đường "NEON không dùng được" (IRQ, softirq khi NEON đang bận, hoặc đang atomic mà cryptd còn request xếp hàng) được vẽ chi tiết ở chương Tăng tốc phần cứng. `aes_cbc_encrypt` là hàm asm xử lý **nhiều block** trong một lần bật NEON.
+refs: `crypto/simd.c:62-81` · `arch/arm64/crypto/aes-glue.c:213-240` (`cbc_encrypt_walk`, `cbc_encrypt`) · `arch/arm64/crypto/aes-glue.c:1003-1036` (đăng ký vỏ simd) · `include/crypto/internal/simd.h`
+explain: ch-hwaccel
+next: Đường bất đồng bộ qua cryptd: [cryptd — submit](#dg-hw-cryptd-submit).
+---
+sequenceDiagram
+    autonumber
+    participant C as Caller
+    participant SK as skcipher.c
+    participant S as simd.c<br/>cbc-aes-ce · ASYNC
+    participant I as __cbc-aes-ce<br/>INTERNAL · sync
+    participant N as NEON asm
+    C->>SK: crypto_skcipher_encrypt(req)
+    SK->>S: simd_skcipher_encrypt(req)
+    Note over S,I: subreq = vùng nháp của req<br/>*subreq = *req
+    alt NEON dùng được
+        S->>SK: encrypt(subreq)<br/>tfm con = __cbc-aes-ce
+        SK->>I: cbc_encrypt(subreq)
+        loop mỗi đoạn walk
+            I->>N: aes_cbc_encrypt()<br/>nhiều block / lần
+        end
+            N-->>I: xong đoạn
+        I-->>S: 0 (qua dispatcher)
+        S-->>C: 0 — kết quả có ngay
+    else NEON không dùng được
+        S->>SK: encrypt(subreq)<br/>tfm con = cryptd
+        S-->>C: -EINPROGRESS<br/>(xem sơ đồ cryptd)
+    end
+
+=== dg-sk-walk-next
+type: flowchart
+status: verified
+title: skcipher_walk_next() — chọn đường fast / copy / slow
+purpose: Cho thấy cách walk biến scatterlist thành đoạn nhớ liền mạch, và vì sao dữ liệu không căn chỉnh hay bị cắt ngang làm chậm.
+caption: `bsize = min(stride, max(total, blocksize))`; `stride` là `walksize`. "Đoạn liền" = phần còn lại của mục scatterlist hiện tại ở cả src và dst (`scatterwalk_clamp`). Khi không xin được page tạm, đường copy rơi về đường slow. Với `skcipher_walk_async()` (cờ `SKCIPHER_WALK_PHYS`) kết quả được đổi sang page + offset vật lý.
+refs: `crypto/skcipher.c:343-394` · `crypto/skcipher.c:224-341` (`skcipher_next_slow/copy/fast`) · `crypto/skcipher.c:78-84` (`skcipher_walk_gfp`)
+---
+flowchart TD
+    %% @classdefs
+    S(["skcipher_walk_next(walk)"]):::api --> B["n = min(total, đoạn liền src/dst)<br/>bsize = min(stride,<br/>max(total, blocksize))"]:::core
+    B --> Q1{{"n < bsize ?<br/>(block bị cắt ngang)"}}:::dec
+    Q1 -- "có" --> Q2{{"total < blocksize ?"}}:::dec
+    Q2 -- "có" --> E1(["skcipher_walk_done(-EINVAL)<br/>dữ liệu không đủ một block"]):::err
+    Q2 -- "không" --> SLOW(["slow: chép block vào<br/>buffer nhỏ"]):::drv
+    Q1 -- "không" --> Q3{{"src/dst lệch alignmask ?"}}:::dec
+    Q3 -- "có" --> Q4{{"đã có hoặc xin được<br/>page tạm?"}}:::dec
+    Q4 -- "không" --> SLOW2(["slow (rơi về)"]):::drv
+    Q4 -- "có" --> COPY(["copy: chép vào page tạm,<br/>xử lý, chép ra"]):::drv
+    Q3 -- "không" --> FAST(["fast: map trực tiếp,<br/>không chép"]):::ok
+
+=== dg-sk-setkey
+type: flowchart
+status: verified
+title: crypto_skcipher_setkey() — kiểm tra, căn chỉnh, cờ NEED_KEY
+purpose: Mọi nhánh lỗi của setkey ở tầng core, trước và sau khi gọi implementation.
+caption: Kiểm tra độ dài ở core chỉ dùng `min_keysize/max_keysize`; implementation còn kiểm chi tiết hơn (AES chỉ nhận 16/24/32). Bản sao khoá cho trường hợp lệch căn được xoá bằng `kfree_sensitive`. Setkey lỗi đưa tfm về `NEED_KEY` — khoá cũ coi như mất.
+refs: `crypto/skcipher.c:578-621` · `crypto/skcipher.c:572-576` (`skcipher_set_needkey`)
+---
+flowchart TD
+    %% @classdefs
+    S(["crypto_skcipher_setkey(tfm, key, keylen)"]):::api --> Q1{{"keylen trong<br/>[min_keysize, max_keysize]?"}}:::dec
+    Q1 -- "không" --> E1(["-EINVAL<br/>(cờ không đổi)"]):::err
+    Q1 -- "có" --> Q2{{"key lệch alignmask?"}}:::dec
+    Q2 -- "có" --> U["kmalloc(GFP_ATOMIC) bản sao căn chỉnh<br/>→ alg->setkey → kfree_sensitive"]:::core
+    Q2 -- "không" --> D["alg->setkey(tfm, key, keylen)"]:::impl
+    U --> Q3{{"err ≠ 0 ?"}}:::dec
+    D --> Q3
+    Q3 -- "có" --> E2(["đặt NEED_KEY, trả err<br/>(-EINVAL, -ENOMEM …)"]):::err
+    Q3 -- "không" --> OK(["xoá NEED_KEY, trả 0"]):::ok

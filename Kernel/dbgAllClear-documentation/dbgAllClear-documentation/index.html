@@ -1,0 +1,1869 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dbgAllClear Deep Dive</title>
+<meta name="description" content="Tài liệu kỹ thuật tương tác về lệnh debug dbgAllClear: NVRAM, SPI-Flash, backup group, NVRAM Clear Flag và FactorySetup, dựa trên source code thực tế.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>
+  // Apply saved theme before first paint (avoids a light/dark flash).
+  (function () { try { var t = localStorage.getItem('dbg-doc-theme'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+</script>
+<script src="assets/vendor/highlight.min.js" defer></script>
+<script src="assets/vendor/hljs-cpp.min.js" defer></script>
+<script src="assets/vendor/mermaid.min.js" defer></script>
+<script src="assets/js/main.js" defer></script>
+<script src="assets/js/diagrams.js" defer></script>
+<script src="assets/js/search.js" defer></script>
+<script src="assets/js/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Mở menu điều hướng" aria-expanded="false" aria-controls="sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <a class="brand" href="#introduction">
+    <span class="brand-mark" aria-hidden="true">NV</span>
+    <span class="brand-text">dbgAllClear Deep Dive<small>NVRAM · SPI-Flash · Backup · FactorySetup</small></span>
+  </a>
+  <div class="spacer"></div>
+  <div class="search" role="search">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="search-input" type="search" placeholder="Tìm function, macro, file path…" autocomplete="off" aria-label="Tìm kiếm tài liệu" aria-controls="search-results" aria-expanded="false" role="combobox">
+    <span class="kbd-hint"><kbd>/</kbd></span>
+    <div class="search-results" id="search-results" role="listbox" aria-label="Kết quả tìm kiếm"></div>
+  </div>
+  <button class="icon-btn" id="theme-btn" type="button" aria-label="Chuyển giao diện">
+    <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+  <div class="progress" id="progress" aria-hidden="true"></div>
+</header>
+<div class="overlay" id="overlay"></div>
+
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục tài liệu">
+  <div class="nav-title">DBGALLCLEAR DOCUMENTATION</div>
+
+  <div class="nav-group" data-key="overview">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Overview <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#introduction">01 · Introduction</a></li>
+      <li><a href="#executive-summary">Executive Summary</a></li>
+      <li><a href="#system-architecture">System Architecture</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="fundamentals">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Fundamentals <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#storage">02 · Storage Fundamentals</a></li>
+      <li><a href="#nvram">NVRAM</a></li>
+      <li><a href="#spi-flash">SPI-Flash</a></li>
+      <li><a href="#ssd-emmc">SSD / eMMC</a></li>
+      <li><a href="#flash-erase">Flash Erase Mechanism</a></li>
+      <li><a href="#vxworks">03 · VxWorks &amp; Tornado</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="implementation">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Implementation <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#donau3-subset">04 · Donau3 Subset S-S800</a></li>
+      <li><a href="#donau3-km3">05 · Donau3 KM3</a></li>
+      <li><a href="#zeus">06 · Zeus KM3</a></li>
+      <li><a href="#version-comparison">10 · Version Comparison</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="storage-dd">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Storage Deep Dive <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#storage-functions">07 · Storage Functions</a></li>
+      <li><a href="#fn-memset">NVDF_memsetNvRam</a></li>
+      <li><a href="#fn-softdipsw">THRG_setSoftDipSw</a></li>
+      <li><a href="#fn-erase">EraseNvramBackupArea</a></li>
+      <li><a href="#group-1">Backup Group 1</a></li>
+      <li><a href="#group-2">Backup Group 2</a></li>
+      <li><a href="#group-3">Backup Group 3</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="boot">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Boot Initialization <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#clear-flag">08 · NVRAM Clear Flag</a></li>
+      <li><a href="#boot">09 · Boot Sequence</a></li>
+      <li><a href="#firstmark">FirstMark</a></li>
+      <li><a href="#factorysetup">FactorySetup</a></li>
+      <li><a href="#ssd-init">SSD Initialization</a></li>
+      <li><a href="#database-init">Database Initialization</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="analysis">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Analysis <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#failure-analysis">11 · Failure Analysis</a></li>
+      <li><a href="#execution-flow">Execution Flow</a></li>
+      <li><a href="#data-consistency">Data Consistency</a></li>
+      <li><a href="#recovery">Recovery Mechanism</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="debugging">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Debugging <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#debugging">12 · Debugging Guide</a></li>
+      <li><a href="#breakpoints">Breakpoints</a></li>
+      <li><a href="#diagnostic-checklist">Diagnostic Checklist</a></li>
+    </ul>
+  </div>
+  <div class="nav-group" data-key="reference">
+    <button class="nav-group-btn" type="button" aria-expanded="true">Reference <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg></button>
+    <ul>
+      <li><a href="#knowledge-check">13 · Knowledge Check</a></li>
+      <li><a href="#glossary">14 · Glossary</a></li>
+      <li><a href="#source-index">15 · Source Code Index</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="content" id="content">
+
+<!-- ===================================================================== 01 -->
+<section class="hero" id="introduction" aria-labelledby="intro-title">
+  <div class="eyebrow">Firmware deep dive · bizhub MFP controller</div>
+  <h1 id="intro-title">Bên trong <code>dbgAllClear</code></h1>
+  <p class="lede">Một lệnh debug xoá dữ liệu không bay hơi (NVRAM / SPI-Flash), vùng backup và kích hoạt khởi tạo lại ở lần boot sau. Tài liệu này truy vết từ dòng lệnh trên console đến tầng storage và ngược lại từ boot đến FactorySetup, chỉ dựa trên source code trong repository.</p>
+
+  <div class="stats" role="list">
+    <div class="stat" role="listitem"><div class="num">3</div><div class="lbl">implementation khác nhau (Donau3 Subset, Donau3 KM3, Zeus KM3)</div></div>
+    <div class="stat" role="listitem"><div class="num">6</div><div class="lbl">Zeus command được xử lý (<code>uc_ClearCmdNo</code> 0–5)</div></div>
+    <div class="stat" role="listitem"><div class="num">3</div><div class="lbl">NVRAM backup group (2 trên SPI-Flash, 1 trên eMMC/SSD)</div></div>
+    <div class="stat" role="listitem"><div class="num mono">0xAB</div><div class="lbl">giá trị NVRAM Clear Flag kích hoạt khởi tạo lúc boot</div></div>
+  </div>
+
+  <div class="legend" aria-label="Chú giải mức độ bằng chứng">
+    <span><span class="badge v">VERIFIED</span> đọc trực tiếp từ source</span>
+    <span><span class="badge i">INFERRED</span> suy luận, có ghi cơ sở</span>
+    <span><span class="badge u">UNVERIFIED</span> chưa xác định được từ repo</span>
+  </div>
+
+  <h3 id="what-is">dbgAllClear là gì và vì sao tồn tại?</h3>
+  <p><code>dbgAllClear</code> là <strong>một hàm C++ bình thường</strong> trong module NVD (Non-Volatile Data) của ứng dụng MFP, được bọc trong <code>#ifdef TORNADO</code>. Nó không phải lệnh built-in của VxWorks. Kỹ sư gọi nó theo tên từ console debug, và shell tra địa chỉ hàm trong bảng symbol. Comment ngay trên hàm mô tả mục đích: <em>“NVRAM and BackUp FlashROM All Clear”</em>. <span class="badge v">VERIFIED</span></p>
+  <p>Mục đích thực tế là đưa thiết bị về trạng thái “chưa từng khởi tạo” trong phòng thí nghiệm: xoá dữ liệu cài đặt/bộ đếm và xoá luôn bản backup, để lần khởi động sau phần mềm không thể khôi phục mà phải chạy <code>FactorySetup()</code> và nạp giá trị xuất xưởng. <span class="badge i">INFERRED</span> <span class="caption">Cơ sở: tên hàm, comment và hành vi boot ở chương 09.</span></p>
+
+  <div class="callout danger">
+    <div class="callout-title">Cảnh báo an toàn</div>
+    <p>Lệnh này xoá dữ liệu không thể khôi phục: cài đặt, bộ đếm, bản backup và database. Lệnh không hỏi xác nhận. Trên Zeus, gọi <strong>không có tham số</strong> qua cuShell tương đương <code>dbgAllClear 0</code>, là chế độ xoá nhiều nhất (xem <a href="#parameter-passing">3.5</a>). Chỉ dùng trên thiết bị test đã được phê duyệt và có backup.</p>
+  </div>
+
+  <h3 id="three-versions">Ba phiên bản được phân tích</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Phiên bản</th><th>File</th><th>Chữ ký</th><th>Có được build?</th></tr></thead>
+    <tbody>
+      <tr><td><a href="#donau3-subset">Donau3 – Subset S-S800</a></td><td><code>Subset/S-S800/Src/application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp:6842</code></td><td><code>void dbgAllClear(void)</code></td><td>Có. <code>nvd/Makefile:49</code>: <code>SUBDIRS = nvdg nvdDonau3 nvdc</code> <span class="badge v">VERIFIED</span></td></tr>
+      <tr><td><a href="#donau3-km3">Donau3 – KM3</a></td><td><code>IT6_Controller/KM3/application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp:5404</code></td><td><code>void dbgAllClear(void)</code></td><td>Chỉ ở nhánh <code>else</code> cuối của <code>nvd/Makefile:227–228</code>, khi <code>CROSS_COMPILE</code> không khớp toolchain nào đã liệt kê <span class="badge v">VERIFIED</span></td></tr>
+      <tr><td><a href="#zeus">Zeus – KM3</a></td><td><code>IT6_Controller/KM3/application/mfp/system/nvd/nvdZeus/NVDG_FuncZeus.cpp:33433</code></td><td><code>void dbgAllClear(uchar uc_ClearCmdNo)</code></td><td>Có, với mọi toolchain đã liệt kê, kể cả <code>s800a-linux-</code> <span class="badge v">VERIFIED</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="overview-flow">Vòng đời tổng quan</h3>
+  <figure class="diagram" data-title="Vòng đời dbgAllClear: pha xoá và pha khởi tạo">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TB
+  U["Kỹ sư nhập lệnh trên console"]:::sw --> SH["Shell: VxWorks hoặc cuShell giả lập trên Linux"]:::sw
+  SH --> D["dbgAllClear(...)"]:::sw
+  subgraph CLR["Pha 1 - khi chạy lệnh"]
+    D --> S1["Xoá vùng NVRAM hoặc SoftDipSW"]:::st
+    D --> S2["Xoá backup group 1, 2, 3"]:::st
+    D --> S3["Đặt Clear Flag = 0xAB (chỉ Zeus)"]:::st
+  end
+  S3 --> R["Reboot - dbgAllClear KHÔNG tự reboot"]:::bt
+  subgraph BOOT["Pha 2 - lần boot sau (Zeus)"]
+    R --> N["NVDSInit()"]:::bt
+    N --> F["FactorySetup() cho từng class"]:::bt
+    F --> DB["SYSF_DBMediaMapDelete()"]:::bt
+    DB --> C["Clear Flag = 0x00"]:::bt
+  end
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef bt fill:#EDE9FE,stroke:#7C3AED,color:#172033
+    </script></div>
+    <div class="diagram-legend"><span><i class="lg-sw"></i>Software</span><span><i class="lg-st"></i>Storage</span><span><i class="lg-bt"></i>Boot / khởi tạo</span><span><i class="lg-er"></i>Lỗi / rủi ro</span></div>
+    <figcaption>Hình 1.1. Hai pha của dbgAllClear. Donau3 chỉ có pha 1 và không có Clear Flag. Đã xác minh: không bản nào trong ba bản gọi reboot.</figcaption>
+  </figure>
+
+  <h3 id="executive-summary">Executive Summary</h3>
+  <ol>
+    <li><strong>Gọi từ đâu.</strong> Hàm chỉ được biên dịch khi có <code>TORNADO</code>. Trong build Linux, macro này vẫn được định nghĩa (<code>Subset/S-S800/Src/donau/Rule.makes:758</code>: <code>-DTORNADO -DDEF_COLOR -DLINUX</code>). Lệnh chạy qua shell giả lập VxWorks <code>cuShell</code> (<code>Linux/Shell/shellLib.cpp</code>), shell này tra tên trong file <code>&lt;argv0&gt;.map</code>. <span class="badge v">VERIFIED</span></li>
+    <li><strong>Ba bản, hai mô hình.</strong> Donau3 (Subset, KM3) ghi 0 vào vùng “NVRAM” rồi xoá backup. Zeus không đụng vùng NVRAM RAM mà chọn 1 trong 6 thao tác qua <code>uc_ClearCmdNo</code>. <span class="badge v">VERIFIED</span></li>
+    <li><strong>“NVRAM” của Zeus là vùng SoftDipSW trên SPI-Flash.</strong> Lệnh zero <code>NVDD_SPI_Flash_SIZE = (16*1024)-8 = 16376</code> byte qua <code>THRG_setSoftDipSw(0, …)</code>. Vùng này chứa FirstMark <code>"NVD10"</code>, Clear Flag và magic <code>"R1"</code> của các class SPI-Flash. <span class="badge v">VERIFIED</span></li>
+    <li><strong>Xoá backup group 1/2 là xoá logic.</strong> Lệnh chỉ ghi <code>0x0000</code> vào trường erase-flag, không erase sector. Group 3 (<code>FlashCtrlBackup</code>) bị ghi đè 0 lên phân vùng eMMC/SSD (<code>DEF_SupportSSD</code>) hoặc <code>ioctl(MEMERASE)</code> trên MTD. <span class="badge v">VERIFIED</span></li>
+    <li><strong>Clear Flag.</strong> Byte <code>0xAB</code> nằm ở SoftDipSW offset <code>5 + offsetof(NVDS_SPIFlashFlag, uc_NVClearFlag)</code>. Ở lần boot sau, <code>NVDSInit()</code> chuyển nó thành <code>sc_InitFlgOfSSD = NVDE_On</code> để chạy FactorySetup cho các class SSD, rồi tắt cờ ở cuối hàm, sau <code>SYSF_DBMediaMapDelete()</code>. <span class="badge v">VERIFIED</span></li>
+    <li><strong>Rủi ro phát hiện được.</strong>
+      <ul>
+        <li>Donau3 memset <code>0x1ffef0</code> byte lên buffer chỉ <code>malloc(512*1024)</code> trên Linux, gây tràn heap <span class="badge i">INFERRED</span>.</li>
+        <li>Subset gọi <code>EraseNvramBackupArea(0)</code> với 1 tham số trong khi bản được build nhận 2 tham số <span class="badge i">INFERRED</span>.</li>
+        <li><code>Set_Cs2()</code> rỗng nên write-protect không có tác dụng <span class="badge v">VERIFIED</span>.</li>
+        <li>Không bản nào kiểm tra giá trị trả về của <code>EraseNvramBackupArea</code> <span class="badge v">VERIFIED</span>.</li>
+      </ul></li>
+    <li><strong>Chuỗi “omit the first 256byte”</strong> chỉ khớp với mô hình Donau3: <code>NVDD_NVRam_Base = DEVICE_CS1_BASE + 0x100</code>. Với Zeus đó chỉ là text trong <code>printf</code>; code ghi từ offset 0 của SoftDipSW. Không có bằng chứng 256 byte này chứa U-Boot. <span class="badge u">UNVERIFIED</span></li>
+  </ol>
+
+  <h3 id="system-architecture">System Architecture</h3>
+  <p>Sơ đồ dưới mô tả quan hệ giữa console, module NVD, các vùng storage và chuỗi khởi tạo. Chi tiết từng vùng có ở <a href="#storage-architecture">chương 02</a>.</p>
+  <figure class="diagram" data-title="Kiến trúc tổng thể: console, NVD, storage, boot">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart LR
+  subgraph CON["Console"]
+    SH["cuShell task<br/>ShellCtrl::Exec"]:::sw
+  end
+  subgraph NVD["Module NVD / THR"]
+    DBG["dbgAllClear"]:::sw
+    MEM["NVDF_memsetNvRam"]:::sw
+    DIP["THRG_setSoftDipSw"]:::sw
+    ERS["EraseNvramBackupArea"]:::sw
+    FLG["NVDF_setNvramClearFlag"]:::sw
+    INI["NVDSInit"]:::bt
+  end
+  subgraph STO["Storage"]
+    RAMNV["Vùng NVRAM<br/>(malloc 512KB trên Linux)"]:::st
+    SOFT["SPI-Flash: SoftDipSW"]:::st
+    BK12["SPI-Flash: Backup G1, G2"]:::st
+    BK3["eMMC/SSD: Backup G3"]:::st
+    NVDATA["SSD: thư mục NVData + DB"]:::st
+  end
+  SH --> DBG
+  DBG -->|Donau3| MEM --> RAMNV
+  DBG -->|Zeus 0,3,5| DIP --> SOFT
+  DBG -->|Donau3, Zeus 0,1,2| ERS
+  ERS --> BK12
+  ERS --> BK3
+  DBG -->|Zeus 0,4,5| FLG --> SOFT
+  INI -->|đọc FirstMark và cờ| SOFT
+  INI -->|FactorySetup, xoá DB| NVDATA
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef bt fill:#EDE9FE,stroke:#7C3AED,color:#172033
+    </script></div>
+    <div class="diagram-legend"><span><i class="lg-sw"></i>Software</span><span><i class="lg-st"></i>Storage</span><span><i class="lg-bt"></i>Boot / khởi tạo</span></div>
+    <figcaption>Hình 1.2. Zeus command 1 cũng xoá trực tiếp thư mục NVData bằng <code>FILF_RemoveDirTree</code>; mũi tên này được tách riêng trong chương 06 để sơ đồ không bị rối.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================================================================== 02 -->
+<section class="chapter" id="storage">
+  <div class="chapter-label">Chapter 02</div>
+  <h2>Storage Fundamentals</h2>
+  <p class="chapter-lede">Trước khi đọc code cần phân biệt rõ các loại bộ nhớ, vì repo dùng tên “NVRAM” và “FlashROM” cho những thứ không còn giống nghĩa đen.</p>
+
+  <h3 id="nvram">NVRAM</h3>
+  <div class="grid-2">
+    <div class="card"><h4>1 · Definition</h4><p>Non-Volatile RAM: bộ nhớ đọc/ghi theo byte như RAM nhưng <strong>giữ dữ liệu khi mất nguồn</strong> (ví dụ SRAM nuôi pin, FRAM, MRAM).</p></div>
+    <div class="card"><h4>2 · How it works</h4><p>DRAM lưu bit bằng tụ điện, cần refresh và mất dữ liệu khi tắt nguồn. NVRAM giữ trạng thái bằng pin hoặc vật liệu không bay hơi, nên CPU có thể ghi trực tiếp bằng lệnh store hoặc <code>memset</code>.</p></div>
+    <div class="card"><h4>3 · Why it is needed</h4><p>Lưu cài đặt, bộ đếm trang in, cờ trạng thái: những dữ liệu thay đổi thường xuyên và phải còn sau khi tắt máy.</p></div>
+    <div class="card"><h4>4 · In this repository</h4><p>Trên build Linux, <code>DEVICE_CS1_BASE</code> = <code>ul_CS1_BaseAdr</code> = <code>malloc(512 * 1024)</code>, tức một <strong>buffer RAM thường</strong> (KM3 <code>Linux/Platform/InitDevice.cpp:209</code>, Subset <code>InitDevice.cpp:207,348</code>) <span class="badge v">VERIFIED</span>. Comment trong code gọi kiến trúc này là “NVRAMレス対応” (NVRAM-less). Dữ liệu bền vững nằm ở SPI-Flash và SSD <span class="badge i">INFERRED</span>.</p></div>
+    <div class="card"><h4>5 · Related functions</h4><p><code>NVDF_memsetNvRam</code>, <code>NVDF_memcpyNvRam</code> (<code>nvdg/NVDG_NVWrite.cpp</code>), macro <code>NVDD_NVRam_Base</code>.</p></div>
+    <div class="card"><h4>6 · Common misconceptions</h4><p>“Biến tên NVRAM thì có chip NVRAM”: sai với các build Linux trong repo. Cũng sai khi cho rằng <code>Set_Cs2()</code> đang bảo vệ ghi: hàm này rỗng.</p></div>
+  </div>
+
+  <h3 id="spi-flash">SPI-Flash</h3>
+  <div class="grid-2">
+    <div class="card"><h4>1 · Definition</h4><p>NOR flash nối qua bus SPI, dung lượng nhỏ, thường chứa bootloader và dữ liệu cấu hình.</p></div>
+    <div class="card"><h4>2 · How it works</h4><p>Đọc theo byte. Ghi (program) chỉ chuyển bit 1 thành 0. Muốn đưa bit về 1 phải <strong>erase cả sector</strong> (ở đây 4KB: <code>THRD_SPI_FlashSectorSize = _4K</code>).</p></div>
+    <div class="card"><h4>3 · Why it is needed</h4><p>Thay thế NVRAM cho dữ liệu nhỏ, quan trọng: SoftDipSW, cờ boot, backup group 1/2.</p></div>
+    <div class="card"><h4>4 · In this repository</h4><p>Mỗi vùng có <strong>2 mặt</strong> (1面/2面) và bộ đếm đầu/cuối 4 byte, quản lý bởi <code>THRC_SPI_FlashCtrlBackup</code> (KM3 <code>Linux/Platform/Mediaif.cpp</code>) <span class="badge v">VERIFIED</span>.</p></div>
+    <div class="card"><h4>5 · Related functions</h4><p><code>THRG_setSoftDipSw</code>, <code>THRG_getSoftDipSw</code>, <code>THRC_SPI_FlashCtrlBackup::write/read/erase</code>, <code>THRF_writeFlash</code>.</p></div>
+    <div class="card"><h4>6 · Common misconceptions</h4><p>“Erase backup = xoá sector”: với group 1/2, <code>erase()</code> chỉ ghi 2 byte <code>0x0000</code> đánh dấu đã xoá (chi tiết ở <a href="#group-1">7.4</a>).</p></div>
+  </div>
+
+  <h3 id="flashrom">FlashROM</h3>
+  <p>Trong code, “BackUp FlashROM” xuất hiện trong <code>printf</code> của Zeus và tên class <code>FlashCtrlBackup</code>. Trên KM3, <code>FlashCtrlBackup</code> đọc/ghi qua <code>raw_ReadFlash</code>/<code>raw_WriteFlash</code>/<code>raw_EraseFlash</code>. Khi có <code>DEF_SupportSSD</code>, các hàm này mở một <strong>block device</strong> (<code>/dev/kmsda12</code>, <code>/dev/kmsda11</code> hoặc <code>/dev/mapper/crypt_*</code>; <code>Mediaif.cpp:5717</code>) <span class="badge v">VERIFIED</span>. Vì vậy “FlashROM” trong repo là thuật ngữ kế thừa từ thời NOR FlashROM. Trên KM3, nó có thể là một phân vùng eMMC/SSD. Bản VxWorks cũ (<code>Subset/S-S800/Src/bsp_donau/Donau/Mediaif.cpp</code>) dùng <code>BSP_FLASH_DEVICE_ID_BACKUP</code> với comment “NorFlashROM” nhưng không được Makefile nào tham chiếu.</p>
+
+  <h3 id="ssd-emmc">SSD / eMMC</h3>
+  <div class="grid-2">
+    <div class="card"><h4>Definition &amp; working</h4><p>Bộ nhớ NAND có controller riêng (FTL), truy cập theo block qua driver block device. Ứng dụng làm việc với file hoặc phân vùng, không với cell flash.</p></div>
+    <div class="card"><h4>In this repository</h4><p>Cấu hình lưu trữ được nhận diện qua <code>THRG_GetStorageType()</code>: <code>TYPE_StorageConfig_MicroSD_8GB/16GB</code>, <code>SSD_128GB/256GB/1TB</code> (<code>raw_GetFlashFdSingleton</code>, <code>Mediaif.cpp:5717</code>). Dữ liệu class SSD nằm trong thư mục <code>FILE_DirTypeNVData</code> = <code>"/NVData"</code> (<code>fil/filc/FILC_BaseDirColor.cpp:138</code>). Printf của Zeus gọi nó là <code>/ata0b/NVData</code>.</p></div>
+    <div class="card"><h4>Related functions</h4><p><code>FILF_RemoveDirTree</code>, <code>SYSF_DBMediaMapDelete</code>, <code>NVDC_MediaAccessSSD::CheckOfFile</code>, <code>FlashCtrlBackup::eraseBackupData</code>.</p></div>
+    <div class="card"><h4>Misconceptions</h4><p>“Xoá file = xoá dữ liệu vật lý”: <code>FILF_RemoveDirTree</code> chỉ unlink file. Việc dữ liệu còn trên NAND hay không do FTL/TRIM quyết định, và repo không cho biết <span class="badge u">UNVERIFIED</span>.</p></div>
+  </div>
+
+  <h3 id="backup-storage">Backup Storage</h3>
+  <p>Ba “NVRAM backup group” chứa bản sao dữ liệu các class được đánh dấu cần backup. Comment trong <code>Mediaif.cpp</code> (bảng ở hàm <code>EraseNvramBackupArea</code>) ghi vị trí: <em>Group 1, 2 → SSD (có NVRAM) / SPI-Flash (NVRAM-less); Group 3 → không có / eMMC</em>. Trong <code>NVDSInit</code>, class nào mất dữ liệu chính mà còn backup sẽ đi nhánh <code>SERR_Fatal</code> thay vì <code>FactorySetup</code> (chương 09). Đó là lý do <code>dbgAllClear</code> xoá cả backup. <span class="badge i">INFERRED</span></p>
+
+  <h3 id="boot-flag">Boot Flag</h3>
+  <p>Cờ boot là một byte trong SoftDipSW mà phần mềm đọc khi khởi động để quyết định hành vi. <code>TYPE_FlagKind_NVClear = 0</code> (<code>nvd/APIC_Setting_Other.h:5555</code>) là cờ “NVRAM Clear”, giá trị bật là <code>0xab</code>. Cùng struct <code>NVDS_SPIFlashFlag</code> còn có <code>NWDLExec</code>, <code>StaticElectricCalibrationExec</code>, <code>EnhancedNVClearFlag</code>. <span class="badge v">VERIFIED</span></p>
+
+  <h3 id="storage-comparison">Storage comparison</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Loại</th><th>Volatility</th><th>Read</th><th>Write</th><th>Erase</th><th>Dùng phổ biến</th><th>Trong hệ thống này</th></tr></thead>
+    <tbody>
+      <tr><td>DRAM</td><td>Bay hơi</td><td>Byte</td><td>Byte</td><td>Không cần</td><td>Bộ nhớ chính</td><td>Vùng “NVRAM” trên Linux (<code>malloc 512KB</code>)</td></tr>
+      <tr><td>NVRAM thật</td><td>Không bay hơi</td><td>Byte</td><td>Byte</td><td>Không cần</td><td>Cài đặt, bộ đếm</td><td>Mô hình VxWorks/Donau cũ (<code>DEVICE_CS1_BASE</code>, write-protect CS2)</td></tr>
+      <tr><td>NOR SPI-Flash</td><td>Không bay hơi</td><td>Byte</td><td>Program 1→0</td><td>Theo sector (4KB)</td><td>Boot, cấu hình</td><td>SoftDipSW, Backup G1/G2, BspThr, MachineInfo</td></tr>
+      <tr><td>eMMC / SSD</td><td>Không bay hơi</td><td>Block</td><td>Block (qua FTL)</td><td>FTL tự quản</td><td>File system</td><td>NVData, database, Backup G3</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="storage-architecture">Storage architecture (KM3 / Zeus)</h3>
+  <figure class="diagram" data-title="Kiến trúc storage KM3 / Zeus">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TB
+  APP["MFP application: NVD, THR"]:::sw
+  subgraph RAM["RAM của tiến trình"]
+    CS1["DEVICE_CS1_BASE = malloc 512KB<br/>NVDD_NVRam_Base = CS1 + 0x100"]:::st
+  end
+  subgraph SPI["SPI-Flash - sector 4KB, mỗi vùng 2 mặt"]
+    G1["Backup Group 1<br/>0x00000 / 0x19000 - 100KB mỗi mặt"]:::st
+    G2["Backup Group 2<br/>0x32000 / 0x50000 - 120KB mỗi mặt"]:::st
+    SD["SoftDipSW<br/>0x6E000 / 0x72000 - 16KB mỗi mặt<br/>FirstMark, Clear Flag, dữ liệu class SPI"]:::st
+    OT["BspThr 0x77000 / 0x78000<br/>MachineInfo 0x79000 / 0x7A000"]:::st
+  end
+  subgraph BLK["eMMC / SSD - block device"]
+    G3["Backup Group 3 - FlashCtrlBackup<br/>sector quản lý 17, bank 2 và 4"]:::st
+    NV["Thư mục NVData<br/>record class SSD, file DB"]:::st
+  end
+  APP --> CS1
+  APP --> SD
+  APP --> G1
+  APP --> G2
+  APP --> G3
+  APP --> NV
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+    </script></div>
+    <div class="diagram-legend"><span><i class="lg-sw"></i>Software</span><span><i class="lg-st"></i>Storage</span></div>
+    <figcaption>Hình 2.1. Địa chỉ SPI-Flash lấy từ macro tại <code>KM3 Linux/Platform/Mediaif.cpp:107–133</code>. Thông số Group 3 lấy từ <code>Mediaif.cpp:71–75</code>: <code>START_SEC_NVT 17</code>, <code>START_SEC_NV1 2</code>, <code>START_SEC_NV2 4</code>, <code>NVRAM_SECTOR_COUNT 2</code>, mỗi sector <code>_64K</code>. Đây là offset trong vùng do driver quản lý, không phải địa chỉ vật lý tuyệt đối.</figcaption>
+  </figure>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>Vùng</th><th>Physical device</th><th>Logical region</th><th>Truy cập</th><th>Erase / write</th><th>dbgAllClear tác động?</th></tr></thead>
+    <tbody>
+      <tr><td>Vùng NVRAM</td><td>RAM (Linux)</td><td><code>CS1+0x100 …</code></td><td><code>FUNCOFFSET</code>, <code>NVDF_*NvRam</code></td><td><code>NVDF_memsetNvRam</code></td><td>Donau3: có</td></tr>
+      <tr><td>SoftDipSW</td><td>SPI-Flash</td><td>16376 byte dữ liệu</td><td><code>THRG_getSoftDipSw</code></td><td><code>THRG_setSoftDipSw</code></td><td>Zeus 0, 3, 5 (zero); 0, 4, 5 (cờ)</td></tr>
+      <tr><td>Backup G1</td><td>SPI-Flash</td><td>2 mặt × 100KB</td><td><code>c_NvramBackupGroup1.read</code></td><td><code>.erase()</code> (logic)</td><td>Donau3 KM3; Zeus 0, 1, 2</td></tr>
+      <tr><td>Backup G2</td><td>SPI-Flash</td><td>2 mặt × 120KB</td><td><code>c_NvramBackupGroup2.read</code></td><td><code>.erase()</code> (logic)</td><td>Donau3 KM3; Zeus 0, 1, 2</td></tr>
+      <tr><td>Backup G3</td><td>eMMC/SSD partition</td><td>sector quản lý + 2 bank</td><td><code>c_NvramBackup.readBackupData</code></td><td><code>eraseBackupData</code> → <code>raw_EraseFlash</code></td><td>Zeus 0, 1, 2</td></tr>
+      <tr><td>NVData</td><td>SSD file system</td><td>thư mục <code>/NVData</code></td><td><code>NVDC_MediaAccessSSD</code></td><td><code>FILF_RemoveDirTree</code>, <code>SYSF_Remove</code></td><td>Zeus 1 (trực tiếp); 0, 4, 5 (lúc boot)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="flash-erase">Flash Erase Mechanism – vì sao không “memset” flash?</h3>
+  <p><code>memset(address, 0, size)</code> chỉ chạy được trên vùng nhớ mà CPU ghi trực tiếp được (RAM, NVRAM ánh xạ bộ nhớ). Flash thì khác:</p>
+  <ul>
+    <li><strong>Erase</strong> đưa toàn bộ sector về <code>0xFF</code> (mọi bit = 1). Thao tác chậm, chạy theo khối, và làm mòn cell (wear).</li>
+    <li><strong>Program</strong> chỉ đổi bit 1 → 0. Vì vậy ghi <code>0x00</code> luôn được mà không cần erase trước.</li>
+    <li><strong>Write protection</strong> trên NVRAM cũ được bật/tắt qua thanh ghi CS2 (<code>Set_Cs2</code>). Flash có cơ chế khoá riêng của driver.</li>
+  </ul>
+  <p>Code dựa đúng vào tính chất này. <code>THRC_SPI_FlashCtrl::setEraseEnable()</code> ghi <code>0x0000</code> với comment “削除設定有効値は、0x0000（すべてのビットOFFであるため、イレースの必要なし）”, tức giá trị “đã xoá” là 0x0000 nên không cần erase. Ngược lại, bộ đếm <code>THRD_SPI_FlashEraseCountVal = 0xFFFFFFFF</code> là giá trị sau khi erase. <span class="badge v">VERIFIED</span></p>
+  <div class="callout note"><div class="callout-title">Phân biệt các thao tác</div>
+    <p><strong>Memory clear</strong>: memset RAM. <strong>Flash program</strong>: ghi 0. <strong>Flash erase</strong>: về 0xFF theo sector. <strong>Logical erase</strong>: ghi cờ “invalid”. <strong>File deletion</strong>: unlink. <strong>Recursive deletion</strong>: <code>FILF_RemoveDirTree</code>. <strong>Factory initialization</strong>: <code>FactorySetup()</code> ghi giá trị mặc định mới.</p>
+  </div>
+</section>
+
+<!-- ===================================================================== 03 -->
+<section class="chapter" id="vxworks">
+  <div class="chapter-label">Chapter 03</div>
+  <h2>VxWorks &amp; Tornado</h2>
+  <p class="chapter-lede">Từ việc gõ chữ <code>dbgAllClear</code> đến lúc hàm được gọi: macro biên dịch, shell, bảng symbol và cách tham số được truyền.</p>
+
+  <h3 id="vxworks-basics">VxWorks và Tornado là gì?</h3>
+  <p><strong>VxWorks</strong> là RTOS của Wind River. <strong>Tornado</strong> là bộ công cụ phát triển (IDE, compiler, target shell) đi kèm VxWorks 5.x. Target shell của VxWorks cho phép gọi <em>bất kỳ hàm C nào</em> có trong bảng symbol bằng cách gõ tên hàm và tham số, nên các nhóm firmware thường viết hàm <code>dbg*</code> để dùng như lệnh debug. <span class="caption">(Kiến thức chung, không phải từ repo.)</span></p>
+
+  <h3 id="tornado-macro"><code>#ifdef TORNADO</code> trong repository này</h3>
+  <p>Cả ba bản <code>dbgAllClear</code> nằm trong <code>#ifdef TORNADO … #endif</code>. Đây là điều kiện lúc biên dịch: nếu macro không được định nghĩa thì hàm không tồn tại trong binary, và shell báo <em>undefined symbol</em>.</p>
+  <p>Điểm quan trọng: trong repo, <code>TORNADO</code> <strong>không có nghĩa là đang chạy VxWorks</strong>.</p>
+  <figure class="code" data-start="677" data-hl="677">
+    <div class="code-head"><span class="path">Subset/S-S800/Src/donau/Rule.makes</span><span class="fn">BASETYPE = hw</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-makefile">TSS_DEFINES += -DTORNADO -D_REAL -DIMP_THRDRVR -DINCLUDE_USER_APPL -DIMP_MFPSHELL</code></pre>
+  </figure>
+  <figure class="code" data-start="758" data-hl="758">
+    <div class="code-head"><span class="path">Subset/S-S800/Src/donau/Rule.makes</span><span class="fn">unconditional</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-makefile">TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DLINUX</code></pre>
+    <figcaption class="code-note">Dòng 758 nằm ngoài mọi <code>ifeq</code>, nên mọi build Subset có cả <code>TORNADO</code> và <code>LINUX</code>.</figcaption>
+  </figure>
+  <ul>
+    <li>Subset: <code>TORNADO</code> luôn được định nghĩa cùng <code>LINUX</code> <span class="badge v">VERIFIED</span>.</li>
+    <li>KM3: <code>Makefile</code> chỉ <code>include $(BASEPATH)/Rule.makes</code>; file này không có trong repo nên không tìm được nơi định nghĩa <code>TORNADO</code> <span class="badge u">UNVERIFIED</span>. Code KM3 dùng phân nhánh <code>#if defined(TORNADO) &amp;&amp; !defined(FUM_LINUX)</code> (máy thật) so với <code>FUM_LINUX</code> (SimLin), cho thấy máy thật Linux có <code>TORNADO</code> <span class="badge i">INFERRED</span>.</li>
+  </ul>
+
+  <h3 id="cushell">Console: cuShell, shell giả lập VxWorks trên Linux</h3>
+  <p>KM3 có thư mục <code>Linux/Shell/</code> với <code>shellLib.cpp</code>, <code>taskLib.cpp</code>, <code>usrLib.cpp</code>, <code>vxWorks.cpp</code>. Đây là lớp tương thích VxWorks. <code>shellInit()</code> (dòng 59) spawn task <code>"cuShell"</code> với stack <code>1024*1024</code> và độ ưu tiên <code>TYPD_PRIONO_BSP__cuShell</code> (255 trên core 0). <span class="badge v">VERIFIED</span> Subset cũng có <code>Linux/Shell/</code>, nhưng tài liệu này chưa đọc chi tiết bản đó.</p>
+
+  <h3 id="symbol-registration">Symbol registration: không có bảng đăng ký lệnh</h3>
+  <p>Grep toàn repo chỉ thấy <code>dbgAllClear</code> trong 3 file định nghĩa, không có bảng lệnh hay hàm đăng ký nào <span class="badge v">VERIFIED</span>. Shell nhận diện lệnh bằng <strong>bảng symbol của chính binary</strong>:</p>
+  <ol>
+    <li><code>main_BSP.cpp:2442</code>: <code>snprintf(symbolmap_path, …, "%s.map", argv[0])</code>, tức file map đặt cạnh file thực thi.</li>
+    <li><code>SymbolMap::Regist()</code> (dòng 138) đọc từng dòng dạng nm <code>"addr T name"</code>. Chỉ lấy kiểu <code>T</code> (text), <code>S/G</code> (data), <code>D/B</code> (bss).</li>
+    <li>Việc load chạy lười: chỉ thực hiện ở lần <code>Find()</code> đầu tiên (dòng 246–258), để không làm chậm khởi động.</li>
+    <li><code>Find(symbol)</code> khi thực thi lệnh dùng <strong>so khớp tuyệt đối</strong> (<code>first = 0</code>).</li>
+  </ol>
+  <div class="callout warn"><div class="callout-title">Điểm chưa xác minh: C++ name mangling <span class="badge u">UNVERIFIED</span></div>
+    <p>Không bản <code>dbgAllClear</code> nào được khai báo <code>extern "C"</code>, nên symbol trong object là tên đã mangle (theo Itanium ABI sẽ là <code>_Z11dbgAllClearv</code> / <code>_Z11dbgAllClearh</code>). Việc gõ <code>dbgAllClear</code> có khớp được hay không phụ thuộc vào cách sinh file <code>.map</code> (có demangle hay không). Lệnh sinh map nằm trong <code>Rule.makes</code>/<code>Rule.common</code>, không có trong repo. Cần kiểm tra file <code>.map</code> thực tế trên thiết bị.</p>
+  </div>
+
+  <h3 id="invocation-flow">Function invocation flow</h3>
+  <figure class="diagram" data-title="cuShell: từ dòng lệnh tới con trỏ hàm">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+sequenceDiagram
+  actor U as Kỹ sư
+  participant G as ShellCtrl Go
+  participant E as ShellCtrl Exec
+  participant M as SymbolMap
+  participant F as dbgAllClear
+  U->>G: gõ "dbgAllClear 3" rồi Enter
+  G->>E: Exec(cmdline)
+  E->>E: tách argv theo dấu cách hoặc dấu phẩy
+  E->>M: ChkCmd rồi Find("dbgAllClear"), khớp tuyệt đối
+  Note over M: Lần đầu gọi: Regist(symbolmap_path) đọc file argv0.map
+  M-->>E: Entry và TextType
+  E->>E: GetArgValue("3") bằng strtoul = 3
+  E->>F: gọi con trỏ hàm với 29 tham số intptr_t
+  F-->>E: hàm void, thanh ghi trả về không xác định
+  E-->>U: in "value = N = 0xN"
+    </script></div>
+    <figcaption>Hình 3.1. Dựa trên <code>Linux/Shell/shellLib.cpp</code>: <code>Go</code> 814, <code>ChkCmd</code> 870, <code>GetCmdPtr</code> 884 (cộng offset PIE/ASLR qua <code>dladdr</code>), <code>GetArgValue</code> 992, <code>Exec</code> 1025.</figcaption>
+  </figure>
+
+  <h3 id="parameter-passing">Parameter passing</h3>
+  <figure class="code" data-start="992" data-hl="994-995,1007-1011">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/Linux/Shell/shellLib.cpp</span><span class="fn">ShellCtrl::GetArgValue()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">intptr_t ShellCtrl::GetArgValue(char *argv)
+{
+    if ( argv == NULL )
+        return 0;
+
+    // string argument
+    if ( *argv == '"' ) {
+        char* find = strchr(argv+1, '"');
+        if ( find == NULL )
+            return 0;
+        *find = 0;
+        return (intptr_t)(argv+1);
+    }
+
+    // numeric argument
+    if ( isdigit(argv[0]) || argv[0] == '-' ) {
+        if ( *argv == '0' &amp;&amp; *(argv+1) == 'x' )
+            return (intptr_t)strtoul(argv, NULL, 16);
+        else
+            return (intptr_t)strtoul(argv, NULL, 10);
+    }</code></pre>
+    <figcaption class="code-note">Dòng 992–1012. Comment gốc tiếng Nhật (文字列指定 / 数値指定) đã được dịch. Sau đoạn này là nhánh “symbol argument”: trả địa chỉ hoặc giá trị của symbol.</figcaption>
+  </figure>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Bạn gõ</th><th>Giá trị truyền</th><th>Zeus <code>uc_ClearCmdNo</code></th><th>Mức bằng chứng</th></tr></thead>
+    <tbody>
+      <tr><td><code>dbgAllClear</code></td><td><code>argv[1] == NULL</code> → <code>0</code> (vì <code>char *argv[MAXARGS] = {cmdline, };</code>, dòng 1028)</td><td><strong>0: xoá nhiều nhất</strong></td><td><span class="badge v">VERIFIED</span></td></tr>
+      <tr><td><code>dbgAllClear 3</code></td><td><code>strtoul("3", 10)</code> = 3</td><td>3</td><td><span class="badge v">VERIFIED</span></td></tr>
+      <tr><td><code>dbgAllClear 0x5</code></td><td><code>strtoul(…, 16)</code> = 5</td><td>5</td><td><span class="badge v">VERIFIED</span></td></tr>
+      <tr><td><code>dbgAllClear 256</code></td><td>256 dưới dạng <code>intptr_t</code></td><td>0 nếu callee chỉ đọc byte thấp</td><td><span class="badge i">INFERRED</span> (phụ thuộc ABI)</td></tr>
+      <tr><td><code>dbgAllClear 7</code></td><td>7</td><td><code>default: break</code>: không làm gì, không in gì</td><td><span class="badge v">VERIFIED</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>Hàm được gọi qua <code>(*(intptr_t (*)(...))GetCmdPtr(argv[0]))(GetArgValue(argv[1]), …, GetArgValue(argv[29]))</code>. Nó chạy <strong>đồng bộ trong context của task cuShell</strong>: shell bị chặn cho tới khi lệnh xong. <span class="badge v">VERIFIED</span> Bản Zeus cấp phát <code>uchar uc_Buff[16376]</code> trên stack. Stack của cuShell là 1MB nên đủ chỗ. <span class="badge i">INFERRED</span></p>
+  <div class="srcref"><div class="srcref-title">Source Code Reference</div><dl>
+    <dt>File</dt><dd>IT6_Controller/KM3/application/mfp/Linux/Shell/shellLib.cpp</dd>
+    <dt>Functions</dt><dd>shellInit() 59 · SymbolMap::Regist 138 · SymbolMap::Find 246 · ShellCtrl::Go 814 · ChkCmd 870 · GetCmdPtr 884 · GetArgValue 992 · Exec 1025</dd>
+    <dt>Related</dt><dd>Linux/main_BSP.cpp:2442 (symbolmap_path) · Linux/Shell/vxWorks.cpp:37</dd>
+    <dt>Evidence</dt><dd><span class="badge v">VERIFIED</span> luồng gọi · <span class="badge u">UNVERIFIED</span> định dạng tên trong file .map</dd>
+  </dl></div>
+</section>
+
+<!-- ===================================================================== 04 -->
+<section class="chapter" id="donau3-subset">
+  <div class="chapter-label">Chapter 04</div>
+  <h2>Donau3 – Subset S-S800</h2>
+  <p class="chapter-lede">Bản đơn giản nhất: không tham số, hai câu lệnh. Nhưng cả hai câu lệnh đều có vấn đề khi chạy trên Linux.</p>
+
+  <h3 id="subset-overview">Overview &amp; source</h3>
+  <figure class="code" data-start="6840" data-hl="6845,6848" data-warn="6846">
+    <div class="code-head"><span class="path">Subset/S-S800/Src/application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp</span><span class="fn">dbgAllClear()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">#ifdef TORNADO
+// NVRAM and BackUp FlashROM All Clear
+void dbgAllClear(void)
+{
+// 2008.08.04 (change history comment, Donau ... 307738)
+	NVDF_memsetNvRam((void*)NVDD_NVRam_Base,0x0,0x1ffef0); /* NVRAM 2MB */
+//	NVDF_memsetNvRam((void*)NVDD_NVRam_Base,0x0,0xffef0); /* NVRAM 1MB */
+// 2008.08.04 (change history comment)
+	EraseNvramBackupArea(0);
+}
+#endif</code></pre>
+    <figcaption class="code-note">Dòng 6846 là bản cũ (1MB) đã bị comment. Khai báo dùng cho lời gọi ở 6848 nằm ở dòng 107: <code>extern "C" Bool EraseNvramBackupArea( short ss_Area );</code></figcaption>
+  </figure>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Code</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>NVDD_NVRam_Base</code></td><td><code>( DEVICE_CS1_BASE + 0x100 )</code> (<code>NVDG_FuncDonau3.h:124</code>). Bỏ qua 256 byte đầu của vùng CS1.</td></tr>
+      <tr><td><code>0x0</code></td><td>Giá trị ghi (truyền dưới dạng <code>short ss_Value</code>).</td></tr>
+      <tr><td><code>0x1ffef0</code></td><td>2,096,880 byte = 2MB − 0x110. Vùng bị ghi: <code>CS1+0x100 … CS1+0x1FFFF0</code>; 16 byte cuối của 2MB không bị đụng.</td></tr>
+      <tr><td><code>EraseNvramBackupArea(0)</code></td><td>Gọi theo chữ ký cũ 1 tham số (<code>ss_Area</code>: 1 = NV1, 2 = NV2, khác = cả hai).</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="subset-flow">Execution flow &amp; call graph</h3>
+  <p>Hàm không có tham số, không có <code>if</code>, không có giá trị trả về, không có log riêng và không kiểm tra kết quả. Hai lời gọi chạy tuần tự. <span class="badge v">VERIFIED</span></p>
+  <figure class="diagram" data-title="Call graph – Donau3 Subset">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  A["dbgAllClear(void)<br/>NVDG_FuncDonau3.cpp:6842"]:::sw --> B["NVDF_memsetNvRam(NVDD_NVRam_Base, 0x0, 0x1ffef0)"]:::sw
+  B --> B1["SYSF_semMCreate - chỉ lần đầu"]:::sw
+  B --> B2["SYSF_semTake(WAIT_FOREVER)"]:::sw
+  B --> B3["Set_Cs2(UNLOCK = 2)<br/>thân hàm rỗng trên Linux"]:::er
+  B --> B4["SYSF_memset trên vùng CS1 + 0x100"]:::st
+  B --> B5["Set_Cs2(LOCK = 1)<br/>thân hàm rỗng"]:::er
+  B --> B6["SYSF_semGive"]:::sw
+  A --> C["EraseNvramBackupArea(0)<br/>khai báo 1 tham số, dòng 107"]:::er
+  C --> C1["Bản được link: Linux/Platform/Mediaif.cpp:1522<br/>BOOL EraseNvramBackupArea(short, int)"]:::sw
+  C1 --> C2["si_area2 không xác định<br/>xoá group tương ứng hoặc báo invalid area"]:::er
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+    </script></div>
+    <div class="diagram-legend"><span><i class="lg-sw"></i>Software</span><span><i class="lg-st"></i>Storage</span><span><i class="lg-er"></i>Rủi ro</span></div>
+    <figcaption>Hình 4.1. Các node màu đỏ là điểm sai lệch giữa ý đồ thiết kế và hành vi trên build Linux.</figcaption>
+  </figure>
+
+  <h3 id="subset-memset"><code>NVDF_memsetNvRam()</code>: semaphore và write protection</h3>
+  <figure class="code" data-start="31" data-hl="42,45,48,52,57,60" data-warn="39,54">
+    <div class="code-head"><span class="path">Subset/S-S800/Src/application/mfp/system/nvd/nvdg/NVDG_NVWrite.cpp</span><span class="fn">NVDF_memsetNvRam()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">void* NVDF_memsetNvRam( void* p_DataDst, short ss_Value, size_t size )
+{
+#ifdef COSIM
+	// COSIM has no NVRAM: do not write
+	return p_DataDst;
+#else	// COSIM.
+	void *p_Return;
+
+#ifdef TORNADO &amp;&amp; !defined(NVRAMLESS_PART_ONE)	// NVRAMLESS_PART_ONE: see typs_base.h
+
+	// create module semaphore
+	if( NVDD_SemaphoreID == 0 ) { NVDD_SemaphoreID = SYSF_semMCreate( (SEM_Q_PRIORITY | SEM_DELETE_SAFE | SEM_INVERSION_SAFE), False ); }
+
+	// lock
+	SYSF_semTake( NVDD_SemaphoreID, WAIT_FOREVER );
+
+	// NVRAM write-protect OFF
+	Set_Cs2( NVDD_NVRAM_WRITE_UNLOCK );
+#endif // TORNADO &amp;&amp; !defined(NVRAMLESS_PART_ONE).
+
+	// NVRAM write
+	p_Return = SYSF_memset( p_DataDst, (int)ss_Value, size );
+
+#ifdef TORNADO &amp;&amp; !defined(NVRAMLESS_PART_ONE)
+
+	// NVRAM write-protect ON
+	Set_Cs2( NVDD_NVRAM_WRITE_LOCK );
+
+	// unlock
+	SYSF_semGive( NVDD_SemaphoreID );
+
+#endif // TORNADO &amp;&amp; !defined(NVRAMLESS_PART_ONE).
+
+	return p_Return;</code></pre>
+    <figcaption class="code-note">Dòng 39/54 (vàng): <code>#ifdef</code> chỉ nhận một identifier. Phần <code>&amp;&amp; !defined(…)</code> là token thừa; GCC cảnh báo rồi bỏ qua, nên điều kiện thực tế chỉ là <code>#ifdef TORNADO</code> <span class="badge i">INFERRED</span> (theo quy tắc preprocessor C/C++). Grep cũng không tìm thấy <code>#define NVRAMLESS_PART_ONE</code> trong repo.</figcaption>
+  </figure>
+  <div class="fn-card">
+    <header><h4>NVDF_memsetNvRam(void* p_DataDst, short ss_Value, size_t size)</h4><p>Wrapper memset có khoá cho vùng NVRAM.</p></header>
+    <div class="fn-grid">
+      <div>Input</div><div><code>p_DataDst</code> = <code>NVDD_NVRam_Base</code>, <code>ss_Value</code> = 0, <code>size</code> = <code>0x1ffef0</code>.</div>
+      <div>Preconditions</div><div>Không kiểm tra con trỏ/kích thước. Semaphore được tạo lười trong lần gọi đầu tiên.</div>
+      <div>Internal execution</div><div><ol><li><code>SYSF_semMCreate</code> (nếu ID == 0)</li><li><code>SYSF_semTake(WAIT_FOREVER)</code></li><li><code>Set_Cs2(2)</code></li><li><code>SYSF_memset</code></li><li><code>Set_Cs2(1)</code></li><li><code>SYSF_semGive</code></li></ol></div>
+      <div>Storage impact</div><div>Ghi 0 vào vùng RAM “NVRAM”. Không có thao tác flash.</div>
+      <div>Return value</div><div><code>p_Return</code> (con trỏ đích), bị <code>dbgAllClear</code> bỏ qua.</div>
+      <div>Error handling</div><div>Không có. <code>WAIT_FOREVER</code> nên nếu task khác giữ semaphore mãi thì shell treo theo.</div>
+      <div>Side effects</div><div>Semaphore chỉ bảo vệ <em>riêng</em> lời gọi memset này, không bảo vệ toàn bộ <code>dbgAllClear</code>. Các module khác đọc/ghi qua <code>FUNCOFFSET</code> mà không lấy semaphore này vẫn có thể chen vào <span class="badge i">INFERRED</span>.</div>
+      <div>Callers</div><div><code>dbgAllClear</code>, <code>NVDC_ColorC.cpp</code>, <code>NVDC_FstColorC.cpp</code>, <code>NVDC_Counter.cpp</code> (grep).</div>
+    </div>
+  </div>
+  <div class="callout danger"><div class="callout-title">Write protection không hoạt động trên Linux <span class="badge v">VERIFIED</span></div>
+    <p><code>Set_Cs2()</code> có thân rỗng ở <code>Subset/…/Linux/Platform/InitDevice.cpp:419</code> và <code>InitDeviceIt6.cpp:205</code>. Bản có tác dụng (<code>bsp_donau/Donau/sysLib.c:2618</code>, ghi <code>DEVICE_CS2_BASE+0x9</code> hoặc <code>portNV_PROTECT</code>) nằm trong <code>#if 0</code>. Cặp UNLOCK/LOCK vì thế chỉ còn là nghi thức.</p>
+  </div>
+
+  <h3 id="subset-overflow">Vùng đích thực sự lớn bao nhiêu?</h3>
+  <div class="callout danger"><div class="callout-title">Ghi tràn heap tiềm ẩn <span class="badge i">INFERRED</span></div>
+    <p>Hai sự thật đã kiểm chứng:</p>
+    <ul>
+      <li><code>DEVICE_CS1_BASE = (ul_CS1_BaseAdr)</code> (<code>Linux/Platform/InitDevice.h:32</code>) và <code>ul_CS1_BaseAdr = (uintptr_t)malloc(512 * 1024)</code> (<code>InitDevice.cpp:207</code> và <code>:348</code>).</li>
+      <li><code>dbgAllClear</code> ghi <code>0x1ffef0</code> byte bắt đầu từ <code>CS1 + 0x100</code>.</li>
+    </ul>
+    <p>Suy ra: vùng ghi kết thúc ở <code>CS1 + 0x1FFFF0</code>, vượt quá buffer 0x80000 byte khoảng <strong>1.5MB</strong>. Đây là heap corruption và có thể gây crash ngay hoặc về sau. Chưa chạy thực tế để xác nhận.</p>
+  </div>
+
+  <h3 id="subset-erase"><code>EraseNvramBackupArea(0)</code>: chữ ký nào được link?</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Bản cũ (VxWorks BSP)</th><th>Bản Linux</th></tr></thead>
+    <tbody>
+      <tr><td>File</td><td><code>Subset/S-S800/Src/bsp_donau/Donau/Mediaif.cpp:1481</code></td><td><code>Subset/S-S800/Src/application/mfp/Linux/Platform/Mediaif.cpp:1522</code></td></tr>
+      <tr><td>Chữ ký</td><td><code>Bool EraseNvramBackupArea(short ss_Area)</code></td><td><code>BOOL EraseNvramBackupArea(short ss_area1, int si_area2)</code></td></tr>
+      <tr><td>Có được build?</td><td>Không: không Makefile/Rule nào tham chiếu <code>bsp_donau</code> <span class="badge v">VERIFIED</span></td><td>Có: <code>Linux/Platform/Makefile:24–26</code> (<code>BASETYPE=hw</code>) <span class="badge v">VERIFIED</span></td></tr>
+      <tr><td>Linkage</td><td><code>extern "C"</code></td><td><code>extern "C"</code> (<code>Mediaif.h:104–123</code>)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Vì cả hai khai báo đều là <code>extern "C"</code> và symbol C không mã hoá kiểu tham số, linker ghép lời gọi 1 tham số với định nghĩa 2 tham số mà không báo lỗi. <code>si_area2</code> lấy giá trị đang có trong thanh ghi/stack ở thời điểm gọi. <span class="badge i">INFERRED</span></p>
+  <p>Với <code>DEF_Helios_PF</code> (được định nghĩa cho các cấu hình S800 tại <code>donau/Rule.makes:505–524</code>), nhánh <code>ss_area1 = 0</code> (default, cả hai mặt) xử lý như sau:</p>
+  <ul>
+    <li><code>si_area2</code> = 0: xoá cả hai mặt Group 1.</li>
+    <li><code>si_area2</code> = 1: xoá cả hai mặt Group 2.</li>
+    <li><code>si_area2</code> = 2: xoá cả hai mặt Group 3.</li>
+    <li>Giá trị khác: <code>printf("Fail to erase NVRAM backup invalid area %d.\n")</code> và trả FALSE.</li>
+  </ul>
+  <p>Kết quả: <strong>ít nhất 2 trong 3 group không bị xoá</strong>, và group nào bị xoá thì không xác định trước được. Các caller khác trong Subset cũng dùng chữ ký cũ: <code>SYSC_SystemInfoColor.cpp:852, 960, 1138</code>. Riêng <code>thr/clrchg.cpp:92,101</code> và <code>THRC_HddTrans.cpp:6486–6488</code> dùng chữ ký mới.</p>
+
+  <h3 id="subset-impact">Storage impact, error handling, final state</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Khía cạnh</th><th>Kết luận</th></tr></thead>
+    <tbody>
+      <tr><td>Vùng bị ghi</td><td>RAM từ <code>CS1+0x100</code>, dài <code>0x1ffef0</code> (vượt buffer 512KB) <span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Backup</td><td>Một group không xác định (hoặc không group nào) <span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Log</td><td>Chỉ có <code>logMsg("Erase NVRAM backup Start/End")</code> trong <code>EraseNvramBackupArea</code> (<code>#ifdef TORNADO</code>) và <code>printf</code> khi lỗi</td></tr>
+      <tr><td>Kiểm tra lỗi</td><td>Không: bỏ qua giá trị trả về của cả hai hàm <span class="badge v">VERIFIED</span></td></tr>
+      <tr><td>Clear Flag / boot</td><td>Không có. Donau3 không đặt cờ cho lần boot sau <span class="badge v">VERIFIED</span></td></tr>
+      <tr><td>Lần boot sau</td><td>Phụ thuộc cơ chế init của Donau3 (<code>NVDSInit</code> trong <code>NVDG_FuncDonau3.cpp</code>), chưa truy vết <span class="badge u">UNVERIFIED</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ===================================================================== 05 -->
+<section class="chapter" id="donau3-km3">
+  <div class="chapter-label">Chapter 05</div>
+  <h2>Donau3 – KM3</h2>
+  <p class="chapter-lede">Cùng thân hàm với Subset, khác ở hai lời gọi backup theo chữ ký mới. Bản này chỉ được build trong nhánh fallback của Makefile.</p>
+
+  <h3 id="km3d-source">Source</h3>
+  <figure class="code" data-start="5402" data-hl="5407-5408">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp</span><span class="fn">dbgAllClear()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">#ifdef TORNADO
+// NVRAM and BackUp FlashROM All Clear
+void dbgAllClear(void)
+{
+	NVDF_memsetNvRam((void*)NVDD_NVRam_Base,0x0,0x1ffef0); /* NVRAM 2MB */
+	EraseNvramBackupArea(0, 0);		// erase backup area (group 1)
+	EraseNvramBackupArea(0, 1);		// erase backup area (group 2)
+}
+#endif</code></pre>
+    <figcaption class="code-note">Prototype tại dòng 165: <code>void dbgAllClear(void);</code>. Khai báo backup tại dòng 109: <code>extern "C" BOOL EraseNvramBackupArea( short ss_area1 , int si_area2 );</code></figcaption>
+  </figure>
+
+  <h3 id="km3d-erase">Ý nghĩa thật của <code>(0, 0)</code> và <code>(0, 1)</code></h3>
+  <p>Đọc <code>KM3 Linux/Platform/Mediaif.cpp:1592</code>:</p>
+  <ul>
+    <li><strong>Tham số 1 <code>ss_area1</code></strong> chọn <em>mặt</em> (plane) trong group: <code>1</code> = mặt 1 (<code>THRD_SPI_FlashBackupArea1</code>), <code>2</code> = mặt 2, giá trị khác = <strong>cả hai mặt</strong> (nhánh <code>default</code> tại dòng 1651, comment “両面削除”).</li>
+    <li><strong>Tham số 2 <code>si_area2</code></strong> chọn <em>group</em>: <code>0</code> = Group 1 (<code>c_NvramBackupGroup1</code>), <code>1</code> = Group 2, <code>2</code> = Group 3 (<code>c_NvramBackup</code>). Giá trị khác → <code>FALSE</code>.</li>
+    <li>Group mapping là các đối tượng static ở dòng 792/794 (SPI) và 1432 (eMMC). Địa chỉ lấy từ macro <code>THRD_NvramBackupGroup*Area*Adress</code> ở dòng 127–133.</li>
+  </ul>
+  <p>Vậy <code>(0,0)</code> = Group 1 cả hai mặt, <code>(0,1)</code> = Group 2 cả hai mặt. <strong>Group 3 không bị xoá</strong>. <span class="badge v">VERIFIED</span> Cơ chế xoá vật lý ở <a href="#fn-erase">chương 07</a>.</p>
+
+  <h3 id="km3d-diff">So sánh với Subset S-S800</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Khía cạnh</th><th>Subset S-S800</th><th>Donau3 KM3</th></tr></thead>
+    <tbody>
+      <tr><td>Chữ ký <code>dbgAllClear</code></td><td><code>void (void)</code></td><td><code>void (void)</code></td></tr>
+      <tr><td>Lệnh memset</td><td>giống hệt (<code>0x1ffef0</code>)</td><td>giống hệt</td></tr>
+      <tr><td>Khai báo backup API</td><td class="diff"><code>Bool EraseNvramBackupArea(short)</code></td><td class="diff"><code>BOOL EraseNvramBackupArea(short, int)</code></td></tr>
+      <tr><td>Lời gọi backup</td><td class="diff"><code>(0)</code> — group không xác định</td><td class="diff"><code>(0,0)</code>, <code>(0,1)</code> — G1 + G2</td></tr>
+      <tr><td>Group 3</td><td>có thể bị xoá (ngẫu nhiên)</td><td>không bị xoá</td></tr>
+      <tr><td><code>NVDF_memsetNvRam</code></td><td>sem tạo <em>trong</em> <code>#ifdef TORNADO&amp;&amp;…</code></td><td class="diff">sem tạo <em>ngoài</em> <code>#ifdef</code> (<code>nvdg/NVDG_NVWrite.cpp:44</code>), dùng <code>NVRAM_WRITE_UNLOCK</code> từ <code>InitDevice.h</code> (0 nếu <code>FUM_LINUX</code>)</td></tr>
+      <tr><td>Kiểm tra lỗi</td><td>không</td><td>không</td></tr>
+      <tr><td>Build</td><td>có</td><td class="diff">chỉ nhánh fallback (<code>nvd/Makefile:227–228</code>)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn"><div class="callout-title">Cùng vấn đề kích thước <span class="badge i">INFERRED</span></div>
+    <p>KM3 cũng có <code>DEVICE_CS1_BASE = ul_CS1_BaseAdr = malloc(512 * 1024)</code> (<code>Linux/Platform/InitDevice.h:30</code>, <code>InitDevice.cpp:209</code>) và <code>Set_Cs2()</code> rỗng (<code>InitDevice.cpp:420</code>). Nếu bản Donau3 KM3 được build trên Linux, lệnh memset 2MB sẽ tràn buffer giống Subset.</p>
+  </div>
+  <div class="srcref"><div class="srcref-title">Source Code Reference</div><dl>
+    <dt>File</dt><dd>IT6_Controller/KM3/application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp</dd>
+    <dt>Function</dt><dd>dbgAllClear() — 5402–5410 (prototype 165, extern decl 109)</dd>
+    <dt>Related</dt><dd>nvdg/NVDG_NVWrite.cpp:35 · Linux/Platform/Mediaif.cpp:1592 · nvdDonau3/NVDG_FuncDonau3.h:104 · nvd/Makefile:156–229</dd>
+    <dt>Evidence</dt><dd><span class="badge v">VERIFIED</span></dd>
+  </dl></div>
+</section>
+
+<!-- ===================================================================== 06 -->
+<section class="chapter" id="zeus">
+  <div class="chapter-label">Chapter 06</div>
+  <h2>Zeus – KM3</h2>
+  <p class="chapter-lede">Bản quan trọng nhất: một tham số chọn 1 trong 6 thao tác. Lệnh tác động lên SoftDipSW (SPI-Flash), backup group, thư mục NVData và Clear Flag cho lần boot sau.</p>
+
+  <h3 id="zeus-source">Source đầy đủ</h3>
+  <figure class="code" data-start="33431" data-hl="33436-33438,33446,33458,33462,33477,33490,33496,33505" data-warn="33444,33475,33494,33508-33509">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdZeus/NVDG_FuncZeus.cpp</span><span class="fn">dbgAllClear(uchar)</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">#ifdef TORNADO
+// NVRAM and BackUp FlashROM All Clear .
+void dbgAllClear( uchar uc_ClearCmdNo )
+{
+// valid on models with SPI-Flash.
+	uchar		uc_Buff[NVDD_SPI_Flash_SIZE];
+	uchar		uc_Ret = THRD_SET_SPI_OK;
+	memset( uc_Buff, 0x00, sizeof(uc_Buff) );
+
+
+	switch ( uc_ClearCmdNo )
+	{
+		case 0 :	// NVRAM Clear: NVRAM (excluding U-Boot head 256 byte) + SSD (BackUp FlashROM) clear.
+			printf("[NVRAM(omit the first 256byte) + SSD(BackUp FlashROM + /ata0b/NVData)] Clear\n");
+// valid on models with SPI-Flash.
+			uc_Ret = THRG_setSoftDipSw( 0, reinterpret_cast&lt;void *&gt;(uc_Buff), sizeof(uc_Buff) );
+			if ( THRD_SET_SPI_OK != uc_Ret ) {
+				SYSF_logMsg( "[%s]THRG_setSoftDipSw() Error. Ret[%d] \n", __FUNCTION__,uc_Ret,0,0,0,0 );
+// 2016/03/24 ZeusS_ZX0 SPI-Flash new detail code (start)
+		uint64_t ull_DetailCode = TYPD_NewDetailCode_Cmn_D390_004A;
+		ull_DetailCode |= static_cast&lt;uint64_t&gt;(uc_Ret) &lt;&lt; 32;				// digits 7-8: return value (hex)
+		APIC_setNewDetailCode( 0,ull_DetailCode );
+// 2016/03/24 ZeusS_ZX0 SPI-Flash new detail code (end)
+			}
+			EraseNvramBackupArea(0, 0);
+			EraseNvramBackupArea(0, 1);
+			EraseNvramBackupArea(0, 2);	// erase backup area (group 3).
+			NVDF_setNvramClearFlag( True );		// NVRAM clear request flag = ON.
+			break;
+		case 1 :	// New SSD: SSD(ata0b) + SSD(BackUp FlashROM) clear.
+			printf("New SSD([BackUp FlashROM + /ata0b/NVData] Clear.)\n");
+			FILF_RemoveDirTree( FILC_BaseDirIf::newInstance( FILE_DirTypeNVData )-&gt;getPath() );
+			EraseNvramBackupArea(0, 0);
+			EraseNvramBackupArea(0, 1);
+			EraseNvramBackupArea(0, 2);	// erase backup area (group 3).
+			break;
+		case 2 :	// SSD(BackUp FlashROM) clear.
+			printf("SSD(BackUp FlashROM) Clear.\n");
+			EraseNvramBackupArea(0, 0);
+			EraseNvramBackupArea(0, 1);
+			EraseNvramBackupArea(0, 2);	// erase backup area (group 3).
+			break;
+
+		case 3 :	// SPI-Flash/NVRAM: NVRAM (excluding U-Boot head 256 byte) clear.
+			printf("SPI-Flash/NVRAM(omit the first 256byte) Clear\n");
+// valid on models with SPI-Flash.
+			uc_Ret = THRG_setSoftDipSw( 0, reinterpret_cast&lt;void *&gt;(uc_Buff), sizeof(uc_Buff) );
+			if ( THRD_SET_SPI_OK != uc_Ret ) {
+				SYSF_logMsg( "[%s]THRG_setSoftDipSw() Error. Ret[%d] \n", __FUNCTION__,uc_Ret,0,0,0,0 );
+// 2016/03/24 ZeusS_ZX0 SPI-Flash new detail code (start)
+		uint64_t ull_DetailCode = TYPD_NewDetailCode_Cmn_D390_004B;
+		ull_DetailCode |= static_cast&lt;uint64_t&gt;(uc_Ret) &lt;&lt; 32;				// digits 7-8: return value (hex)
+		APIC_setNewDetailCode( 0,ull_DetailCode );
+// 2016/03/24 ZeusS_ZX0 SPI-Flash new detail code (end)
+			}
+			break;
+
+		case 4 :	// SSD(/ata0b/NVData) clear.
+			printf("SSD(/ata0b/NVData) Clear.\n");
+			NVDF_setNvramClearFlag( True );		// NVRAM clear request flag = ON.
+			break;
+
+		case 5 :	// SPI-Flash/NVRAM (excluding U-Boot head 256 byte) + SSD(/ata0b/NVData) clear.
+			printf("[SPI-Flash/NVRAM(omit the first 256byte) + SSD(/ata0b/NVData)] Clear\n");
+// valid on models with SPI-Flash.
+			uc_Ret = THRG_setSoftDipSw( 0, reinterpret_cast&lt;void *&gt;(uc_Buff), sizeof(uc_Buff) );
+			if ( THRD_SET_SPI_OK != uc_Ret ) {
+				SYSF_logMsg( "[%s]THRG_setSoftDipSw() Error. Ret[%d] \n", __FUNCTION__,uc_Ret,0,0,0,0 );
+// 2016/03/24 ZeusS_ZX0 SPI-Flash new detail code (start)
+		uint64_t ull_DetailCode = TYPD_NewDetailCode_Cmn_D390_004C;
+		ull_DetailCode |= static_cast&lt;uint64_t&gt;(uc_Ret) &lt;&lt; 32;				// digits 7-8: return value (hex)
+		APIC_setNewDetailCode( 0,ull_DetailCode );
+// 2016/03/24 ZeusS_ZX0 SPI-Flash new detail code (end)
+			}
+			NVDF_setNvramClearFlag( True );		// NVRAM clear request flag = ON.
+			break;
+
+		default :
+			break;
+	}
+}
+#endif</code></pre>
+    <figcaption class="code-note">Dòng 33431–33512. Comment tiếng Nhật được dịch sang tiếng Anh, giữ nguyên vị trí dòng. Dòng xanh là thao tác storage. Dòng vàng là các chuỗi “256byte” gây hiểu nhầm và nhánh <code>default</code> im lặng.</figcaption>
+  </figure>
+
+  <h3 id="zeus-param">Tham số <code>uc_ClearCmdNo</code></h3>
+  <ul>
+    <li>Kiểu <code>uchar</code> (unsigned char, 0–255). Không có validation: mọi giá trị ngoài 0–5 rơi vào <code>default: break;</code>, không in gì, không báo lỗi. <span class="badge v">VERIFIED</span></li>
+    <li>Hàm trả <code>void</code>. Shell in giá trị thanh ghi trả về, nhưng giá trị đó vô nghĩa. <span class="badge v">VERIFIED</span></li>
+    <li>Buffer <code>uc_Buff[NVDD_SPI_Flash_SIZE]</code> = 16376 byte trên stack, được <code>memset</code> về 0 <em>trước</em> <code>switch</code>, nên chạy ở mọi command, kể cả những command không dùng tới (1, 2, 4). <span class="badge v">VERIFIED</span></li>
+    <li><code>NVDD_SPI_Flash_SIZE = ((16*1024)-8)</code> (<code>NVDG_FuncZeus.h:32</code>) đúng bằng vùng dữ liệu của <code>c_SoftDipSW</code>: <code>4 × 4KB − 2 × 4 byte</code> bộ đếm đầu/cuối (không có trường erase-flag vì <code>bl_Erase</code> mặc định False). Lệnh vì thế ghi đè <strong>toàn bộ</strong> SoftDipSW. <span class="badge v">VERIFIED</span></li>
+  </ul>
+
+  <h3 id="zeus-commands">Command explorer</h3>
+  <p>Chọn một command để xem chi tiết. Mỗi command có flowchart riêng.</p>
+  <div class="tabs" id="cmd-tabs">
+    <div class="tablist" role="tablist" aria-label="Zeus commands">
+      <button role="tab" id="tab-c0" aria-controls="panel-c0" aria-selected="true">Cmd 0</button>
+      <button role="tab" id="tab-c1" aria-controls="panel-c1" aria-selected="false" tabindex="-1">Cmd 1</button>
+      <button role="tab" id="tab-c2" aria-controls="panel-c2" aria-selected="false" tabindex="-1">Cmd 2</button>
+      <button role="tab" id="tab-c3" aria-controls="panel-c3" aria-selected="false" tabindex="-1">Cmd 3</button>
+      <button role="tab" id="tab-c4" aria-controls="panel-c4" aria-selected="false" tabindex="-1">Cmd 4</button>
+      <button role="tab" id="tab-c5" aria-controls="panel-c5" aria-selected="false" tabindex="-1">Cmd 5</button>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="panel-c0" aria-labelledby="tab-c0">
+      <h4 id="cmd-0">Command 0: NVRAM (SoftDipSW) + toàn bộ backup + Clear Flag</h4>
+      <dl class="kv">
+        <dt>Description</dt><dd>Chế độ xoá nhiều nhất. Đây cũng là chế độ chạy khi gọi không tham số.</dd>
+        <dt>Condition</dt><dd><code>uc_ClearCmdNo == 0</code> (dòng 33443)</dd>
+        <dt>Sequence</dt><dd>printf → <code>THRG_setSoftDipSw(0, zero, 16376)</code> → (lỗi: log + D390_004A) → <code>EraseNvramBackupArea(0,0)</code>, <code>(0,1)</code>, <code>(0,2)</code> → <code>NVDF_setNvramClearFlag(True)</code></dd>
+        <dt>SPI-Flash</dt><dd>Zero toàn SoftDipSW (FirstMark, magic “R1” của class SPI, mọi cờ), sau đó ghi lại cờ = 0xAB</dd>
+        <dt>SSD</dt><dd>Không xoá trực tiếp. Printf nói “/ata0b/NVData” nhưng code chỉ đặt cờ; NVData được khởi tạo ở lần boot sau</dd>
+        <dt>Backup groups</dt><dd>G1 + G2 (logic), G3 (ghi đè/erase), cả hai mặt</dd>
+        <dt>Clear Flag</dt><dd>Bật (0xAB), ghi <em>sau</em> lệnh zero nên không bị xoá theo</dd>
+        <dt>Error handling</dt><dd>Chỉ cho bước SoftDipSW (log + detail code). Lỗi xoá backup chỉ có printf trong callee. Không dừng giữa chừng</dd>
+        <dt>Final state</dt><dd>Boot sau: FirstMark sai nên <code>sc_InitFlg = On</code>; cờ 0xAB nên <code>sc_InitFlgOfSSD = On</code>. Class SPI và SSD được FactorySetup, DB bị xoá, cờ được tắt <span class="badge i">INFERRED</span> (dựa trên chương 09)</dd>
+        <dt>Source</dt><dd><code>NVDG_FuncZeus.cpp:33443–33459</code></dd>
+      </dl>
+      <figure class="diagram" data-title="Command 0 flowchart">
+        <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  S["dbgAllClear(0)"]:::sw --> P["printf NVRAM(omit the first 256byte) + SSD Clear"]:::sw
+  P --> W["THRG_setSoftDipSw(0, uc_Buff = 0, 16376)"]:::st
+  W --> Q{"uc_Ret == THRD_SET_SPI_OK ?"}
+  Q -->|Không| L["SYSF_logMsg + APIC_setNewDetailCode D390_004A"]:::er
+  Q -->|Có| E1
+  L --> E1["EraseNvramBackupArea(0,0) - Group 1 cả hai mặt"]:::st
+  E1 --> E2["EraseNvramBackupArea(0,1) - Group 2 cả hai mặt"]:::st
+  E2 --> E3["EraseNvramBackupArea(0,2) - Group 3 cả hai mặt"]:::st
+  E3 --> F["NVDF_setNvramClearFlag(True) - ghi 0xAB"]:::bt
+  F --> X["return - không reboot"]:::sw
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef bt fill:#EDE9FE,stroke:#7C3AED,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+        </script></div>
+        <figcaption>Hình 6.1. Giá trị trả về của các lời gọi EraseNvramBackupArea không được kiểm tra.</figcaption>
+      </figure>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="panel-c1" aria-labelledby="tab-c1" hidden>
+      <h4 id="cmd-1">Command 1: “New SSD”: xoá thư mục NVData + toàn bộ backup</h4>
+      <dl class="kv">
+        <dt>Description</dt><dd>Command duy nhất xoá file trên SSD ngay khi chạy.</dd>
+        <dt>Condition</dt><dd><code>uc_ClearCmdNo == 1</code> (dòng 33460)</dd>
+        <dt>Sequence</dt><dd>printf → <code>FILF_RemoveDirTree(FILC_BaseDirIf::newInstance(FILE_DirTypeNVData)-&gt;getPath())</code> → <code>EraseNvramBackupArea(0,0..2)</code></dd>
+        <dt>SPI-Flash</dt><dd>SoftDipSW không đổi; G1/G2 bị đánh dấu xoá</dd>
+        <dt>SSD</dt><dd>Xoá đệ quy mọi file và thư mục con của NVData, kể cả thư mục gốc. Symlink chỉ xoá link, không xoá đích (<code>fil/filg/FIL_FsWrapperC.cpp:8406</code>)</dd>
+        <dt>Backup groups</dt><dd>G1, G2, G3</dd>
+        <dt>Clear Flag</dt><dd>Không đặt</dd>
+        <dt>Error handling</dt><dd>Giá trị trả về của <code>FILF_RemoveDirTree</code> (OK/ERROR) bị bỏ qua. Hàm dừng ở lỗi <code>lstat</code>/<code>remove</code> đầu tiên, có thể để lại một phần thư mục</dd>
+        <dt>Final state</dt><dd>Boot sau: cả hai cờ init = Off. Class SSD không tìm thấy record nên <code>FactorySetRequest</code> (backup đã xoá) <span class="badge i">INFERRED</span>. Cơ chế FirstMark và Clear Flag không tham gia</dd>
+        <dt>Source</dt><dd><code>NVDG_FuncZeus.cpp:33460–33466</code></dd>
+      </dl>
+      <figure class="diagram" data-title="Command 1 flowchart">
+        <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  S["dbgAllClear(1)"]:::sw --> P["printf New SSD Clear"]:::sw
+  P --> R["FILF_RemoveDirTree(đường dẫn FILE_DirTypeNVData)"]:::st
+  R -->|"kết quả bị bỏ qua"| E1["EraseNvramBackupArea(0,0) - Group 1"]:::st
+  E1 --> E2["EraseNvramBackupArea(0,1) - Group 2"]:::st
+  E2 --> E3["EraseNvramBackupArea(0,2) - Group 3"]:::st
+  E3 --> X["return - không đặt cờ"]:::sw
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+        </script></div>
+        <figcaption>Hình 6.2. Command 1 không đụng SoftDipSW.</figcaption>
+      </figure>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="panel-c2" aria-labelledby="tab-c2" hidden>
+      <h4 id="cmd-2">Command 2: chỉ xoá backup</h4>
+      <dl class="kv">
+        <dt>Description</dt><dd>Chỉ xoá 3 backup group; dữ liệu đang dùng giữ nguyên.</dd>
+        <dt>Condition</dt><dd><code>uc_ClearCmdNo == 2</code> (dòng 33467)</dd>
+        <dt>Sequence</dt><dd>printf → <code>EraseNvramBackupArea(0,0)</code>, <code>(0,1)</code>, <code>(0,2)</code></dd>
+        <dt>SPI-Flash</dt><dd>G1/G2 bị đánh dấu xoá; SoftDipSW không đổi</dd>
+        <dt>SSD</dt><dd>G3 (phân vùng backup) bị ghi đè 0 hoặc erase; NVData không đổi</dd>
+        <dt>Clear Flag</dt><dd>Không đặt</dd>
+        <dt>Final state</dt><dd>Thiết bị boot bình thường, nhưng nếu dữ liệu chính hỏng thì không còn backup để khôi phục. Thời điểm backup được tạo lại chưa được truy vết <span class="badge u">UNVERIFIED</span></dd>
+        <dt>Source</dt><dd><code>NVDG_FuncZeus.cpp:33467–33472</code></dd>
+      </dl>
+      <figure class="diagram" data-title="Command 2 flowchart">
+        <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  S["dbgAllClear(2)"]:::sw --> P["printf SSD(BackUp FlashROM) Clear."]:::sw
+  P --> E1["EraseNvramBackupArea(0,0) - Group 1"]:::st
+  E1 --> E2["EraseNvramBackupArea(0,1) - Group 2"]:::st
+  E2 --> E3["EraseNvramBackupArea(0,2) - Group 3"]:::st
+  E3 --> X["return"]:::sw
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+        </script></div>
+        <figcaption>Hình 6.3. Command 2 chỉ tác động vùng backup.</figcaption>
+      </figure>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="panel-c3" aria-labelledby="tab-c3" hidden>
+      <h4 id="cmd-3">Command 3: chỉ SPI-Flash (SoftDipSW)</h4>
+      <dl class="kv">
+        <dt>Description</dt><dd>Zero toàn SoftDipSW, không xoá backup, không đặt cờ.</dd>
+        <dt>Condition</dt><dd><code>uc_ClearCmdNo == 3</code> (dòng 33474)</dd>
+        <dt>Sequence</dt><dd>printf → <code>THRG_setSoftDipSw(0, zero, 16376)</code> → (lỗi: log + D390_004B)</dd>
+        <dt>SPI-Flash</dt><dd>Toàn bộ 16376 byte = 0, <strong>bao gồm cả byte Clear Flag</strong>, nên sau lệnh cờ = 0x00 dù trước đó đang 0xAB</dd>
+        <dt>SSD</dt><dd>Không đổi</dd>
+        <dt>Backup groups</dt><dd>Giữ nguyên</dd>
+        <dt>Clear Flag</dt><dd>Bị xoá về 0 (gián tiếp)</dd>
+        <dt>Final state</dt><dd>Boot sau: FirstMark sai nên <code>sc_InitFlg = On</code>, <code>sc_InitFlgOfSSD = Off</code>. Class SPI-Flash mất magic “R1”: nếu còn backup thì <code>SERR_Fatal</code> → <code>NVDC_setWakeUpFatal()</code>, nếu không thì FactorySetup <span class="badge i">INFERRED</span></dd>
+        <dt>Source</dt><dd><code>NVDG_FuncZeus.cpp:33474–33486</code></dd>
+      </dl>
+      <figure class="diagram" data-title="Command 3 flowchart">
+        <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  S["dbgAllClear(3)"]:::sw --> P["printf SPI-Flash/NVRAM Clear"]:::sw
+  P --> W["THRG_setSoftDipSw(0, uc_Buff = 0, 16376)"]:::st
+  W --> Q{"uc_Ret == THRD_SET_SPI_OK ?"}
+  Q -->|Không| L["SYSF_logMsg + APIC_setNewDetailCode D390_004B"]:::er
+  Q -->|Có| X["return - backup và cờ không được ghi lại"]:::sw
+  L --> X
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+        </script></div>
+        <figcaption>Hình 6.4. Command 3 xoá cả byte cờ vì cờ nằm trong cùng vùng SoftDipSW.</figcaption>
+      </figure>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="panel-c4" aria-labelledby="tab-c4" hidden>
+      <h4 id="cmd-4">Command 4: chỉ đặt Clear Flag</h4>
+      <dl class="kv">
+        <dt>Description</dt><dd>Không xoá gì khi chạy; chỉ yêu cầu khởi tạo SSD ở lần boot sau.</dd>
+        <dt>Condition</dt><dd><code>uc_ClearCmdNo == 4</code> (dòng 33488)</dd>
+        <dt>Sequence</dt><dd>printf <code>"SSD(/ata0b/NVData) Clear."</code> → <code>NVDF_setNvramClearFlag(True)</code></dd>
+        <dt>SPI-Flash</dt><dd>Ghi 1 byte 0xAB vào SoftDipSW</dd>
+        <dt>SSD</dt><dd>Không đổi khi chạy lệnh</dd>
+        <dt>Backup groups</dt><dd>Giữ nguyên</dd>
+        <dt>Clear Flag</dt><dd>Bật</dd>
+        <dt>Error handling</dt><dd><code>NVDF_setNvramClearFlag</code> trả void; lỗi chỉ được log bên trong <code>setFlag</code> (D390_0047)</dd>
+        <dt>Final state</dt><dd>Boot sau: <code>sc_InitFlgOfSSD = On</code>. Class SSD có backup hợp lệ đi nhánh <code>SERR_Fatal</code> + <code>DeleteRecord()</code>, class không có backup thì FactorySetup; DB bị xoá, cờ tắt <span class="badge i">INFERRED</span></dd>
+        <dt>Source</dt><dd><code>NVDG_FuncZeus.cpp:33488–33491</code></dd>
+      </dl>
+      <figure class="diagram" data-title="Command 4 flowchart">
+        <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  S["dbgAllClear(4)"]:::sw --> P["printf SSD(/ata0b/NVData) Clear."]:::sw
+  P --> F["NVDF_setNvramClearFlag(True) - ghi 0xAB"]:::bt
+  F --> X["return - xoá thật sự diễn ra ở lần boot sau"]:::sw
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef bt fill:#EDE9FE,stroke:#7C3AED,color:#172033
+        </script></div>
+        <figcaption>Hình 6.5. Printf nói “Clear” nhưng lệnh chỉ đặt cờ.</figcaption>
+      </figure>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="panel-c5" aria-labelledby="tab-c5" hidden>
+      <h4 id="cmd-5">Command 5: SoftDipSW + Clear Flag (giữ backup)</h4>
+      <dl class="kv">
+        <dt>Description</dt><dd>Giống command 0 nhưng <strong>không xoá backup</strong>.</dd>
+        <dt>Condition</dt><dd><code>uc_ClearCmdNo == 5</code> (dòng 33493)</dd>
+        <dt>Sequence</dt><dd>printf → <code>THRG_setSoftDipSw(0, zero, 16376)</code> → (lỗi: log + D390_004C) → <code>NVDF_setNvramClearFlag(True)</code></dd>
+        <dt>SPI-Flash</dt><dd>Zero SoftDipSW, sau đó ghi cờ 0xAB</dd>
+        <dt>SSD</dt><dd>Không đổi khi chạy; khởi tạo ở lần boot sau</dd>
+        <dt>Backup groups</dt><dd>Giữ nguyên</dd>
+        <dt>Clear Flag</dt><dd>Bật</dd>
+        <dt>Final state</dt><dd>Boot sau: cả hai cờ init = On. Do backup còn, các class có backup đi nhánh <code>SERR_Fatal</code> → <code>NVDC_setWakeUpFatal()</code> <span class="badge i">INFERRED</span></dd>
+        <dt>Source</dt><dd><code>NVDG_FuncZeus.cpp:33493–33506</code></dd>
+      </dl>
+      <figure class="diagram" data-title="Command 5 flowchart">
+        <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  S["dbgAllClear(5)"]:::sw --> P["printf SPI-Flash/NVRAM + SSD(/ata0b/NVData) Clear"]:::sw
+  P --> W["THRG_setSoftDipSw(0, uc_Buff = 0, 16376)"]:::st
+  W --> Q{"uc_Ret == THRD_SET_SPI_OK ?"}
+  Q -->|Không| L["SYSF_logMsg + APIC_setNewDetailCode D390_004C"]:::er
+  Q -->|Có| F
+  L --> F["NVDF_setNvramClearFlag(True) - ghi 0xAB"]:::bt
+  F --> X["return - backup vẫn còn"]:::sw
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef bt fill:#EDE9FE,stroke:#7C3AED,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+        </script></div>
+        <figcaption>Hình 6.6. Nếu SoftDipSW lỗi khi ghi, lệnh ghi cờ (dùng cùng vùng SPI) nhiều khả năng cũng lỗi <span class="badge i">INFERRED</span>.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <h3 id="zeus-matrix">Command comparison matrix</h3>
+  <div class="table-wrap"><table class="matrix">
+    <thead><tr><th>Cmd</th><th>SoftDipSW zero</th><th>Xoá NVData</th><th>Group 1</th><th>Group 2</th><th>Group 3</th><th>Clear Flag ON</th><th>Detail code khi lỗi</th></tr></thead>
+    <tbody>
+      <tr><td><a href="#zeus-commands" data-open-tab="tab-c0">0</a></td><td class="cell-yes">✓</td><td class="cell-warn">⚠ lúc boot</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td><code>D390_004A</code></td></tr>
+      <tr><td><a href="#zeus-commands" data-open-tab="tab-c1">1</a></td><td class="cell-no">–</td><td class="cell-yes">✓ ngay</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td class="cell-no">–</td><td>–</td></tr>
+      <tr><td><a href="#zeus-commands" data-open-tab="tab-c2">2</a></td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td class="cell-yes">✓</td><td class="cell-no">–</td><td>–</td></tr>
+      <tr><td><a href="#zeus-commands" data-open-tab="tab-c3">3</a></td><td class="cell-yes">✓</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-warn">⚠ bị xoá về 0</td><td><code>D390_004B</code></td></tr>
+      <tr><td><a href="#zeus-commands" data-open-tab="tab-c4">4</a></td><td class="cell-no">–</td><td class="cell-warn">⚠ lúc boot</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-yes">✓</td><td>(<code>D390_0047</code> trong setFlag)</td></tr>
+      <tr><td><a href="#zeus-commands" data-open-tab="tab-c5">5</a></td><td class="cell-yes">✓</td><td class="cell-warn">⚠ lúc boot</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-yes">✓</td><td><code>D390_004C</code></td></tr>
+      <tr><td>khác</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td class="cell-no">–</td><td>– (im lặng)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="caption">✓ có thao tác · – không thao tác · ⚠ có điều kiện đặc biệt. Click số command để mở tab tương ứng.</p>
+
+  <h3 id="zeus-uboot">U-Boot protection: “omit the first 256byte”</h3>
+  <div class="grid-2">
+    <div class="card"><h4>Điều đã xác minh</h4>
+      <ul>
+        <li>Mọi định nghĩa “thật” của <code>NVDD_NVRam_Base</code> là <code>DEVICE_CS1_BASE + 0x100</code> (Zeus <code>NVDG_FuncZeus.h:123</code>, Donau3 KM3 <code>.h:104</code>, Subset <code>.h:124</code>). Trong SimLin, <code>NV_AreaGet()</code> cũng đặt <code>FUNCOFFSET = malloc + 0x100</code>. <span class="badge v">VERIFIED</span></li>
+        <li>Comment Zeus dòng 33443 ghi “U-Boot先頭256byte除く” (trừ 256 byte đầu cho U-Boot). <span class="badge v">VERIFIED</span> (comment tồn tại)</li>
+      </ul></div>
+    <div class="card"><h4>Điều KHÔNG được chứng minh</h4>
+      <ul>
+        <li>Không có memory layout nào trong repo cho thấy U-Boot dùng 256 byte đó, hay 256 byte đó là toàn bộ U-Boot. <span class="badge u">UNVERIFIED</span></li>
+        <li>Đường đi của Zeus không loại trừ 256 byte nào: <code>THRG_setSoftDipSw(0, …)</code> ghi từ offset 0 của vùng dữ liệu SoftDipSW. Chuỗi printf là di sản từ mô hình NVRAM cũ. <span class="badge v">VERIFIED</span></li>
+        <li>Không có cơ chế recovery cho trường hợp xoá nhầm vùng bootloader trong phạm vi code đã đọc. <span class="badge u">UNVERIFIED</span></li>
+      </ul></div>
+  </div>
+  <p>Vì không xác định được địa chỉ vật lý của U-Boot, tài liệu cố ý <strong>không vẽ sơ đồ địa chỉ</strong> cho vùng này.</p>
+
+  <h3 id="zeus-detail-codes">Logging &amp; detail code</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Macro</th><th>Giá trị</th><th>Nơi dùng</th><th>Ý nghĩa (theo code)</th></tr></thead>
+    <tbody>
+      <tr><td><code>TYPD_NewDetailCode_Cmn_D390_0047</code></td><td><code>0x06D3900000000047</code></td><td><code>NVDC_SPIFlashDataManage::setFlag</code></td><td>Ghi cờ SoftDipSW lỗi; log 2 lần (ret+kind, rồi offset)</td></tr>
+      <tr><td><code>…_D390_0048</code></td><td><code>0x06D3900000000048</code></td><td><code>NVDSInit</code> (máy thật)</td><td>Ghi lại FirstMark lỗi</td></tr>
+      <tr><td><code>…_D390_0049</code></td><td><code>0x06D3900000000049</code></td><td><code>NVDSInit</code> (nhánh FUM_LINUX)</td><td>Ghi lại FirstMark lỗi</td></tr>
+      <tr><td><code>…_D390_004A</code></td><td><code>0x06D390000000004A</code></td><td><code>dbgAllClear</code> case 0</td><td>Zero SoftDipSW lỗi</td></tr>
+      <tr><td><code>…_D390_004B</code></td><td><code>0x06D390000000004B</code></td><td>case 3</td><td>Zero SoftDipSW lỗi</td></tr>
+      <tr><td><code>…_D390_004C</code></td><td><code>0x06D390000000004C</code></td><td>case 5</td><td>Zero SoftDipSW lỗi</td></tr>
+    </tbody>
+  </table></div>
+  <p>Định nghĩa ở <code>system/sys/APIC_FatalSignalDetailCode.h:11082–11087</code>, comment chung “SPI-Flash SoftDipSW領域設定箇所” (vị trí ghi vùng SoftDipSW). Cách ghép 64 bit theo comment trong <code>THRG_setSoftDipSw</code>: chữ số hex 1–2 = module, 3–6 = trouble code <code>D390</code>, 7–8 = kết quả. <code>dbgAllClear</code> đưa <code>uc_Ret</code> vào bit 32–39 bằng <code>static_cast&lt;uint64_t&gt;(uc_Ret) &lt;&lt; 32</code>. <span class="badge v">VERIFIED</span></p>
+  <p><code>APIC_setNewDetailCode()</code> (<code>sys/APIC_FatalSignalDetailCode.cpp:346</code>) làm các việc sau:</p>
+  <ul>
+    <li>Nếu byte cao nhất bằng 0: <code>setFatal(TYPD_TroubleCode_E002)</code>.</li>
+    <li>Nếu <code>NVDC_isInitialization()</code> trả True: <code>SYSF_logMsg</code>, sau đó lưu bản ghi <code>TYPS_LogThreadAssert</code> qua <code>APIC_LogThreadAssert::setLogThreadAssert()</code>. Comment trong code ghi “NVに保存する値” (giá trị lưu vào vùng không bay hơi).</li>
+  </ul>
+  <p>Bản ghi được lưu ở vùng nào và có tra được sau reboot hay không chưa được truy vết. <span class="badge u">UNVERIFIED</span></p>
+</section>
+
+<!-- ===================================================================== 07 -->
+<section class="chapter" id="storage-functions">
+  <div class="chapter-label">Chapter 07</div>
+  <h2>Storage Function Deep Dive</h2>
+  <p class="chapter-lede">Mỗi hàm storage được phân tích riêng: tham số, các bước thực thi, tác động phần cứng và điểm có thể lỗi.</p>
+
+  <h3 id="fn-memset">A · <code>NVDF_memsetNvRam()</code> (KM3)</h3>
+  <figure class="code" data-start="35" data-hl="44,49,52,57,62,65">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdg/NVDG_NVWrite.cpp</span><span class="fn">NVDF_memsetNvRam()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">void* NVDF_memsetNvRam( void* p_DataDst, short ss_Value, size_t size )
+{
+#ifdef COSIM
+	// COSIM has no NVRAM: do not write
+	return p_DataDst;
+#else
+	void *p_Return;
+
+	// create module semaphore
+	if( NVDD_SemaphoreID == 0 ) { NVDD_SemaphoreID = SYSF_semMCreate( (SEM_Q_PRIORITY | SEM_DELETE_SAFE | SEM_INVERSION_SAFE), False ); }
+
+#ifdef TORNADO
+
+	// lock
+	SYSF_semTake( NVDD_SemaphoreID, WAIT_FOREVER );
+
+	// NVRAM write-protect OFF
+	Set_Cs2( NVRAM_WRITE_UNLOCK );
+
+#endif // TORNADO
+
+	// NVRAM write
+	p_Return = SYSF_memset( p_DataDst, static_cast&lt;int&gt;(ss_Value), size );
+
+#ifdef TORNADO
+
+	// NVRAM write-protect ON
+	Set_Cs2( NVRAM_WRITE_LOCK );
+
+	// unlock
+	SYSF_semGive( NVDD_SemaphoreID );
+
+#endif // TORNADO
+
+	return p_Return;
+#endif
+}</code></pre>
+    <figcaption class="code-note">KM3 đã sửa lỗi <code>#ifdef</code> có token thừa của Subset. <code>NVRAM_WRITE_UNLOCK</code> = 2, hoặc 0 khi có <code>FUM_LINUX</code>; <code>NVRAM_WRITE_LOCK</code> = 1 (<code>Linux/Platform/InitDevice.h:73–78</code>).</figcaption>
+  </figure>
+  <figure class="diagram" data-title="Sequence: NVDF_memsetNvRam">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+sequenceDiagram
+  participant C as Caller (dbgAllClear Donau3)
+  participant W as NVDF_memsetNvRam
+  participant S as NVDD_SemaphoreID
+  participant H as Set_Cs2
+  participant R as Vùng NVRAM (RAM)
+  C->>W: (NVDD_NVRam_Base, 0x0, 0x1ffef0)
+  alt NVDD_SemaphoreID == 0
+    W->>S: SYSF_semMCreate(Q_PRIORITY, DELETE_SAFE, INVERSION_SAFE)
+  end
+  W->>S: SYSF_semTake(WAIT_FOREVER)
+  W->>H: Set_Cs2(UNLOCK)
+  Note over H: Linux: thân hàm rỗng
+  W->>R: SYSF_memset(dst, 0, size)
+  W->>H: Set_Cs2(LOCK)
+  W->>S: SYSF_semGive
+  W-->>C: p_Return (bị bỏ qua)
+    </script></div>
+    <figcaption>Hình 7.1. Semaphore chỉ bao quanh lời gọi memset.</figcaption>
+  </figure>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Điểm có thể lỗi</th><th>Phân tích</th></tr></thead>
+    <tbody>
+      <tr><td>Semaphore creation</td><td>Tạo lười, không kiểm tra NULL. Hai task gọi lần đầu đồng thời có thể cùng tạo semaphore (race ở <code>if (ID == 0)</code>) <span class="badge i">INFERRED</span></td></tr>
+      <tr><td><code>WAIT_FOREVER</code></td><td>Nếu semaphore bị giữ thì cuShell bị chặn vô hạn, và không có timeout</td></tr>
+      <tr><td>Giữa UNLOCK và LOCK</td><td>Trên Linux không có trạng thái phần cứng nào được thay đổi (<code>Set_Cs2</code> rỗng), nên không có rủi ro “quên LOCK”. Trên VxWorks cũ, một exception trong memset sẽ để CS2 ở trạng thái mở <span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Kích thước</td><td>Không kiểm tra biên: xem cảnh báo tràn buffer ở <a href="#subset-overflow">4.4</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="fn-softdipsw">B · <code>THRG_setSoftDipSw()</code></h3>
+  <div class="fn-card">
+    <header><h4>uchar THRG_setSoftDipSw(const size_t ul_Offset, void* pv_Addr, size_t ul_Size)</h4><p>KM3 <code>Linux/Platform/Mediaif.cpp:4846</code>. Ghi dữ liệu vào vùng SoftDipSW trên SPI-Flash.</p></header>
+    <div class="fn-grid">
+      <div>THRG module</div><div>Tiền tố THR = module Thread/HW driver (thư mục <code>system/thr</code>). Hàm nằm trong <code>Mediaif.cpp</code> của lớp Platform và được khai báo <code>extern "C"</code> trong <code>Mediaif.h</code>.</div>
+      <div>Soft DIP Switch</div><div>Phiên bản phần mềm của DIP switch: các bit cấu hình lưu ở SPI-Flash. Trên máy NVRAM-less, vùng này cũng chứa FirstMark, cờ boot và dữ liệu class <code>NVDE_MediaType_SPIFlash</code> (magic “R1” tại <code>FileOffset</code>) <span class="badge v">VERIFIED</span>.</div>
+      <div>Parameters (dbgAllClear)</div><div><code>ul_Offset = 0</code>, <code>pv_Addr = uc_Buff</code> (16376 byte 0), <code>ul_Size = sizeof(uc_Buff)</code> = 16376.</div>
+      <div>Internal execution</div><div><ol><li><code>c_SoftDipSW.write(offset, addr, size)</code>: lấy <code>m_semID_Mutex</code> (<code>WAIT_FOREVER</code>), gọi <code>writeBackup()</code>, trả semaphore (dòng 4112)</li><li>Nếu <code>uc_Ret != THRD_SET_SPI_OK</code>: dựng detail 64 bit (module thread, <code>0xD390</code>, ret, mặt đang dùng, InitAccessFlg, WriteBackupRet) rồi gọi <code>THRL_ThAssertLog2</code></li><li>Nếu lỗi là “retry over” khi read-check: ghi thêm 3 log (check/head/tail counter)</li></ol></div>
+      <div>Storage impact</div><div>SPI-Flash, đối tượng <code>c_SoftDipSW</code>: mặt 1 <code>0x6E000</code>, mặt 2 <code>0x72000</code>, mỗi mặt 16KB (<code>Mediaif.cpp:115–117</code>). Cơ chế 2 mặt và bộ đếm cho thấy dữ liệu mới được ghi sang mặt còn lại rồi mới đổi mặt hiện hành <span class="badge i">INFERRED</span>; nội dung <code>writeBackup()</code> chưa được đọc hết.</div>
+      <div>Verification</div><div>Có các hàm <code>THRC_SPI_FlashCtrl::readCheck</code> (2836), <code>eraseAndCheck</code> (2899), <code>writeAndCheck</code> (2937) và mã lỗi <code>*_RC_RETRAY_OVER_NG</code>, cho thấy có đọc lại để kiểm tra sau khi ghi <span class="badge i">INFERRED</span>.</div>
+      <div>Return values</div><div><code>0</code> OK · <code>10</code> NG_PARAM · <code>20</code> NG_ALL_AREA_ERR · <code>21</code> NG_ERS_DATA_RD_ERR · <code>30/31/32</code> read/erase/write SPI error · <code>40/41</code> lỗi bộ đếm (<code>Mediaif.h:21–32</code>).</div>
+      <div>Error handling</div><div>Tự log qua <code>THRL_ThAssertLog2</code>. <code>dbgAllClear</code> log thêm qua <code>SYSF_logMsg</code> + <code>APIC_setNewDetailCode</code> rồi <strong>tiếp tục</strong>.</div>
+      <div>Callers liên quan</div><div><code>dbgAllClear</code> (0/3/5) · <code>NVDC_SPIFlashDataManage::setFlag</code> · <code>NVDSInit</code> (FirstMark) · <code>NVDC_MediaAccessSPIFlash</code> (magic “R1”).</div>
+    </div>
+  </div>
+  <figure class="diagram" data-title="Call chain: THRG_setSoftDipSw">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart LR
+  A["dbgAllClear<br/>uc_Buff = 0, 16376 byte"]:::sw --> B["THRG_setSoftDipSw(0, uc_Buff, 16376)<br/>Mediaif.cpp:4846"]:::sw
+  B --> C["c_SoftDipSW.write()<br/>semTake m_semID_Mutex"]:::sw
+  C --> D["writeBackup()<br/>ghi mặt và bộ đếm - chưa truy vết chi tiết"]:::st
+  D --> E["SPI-Flash 0x6E000 hoặc 0x72000"]:::st
+  B -->|"uc_Ret khác OK"| F["THRL_ThAssertLog2(detail 0xD390)"]:::er
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+    </script></div>
+    <figcaption>Hình 7.2. Tầng dưới <code>writeBackup()</code> (THRF_writeFlash, driver SPI) nằm ngoài phạm vi đã xác minh.</figcaption>
+  </figure>
+
+  <h3 id="fn-erase">C · <code>EraseNvramBackupArea()</code> (KM3)</h3>
+  <div class="fn-card">
+    <header><h4>BOOL EraseNvramBackupArea(short ss_area1, int si_area2)</h4><p>KM3 <code>Linux/Platform/Mediaif.cpp:1592–1690</code>. Comment: “デバッグ用 NVRAMバックアップ領域削除関数” (hàm debug xoá vùng backup NVRAM).</p></header>
+    <div class="fn-grid">
+      <div><code>ss_area1</code></div><div>Mặt: <code>1</code> = mặt 1, <code>2</code> = mặt 2, <strong>khác (0) = cả hai mặt</strong></div>
+      <div><code>si_area2</code></div><div>Group: <code>0</code> = Group 1, <code>1</code> = Group 2, <code>2</code> = Group 3; khác → <code>printf("…invalid area %d.")</code>, FALSE</div>
+      <div>Return</div><div><code>TRUE</code> nếu mọi thao tác OK, <code>FALSE</code> nếu có lỗi. Không caller <code>dbgAllClear</code> nào kiểm tra.</div>
+      <div>Log</div><div><code>logMsg("Erase NVRAM backup Start.")</code> / <code>"End."</code> (<code>#ifdef TORNADO</code>) + printf mỗi lỗi.</div>
+      <div>Callers khác</div><div><code>NVDSInit</code> (khi ROM version đổi và không có bảng backup), <code>NVDC_FactoryReset.cpp:954–956, 1809–1811</code>, <code>SYSC_SsdDataTransfer.cpp:873–875</code>, <code>THRC_HddTrans.cpp:10949–10951</code>, <code>THRC_Vxworks.cpp:4122–4123</code>.</div>
+    </div>
+  </div>
+  <figure class="diagram" data-title="EraseNvramBackupArea: 3 backup group">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  E["EraseNvramBackupArea(ss_area1, si_area2)<br/>ss_area1 = 0 nghĩa là cả hai mặt"]:::sw
+  E -->|si_area2 = 0| G1["Group 1<br/>c_NvramBackupGroup1.erase(mặt)"]:::sw
+  E -->|si_area2 = 1| G2["Group 2<br/>c_NvramBackupGroup2.erase(mặt)"]:::sw
+  E -->|si_area2 = 2| G3["Group 3<br/>c_NvramBackup.eraseBackupData(1 hoặc 2)"]:::sw
+  E -->|khác| X["printf invalid area - return FALSE"]:::er
+  G1 --> L1["eraseBackup - setEraseEnable<br/>ghi 0x0000 vào trường erase-flag"]:::st
+  G2 --> L1
+  G3 --> R1["raw_EraseFlash(sector quản lý, 1)<br/>raw_EraseFlash(bank, 2)"]:::st
+  R1 --> Q{"DEF_SupportSSD ?"}
+  Q -->|Có| Z["malloc + memset 0 + raw_WriteFlash<br/>ghi đè 0 lên block device"]:::st
+  Q -->|Không| M["ioctl MEMERASE trên MTD"]:::st
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+    </script></div>
+    <figcaption>Hình 7.3. Ba group dùng hai cơ chế xoá khác nhau.</figcaption>
+  </figure>
+
+  <h3 id="group-1">Backup Group 1</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>Physical storage</dt><dd>SPI-Flash, mặt 1 <code>0x00000000</code>, mặt 2 <code>0x00019000</code>, mỗi mặt <code>25 × 4KB</code> = 100KB (<code>Mediaif.cpp:127–129</code>)</dd>
+      <dt>Object</dt><dd><code>static THRC_SPI_FlashCtrlBackup c_NvramBackupGroup1(…, uc_NvramBackupGroup1Work, 0x00, True)</code> (dòng 792). Tham số cuối <code>True</code> = bật trường erase-flag</dd>
+      <dt>Logical data</dt><dd>Bản backup của các class được gán <code>NVDE_BackupDataGroup1</code> (<code>getBackupDataGroupSettingData</code>)</dd>
+      <dt>Erase</dt><dd><code>erase(area)</code> → semTake → <code>eraseBackup()</code> (4710) → <code>m_c_BackupAreaN.setEraseEnable()</code> (3155): ghi <code>ushort 0x0000</code> tại <code>AreaAdress + 4 + DataSize</code> qua <code>THRF_writeFlash</code></dd>
+      <dt>Loại xoá</dt><dd><strong>Logic</strong>: dữ liệu vẫn nằm trên flash, chỉ trường erase-flag bị đặt <span class="badge v">VERIFIED</span>. <code>read()</code> có các mã kết quả như <code>THRD_GET_SPI_OK_ERS_OTHER_AREA1/2</code> (“使用面削除により…読み込み”, đọc mặt kia khi mặt đang dùng đã bị xoá), cho thấy lúc đọc có tôn trọng cờ xoá <span class="badge i">INFERRED</span></dd>
+    </dl>
+  </div>
+
+  <h3 id="group-2">Backup Group 2</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>Physical storage</dt><dd>SPI-Flash, mặt 1 <code>0x00032000</code>, mặt 2 <code>0x00050000</code>, mỗi mặt <code>30 × 4KB</code> = 120KB (<code>Mediaif.cpp:131–133</code>)</dd>
+      <dt>Object</dt><dd><code>c_NvramBackupGroup2</code> (dòng 794), cùng class và cơ chế với Group 1</dd>
+      <dt>Logical data</dt><dd>Các class thuộc <code>NVDE_BackupDataGroup2</code></dd>
+      <dt>Erase</dt><dd>Giống Group 1: logic, 2 byte <code>0x0000</code> mỗi mặt</dd>
+    </dl>
+  </div>
+
+  <h3 id="group-3">Backup Group 3</h3>
+  <div class="card">
+    <dl class="kv">
+      <dt>Physical storage</dt><dd>Block device của vùng backup: <code>/dev/kmsda11</code> (µSD 8GB), <code>/dev/kmsda12</code> (SSD 128GB/256GB/1TB), bản mã hoá <code>/dev/mapper/crypt_11/12</code>, SimLin <code>/dev/sdc</code> (<code>raw_GetFlashFdSingleton</code>, dòng 5717) <span class="badge v">VERIFIED</span></dd>
+      <dt>Object</dt><dd><code>static FlashCtrlBackup c_NvramBackup(START_SEC_NVT, p_NVRAM_Backupdata, START_SEC_NV1, START_SEC_NV2, NVRAM_SECTOR_COUNT, "Donau NVRAM Backup", "rev.1.000")</code> (dòng 1432). Comment dòng 1428: khi NVRAM-less, group 1 cũ trên eMMC được dùng làm group 3</dd>
+      <dt>Layout</dt><dd>Sector quản lý 17 (mặt 1) / 18 (mặt 2), bank 1 bắt đầu sector 2, bank 2 sector 4, mỗi bank 2 sector × 64KB (<code>Mediaif.cpp:71–75</code>)</dd>
+      <dt>Erase</dt><dd><code>eraseBackupData(1|2)</code> (1289): <code>raw_EraseFlash(ctrl, 1)</code> rồi <code>raw_EraseFlash(bank, 2)</code>. <code>raw_EraseFlash</code> (945) với <code>DEF_SupportSSD</code> sẽ <code>malloc(len)</code>, <code>memset 0</code>, <code>raw_WriteFlash</code>; nếu không có thì <code>ioctl(fd, MEMERASE)</code></dd>
+      <dt>Loại xoá</dt><dd>Ghi đè vật lý ở mức block device (0x00), hoặc erase MTD (0xFF). Header quản lý cũng bị xoá nên bản backup mất hiệu lực <span class="badge v">VERIFIED</span>. <code>DEF_SupportSSD</code> có được bật cho build KM3 hay không thì chưa xác định <span class="badge u">UNVERIFIED</span></dd>
+      <dt>Lỗi</dt><dd>Nếu <code>malloc</code> lỗi thì <code>ret</code> giữ −1 và hàm trả FALSE kèm printf “eraseBackupData() bspFlashExtService ERROR”</dd>
+    </dl>
+  </div>
+  <div class="callout note"><div class="callout-title">Backup group có phải các bản sao giống nhau?</div>
+    <p>Không. Mỗi class được gán vào <em>một</em> group (<code>getBackupDataGroupSettingData(ChkInheritClass)</code>). Ba group chứa các tập dữ liệu khác nhau, và <strong>mỗi group có 2 mặt</strong> để ghi luân phiên. Việc chia group có thể do giới hạn dung lượng từng vùng SPI-Flash (100KB/120KB) <span class="badge i">INFERRED</span>.</p>
+  </div>
+</section>
+
+<!-- ===================================================================== 08 -->
+<section class="chapter" id="clear-flag">
+  <div class="chapter-label">Chapter 08</div>
+  <h2>NVRAM Clear Flag</h2>
+  <p class="chapter-lede">Một byte trên SPI-Flash là cầu nối giữa lệnh chạy hôm nay và quá trình khởi tạo ở lần boot sau.</p>
+
+  <h3 id="flag-chain">Call chain</h3>
+  <figure class="diagram" data-title="Call chain: NVDF_setNvramClearFlag">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  A["NVDF_setNvramClearFlag(b_FlagOn)<br/>NVDG_FuncZeus.cpp:34042"]:::sw --> B["sc_SetData = b_FlagOn ? 0xab : 0x00"]:::sw
+  B --> C["APIC_SPIFlashDataManage::newInstance()->setFlag(TYPE_FlagKind_NVClear, sc_SetData)"]:::sw
+  C --> D["NVDC_SPIFlashDataManage::setFlag<br/>nvdg/NVDC_Setting.cpp"]:::sw
+  D --> E["getFlagOffset(NVClear)<br/>offsetof(NVDS_SPIFlashFlag, uc_NVClearFlag) + 5 = 5"]:::sw
+  E --> F["THRG_setSoftDipSw(5, ptr tới flag, 1)"]:::sw
+  F --> G["SoftDipSW trên SPI-Flash, byte offset 5"]:::st
+  D -->|"uc_Ret khác OK"| H["SYSF_logMsg + D390_0047 hai lần"]:::er
+  classDef sw fill:#DBEAFE,stroke:#2563EB,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+    </script></div>
+    <figcaption>Hình 8.1. Toàn bộ chuỗi chỉ chạy khi có <code>TORNADO</code> và không có <code>FUM_LINUX</code>. Trên SimLin, <code>NVDF_setNvramClearFlag</code> là no-op.</figcaption>
+  </figure>
+
+  <figure class="code" data-start="34042" data-hl="34049,34053">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdZeus/NVDG_FuncZeus.cpp</span><span class="fn">NVDF_setNvramClearFlag()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">void NVDF_setNvramClearFlag( Bool b_FlagOn )
+{
+#ifdef TORNADO
+#ifndef FUM_LINUX // [new SIM support] MinervaZeusInt bring-up.
+	char sc_SetData = 0x00;
+	if (True == b_FlagOn)
+	{
+		sc_SetData = 0xab;
+	}
+
+// valid on models with SPI-Flash.
+	APIC_SPIFlashDataManage::newInstance()-&gt;setFlag( TYPE_FlagKind_NVClear, static_cast&lt;uchar&gt;(sc_SetData) );
+#endif // [new SIM support]
+#endif
+}</code></pre>
+    <figcaption class="code-note">Prototype <code>static void NVDF_setNvramClearFlag( Bool b_FlagOn );</code> ở dòng 387 nên hàm có internal linkage và không gọi trực tiếp được từ shell. Hàm trả <code>void</code>, không có lock riêng (lock nằm ở <code>c_SoftDipSW.write</code>) và không kiểm tra lỗi ở tầng này.</figcaption>
+  </figure>
+
+  <h3 id="flag-layout">Flag nằm ở đâu và vì sao là <code>0xAB</code>?</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>SoftDipSW offset</th><th>Nội dung</th><th>Nguồn</th></tr></thead>
+    <tbody>
+      <tr><td><code>0 … 4</code></td><td>FirstMark <code>"NVD10"</code> (<code>NVDD_NVRam_FirstMarkLen = 5</code>)</td><td><code>NVDG_FuncZeus.h:128–129</code></td></tr>
+      <tr><td><code>5</code></td><td><code>uc_NVClearFlag</code> (thành viên đầu tiên, <code>offsetof</code> = 0)</td><td><code>nvdg/NVDC_Setting_Other.h:3487</code></td></tr>
+      <tr><td><code>6</code></td><td><code>uc_NWDLExecFlag</code></td><td>như trên</td></tr>
+      <tr><td><code>7</code></td><td><code>uc_StaticElectricCalibrationExecFlag</code></td><td>như trên</td></tr>
+      <tr><td><code>8</code></td><td><code>uc_EnhancedNVClearFlag</code>, tiếp theo là <code>uc_Reserve[7]</code></td><td>như trên</td></tr>
+      <tr><td>khác</td><td>Dữ liệu class SPI-Flash, mỗi class có magic <code>"R1"</code> tại <code>FileOffset</code></td><td><code>NVDC_MediaAccessSPIFlash.cpp:621</code></td></tr>
+    </tbody>
+  </table></div>
+  <p><code>0xAB</code> là một “magic byte” (<code>10101011b</code>), khác cả <code>0x00</code> (sau khi bị zero) lẫn <code>0xFF</code> (flash vừa erase). Vì vậy một vùng vừa bị xoá hay vừa erase không bao giờ bị hiểu nhầm thành “cờ bật”. <span class="badge i">INFERRED</span> Code chỉ so sánh <code>== 0xab</code>; không có comment giải thích lý do chọn giá trị này.</p>
+  <p>Có một biến thể <code>TYPE_FlagKind_NVClear_ONreboot = 99</code>: <code>setFlag</code> đổi nó về <code>NVClear</code> rồi khởi động <code>NVDC_NvclearWatchTimerObserver::startWatchTimer()</code> (cơ chế tự reboot, ngoài phạm vi của <code>dbgAllClear</code>). <span class="badge v">VERIFIED</span></p>
+
+  <h3 id="flag-read">Đọc cờ khi boot</h3>
+  <figure class="code" data-start="34018" data-hl="34026,34028" data-warn="34035">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdZeus/NVDG_FuncZeus.cpp</span><span class="fn">NVDF_checkNvramClearFlag()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">Bool NVDF_checkNvramClearFlag( void )
+{
+#ifdef TORNADO
+#ifndef FUM_LINUX // [new SIM support]
+	Bool b_CheckResult = False;
+	uchar uc_CheckData = 0x00;
+
+// valid on models with SPI-Flash.
+	uc_CheckData = APIC_SPIFlashDataManage::newInstance()-&gt;getFlag( TYPE_FlagKind_NVClear );
+
+	if ( uc_CheckData == 0xab )
+	{
+		b_CheckResult = True;
+	}
+	return b_CheckResult;
+#endif // [new SIM support]
+#endif
+	return False;
+}</code></pre>
+    <figcaption class="code-note"><code>getFlag</code> đọc 1 byte bằng <code>THRG_getSoftDipSw</code>. Nếu đọc lỗi thì chỉ log, rồi trả giá trị khởi tạo <code>0</code>, tức cờ được coi là OFF.</figcaption>
+  </figure>
+
+  <h3 id="flag-sequence">Vòng đời của cờ</h3>
+  <figure class="diagram" data-title="Sequence: vòng đời Clear Flag">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+sequenceDiagram
+  participant D as dbgAllClear 0, 4, 5
+  participant F as SoftDipSW (SPI-Flash)
+  participant N as NVDSInit (lần boot sau)
+  participant S as SSD NVData
+  D->>F: setFlag(NVClear, 0xab) tại offset 5
+  Note over D,F: Lệnh kết thúc - không reboot
+  N->>F: NVDF_checkNvramClearFlag - getFlag
+  F-->>N: 0xab
+  N->>N: sc_InitFlgOfSSD = NVDE_On
+  N->>S: CheckOfFile(On) cho class không phải NVRAM/SPI
+  N->>S: FactorySetup từng class (hoặc SERR_Fatal nếu còn backup)
+  N->>F: ghi lại FirstMark nếu sai và sc_InitFlg = On
+  N->>S: SYSF_DBMediaMapDelete - xoá file DB
+  N->>N: APIC_SaaSGWSetting FactorySetup
+  N->>F: NVDF_setNvramClearFlag(False) ghi 0x00
+    </script></div>
+    <figcaption>Hình 8.2. Cờ được tắt ở bước cuối cùng của khối xử lý.</figcaption>
+  </figure>
+
+  <h3 id="flag-why-late">Vì sao cờ chỉ được tắt sau khi khởi tạo xong?</h3>
+  <div class="callout ok"><div class="callout-title">Thiết kế “làm lại được” <span class="badge v">VERIFIED</span> (comment) · <span class="badge i">INFERRED</span> (hệ quả)</div>
+    <p>Comment tại <code>NVDG_FuncZeus.cpp:28759</code>: <em>“NVRAM初期化中での主電源断を考慮し、Boot領域：NVRAMクリア実行フラグ(Off)は、NVRAM MagicNo書込みタイミングで行う”</em>, nghĩa là “xét đến mất nguồn chính trong lúc khởi tạo NVRAM, việc tắt cờ trong vùng Boot được thực hiện ở thời điểm ghi MagicNo”.</p>
+    <p>Hệ quả: nếu mất nguồn ở bất kỳ điểm nào trước dòng 28767, cờ vẫn là <code>0xAB</code> và lần boot sau sẽ chạy lại toàn bộ quá trình. Nếu tắt cờ ngay trong <code>dbgAllClear</code> hoặc đầu <code>NVDSInit</code>, một lần mất nguồn giữa chừng sẽ để lại dữ liệu khởi tạo dở dang mà không ai biết cần làm lại.</p>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Tình huống</th><th>Hành vi</th><th>Bằng chứng</th></tr></thead>
+    <tbody>
+      <tr><td>Mất nguồn ngay sau khi xoá (trước khi đặt cờ)</td><td>Cờ chưa bật nên SSD không được khởi tạo; SPI (nếu đã zero) được khởi tạo nhờ FirstMark</td><td><span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Mất nguồn trong FactorySetup</td><td>Cờ vẫn 0xAB: chạy lại</td><td><span class="badge i">INFERRED</span></td></tr>
+      <tr><td>FactorySetup xong, chưa tắt cờ</td><td>Chạy lại FactorySetup + xoá DB lần nữa</td><td><span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Ghi cờ (tắt) thất bại</td><td>Log D390_0047; cờ có thể vẫn 0xAB nên mỗi lần boot đều khởi tạo lại SSD</td><td><span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Boot nhiều lần khi cờ vẫn bật</td><td>Mỗi lần đều khởi tạo lại; dữ liệu người dùng tạo giữa các lần boot sẽ mất. Không thấy cơ chế đếm số lần thử</td><td><span class="badge i">INFERRED</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ===================================================================== 09 -->
+<section class="chapter" id="boot">
+  <div class="chapter-label">Chapter 09</div>
+  <h2>Boot Sequence &amp; FactorySetup</h2>
+  <p class="chapter-lede">Truy vết ngược từ lúc khởi động hệ thống đến nơi gọi <code>FactorySetup()</code> và tắt Clear Flag (Zeus KM3).</p>
+
+  <h3 id="boot-chain">Boot entry</h3>
+  <ol>
+    <li><code>SYSC_SystemInit0()</code> (<code>system/sys/sysg/SYSC_SystemInit.cpp:940</code>) gọi <code>NVDG_InitModule( 2 );</code> ở dòng 994, ngay sau <code>DAPG_InitModule(0)</code>.</li>
+    <li><code>NVDG_InitModule(ushort us_InitOrder)</code> (<code>system/nvd/NVDG_InitModuleIf.cpp:43</code>): <code>case 2:</code> gọi <code>NVDSInit();</code> (dòng 61–64).</li>
+    <li>Sau khi NVD xong, <code>SYSC_SystemInit0</code> gọi <code>DBMG_InitModule();</code> (dòng 998).</li>
+  </ol>
+  <p class="caption">Tất cả <span class="badge v">VERIFIED</span>. Nơi gọi <code>SYSC_SystemInit0</code> từ main chưa được truy vết.</p>
+
+  <h3 id="boot-flowchart">Boot flowchart: <code>NVDSInit()</code></h3>
+  <figure class="diagram" data-title="NVDSInit: các quyết định khởi tạo">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+flowchart TD
+  A["SYSC_SystemInit0"]:::bt --> B["NVDG_InitModule(2)"]:::bt --> C["NVDSInit - NVDG_FuncZeus.cpp:28141"]:::bt
+  C --> D{"NV_AreaGet: FirstMark == NVD10 ?"}
+  D -->|Không| D1["sc_InitFlg = NVDE_On"]:::bt
+  D -->|Có| D2["sc_InitFlg = NVDE_Off"]:::bt
+  D1 --> E{"ROM version đổi và không có bảng backup G1, G2 ?"}
+  D2 --> E
+  E -->|Có| E1["EraseNvramBackupArea(0,0), (0,1), (0,2)"]:::st
+  E -->|Không| F
+  E1 --> F{"NVDF_checkNvramClearFlag: cờ == 0xab ?"}
+  F -->|Có| F1["sc_InitFlgOfSSD = NVDE_On"]:::bt
+  F -->|Không| F2["sc_InitFlgOfSSD = NVDE_Off"]:::bt
+  F1 --> G["CheckOfFile - class NVRAM/SPI dùng sc_InitFlg, class khác dùng sc_InitFlgOfSSD"]:::bt
+  F2 --> G
+  G --> H{"GetPowerOnResult của từng class"}
+  H -->|FactorySetRequest| H1["FactorySetup(e_SystemType) + WriteMagicNumber"]:::bt
+  H -->|SERR_Fatal, không có backup| H1
+  H -->|SERR_Fatal, có backup| H2["NVDC_setWakeUpFatal"]:::er
+  H -->|0 = OK| I
+  H1 --> I{"FirstMark sai và sc_InitFlg = On ?"}
+  H2 --> I
+  I -->|Có| I1["THRG_setSoftDipSw(0, NVD10, 5)"]:::st
+  I -->|Không| J
+  I1 --> J{"sc_InitFlgOfSSD = On ?"}
+  J -->|Có| J1["SYSF_DBMediaMapDelete"]:::st
+  J1 --> J2["APIC_SaaSGWSetting FactorySetup"]:::bt
+  J2 --> J3["NVDF_setNvramClearFlag(False)"]:::bt
+  J3 --> K["Kết thúc NVDSInit, sau đó DBMG_InitModule"]:::bt
+  J -->|Không| K
+  classDef bt fill:#EDE9FE,stroke:#7C3AED,color:#172033
+  classDef st fill:#CCFBF1,stroke:#0F766E,color:#172033
+  classDef er fill:#FEE2E2,stroke:#DC2626,color:#172033
+    </script></div>
+    <div class="diagram-legend"><span><i class="lg-bt"></i>Boot / khởi tạo</span><span><i class="lg-st"></i>Storage</span><span><i class="lg-er"></i>Đường lỗi</span></div>
+    <figcaption>Hình 9.1. Nhánh máy thật (<code>TORNADO &amp;&amp; !FUM_LINUX</code>). Trên SimLin, <code>sc_InitFlgOfSSD = sc_InitFlg</code> (dòng 28251) và không có bước SaaSGW.</figcaption>
+  </figure>
+
+  <h3 id="firstmark">FirstMark</h3>
+  <div class="grid-2">
+    <div class="card"><h4>Là gì, ở đâu</h4><p>5 byte <code>"NVD10"</code> ở offset 0 của SoftDipSW. Nó đánh dấu “vùng NVRAM/SPI đã từng được khởi tạo”.</p></div>
+    <div class="card"><h4>Ai đọc</h4><p><code>NV_AreaGet()</code> (<code>NVDG_FuncZeus.cpp:30415</code>) đọc bằng <code>THRG_getSoftDipSw(0, uc_FirstMark, 5)</code>. Nếu khác → <code>NVDE_On</code>, tức <code>sc_InitFlg</code> (dòng 28153–28157).</p></div>
+    <div class="card"><h4>Ai ghi</h4><p>Cuối <code>NVDSInit</code> (dòng 28737–28754): đọc lại, nếu vẫn sai <em>và</em> <code>sc_InitFlg == NVDE_On</code> thì ghi <code>"NVD10"</code> (lỗi → D390_0048).</p></div>
+    <div class="card"><h4>Quan hệ với Clear Flag</h4><p>Hai cơ chế <strong>độc lập</strong>. FirstMark điều khiển <code>sc_InitFlg</code> (class NVRAM/SPI-Flash). Clear Flag điều khiển <code>sc_InitFlgOfSSD</code> (class khác: SSD, …). Zeus cmd 0/5 tác động cả hai; cmd 3 chỉ FirstMark; cmd 4 chỉ Clear Flag.</p></div>
+  </div>
+
+  <h3 id="sc-initflgofssd"><code>sc_InitFlgOfSSD</code></h3>
+  <figure class="code" data-start="28229" data-hl="28234,28236" data-warn="28243-28244">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdZeus/NVDG_FuncZeus.cpp</span><span class="fn">NVDSInit()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">	char sc_InitFlgOfSSD = NVDE_Off;			// SSD(/ata0b/NVData) initializing flag.
+
+	 b_FactorySetup = True;						// FactorySetup in progress.
+
+#ifdef TORNADO
+	if ( True == NVDF_checkNvramClearFlag() )	// NVRAM clear requested?
+	{
+		sc_InitFlgOfSSD = NVDE_On;				// perform NVRAM clear.
+//Str [OP_BTS-22519 : 2020.05.22].
+#if !defined(FUM_LINUX)
+		TYPE_StorageConfig e_StorageConfig;
+		e_StorageConfig = APIC_SystemInfo::newInstance()-&gt;isStorageConfiguration();
+		if( ( TYPE_StorageConfig_MicroSD_8GB  == e_StorageConfig )
+		 || ( TYPE_StorageConfig_MicroSD_16GB == e_StorageConfig ) ) {
+			NVDC_NVBackup::newInstance()-&gt;isBackupFlashMagicNumberToRam();	// load backup flag to RAM.
+			b_ixEraseNvramBackup = True;
+			printf("%s：MicroSD NVRAM Clear Request\n",__FUNCTION__);
+		}
+#endif	//!defined(FUM_LINUX)
+//End [OP_BTS-22519 : 2020.05.22].
+	}</code></pre>
+    <figcaption class="code-note">Kiểu <code>char</code>, giá trị <code>NVDE_On</code>/<code>NVDE_Off</code>, biến local của <code>NVDSInit</code>. Nhánh microSD (vàng) có tác dụng chưa được truy vết <span class="badge u">UNVERIFIED</span>.</figcaption>
+  </figure>
+  <p>Biến này được truyền vào <code>CheckOfFile()</code> của mọi class không thuộc <code>NVDE_MediaType_NvRam | NVDE_MediaType_SPIFlash</code> (dòng 28316–28324) và quyết định có chạy khối xoá DB/tắt cờ ở cuối hay không (28760). Nó cũng ép <code>e_SystemType = TYPE_SystemType_US</code> khi chọn system type (dòng 28426). <span class="badge v">VERIFIED</span></p>
+
+  <h3 id="ssd-init">SSD Initialization: <code>CheckOfFile(InitFlg = On)</code></h3>
+  <figure class="code" data-start="373" data-hl="373,378,380" data-nonum>
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/nvd/nvdg/NVDC_MediaAccessSSD.cpp</span><span class="fn">NVDC_MediaAccessSSD::CheckOfFile() — trích</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">if ((NVDE_On == InitFlg) &amp;&amp; (FactorySetRequest != pNvdsVar-&gt;Result)) {
+	// init flag ON: perform factory setup
+	if ( ( True == b_GetBackUpJudgment ) &amp;&amp; ( True == b_isBackupFlashMagicNumber ) &amp;&amp; ( True == b_isBackupClassData) ) {
+		pNvdsVar-&gt;Result = SERR_Fatal;
+		// delete record
+		DeleteRecord();
+	} else {
+		pNvdsVar-&gt;Result = FactorySetRequest;
+	}
+	// init flag ON: CheckOfFile returns OK
+	return OK;
+}</code></pre>
+    <figcaption class="code-note">Trích từ dòng 373 trở đi (đã bỏ các dòng comment lịch sử, nên không đánh số dòng). Lớp SPI-Flash (<code>NVDC_MediaAccessSPIFlash.cpp:621</code>) dùng tiêu chí khác: thiếu magic <code>"R1"</code> tại <code>FileOffset</code> thì kết quả là <code>SERR_Fatal</code> (nếu có backup) hoặc <code>FactorySetRequest</code>.</figcaption>
+  </figure>
+  <div class="callout note"><div class="callout-title">Vì sao command 0 xoá backup trước khi bật cờ? <span class="badge i">INFERRED</span></div>
+    <p>Nếu backup còn hợp lệ, class sẽ đi nhánh <code>SERR_Fatal</code> → <code>NVDC_setWakeUpFatal()</code> (đường khôi phục từ backup) thay vì <code>FactorySetup</code>. Xoá backup trước đảm bảo <code>isBackupFlashMagicNumber()</code> trả False, nên mọi class đều về giá trị xuất xưởng. Cách <code>isBackupFlashMagicNumber</code> phản ứng sau khi xoá logic chưa được đọc trực tiếp.</p>
+  </div>
+
+  <h3 id="factorysetup">FactorySetup timeline</h3>
+  <ol class="timeline">
+    <li data-step="1"><div class="tl-fn">NV_AreaGet() · NV_CheckSum()</div><dl class="tl-meta"><dt>Purpose</dt><dd>Xác định <code>sc_InitFlg</code> (FirstMark) và <code>sc_CounterCheckSumInitFlg</code></dd><dt>Source</dt><dd>28154–28174</dd></dl></li>
+    <li data-step="2"><div class="tl-fn">ROM version check</div><dl class="tl-meta"><dt>Condition</dt><dd>ROM khác bản trước <em>và</em> không có bảng backup G1/G2</dd><dt>Side effect</dt><dd><code>EraseNvramBackupArea(0,0..2)</code>, <code>b_ixEraseNvramBackup = True</code></dd><dt>Source</dt><dd>28195–28214</dd></dl></li>
+    <li data-step="3"><div class="tl-fn">NVDF_checkNvramClearFlag()</div><dl class="tl-meta"><dt>Purpose</dt><dd>Đặt <code>sc_InitFlgOfSSD</code>; đặt <code>b_FactorySetup = True</code> (28231)</dd><dt>Source</dt><dd>28229–28251</dd></dl></li>
+    <li data-step="4"><div class="tl-fn">InstanceSetup + CheckOfFile (từng class)</div><dl class="tl-meta"><dt>Purpose</dt><dd>Nạp dữ liệu và gán <code>Result</code>: 0, <code>FactorySetRequest</code>, <code>SERR_Fatal</code>, …</dd><dt>Source</dt><dd>28300–28410</dd></dl></li>
+    <li data-step="5"><div class="tl-fn">Chọn e_SystemType</div><dl class="tl-meta"><dt>Condition</dt><dd><code>sc_InitFlgOfSSD == On</code> hoặc MachineSetting = <code>FactorySetRequest</code> → <code>TYPE_SystemType_US</code></dd><dt>Source</dt><dd>28420–28440</dd></dl></li>
+    <li data-step="6"><div class="tl-fn">NVDC_WriteWithDelay_setEnable(False) · vòng FactorySetup</div><dl class="tl-meta"><dt>Purpose</dt><dd>Với <code>FactorySetRequest</code>: <code>FactorySetup(e_SystemType)</code> (trừ khi <code>IsFactorySetupByParent()</code>), <code>WriteMagicNumber()</code>, <code>CheckOfFile</code>, <code>FlashData()</code></dd><dt>Side effect</dt><dd>Ghi giá trị mặc định xuống SPI/SSD</dd><dt>Source</dt><dd>28465–28725</dd></dl></li>
+    <li data-step="7" class="err"><div class="tl-fn">NVDC_setWakeUpFatal()</div><dl class="tl-meta"><dt>Condition</dt><dd><code>SERR_Fatal</code> và class có backup</dd><dt>Side effect</dt><dd>Fatal lúc khởi động (nội dung chưa truy vết)</dd><dt>Source</dt><dd>28545, 28641, 28712</dd></dl></li>
+    <li data-step="8"><div class="tl-fn">Ghi FirstMark</div><dl class="tl-meta"><dt>Condition</dt><dd>FirstMark sai và <code>sc_InitFlg == On</code></dd><dt>Source</dt><dd>28737–28754</dd></dl></li>
+    <li data-step="9"><div class="tl-fn">b_FactorySetup = False · setDisablerFinishLicenseCode()</div><dl class="tl-meta"><dt>Source</dt><dd>28756–28757</dd></dl></li>
+    <li data-step="10"><div class="tl-fn">SYSF_DBMediaMapDelete() · APIC_SaaSGWSetting::FactorySetup() · NVDF_setNvramClearFlag(False)</div><dl class="tl-meta"><dt>Condition</dt><dd><code>sc_InitFlgOfSSD == On</code></dd><dt>Source</dt><dd>28760–28768</dd></dl></li>
+  </ol>
+  <p class="caption">Số dòng trong khoảng 28300–28725 là phạm vi gần đúng của các vòng lặp, không phải dòng đơn lẻ.</p>
+  <div class="callout note"><div class="callout-title">Clear data ≠ Factory reset ≠ Factory setup ≠ DB init</div>
+    <p><strong>Clear data</strong>: <code>dbgAllClear</code> xoá/vô hiệu dữ liệu. <strong>Factory reset</strong>: luồng riêng trong <code>nvdg/NVDC_FactoryReset.cpp</code>, cũng gọi <code>EraseNvramBackupArea</code> (dòng 954–956) nhưng không được phân tích ở đây. <strong>FactorySetup</strong>: phương thức ảo của từng class, ghi giá trị mặc định. <strong>DB init</strong>: <code>DBMG_InitModule()</code> sau NVD.</p>
+  </div>
+
+  <h3 id="database-init">Database Initialization: <code>SYSF_DBMediaMapDelete()</code></h3>
+  <figure class="code" data-start="590" data-hl="596,599,602,603">
+    <div class="code-head"><span class="path">IT6_Controller/KM3/application/mfp/system/sys/Database/SYSC_DBMediaMap.cpp</span><span class="fn">SYSF_DBMediaMapDelete()</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-cpp">void SYSF_DBMediaMapDelete()
+{
+	char sc_Filename[PATH_MAX_KM + 1];
+
+	/* search non-volatile media map table (DB) */
+	for ( int32_t sl_Cnt = 0; sl_Cnt &lt; sl_DBMediaMapStructClassInfoCnt; sl_Cnt++ ){
+		if( s_DBMediaMapStructClassInfo[sl_Cnt].e_MadiaType == NVDE_MediaType_SSD ){
+			strncpy(sc_Filename, SYSD_HeadPath_Ssd, sizeof(SYSD_HeadPath_Ssd));
+		}
+		if( s_DBMediaMapStructClassInfo[sl_Cnt].e_MadiaType == NVDE_MediaType_HDD ){
+			strncpy(sc_Filename, SYSD_HeadPath_Hdd, sizeof(SYSD_HeadPath_Hdd));
+		}
+		strncat(sc_Filename, s_DBMediaMapStructClassInfo[sl_Cnt].pc_FileName, strlen(s_DBMediaMapStructClassInfo[sl_Cnt].pc_FileName));
+		SYSF_Remove(sc_Filename);
+	}
+}</code></pre>
+    <figcaption class="code-note"><code>SYSD_HeadPath_Ssd = SYSD_FTAG_NVData_0b</code>, <code>SYSD_HeadPath_Hdd = SYSD_FTAG_NVData_01</code> (<code>SYSC_DBMediaMap.h:79–80</code>).</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Xoá gì:</strong> mọi file DB trong bảng media map (DB hệ, ví dụ <code>"NVDC_GroupAddress.db"</code> trong <code>SYSC_System.cpp:14117</code>). Đây là xoá cả file, không phải xoá record. <span class="badge v">VERIFIED</span></li>
+    <li><strong>Lỗi:</strong> giá trị trả về của <code>SYSF_Remove</code> bị bỏ qua. Nếu một entry không phải SSD cũng không phải HDD, <code>sc_Filename</code> giữ giá trị của vòng trước (hoặc rác ở vòng đầu) trước khi <code>strncat</code> <span class="badge i">INFERRED</span> (đọc code, không thấy nhánh else).</li>
+    <li><strong>Tạo lại ở đâu:</strong> <code>DBMG_InitModule()</code> được gọi ngay sau <code>NVDG_InitModule(2)</code>. Việc nó tạo lại file DB là suy luận từ thứ tự gọi <span class="badge i">INFERRED</span>.</li>
+    <li><strong>Ảnh hưởng người dùng:</strong> DB chứa dữ liệu như sổ địa chỉ nhóm, nên các dữ liệu này mất <span class="badge i">INFERRED</span>.</li>
+  </ul>
+
+  <h3 id="power-failure">Power failure scenarios</h3>
+  <div class="grid-2">
+    <div class="scenario"><h4>1 · Mất nguồn trước FactorySetup</h4><dl>
+      <dt>Trạng thái</dt><dd>Lệnh (vd. cmd 0) đã hoàn tất: SoftDipSW zero, backup xoá, cờ 0xAB.</dd>
+      <dt>Boot sau</dt><dd>Như dự kiến: <code>sc_InitFlg</code> và <code>sc_InitFlgOfSSD</code> đều On → FactorySetup đầy đủ.</dd>
+      <dt>Bằng chứng</dt><dd><span class="badge i">INFERRED</span></dd></dl></div>
+    <div class="scenario"><h4>2 · Mất nguồn trong FactorySetup</h4><dl>
+      <dt>Trạng thái</dt><dd>Một số class đã ghi mặc định, số khác chưa; FirstMark có thể chưa ghi; cờ vẫn 0xAB.</dd>
+      <dt>Boot sau</dt><dd>Chạy lại: class SSD được khởi tạo lại do cờ; class SPI được khởi tạo lại nếu FirstMark vẫn sai hoặc magic “R1” thiếu.</dd>
+      <dt>Bằng chứng</dt><dd><span class="badge i">INFERRED</span></dd></dl></div>
+    <div class="scenario"><h4>3 · Mất nguồn sau khi xoá DB</h4><dl>
+      <dt>Trạng thái</dt><dd>File DB đã xoá, cờ chưa tắt (dòng 28763 xong, 28767 chưa).</dd>
+      <dt>Boot sau</dt><dd>Toàn bộ khối SSD chạy lại, xoá DB lần nữa (vô hại vì đã trống).</dd>
+      <dt>Bằng chứng</dt><dd><span class="badge i">INFERRED</span></dd></dl></div>
+    <div class="scenario"><h4>4 · Mất nguồn trước khi tắt cờ</h4><dl>
+      <dt>Trạng thái</dt><dd>Mọi bước đã xong, cờ còn 0xAB.</dd>
+      <dt>Boot sau</dt><dd>Khởi tạo lại một lần nữa. Thiết kế chấp nhận chi phí này để tránh khởi tạo dở dang.</dd>
+      <dt>Bằng chứng</dt><dd><span class="badge v">VERIFIED</span> (comment 28759) + <span class="badge i">INFERRED</span></dd></dl></div>
+    <div class="scenario"><h4>5 · Mất nguồn sau khi tắt cờ</h4><dl>
+      <dt>Trạng thái</dt><dd>Cờ 0x00, dữ liệu mặc định đã ghi.</dd>
+      <dt>Boot sau</dt><dd>Boot bình thường. Việc ghi cờ bằng <code>c_SoftDipSW.write</code> có cơ chế 2 mặt, nên một lần ghi bị ngắt nhiều khả năng giữ lại phiên bản cũ của mặt còn lại.</dd>
+      <dt>Bằng chứng</dt><dd><span class="badge i">INFERRED</span></dd></dl></div>
+  </div>
+</section>
+
+<!-- ===================================================================== 10 -->
+<section class="chapter" id="version-comparison">
+  <div class="chapter-label">Chapter 10</div>
+  <h2>Version Comparison</h2>
+  <p class="chapter-lede">Ba hàm cùng tên, ba hành vi. Bảng có header và cột đầu cố định khi cuộn; ô tô vàng là điểm khác biệt.</p>
+
+  <h3 id="vc-table">Bảng so sánh</h3>
+  <div class="table-wrap table-sticky"><table>
+    <thead><tr><th>Feature</th><th>Donau3 Subset S-S800</th><th>Donau3 KM3</th><th>Zeus KM3</th></tr></thead>
+    <tbody>
+      <tr><td>Chữ ký</td><td><code>void (void)</code></td><td><code>void (void)</code></td><td class="diff"><code>void (uchar uc_ClearCmdNo)</code></td></tr>
+      <tr><td>Dòng</td><td>6842</td><td>5404</td><td>33433</td></tr>
+      <tr><td>Build</td><td>Có</td><td class="diff">Chỉ nhánh fallback của Makefile</td><td>Có</td></tr>
+      <tr><td>NVRAM clear</td><td><a href="#fn-memset">NVDF_memsetNvRam</a> 0x1ffef0</td><td>giống Subset</td><td class="diff">Không có (vùng RAM NVRAM không bị đụng)</td></tr>
+      <tr><td>SPI-Flash clear</td><td>Không</td><td>Không</td><td class="diff"><a href="#fn-softdipsw">THRG_setSoftDipSw</a> 16376 byte (cmd 0, 3, 5)</td></tr>
+      <tr><td>SSD NVData clear</td><td>Không</td><td>Không</td><td class="diff">cmd 1 trực tiếp; cmd 0, 4, 5 lúc boot</td></tr>
+      <tr><td>Backup Group 1</td><td class="diff">Không xác định (lỗi chữ ký)</td><td>Có</td><td>cmd 0, 1, 2</td></tr>
+      <tr><td>Backup Group 2</td><td class="diff">Không xác định</td><td>Có</td><td>cmd 0, 1, 2</td></tr>
+      <tr><td>Backup Group 3</td><td class="diff">Không xác định</td><td>Không</td><td>cmd 0, 1, 2</td></tr>
+      <tr><td>Clear Flag</td><td>Không</td><td>Không</td><td class="diff"><a href="#clear-flag">0xAB</a> (cmd 0, 4, 5)</td></tr>
+      <tr><td>FactorySetup lần boot sau</td><td>Phụ thuộc init Donau3 (chưa truy vết)</td><td>như Subset</td><td class="diff">Có, qua Clear Flag + FirstMark</td></tr>
+      <tr><td>Database delete</td><td>Không</td><td>Không</td><td class="diff"><a href="#database-init">SYSF_DBMediaMapDelete</a> lúc boot</td></tr>
+      <tr><td>Error handling</td><td>Không</td><td>Không</td><td class="diff">Log + detail code cho bước SoftDipSW; backup thì không</td></tr>
+      <tr><td>Rủi ro chính</td><td class="diff">Tràn buffer 512KB; tham số rác</td><td class="diff">Tràn buffer 512KB (nếu build trên Linux)</td><td class="diff">Không tham số = cmd 0; giá trị lạ bị bỏ qua im lặng</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="vc-evolution">Sự phát triển của implementation</h3>
+  <ol>
+    <li><strong>Donau3 (2008):</strong> mô hình NVRAM vật lý trên chip-select CS1, có write-protect CS2 và một vùng backup NOR. Comment ở 6846 cho thấy kích thước được nâng từ 1MB (<code>0xffef0</code>) lên 2MB (<code>0x1ffef0</code>) ngày 2008-08-04. <span class="badge v">VERIFIED</span></li>
+    <li><strong>NVRAM-less (2011–2014):</strong> backup được chia thành group trên SPI-Flash/eMMC. <code>EraseNvramBackupArea</code> có thêm tham số group (comment lịch sử “2011/3/17 MinervaZeus”, “2014.04.10 Zeus5BK”, “2014.08.11 Poseidon” trong <code>Mediaif.cpp</code>). Donau3 KM3 được sửa sang chữ ký mới; Subset thì không. <span class="badge v">VERIFIED</span> (comment) · <span class="badge i">INFERRED</span> (trình tự)</li>
+    <li><strong>Zeus (2016+):</strong> chuyển “NVRAM” sang SoftDipSW, thêm command để xoá từng phần và cơ chế Clear Flag để khởi tạo SSD lúc boot. Detail code ghi “2016/03/24 ZeusS_ZX0”. <span class="badge v">VERIFIED</span></li>
+  </ol>
+  <div class="callout warn"><div class="callout-title">Rủi ro khi port code</div>
+    <p>Cùng tên hàm <code>dbgAllClear</code>, cùng tên <code>EraseNvramBackupArea</code>, nhưng chữ ký và ý nghĩa tham số khác nhau giữa các cây. Vì <code>extern "C"</code> không kiểm tra chữ ký lúc link, port <code>NVDG_FuncDonau3.cpp</code> từ Subset sang cây có <code>Mediaif.cpp</code> mới sẽ biên dịch và link thành công nhưng gọi sai. Đây chính là tình trạng hiện tại của Subset.</p>
+  </div>
+</section>
+
+<!-- ===================================================================== 11 -->
+<section class="chapter" id="failure-analysis">
+  <div class="chapter-label">Chapter 11</div>
+  <h2>Failure Analysis</h2>
+  <p class="chapter-lede">Điều gì xảy ra khi một bước thất bại. Mỗi rủi ro được gắn nhãn: đã xác minh trong code, rủi ro tiềm ẩn, hoặc chưa biết.</p>
+
+  <h3 id="execution-flow">Execution Flow (end-to-end)</h3>
+  <p>Hai sơ đồ riêng cho hai mô hình, không gộp chung.</p>
+  <figure class="diagram" data-title="End-to-end: Zeus command 0">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+sequenceDiagram
+  actor U as Kỹ sư
+  participant SH as cuShell
+  participant D as dbgAllClear(0)
+  participant SPI as SPI-Flash
+  participant BK as Backup G1 G2 G3
+  participant N as NVDSInit
+  participant SSD as SSD NVData và DB
+  U->>SH: dbgAllClear 0
+  SH->>D: gọi qua bảng symbol
+  D->>SPI: THRG_setSoftDipSw zero 16376 byte
+  D->>BK: EraseNvramBackupArea(0,0), (0,1), (0,2)
+  D->>SPI: setFlag NVClear = 0xab
+  D-->>SH: return
+  U->>U: tắt/bật nguồn hoặc reboot
+  N->>SPI: FirstMark sai - sc_InitFlg On
+  N->>SPI: cờ 0xab - sc_InitFlgOfSSD On
+  N->>SSD: CheckOfFile On rồi FactorySetup từng class
+  N->>SPI: ghi FirstMark NVD10
+  N->>SSD: SYSF_DBMediaMapDelete
+  N->>SPI: setFlag NVClear = 0x00
+    </script></div>
+    <figcaption>Hình 11.1. Zeus command 0, từ lúc gõ lệnh đến khi cờ được tắt.</figcaption>
+  </figure>
+  <figure class="diagram" data-title="End-to-end: Donau3 (Subset / KM3)">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+sequenceDiagram
+  actor U as Kỹ sư
+  participant D as dbgAllClear()
+  participant M as NVDF_memsetNvRam
+  participant R as RAM NVRAM (malloc 512KB)
+  participant E as EraseNvramBackupArea
+  U->>D: dbgAllClear
+  D->>M: (CS1 + 0x100, 0, 0x1ffef0)
+  M->>R: memset 0x1ffef0 byte - vượt buffer
+  D->>E: Subset (0) hoặc KM3 (0,0) và (0,1)
+  E-->>D: BOOL - bị bỏ qua
+  D-->>U: return - không có cờ, không reboot
+    </script></div>
+    <figcaption>Hình 11.2. Donau3 chỉ có pha xoá.</figcaption>
+  </figure>
+
+  <h3 id="fa-table">Failure scenarios</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Scenario</th><th>Nguyên nhân có thể</th><th>Trạng thái hệ thống</th><th>Hệ quả</th><th>Recovery</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>SPI-Flash write failed</td><td>Mã 30/31/32 (read/erase/write), lỗi bộ đếm 40/41, cả hai mặt hỏng (20)</td><td>SoftDipSW có thể giữ nội dung cũ</td><td>Cmd 0 vẫn xoá backup và bật cờ, nên SSD được khởi tạo còn SPI thì không: trạng thái lẫn lộn</td><td>Đọc D390_004A/B/C, chạy lại lệnh</td><td><span class="badge v">VERIFIED</span> (tiếp tục chạy) · <span class="badge risk">POTENTIAL RISK</span></td></tr>
+      <tr><td>SSD directory delete failed</td><td><code>lstat</code>/<code>remove</code> lỗi, file bị khoá</td><td>NVData bị xoá một phần</td><td>Giá trị trả về bị bỏ qua; boot sau, class thiếu record được FactorySetup, class còn record giữ dữ liệu cũ</td><td>Kiểm tra thư mục thủ công</td><td><span class="badge risk">POTENTIAL RISK</span></td></tr>
+      <tr><td>Backup erase failed</td><td><code>setEraseEnable</code> ghi lỗi; <code>raw_EraseFlash</code> lỗi; <code>malloc</code> lỗi</td><td>Một hoặc nhiều group còn hợp lệ</td><td>Chỉ có printf. Boot sau, class có backup đi <code>SERR_Fatal</code> → <code>NVDC_setWakeUpFatal()</code> thay vì FactorySetup</td><td><code>THRG_PrintSpiFlashBackupInfo</code>, chạy lại cmd 2</td><td><span class="badge v">VERIFIED</span> (bỏ qua lỗi) · <span class="badge i">INFERRED</span> (hệ quả)</td></tr>
+      <tr><td>Semaphore failure</td><td>Task khác giữ <code>NVDD_SemaphoreID</code> hoặc <code>m_semID_Mutex</code></td><td>cuShell bị chặn</td><td><code>WAIT_FOREVER</code>, không timeout; kết quả của <code>SYSF_semMCreate</code> không được kiểm tra</td><td>Không có trong code</td><td><span class="badge u">UNKNOWN</span></td></tr>
+      <tr><td>Power loss during clear</td><td>Mất nguồn giữa các bước</td><td>Một phần đã xoá</td><td>Không có transaction/rollback; trạng thái phụ thuộc bước đã hoàn tất</td><td>Chạy lại lệnh</td><td><span class="badge v">VERIFIED</span> (không có rollback)</td></tr>
+      <tr><td>Clear Flag write failed</td><td>Lỗi ghi SoftDipSW</td><td>Cờ không đổi</td><td>Bật thất bại: SSD không được khởi tạo. Tắt thất bại: khởi tạo lại ở mọi lần boot. Log D390_0047</td><td>Chạy lại cmd 4 / kiểm tra SPI</td><td><span class="badge i">INFERRED</span></td></tr>
+      <tr><td>FactorySetup failure</td><td>Lỗi ghi trong từng class</td><td>Class ở trạng thái không xác định</td><td>Vòng lặp gọi <code>FactorySetup(e_SystemType)</code> mà không kiểm tra giá trị trả về</td><td>Cờ vẫn bật nếu NVDSInit không chạy tới cuối</td><td><span class="badge v">VERIFIED</span> (không kiểm tra) · <span class="badge u">UNKNOWN</span> (hệ quả)</td></tr>
+      <tr><td>Database deletion failure</td><td><code>SYSF_Remove</code> lỗi</td><td>File DB cũ còn</td><td>Giá trị trả về bị bỏ qua; cờ vẫn bị tắt, nên DB cũ có thể được dùng tiếp</td><td>Xoá thủ công</td><td><span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Donau3 buffer overflow</td><td><code>0x1ffef0</code> &gt; <code>malloc(512KB)</code></td><td>Heap hỏng</td><td>Crash hoặc lỗi ngẫu nhiên về sau</td><td>Không</td><td><span class="badge i">INFERRED</span> · <span class="badge risk">POTENTIAL RISK</span></td></tr>
+      <tr><td>Subset parameter mismatch</td><td>Khai báo 1 tham số, định nghĩa 2 tham số</td><td>Group xoá không xác định</td><td>Backup có thể còn nguyên</td><td>Sửa khai báo</td><td><span class="badge i">INFERRED</span> · <span class="badge risk">POTENTIAL RISK</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <details class="acc"><summary>A · Power failure giữa các thao tác <span class="badge i">INFERRED</span></summary><div class="acc-body">
+    <p>Thứ tự của command 0 là SoftDipSW → G1 → G2 → G3 → cờ. Mỗi bước độc lập, không có journal. Mất nguồn sau G1 và trước G2: G2/G3 còn hợp lệ, cờ chưa bật. Boot sau: FirstMark sai nên class SPI có backup trong G2/G3 sẽ đi <code>SERR_Fatal</code>, class SSD giữ nguyên. Các backup group vì thế có thể ở trạng thái không đồng nhất.</p>
+  </div></details>
+  <details class="acc" id="concurrency-acc"><summary>B · Concurrency <span class="badge i">INFERRED</span></summary><div class="acc-body">
+    <ul>
+      <li>Lệnh chạy trong task cuShell <em>trong khi ứng dụng vẫn chạy</em>. Không có lock bao trùm toàn bộ <code>dbgAllClear</code>.</li>
+      <li><code>NVDD_SemaphoreID</code> chỉ bảo vệ một lần memset. <code>m_semID_Mutex</code> của từng <code>THRC_SPI_FlashCtrlBackup</code> chỉ bảo vệ một lần read/write/erase.</li>
+      <li>Các class NVD vẫn giữ bản cache trong RAM. Một lần lưu sau đó (ví dụ cơ chế ghi trễ <code>NVDC_WriteWithDelay</code>, hay <code>setData</code> của <code>NVDC_SPIFlashDataManage</code>) có thể ghi lại dữ liệu cũ xuống SPI/SSD trước khi reboot. <strong>Khuyến nghị: reboot ngay sau khi chạy lệnh.</strong></li>
+      <li>Deadlock: chuỗi gọi không giữ hai lock lồng nhau, nên nguy cơ thấp.</li>
+    </ul>
+  </div></details>
+
+  <h3 id="data-consistency">Data Consistency</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Cơ chế</th><th>Có?</th><th>Chi tiết</th></tr></thead>
+    <tbody>
+      <tr><td>Transaction / rollback</td><td class="cell-no">Không</td><td>Các lời gọi tuần tự, độc lập <span class="badge v">VERIFIED</span></td></tr>
+      <tr><td>Verify sau erase</td><td class="cell-no">Không (ở dbgAllClear)</td><td>Tầng SPI có <code>readCheck</code>/<code>writeAndCheck</code> <span class="badge i">INFERRED</span></td></tr>
+      <tr><td>Checksum</td><td class="cell-warn">Một phần</td><td><code>NV_CheckSum()</code> cho vùng bộ đếm (<code>sc_CounterCheckSumInitFlg</code>); không liên quan trực tiếp tới dbgAllClear Zeus</td></tr>
+      <tr><td>Đánh dấu invalid</td><td class="cell-yes">Có</td><td>G1/G2: erase-flag <code>0x0000</code>. G3: xoá header quản lý. SoftDipSW: mất FirstMark và magic <code>"R1"</code>. SSD: thiếu record → <code>FactorySetRequest</code></td></tr>
+      <tr><td>Idempotent init</td><td class="cell-yes">Thiết kế có</td><td>Cờ tắt cuối cùng; chạy lại FactorySetup là chấp nhận được <span class="badge i">INFERRED</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="recovery">Recovery Mechanism</h3>
+  <ul>
+    <li><strong>Từ backup:</strong> class có backup hợp lệ mà dữ liệu chính mất sẽ đi <code>SERR_Fatal</code> → <code>NVDC_setWakeUpFatal()</code>. Nội dung chi tiết của luồng khôi phục chưa được truy vết <span class="badge u">UNVERIFIED</span>.</li>
+    <li><strong>Từ boot dở dang:</strong> cờ còn bật hoặc FirstMark còn sai thì lần boot sau tự làm lại <span class="badge i">INFERRED</span>.</li>
+    <li><strong>Của chính dbgAllClear:</strong> không có undo. Dữ liệu G3 bị ghi đè 0 không lấy lại được bằng phần mềm <span class="badge v">VERIFIED</span> (ghi đè).</li>
+    <li><strong>Boot loop:</strong> không thấy đường code nào reboot lặp vì cờ. Nếu <code>NVDSInit</code> crash ổn định trước khi tắt cờ thì mỗi lần boot sẽ crash lại <span class="badge u">UNVERIFIED</span>.</li>
+  </ul>
+  <figure class="diagram" data-title="State: Clear Flag và các command">
+    <div class="diagram-body"><script type="text/plain" class="mmd">
+stateDiagram-v2
+  [*] --> Off
+  Off --> On: dbgAllClear 0, 4, 5
+  On --> Initializing: reboot, NVDSInit đọc 0xab
+  Initializing --> On: mất nguồn trước dòng 28767
+  Initializing --> Off: NVDF_setNvramClearFlag(False)
+  On --> Off: dbgAllClear 3 (zero SoftDipSW)
+  Off --> Off: dbgAllClear 1, 2, 3
+    </script></div>
+    <figcaption>Hình 11.3. Trạng thái của byte cờ (SoftDipSW offset 5).</figcaption>
+  </figure>
+</section>
+
+<!-- ===================================================================== 12 -->
+<section class="chapter" id="debugging">
+  <div class="chapter-label">Chapter 12</div>
+  <h2>Debugging Guide</h2>
+  <p class="chapter-lede">Quy trình kiểm tra <code>dbgAllClear</code> trên thiết bị test.</p>
+
+  <div class="callout danger"><div class="callout-title">Chỉ dùng trên thiết bị test</div>
+    <p>Chức năng này xoá dữ liệu không thể khôi phục. Không chạy trên thiết bị production hoặc thiết bị của khách hàng. Mọi thử nghiệm cần thiết bị test, backup dữ liệu cần thiết và sự phê duyệt của người phụ trách.</p>
+  </div>
+
+  <h3 id="debug-tools">Công cụ có sẵn trong repo</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Lệnh / hàm</th><th>Vị trí</th><th>Dùng để</th></tr></thead>
+    <tbody>
+      <tr><td><code>lkup "dbgAll"</code></td><td><code>Linux/Shell/usrLib.cpp:397</code></td><td>Liệt kê symbol chứa chuỗi, để biết tên thật trong file .map (mangled hay không)</td></tr>
+      <tr><td><code>THRG_PrintSpiFlashBackupInfo</code></td><td><code>Linux/Platform/Mediaif.cpp:5437</code></td><td>In thông tin điều khiển của G1, G2 và SoftDipSW (kích thước, mặt đang dùng…)</td></tr>
+      <tr><td><code>NVDF_checkNvramClearFlag</code></td><td><code>NVDG_FuncZeus.cpp:34018</code></td><td>Trả 1 nếu cờ đang 0xab (chú ý name mangling)</td></tr>
+      <tr><td><code>NVDF_setLogOutFlgForNvd 1</code></td><td><code>NVDG_FuncZeus.cpp:34078</code> (<code>extern "C"</code>)</td><td>Bật log <code>NVDF_PrintfByFlg</code> của NVD</td></tr>
+      <tr><td><code>NVDF_showNVDInitTime</code></td><td><code>NVDG_FuncZeus.cpp:34063</code> (<code>extern "C"</code>)</td><td>In thời gian các pha của NVDSInit, kể cả pha FactorySetup</td></tr>
+      <tr><td><code>getNvramBackup 0|1|2</code></td><td><code>Linux/Platform/Mediaif.cpp</code> (<code>extern "C"</code>)</td><td>Trả địa chỉ dữ liệu backup, hoặc 0 nếu đọc lỗi (cách diễn giải sau khi xoá logic: <span class="badge u">UNVERIFIED</span>)</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="caption">Chỉ <code>getNvramBackup</code> (<code>Mediaif.h:69–102</code>), <code>NVDF_setLogOutFlgForNvd</code> và <code>NVDF_showNVDInitTime</code> được khai báo <code>extern "C"</code>, nên chắc chắn có tên không bị mangle. Các hàm C++ còn lại (<code>THRG_PrintSpiFlashBackupInfo</code>, <code>NVDF_checkNvramClearFlag</code>, <code>dbgAllClear</code>) gọi được bằng tên ngắn hay không tuỳ định dạng file <code>.map</code> <span class="badge u">UNVERIFIED</span>.</p>
+
+  <h3 id="breakpoints">Breakpoints</h3>
+  <p>Khi attach debugger (vd. gdb) vào tiến trình ứng dụng, các điểm dừng nên đặt:</p>
+  <figure class="code" data-nonum>
+    <div class="code-head"><span class="path">gdb – gợi ý breakpoints</span><span class="fn">debug session</span><button class="copy-btn" type="button">Copy</button></div>
+    <pre><code class="language-bash"># Pha xoá
+break dbgAllClear
+break THRG_setSoftDipSw
+break EraseNvramBackupArea
+break NVDG_FuncZeus.cpp:33458
+break FILF_RemoveDirTree
+# Pha boot
+break NVDSInit
+break NVDG_FuncZeus.cpp:28234
+break NVDG_FuncZeus.cpp:28742
+break SYSF_DBMediaMapDelete
+break NVDG_FuncZeus.cpp:28767</code></pre>
+    <figcaption class="code-note">Hai dòng 33458 và 28767 là chỗ bật và tắt cờ. <code>NVDF_setNvramClearFlag</code> là <code>static</code>, nên đặt breakpoint theo file:dòng. Theo dõi các biến <code>uc_ClearCmdNo</code>, <code>uc_Ret</code>, <code>sc_InitFlg</code>, <code>sc_InitFlgOfSSD</code>. Việc có gdb trên target hay không chưa được xác minh.</figcaption>
+  </figure>
+
+  <h3 id="diagnostic-checklist">Diagnostic Checklist</h3>
+  <div class="ck-bar"><span id="ck-count">0 / 0</span><div class="meter"><span id="ck-meter"></span></div><button class="btn" id="ck-reset" type="button">Reset</button></div>
+  <p class="caption">Trạng thái tick chỉ được lưu cục bộ trong trình duyệt này (localStorage), không đồng bộ đi đâu.</p>
+  <ol class="checklist" id="debug-checklist">
+    <li><input type="checkbox" id="ck1" aria-labelledby="ck1-t"><div><div class="ck-title" id="ck1-t">Identify platform</div><div class="ck-body"><p>Xác định <code>CROSS_COMPILE</code>/model, rồi đối chiếu <code>nvd/Makefile</code> để biết đang build <code>nvdZeus</code> hay <code>nvdDonau3</code>.</p></div></div></li>
+    <li><input type="checkbox" id="ck2" aria-labelledby="ck2-t"><div><div class="ck-title" id="ck2-t">Identify version</div><div class="ck-body"><p>Trong cuShell chạy <code>lkup "dbgAllClear"</code>. Có tham số <code>uchar</code> (tên mangled kết thúc bằng <code>h</code>) là Zeus; <code>void</code> (<code>v</code>) là Donau3.</p></div></div></li>
+    <li><input type="checkbox" id="ck3" aria-labelledby="ck3-t"><div><div class="ck-title" id="ck3-t">Check TORNADO</div><div class="ck-body"><p>Nếu shell báo <code>undefined symbol: dbgAllClear</code> thì hàm không được biên dịch (thiếu <code>TORNADO</code>) hoặc tên trong map khác.</p></div></div></li>
+    <li><input type="checkbox" id="ck4" aria-labelledby="ck4-t"><div><div class="ck-title" id="ck4-t">Locate command</div><div class="ck-body"><p>Chọn đúng <code>uc_ClearCmdNo</code> theo <a href="#zeus-matrix">ma trận</a>. Luôn ghi rõ tham số; không gõ lệnh trống.</p></div></div></li>
+    <li><input type="checkbox" id="ck5" aria-labelledby="ck5-t"><div><div class="ck-title" id="ck5-t">Set breakpoints</div><div class="ck-body"><p>Xem <a href="#breakpoints">12.3</a>.</p></div></div></li>
+    <li><input type="checkbox" id="ck6" aria-labelledby="ck6-t"><div><div class="ck-title" id="ck6-t">Monitor parameters &amp; return codes</div><div class="ck-body"><p>Ghi lại <code>uc_Ret</code> sau <code>THRG_setSoftDipSw</code> và giá trị BOOL của từng <code>EraseNvramBackupArea</code>. Tìm log <code>"[dbgAllClear]THRG_setSoftDipSw() Error"</code> và <code>"Fail to erase NVRAM backup"</code>.</p></div></div></li>
+    <li><input type="checkbox" id="ck7" aria-labelledby="ck7-t"><div><div class="ck-title" id="ck7-t">Inspect storage operations</div><div class="ck-body"><p>Chạy <code>THRG_PrintSpiFlashBackupInfo</code> trước và sau lệnh để so sánh G1/G2/SoftDipSW.</p></div></div></li>
+    <li><input type="checkbox" id="ck8" aria-labelledby="ck8-t"><div><div class="ck-title" id="ck8-t">Verify backup groups</div><div class="ck-body"><p>G1/G2: trường erase-flag = 0x0000. G3: header quản lý đã bị xoá.</p></div></div></li>
+    <li><input type="checkbox" id="ck9" aria-labelledby="ck9-t"><div><div class="ck-title" id="ck9-t">Inspect Clear Flag</div><div class="ck-body"><p>Gọi <code>NVDF_checkNvramClearFlag</code>: kỳ vọng 1 sau cmd 0/4/5, 0 sau cmd 3 và sau khi boot xong.</p></div></div></li>
+    <li><input type="checkbox" id="ck10" aria-labelledby="ck10-t"><div><div class="ck-title" id="ck10-t">Confirm FactorySetup</div><div class="ck-body"><p>Bật <code>NVDF_setLogOutFlgForNvd 1</code> rồi reboot. Tìm trace <code>"… Initialized."</code> và (với microSD) <code>"MicroSD NVRAM Clear Request"</code>. Chạy <code>NVDF_showNVDInitTime</code>.</p></div></div></li>
+    <li><input type="checkbox" id="ck11" aria-labelledby="ck11-t"><div><div class="ck-title" id="ck11-t">Verify database state</div><div class="ck-body"><p>Sau boot, file DB trong NVData đã được tạo lại (bởi <code>DBMG_InitModule</code>, <span class="badge i">INFERRED</span>) và cờ = 0.</p></div></div></li>
+  </ol>
+</section>
+
+<!-- ===================================================================== 13 -->
+<section class="chapter" id="knowledge-check">
+  <div class="chapter-label">Chapter 13</div>
+  <h2>Knowledge Check</h2>
+  <p class="chapter-lede"><span id="quiz-total">27</span> câu hỏi chia ba cấp độ. Chọn đáp án để xem giải thích ngay.</p>
+  <div class="quiz-head">
+    <div class="tablist" role="group" aria-label="Lọc theo cấp độ">
+      <button type="button" data-quiz-level="all" aria-selected="true">Tất cả</button>
+      <button type="button" data-quiz-level="b" aria-selected="false">Beginner</button>
+      <button type="button" data-quiz-level="i" aria-selected="false">Intermediate</button>
+      <button type="button" data-quiz-level="a" aria-selected="false">Advanced</button>
+    </div>
+    <div class="quiz-actions"><span class="score" id="quiz-score" aria-live="polite">Điểm: 0</span><button class="btn" id="quiz-reset" type="button">Reset Quiz</button></div>
+  </div>
+  <div class="quiz-result" id="quiz-result" aria-live="polite"></div>
+  <div id="quiz-root"></div>
+</section>
+
+<!-- ===================================================================== 14 -->
+<section class="chapter" id="glossary">
+  <div class="chapter-label">Chapter 14</div>
+  <h2>Glossary</h2>
+  <p><label class="sr-only" for="glossary-filter">Lọc thuật ngữ</label><input class="filter-input" id="glossary-filter" type="search" placeholder="Lọc thuật ngữ…"></p>
+  <div class="table-wrap"><table id="glossary-table">
+    <thead><tr><th>Term</th><th>Definition</th><th>Related function</th></tr></thead>
+    <tbody>
+      <tr><td>NVRAM</td><td>Bộ nhớ không bay hơi đọc/ghi theo byte. Trên Linux trong repo là buffer <code>malloc(512KB)</code> tại <code>DEVICE_CS1_BASE</code>.</td><td><code>NVDF_memsetNvRam</code></td></tr>
+      <tr><td>NVRAM-less (NVRAMレス)</td><td>Kiến trúc không có chip NVRAM; dữ liệu bền vững nằm ở SPI-Flash/SSD.</td><td><code>THRG_setSoftDipSw</code></td></tr>
+      <tr><td>SPI-Flash</td><td>NOR flash qua bus SPI, sector 4KB, mỗi vùng 2 mặt.</td><td><code>THRC_SPI_FlashCtrlBackup</code></td></tr>
+      <tr><td>SoftDipSW</td><td>Vùng 16KB × 2 mặt trên SPI-Flash (0x6E000/0x72000), chứa FirstMark, cờ boot, dữ liệu class SPI.</td><td><code>THRG_setSoftDipSw</code>, <code>THRG_getSoftDipSw</code></td></tr>
+      <tr><td>FlashROM</td><td>Thuật ngữ kế thừa; trên KM3 là phân vùng block device do <code>FlashCtrlBackup</code> quản lý.</td><td><code>raw_EraseFlash</code></td></tr>
+      <tr><td>Backup Group</td><td>Một trong 3 vùng chứa bản sao dữ liệu class (G1/G2 SPI, G3 eMMC/SSD).</td><td><code>EraseNvramBackupArea</code></td></tr>
+      <tr><td>Mặt (面 / Area)</td><td>Một trong 2 bản ghi luân phiên của mỗi vùng SPI hoặc G3.</td><td><code>THRD_SPI_FlashBackupArea1/2</code></td></tr>
+      <tr><td>Erase-flag</td><td>2 byte sau vùng dữ liệu; <code>0x0000</code> nghĩa là đã xoá (logic).</td><td><code>setEraseEnable</code></td></tr>
+      <tr><td>Clear Flag</td><td>Byte <code>uc_NVClearFlag</code> ở SoftDipSW offset 5; <code>0xab</code> nghĩa là yêu cầu khởi tạo SSD lúc boot.</td><td><code>NVDF_setNvramClearFlag</code></td></tr>
+      <tr><td>FirstMark</td><td><code>"NVD10"</code>, 5 byte ở SoftDipSW offset 0; sai thì <code>sc_InitFlg = On</code>.</td><td><code>NV_AreaGet</code></td></tr>
+      <tr><td>MagicNo “R1”</td><td>2 byte ở <code>FileOffset</code> của mỗi class SPI-Flash; thiếu thì cần FactorySetup.</td><td><code>NVDC_MediaAccessSPIFlash::CheckOfFile</code></td></tr>
+      <tr><td>FactorySetup</td><td>Phương thức của từng class NVD, ghi giá trị mặc định xuất xưởng.</td><td><code>NVDSInit</code></td></tr>
+      <tr><td>FactorySetRequest</td><td>Kết quả <code>CheckOfFile</code> yêu cầu FactorySetup.</td><td><code>GetPowerOnResult</code></td></tr>
+      <tr><td>SERR_Fatal</td><td>Dữ liệu chính mất nhưng còn backup, nên đi luồng Fatal/khôi phục.</td><td><code>NVDC_setWakeUpFatal</code></td></tr>
+      <tr><td>sc_InitFlg</td><td>Cờ local: vùng NVRAM/SPI cần khởi tạo (theo FirstMark).</td><td><code>NVDSInit</code></td></tr>
+      <tr><td>sc_InitFlgOfSSD</td><td>Cờ local: SSD cần khởi tạo (theo Clear Flag).</td><td><code>NVDSInit</code></td></tr>
+      <tr><td>TORNADO</td><td>Macro biên dịch; trong repo có cả ở build Linux.</td><td><code>#ifdef TORNADO</code></td></tr>
+      <tr><td>FUM_LINUX</td><td>Macro cho SimLin (giả lập trên PC Linux).</td><td><code>NV_AreaGet</code></td></tr>
+      <tr><td>cuShell</td><td>Task shell giả lập VxWorks trên Linux, gọi hàm theo bảng symbol.</td><td><code>ShellCtrl::Exec</code></td></tr>
+      <tr><td>Detail code (D390)</td><td>Mã lỗi 64 bit ghi lại sự cố SoftDipSW.</td><td><code>APIC_setNewDetailCode</code></td></tr>
+      <tr><td>Set_Cs2</td><td>Bật/tắt write-protect NVRAM qua CS2; rỗng trên Linux.</td><td><code>NVDF_memsetNvRam</code></td></tr>
+      <tr><td>NVData</td><td>Thư mục <code>/NVData</code> trên SSD chứa dữ liệu class SSD và DB.</td><td><code>FILF_RemoveDirTree</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="caption" id="glossary-empty" hidden>Không có thuật ngữ phù hợp.</p>
+</section>
+
+<!-- ===================================================================== 15 -->
+<section class="chapter" id="source-index">
+  <div class="chapter-label">Chapter 15</div>
+  <h2>Source Code Reference Index</h2>
+  <p class="chapter-lede">Mọi file và hàm đã đọc. Số dòng lấy từ commit hiện tại của repository. Đường dẫn KM3 rút gọn tương đối từ <code>IT6_Controller/KM3/application/mfp/</code>, Subset từ <code>Subset/S-S800/Src/</code>.</p>
+  <div class="tree">KM3: system/nvd/nvdZeus/NVDG_FuncZeus.cpp
+  ├── dbgAllClear(uchar)                33433
+  ├── NVDSInit()                        28141
+  ├── NV_AreaGet()                      30415
+  ├── NVDF_checkNvramClearFlag()        34018
+  └── NVDF_setNvramClearFlag(Bool)      34042  (static, prototype 387)
+KM3: system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp
+  └── dbgAllClear(void)                 5404
+Subset: application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp
+  └── dbgAllClear(void)                 6842
+*/nvd/nvdg/NVDG_NVWrite.cpp
+  └── NVDF_memsetNvRam()                KM3 35 · Subset 31
+KM3: Linux/Platform/Mediaif.cpp
+  ├── EraseNvramBackupArea(short,int)   1592
+  ├── FlashCtrlBackup::eraseBackupData  1289
+  ├── raw_EraseFlash()                  945
+  ├── THRC_SPI_FlashCtrl::setEraseEnable 3155
+  ├── THRC_SPI_FlashCtrlBackup::eraseBackup 4710
+  └── THRG_setSoftDipSw()               4846</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>File</th><th>Function / symbol</th><th>Line</th><th>Description</th><th>Chapter</th></tr></thead>
+    <tbody>
+      <tr><td>KM3 system/nvd/nvdZeus/NVDG_FuncZeus.cpp</td><td><code>dbgAllClear(uchar)</code></td><td>33431–33512</td><td>Zeus 6 command</td><td><a href="#zeus">06</a></td></tr>
+      <tr><td>″</td><td><code>NVDSInit()</code></td><td>28141</td><td>Khởi tạo NVD lúc boot</td><td><a href="#boot">09</a></td></tr>
+      <tr><td>″</td><td>Clear-flag check / FirstMark write / flag off</td><td>28233–28251 · 28737–28754 · 28760–28768</td><td>Các khối quyết định</td><td><a href="#boot">09</a></td></tr>
+      <tr><td>″</td><td><code>NV_AreaGet()</code></td><td>30415</td><td>Đọc FirstMark</td><td><a href="#firstmark">09</a></td></tr>
+      <tr><td>″</td><td><code>NVDF_checkNvramClearFlag</code> / <code>NVDF_setNvramClearFlag</code></td><td>34018 / 34042</td><td>Đọc / ghi cờ</td><td><a href="#clear-flag">08</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdZeus/NVDG_FuncZeus.h</td><td><code>NVDD_SPI_Flash_SIZE</code>, <code>NVDD_NVRam_Base</code>, FirstMark</td><td>32 · 123 · 128–129</td><td>Hằng số</td><td><a href="#zeus-param">06</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp</td><td><code>dbgAllClear(void)</code></td><td>5402–5410</td><td>Donau3 KM3</td><td><a href="#donau3-km3">05</a></td></tr>
+      <tr><td>Subset application/mfp/system/nvd/nvdDonau3/NVDG_FuncDonau3.cpp</td><td><code>dbgAllClear(void)</code>; khai báo <code>EraseNvramBackupArea(short)</code></td><td>6840–6850; 107</td><td>Donau3 Subset</td><td><a href="#donau3-subset">04</a></td></tr>
+      <tr><td>Subset …/nvd/nvdg/NVDG_NVWrite.cpp</td><td><code>NVDF_memsetNvRam</code></td><td>31–65</td><td>memset có lock</td><td><a href="#subset-memset">04</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdg/NVDG_NVWrite.cpp</td><td><code>NVDF_memsetNvRam</code></td><td>35–71</td><td>memset có lock</td><td><a href="#fn-memset">07</a></td></tr>
+      <tr><td>KM3 Linux/Platform/Mediaif.cpp</td><td>Layout macros · objects · <code>EraseNvramBackupArea</code> · <code>THRG_setSoftDipSw</code></td><td>71–75, 107–133 · 781–812, 1432 · 1592 · 4846</td><td>Storage HAL</td><td><a href="#storage-functions">07</a></td></tr>
+      <tr><td>Subset application/mfp/Linux/Platform/Mediaif.cpp</td><td><code>EraseNvramBackupArea(short,int)</code></td><td>1522</td><td>Bản được link cho Subset</td><td><a href="#subset-erase">04</a></td></tr>
+      <tr><td>Subset bsp_donau/Donau/Mediaif.cpp</td><td><code>EraseNvramBackupArea(short)</code></td><td>1481</td><td>Bản VxWorks cũ, không được build</td><td><a href="#subset-erase">04</a></td></tr>
+      <tr><td>KM3 Linux/Platform/InitDevice.cpp / .h</td><td><code>Set_Cs2</code> (rỗng) · <code>malloc(512*1024)</code> · <code>DEVICE_CS1_BASE</code></td><td>420 · 209 · h:30</td><td>“NVRAM” trên Linux</td><td><a href="#nvram">02</a></td></tr>
+      <tr><td>Subset application/mfp/Linux/Platform/InitDevice.cpp / .h</td><td><code>Set_Cs2</code> · <code>malloc</code> · <code>DEVICE_CS1_BASE</code></td><td>419 · 207, 348 · h:32</td><td>như trên</td><td><a href="#subset-overflow">04</a></td></tr>
+      <tr><td>KM3 Linux/Shell/shellLib.cpp</td><td><code>shellInit</code> · <code>Regist</code> · <code>Find</code> · <code>GetArgValue</code> · <code>Exec</code></td><td>59 · 138 · 246 · 992 · 1025</td><td>cuShell</td><td><a href="#vxworks">03</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdg/NVDC_Setting.cpp</td><td><code>NVDC_SPIFlashDataManage::setFlag/getFlag/getFlagOffset</code></td><td>~112755 / ~112792 / ~112822</td><td>Cờ SoftDipSW</td><td><a href="#flag-chain">08</a></td></tr>
+      <tr><td>KM3 system/nvd/APIC_Setting_Other.h</td><td><code>TYPE_FlagKind_NVClear</code>, <code>APIC_SPIFlashDataManage</code></td><td>5555 · 5574</td><td>Định nghĩa cờ</td><td><a href="#boot-flag">02</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdg/NVDC_Setting_Other.h</td><td><code>struct NVDS_SPIFlashFlag</code></td><td>3487</td><td>Layout cờ</td><td><a href="#flag-layout">08</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdg/NVDC_MediaAccessSSD.cpp</td><td><code>CheckOfFile</code></td><td>373</td><td>Init SSD</td><td><a href="#ssd-init">09</a></td></tr>
+      <tr><td>KM3 system/nvd/nvdg/NVDC_MediaAccessSPIFlash.cpp</td><td><code>CheckOfFile</code></td><td>621</td><td>Magic “R1”</td><td><a href="#ssd-init">09</a></td></tr>
+      <tr><td>KM3 system/sys/Database/SYSC_DBMediaMap.cpp</td><td><code>SYSF_DBMediaMapDelete</code></td><td>590–605</td><td>Xoá file DB</td><td><a href="#database-init">09</a></td></tr>
+      <tr><td>KM3 system/fil/filg/FIL_FsWrapperC.cpp</td><td><code>FILF_RemoveDirTree</code></td><td>8406</td><td>Xoá đệ quy</td><td><a href="#cmd-1">06</a></td></tr>
+      <tr><td>KM3 system/sys/APIC_FatalSignalDetailCode.h / .cpp</td><td><code>TYPD_NewDetailCode_Cmn_D390_004A..C</code> · <code>APIC_setNewDetailCode</code></td><td>11082–11087 · 346</td><td>Detail code</td><td><a href="#zeus-detail-codes">06</a></td></tr>
+      <tr><td>KM3 system/sys/sysg/SYSC_SystemInit.cpp · system/nvd/NVDG_InitModuleIf.cpp</td><td><code>SYSC_SystemInit0</code> → <code>NVDG_InitModule(2)</code> → <code>NVDSInit</code></td><td>940, 994, 998 · 43, 61–64</td><td>Boot entry</td><td><a href="#boot-chain">09</a></td></tr>
+      <tr><td>KM3 system/nvd/Makefile · Subset application/mfp/system/nvd/Makefile</td><td><code>SUBDIRS</code></td><td>156–229 · 49</td><td>Bản nào được build</td><td><a href="#three-versions">01</a></td></tr>
+      <tr><td>Subset donau/Rule.makes</td><td><code>-DTORNADO</code>, <code>-DLINUX</code>, <code>DEF_Helios_PF</code></td><td>677 · 758 · 505–524</td><td>Macro build</td><td><a href="#tornado-macro">03</a></td></tr>
+    </tbody>
+  </table></div>
+  <p class="caption">“~” = vị trí bắt đầu khối được xác định bằng cách đọc đoạn quanh dòng đó; các số khác là dòng chính xác.</p>
+</section>
+
+<footer class="footer">
+  <p><strong>dbgAllClear Deep Dive.</strong> Tài liệu được dựng từ việc đọc source code của repository (nhánh làm việc hiện tại). Nhãn <span class="badge v">VERIFIED</span>/<span class="badge i">INFERRED</span>/<span class="badge u">UNVERIFIED</span> thể hiện mức độ bằng chứng. Thư viện: Mermaid 10.9.1 và highlight.js 11.9.0 (đóng gói trong <code>assets/vendor</code>); font Inter/JetBrains Mono tải từ Google Fonts, có fallback font hệ thống khi offline.</p>
+</footer>
+</main>
+
+<aside class="toc" aria-label="Mục lục chương hiện tại"><nav id="toc"></nav></aside>
+</div>
+
+<dialog class="zoom" id="zoom-dialog" aria-labelledby="zoom-title">
+  <div class="zoom-bar">
+    <span class="t" id="zoom-title">Sơ đồ</span>
+    <span class="caption" id="zoom-level">100%</span>
+    <button type="button" data-z="out" aria-label="Thu nhỏ">−</button>
+    <button type="button" data-z="reset">100%</button>
+    <button type="button" data-z="in" aria-label="Phóng to">+</button>
+    <button type="button" data-z="close" aria-label="Đóng">Đóng</button>
+  </div>
+  <div class="zoom-stage"></div>
+</dialog>
+
+<button class="to-top" id="to-top" type="button" aria-label="Về đầu trang">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 15 6-6 6 6"/></svg>
+</button>
+</body>
+</html>

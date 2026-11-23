@@ -1,0 +1,474 @@
+diff --git a/Kernel/Src/drivers/usb/core/hub.c b/Kernel/Src/drivers/usb/core/hub.c
+--- a/Kernel/Src/drivers/usb/core/hub.c
++++ b/Kernel/Src/drivers/usb/core/hub.c
+@@ -16,6 +16,7 @@
+ #include <linux/moduleparam.h>
+ #include <linux/completion.h>
+ #include <linux/sched/mm.h>
++#include <linux/sched.h>	/* [OP_BTS-71837] current->comm */
+ #include <linux/list.h>
+ #include <linux/slab.h>
+ #include <linux/kcov.h>
+@@ -878,6 +879,14 @@
+ 	else
+ 		ret = usb_clear_port_feature(hdev, port1, USB_PORT_FEAT_POWER);
+ 
++	/* [OP_BTS-71837] case 4: who cuts the power of a hub port */
++	if (!set) {
++		dev_warn(&hdev->dev,
++			 "OP_BTS-71837: port%d power OFF ret=%d by %s(%d)\n",
++			 port1, ret, current->comm, task_pid_nr(current));
++		dump_stack();
++	}
++
+ 	if (ret)
+ 		return ret;
+ 
+@@ -1004,7 +1013,11 @@
+  */
+ static void hub_port_logical_disconnect(struct usb_hub *hub, int port1)
+ {
+-	dev_dbg(&hub->ports[port1 - 1]->dev, "logical disconnect\n");
++	/* [OP_BTS-71837] case 5: who orders a logical disconnect */
++	dev_warn(&hub->ports[port1 - 1]->dev,
++		 "OP_BTS-71837: logical disconnect by %s(%d)\n",
++		 current->comm, task_pid_nr(current));
++	dump_stack();
+ 	hub_port_disable(hub, port1, 1);
+ 
+ 	/* FIXME let caller ask to power down the port:
+@@ -1399,8 +1412,15 @@
+ 	if (type != HUB_SUSPEND) {
+ 		/* Disconnect all the children */
+ 		for (i = 0; i < hdev->maxchild; ++i) {
+-			if (hub->ports[i]->child)
++			if (hub->ports[i]->child) {
++				/* [OP_BTS-71837] case 5: hub quiesce kills a child */
++				dev_warn(&hdev->dev,
++					 "OP_BTS-71837: hub_quiesce type=%d disconnects port%d child %s (ctx %s)\n",
++					 (int)type, i + 1,
++					 dev_name(&hub->ports[i]->child->dev),
++					 current->comm);
+ 				usb_disconnect(&hub->ports[i]->child);
++			}
+ 		}
+ 	}
+ 
+@@ -2323,6 +2343,14 @@
+ 	usb_set_device_state(udev, USB_STATE_NOTATTACHED);
+ 	dev_info(&udev->dev, "USB disconnect, device number %d\n",
+ 			udev->devnum);
++	/* [OP_BTS-71837] case 6: single choke point of every disconnect.
++	 * comm tells the origin: sh/echo = unbind from user space,
++	 * kworker/*hub* = hub event, anything else = direct caller.
++	 */
++	dev_warn(&udev->dev,
++		 "OP_BTS-71837: disconnect devnum=%d devpath=%s state=%d ctx=%s(%d)\n",
++		 udev->devnum, udev->devpath, (int)udev->state,
++		 current->comm, task_pid_nr(current));
+ 
+ /* 2019/01/17 AR1071618 山口 無線LANが接続できなくなる */
+ #if defined(CONFIG_DenebMLKBoard) || defined(CONFIG_SparrowBoard) || defined(CONFIG_SparrowBKBoard) || defined(CONFIG_HeliosMLKBoard)		/* DenebMLK/Sparrowの場合. */
+@@ -5951,6 +5979,27 @@
+ 	if (hub_port_status(hub, port1, &portstatus, &portchange) < 0)
+ 		return;
+ 
++	/* [OP_BTS-71837] case 3: raw port status. Important changes (connect,
++	 * enable, over-current, warm reset, config error, or any connect_change)
++	 * are always printed. Minor ones (link state, suspend, reset alone)
++	 * are rate limited so an idle system cannot flood the log.
++	 */
++	if (!(connect_change ||
++	      (portchange & (USB_PORT_STAT_C_CONNECTION | USB_PORT_STAT_C_ENABLE |
++			     USB_PORT_STAT_C_OVERCURRENT | USB_PORT_STAT_C_BH_RESET |
++			     USB_PORT_STAT_C_CONFIG_ERROR))) && portchange)
++		dev_warn_ratelimited(&port_dev->dev,
++			 "OP_BTS-71837: port_event minor status=0x%04x change=0x%04x\n",
++			 portstatus, portchange);
++	if (connect_change ||
++	    (portchange & (USB_PORT_STAT_C_CONNECTION | USB_PORT_STAT_C_ENABLE |
++			   USB_PORT_STAT_C_OVERCURRENT | USB_PORT_STAT_C_BH_RESET |
++			   USB_PORT_STAT_C_CONFIG_ERROR)))
++		dev_warn(&port_dev->dev,
++			 "OP_BTS-71837: port_event status=0x%04x change=0x%04x connect_change=%d child=%s\n",
++			 portstatus, portchange, connect_change,
++			 udev ? "present" : "none");
++
+ 	if (portchange & USB_PORT_STAT_C_CONNECTION) {
+ 		usb_clear_port_feature(hdev, port1, USB_PORT_FEAT_C_CONNECTION);
+ 		connect_change = 1;
+@@ -5979,7 +6028,8 @@
+ 		port_dev->over_current_count++;
+ 		port_over_current_notify(port_dev);
+ 
+-		dev_dbg(&port_dev->dev, "over-current change #%u\n",
++		/* [OP_BTS-71837] case 3: over-current was dev_dbg (invisible) */
++		dev_warn(&port_dev->dev, "OP_BTS-71837: over-current change #%u\n",
+ 			port_dev->over_current_count);
+ 		usb_clear_port_feature(hdev, port1,
+ 				USB_PORT_FEAT_C_OVER_CURRENT);
+@@ -6517,6 +6567,15 @@
+ 		return -EINPROGRESS;
+ 	udev->reset_in_progress = 1;
+ 
++	/* [OP_BTS-71837] case 1: every reset (usb-storage, usbfs ioctl,
++	 * Wi-Fi driver, queued reset) goes through here: who and from where.
++	 */
++	dev_warn(&udev->dev,
++		 "OP_BTS-71837: usb_reset_device devpath=%s state=%d by %s(%d)\n",
++		 udev->devpath, (int)udev->state, current->comm,
++		 task_pid_nr(current));
++	dump_stack();
++
+ 	port_dev = hub->ports[udev->portnum - 1];
+ 
+ 	/*
+@@ -6617,6 +6676,12 @@
+  */
+ void usb_queue_reset_device(struct usb_interface *iface)
+ {
++	/* [OP_BTS-71837] case 1: the work item runs in a kworker, so the
++	 * requester must be recorded here.
++	 */
++	dev_warn(&iface->dev, "OP_BTS-71837: usb_queue_reset_device by %s(%d)\n",
++		 current->comm, task_pid_nr(current));
++	dump_stack();
+ 	if (schedule_work(&iface->reset_ws))
+ 		usb_get_intf(iface);
+ }
+diff --git a/Kernel/Src/drivers/usb/core/devio.c b/Kernel/Src/drivers/usb/core/devio.c
+--- a/Kernel/Src/drivers/usb/core/devio.c
++++ b/Kernel/Src/drivers/usb/core/devio.c
+@@ -1427,6 +1427,10 @@
+ 		}
+ 	}
+ 
++	/* [OP_BTS-71837] case 1: reset requested from user space (usbfs) */
++	dev_warn(&ps->dev->dev,
++		 "OP_BTS-71837: USBDEVFS_RESET from user space by %s(%d)\n",
++		 current->comm, task_pid_nr(current));
+ 	return usb_reset_device(ps->dev);
+ }
+ 
+diff --git a/Kernel/Src/drivers/usb/storage/transport.c b/Kernel/Src/drivers/usb/storage/transport.c
+--- a/Kernel/Src/drivers/usb/storage/transport.c
++++ b/Kernel/Src/drivers/usb/storage/transport.c
+@@ -910,6 +910,12 @@
+ 	 * We must release the device lock because the pre_reset routine
+ 	 * will want to acquire it.
+ 	 */
++	/* [OP_BTS-71837] case 8: usb_stor_dbg is compiled out, so the
++	 * decision to reset after a transport error was never visible.
++	 */
++	dev_warn(&us->pusb_dev->dev,
++		 "OP_BTS-71837: transport error, issuing port reset (cmd=0x%02x)\n",
++		 srb->cmnd[0]);
+ 	mutex_unlock(&us->dev_mutex);
+ 	result = usb_stor_port_reset(us);
+ 	mutex_lock(&us->dev_mutex);
+@@ -1437,6 +1443,11 @@
+ {
+ 	int result;
+ 
++	/* [OP_BTS-71837] case 8 */
++	dev_warn(&us->pusb_dev->dev,
++		 "OP_BTS-71837: usb_stor_port_reset called by %s(%d)\n",
++		 current->comm, task_pid_nr(current));
++
+ 	/*for these devices we must use the class specific method */
+ 	if (us->pusb_dev->quirks & USB_QUIRK_RESET)
+ 		return -EPERM;
+diff --git a/Kernel/Src/drivers/usb/storage/scsiglue.c b/Kernel/Src/drivers/usb/storage/scsiglue.c
+--- a/Kernel/Src/drivers/usb/storage/scsiglue.c
++++ b/Kernel/Src/drivers/usb/storage/scsiglue.c
+@@ -32,6 +32,7 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/module.h>
+ #include <linux/mutex.h>
++#include <linux/sched.h>	/* [OP_BTS-71837] current->comm */
+ 
+ #include <scsi/scsi.h>
+ #include <scsi/scsi_cmnd.h>
+@@ -466,6 +467,8 @@
+ 	int result;
+ 
+ 	usb_stor_dbg(us, "%s called\n", __func__);
++	/* [OP_BTS-71837] case 8: SCSI error handler escalated to device reset */
++	dev_warn(&us->pusb_dev->dev, "OP_BTS-71837: SCSI EH device_reset\n");
+ 
+ 	/* abort any pending command before reset */
+ 	command_abort_matching(us, NULL);
+@@ -485,6 +488,8 @@
+ 	int result;
+ 
+ 	usb_stor_dbg(us, "%s called\n", __func__);
++	/* [OP_BTS-71837] case 8: SCSI error handler escalated to bus reset */
++	dev_warn(&us->pusb_dev->dev, "OP_BTS-71837: SCSI EH bus_reset\n");
+ 
+ 	result = usb_stor_port_reset(us);
+ 	return result < 0 ? FAILED : SUCCESS;
+diff --git a/Kernel/Src/drivers/usb/host/xhci-ring.c b/Kernel/Src/drivers/usb/host/xhci-ring.c
+--- a/Kernel/Src/drivers/usb/host/xhci-ring.c
++++ b/Kernel/Src/drivers/usb/host/xhci-ring.c
+@@ -53,6 +53,7 @@
+  */
+ 
+ #include <linux/scatterlist.h>
++#include <linux/sched.h>	/* [OP_BTS-71837] */
+ #include <linux/slab.h>
+ #include <linux/dma-mapping.h>
+ #include "xhci.h"
+@@ -1551,6 +1552,14 @@
+ 	/* mark this command to be cancelled */
+ 	xhci->current_cmd->status = COMP_COMMAND_ABORTED;
+ 
++	/* [OP_BTS-71837] case 7: which command timed out (first timeout too) */
++	xhci_warn(xhci,
++		  "OP_BTS-71837: command timeout: TRB type=%u cmd_abort_seen=%u\n",
++		  xhci->current_cmd->command_trb ?
++		  (unsigned int)TRB_FIELD_TO_TYPE(le32_to_cpu(
++			xhci->current_cmd->command_trb->generic.field[3])) : 0u,
++		  xhci->cmd_abort_seen);
++
+ 	/* Make sure command ring is running before aborting it */
+ 	hw_ring_state = xhci_read_64(xhci, &xhci->op_regs->cmd_ring);
+ 	if (hw_ring_state == ~(u64)0) {
+@@ -1906,6 +1915,27 @@
+ 
+ 	trace_xhci_handle_port_status(hcd_portnum, portsc);
+ 
++	/* [OP_BTS-71837] case 7: PORTSC, only for abnormal events (disconnect,
++	 * link left U0, warm reset, config error, over-current). Normal connects
++	 * are NOT printed: this runs in IRQ context and the console is a
++	 * 115200 baud UART, so every line costs ~15 ms with interrupts off.
++	 */
++	if ((portsc & (PORT_WRC | PORT_CEC | PORT_OCC)) ||
++	    ((portsc & PORT_CSC) && !(portsc & PORT_CONNECT)) ||
++	    ((portsc & PORT_PLC) && ((portsc & PORT_PLS_MASK) != XDEV_U0)))
++		xhci_warn(xhci,
++			  "OP_BTS-71837: port event %d-%d portsc=0x%08x CCS=%d PED=%d PP=%d PLS=%u chg=%s%s%s%s%s%s\n",
++			  hcd->self.busnum, hcd_portnum + 1, portsc,
++			  !!(portsc & PORT_CONNECT), !!(portsc & PORT_PE),
++			  !!(portsc & PORT_POWER),
++			  (unsigned int)((portsc & PORT_PLS_MASK) >> 5),
++			  (portsc & PORT_CSC) ? " CSC" : "",
++			  (portsc & PORT_PLC) ? " PLC" : "",
++			  (portsc & PORT_WRC) ? " WRC" : "",
++			  (portsc & PORT_CEC) ? " CEC" : "",
++			  (portsc & PORT_OCC) ? " OCC" : "",
++			  (portsc & PORT_RC) ? " PRC" : "");
++
+ 	if (hcd->state == HC_STATE_SUSPENDED) {
+ 		xhci_dbg(xhci, "resume root hub\n");
+ 		usb_hcd_resume_root_hub(hcd);
+diff --git a/Kernel/Src/drivers/scsi/sd.c b/Kernel/Src/drivers/scsi/sd.c
+--- a/Kernel/Src/drivers/scsi/sd.c
++++ b/Kernel/Src/drivers/scsi/sd.c
+@@ -3506,6 +3506,9 @@
+ 	sdkp->driver = &sd_template;
+ 	sdkp->disk = gd;
+ 	sdkp->index = index;
++	/* [OP_BTS-71837] case sdX: which name/index/host was assigned */
++	printk(KERN_WARNING "OP_BTS-71837: sd_probe %s idx=%d host%d\n",
++	       gd->disk_name, index, sdp->host->host_no);
+ 	sdkp->max_retries = SD_MAX_RETRIES;
+ 	atomic_set(&sdkp->openers, 0);
+ 	atomic_set(&sdkp->device->ioerr_cnt, 0);
+@@ -3613,6 +3616,10 @@
+ 	// 2020/08/07 山口 OP_BTS-25892 USB認識しない.
+ 	// USBのopen/releseの処理をログに格納.
+ 	printk(KERN_INFO"%s :[%d][%s]disk_name[%s]\n",__func__,__LINE__,current->comm,sdkp->disk->disk_name);
++	/* [OP_BTS-71837] case sdX: how many users still hold the disk */
++	printk(KERN_WARNING "OP_BTS-71837: sd_remove %s idx=%d openers=%d kref=%d ctx=%s\n",
++	       sdkp->disk->disk_name, sdkp->index, atomic_read(&sdkp->openers),
++	       kref_read(&sdkp->dev.kobj.kref), current->comm);
+ 	devt = disk_devt(sdkp->disk);
+ 	scsi_autopm_get_device(sdkp->device);
+ 
+@@ -3653,6 +3660,9 @@
+ 	// USBのopen/releseの処理をログに格納.
+ 	printk(KERN_INFO"%s :[%d][%s]\n",__func__,__LINE__,current->comm);
+ 
++	/* [OP_BTS-71837] case sdX: the index is given back HERE (not in sd_remove) */
++	printk(KERN_WARNING "OP_BTS-71837: scsi_disk_release idx=%d freed ctx=%s\n",
++	       sdkp->index, current->comm);
+ 	ida_free(&sd_index_ida, sdkp->index);
+ 
+ 	/*
+diff --git a/IT6_Controller/KM3/application/mfp/system/sys/FsWrapper/SYSC_FsUSBWrapperC.cpp b/IT6_Controller/KM3/application/mfp/system/sys/FsWrapper/SYSC_FsUSBWrapperC.cpp
+--- a/IT6_Controller/KM3/application/mfp/system/sys/FsWrapper/SYSC_FsUSBWrapperC.cpp
++++ b/IT6_Controller/KM3/application/mfp/system/sys/FsWrapper/SYSC_FsUSBWrapperC.cpp
+@@ -45,6 +45,9 @@
+ #endif // TORNADO
+ #ifdef LINUX
+ #include <sys/mount.h>
++#include <dirent.h>	// [OP_BTS-71837] OP71837_DumpMountHolders
++#include <unistd.h>	// [OP_BTS-71837] readlink
++#include <stdio.h>	// [OP_BTS-71837] snprintf
+ #endif	// #ifdef LINUX.
+ 
+ #include "system/nvd/APIC_Setting_Other.h"
+@@ -243,6 +246,90 @@
+ 	}
+ }
+ 
++// [OP_BTS-71837] Diagnostic: print mountinfo lines of a mount point and
++// every process whose cwd / exe / open fd lives under it. Called only on a
++// mount failure or EBUSY on umount (rare path), so cost is irrelevant.
++static void OP71837_DumpMountHolders( const char *pc_mnt )
++{
++	char sc_path[640];
++	char sc_target[256];
++	char sc_line[512];
++	char sc_comm[32];
++	const char *apc_kind[2] = { "cwd", "exe" };
++	size_t ul_len = 0;
++	FILE *fp_info = NULL;
++	FILE *fp_comm = NULL;
++	DIR *pd_proc = NULL;
++	DIR *pd_fd = NULL;
++	struct dirent *pe_proc = NULL;
++	struct dirent *pe_fd = NULL;
++	ssize_t sl_n = 0;
++	int i_k = 0;
++
++	if( NULL == pc_mnt ) {
++		return;
++	}
++	ul_len = strlen( pc_mnt );
++	printf( "(%010u) OP_BTS-71837: holders of %s\n", SYSF_tickGet(), pc_mnt );
++
++	fp_info = fopen( "/proc/self/mountinfo", "r" );
++	if( NULL != fp_info ) {
++		while( NULL != fgets( sc_line, sizeof(sc_line), fp_info ) ) {
++			if( NULL != strstr( sc_line, pc_mnt ) ) {
++				printf( "OP_BTS-71837: mountinfo %s", sc_line );
++			}
++		}
++		fclose( fp_info );
++	}
++
++	pd_proc = opendir( "/proc" );
++	if( NULL == pd_proc ) {
++		return;
++	}
++	while( NULL != ( pe_proc = readdir( pd_proc ) ) ) {
++		if( pe_proc->d_name[0] < '0' || pe_proc->d_name[0] > '9' ) {
++			continue;
++		}
++		memset( sc_comm, 0, sizeof(sc_comm) );
++		snprintf( sc_path, sizeof(sc_path), "/proc/%s/comm", pe_proc->d_name );
++		fp_comm = fopen( sc_path, "r" );
++		if( NULL != fp_comm ) {
++			if( NULL == fgets( sc_comm, sizeof(sc_comm), fp_comm ) ) {
++				sc_comm[0] = '\0';
++			}
++			sc_comm[strcspn( sc_comm, "\n" )] = '\0';	// strip trailing newline
++			fclose( fp_comm );
++		}
++		for( i_k = 0; i_k < 2; i_k++ ) {
++			snprintf( sc_path, sizeof(sc_path), "/proc/%s/%s", pe_proc->d_name, apc_kind[i_k] );
++			sl_n = readlink( sc_path, sc_target, sizeof(sc_target) - 1 );
++			if( sl_n > 0 ) {
++				sc_target[sl_n] = '\0';
++				if( 0 == strncmp( sc_target, pc_mnt, ul_len ) ) {
++					printf( "OP_BTS-71837:   pid=%s comm=%s %s -> %s\n", pe_proc->d_name, sc_comm, apc_kind[i_k], sc_target );
++				}
++			}
++		}
++		snprintf( sc_path, sizeof(sc_path), "/proc/%s/fd", pe_proc->d_name );
++		pd_fd = opendir( sc_path );
++		if( NULL == pd_fd ) {
++			continue;
++		}
++		while( NULL != ( pe_fd = readdir( pd_fd ) ) ) {
++			snprintf( sc_path, sizeof(sc_path), "/proc/%s/fd/%s", pe_proc->d_name, pe_fd->d_name );
++			sl_n = readlink( sc_path, sc_target, sizeof(sc_target) - 1 );
++			if( sl_n > 0 ) {
++				sc_target[sl_n] = '\0';
++				if( 0 == strncmp( sc_target, pc_mnt, ul_len ) ) {
++					printf( "OP_BTS-71837:   pid=%s comm=%s fd %s -> %s\n", pe_proc->d_name, sc_comm, pe_fd->d_name, sc_target );
++				}
++			}
++		}
++		closedir( pd_fd );
++	}
++	closedir( pd_proc );
++}
++
+ // ---------------------------------------------------------------------------------
+ // 関数名	：SYSC_SetBulkDeviceNames.
+ // 概要     ：デバイス情報の設定.
+@@ -278,6 +365,12 @@
+ 	if ( True == b_param ) {	// バルクデバイス接続の場合.
+ 		printf( "mount %s to %s ...", deviceFileName, mntName );
+ 		i_res = mount(deviceFileName,mntName,"vfat",0,"umask=070,utf8");
++		if( i_res != 0 ) {	// [OP_BTS-71837] "error -1" hides errno: print it (read errno first)
++			const int i_mntErrno71837 = errno;
++			printf( "\n(%010u) OP_BTS-71837: mount(vfat) %s -> %s failed errno=%d(%s)\n", SYSF_tickGet(), deviceFileName, mntName, i_mntErrno71837, strerror( i_mntErrno71837 ) );
++			OP71837_DumpMountHolders( mntName );
++			errno = i_mntErrno71837;	// our own I/O must not change what the original code sees
++		}
+ 		if( i_res != 0 ) {	// vfatでマウント出来なかった場合はext3でのマウントを試みる.
+ //TAS000000012453対応 2022/8/25.Start.
+ 			//USBライトプロテクトチェック.
+@@ -301,7 +394,9 @@
+ 				if( i_res == 0 ) {
+ 					printf( "type ext3.\n" );
+ 				} else {
+-					printf( "error %d.\n", i_res );
++					const int i_extErrno71837 = errno;
++					printf( "error %d. (OP_BTS-71837 ext3 errno=%d(%s))\n", i_res, i_extErrno71837, strerror( i_extErrno71837 ) );
++					errno = i_extErrno71837;
+ 				}
+ 			}
+ 		} else {
+@@ -337,6 +432,8 @@
+ 	} else {	// バルクデバイス引き抜きの場合.
+ 		i_umountRet = umount2(mntName, MNT_FORCE );
+ 		errsv = errno;		// Coverity Check OK.
++		printf( "(%010u) OP_BTS-71837: umount2(%s, MNT_FORCE) ret=%d errno=%d(%s)\n", SYSF_tickGet(), mntName, i_umountRet, errsv, strerror( errsv ) );
++		errno = errsv;	// keep the following perror("umount2") correct
+ 		if( i_umountRet == -1 ){
+ 			perror("umount2");
+ 		}		
+@@ -344,6 +441,7 @@
+ 		{
+ 			case EBUSY:				// 使用中 (busy) のため、 target をアンマウントできなかった.
+ 				// Busyでなくなるまで繰り返す.
++				OP71837_DumpMountHolders( mntName );	// [OP_BTS-71837] EBUSY: list holders before MNT_DETACH
+ 				while( errsv == EBUSY )
+ 				{
+ 					SYSF_taskDelay(static_cast<int>(SYSF_sysClkRateGet() * 200 / 1000));   // 遅延(0.2s).
+diff --git a/IT6_Controller/KM3/application/mfp/Linux/Platform/HW_interim.cpp b/IT6_Controller/KM3/application/mfp/Linux/Platform/HW_interim.cpp
+--- a/IT6_Controller/KM3/application/mfp/Linux/Platform/HW_interim.cpp
++++ b/IT6_Controller/KM3/application/mfp/Linux/Platform/HW_interim.cpp
+@@ -1999,8 +1999,12 @@
+ 						// Rinneの設定ファイルの有無を確認するためUSBのマウント待ち.
+ 						for(int64_t i=0;i<60;i++){
+ 							sleep(1);
+-							system("mount /dev/sdc1 /bd/sdc1");
++							{
++								const int i_mntRet71837 = system("mount /dev/sdc1 /bd/sdc1");	// [OP_BTS-71837] keep the result
++								printf("OP_BTS-71837: checkLineModeInTar mount /dev/sdc1 /bd/sdc1 try=%d ret=%d\n", (int)i, i_mntRet71837);
++							}
+ 							if( 0 == access( "/dev/sdc1" , F_OK ) ) {
++								system("grep ' /bd/sdc1 ' /proc/mounts");	// [OP_BTS-71837] options prove who created the mount
+ 								break;
+ 							}
+ 						}
+diff --git a/IT6_Controller/KM3/application/mfp/system/adj/adjg/ADJC_adjust.cpp b/IT6_Controller/KM3/application/mfp/system/adj/adjg/ADJC_adjust.cpp
+--- a/IT6_Controller/KM3/application/mfp/system/adj/adjg/ADJC_adjust.cpp
++++ b/IT6_Controller/KM3/application/mfp/system/adj/adjg/ADJC_adjust.cpp
+@@ -342,7 +342,10 @@
+ void ADJC_adjust::RunApp()
+ {
+ 	printf("Run AdjustApp.\n");
+-	system("/bd/sdc1/AdjustApp&");
++	const int i_runRet71837 = system("/bd/sdc1/AdjustApp&");	// [OP_BTS-71837]
++	printf("OP_BTS-71837: RunApp spawn /bd/sdc1/AdjustApp ret=%d\n", i_runRet71837);
++	// [OP_BTS-71837] AdjustApp runs from the USB: candidate holder of sdc. Report its pid/exe.
++	system("( sleep 3; ps | grep '[A]djustApp' | sed 's/^/OP_BTS-71837: ps: /' ) &");
+ }
+ 
+ /**

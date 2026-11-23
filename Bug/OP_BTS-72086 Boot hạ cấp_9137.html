@@ -1,0 +1,363 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>OP_BTS-72086 Boot hạ cấp</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: báo cáo kỹ thuật một cột, đọc từ trên xuống; bảng log và code cuộn ngang trong khung riêng */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2330; --muted:#5b6678; --line:#d9dee6;
+  --accent:#1f5fa8; --accent-soft:#e3ecf7;
+  --ok:#1e7a4f; --ok-soft:#e2f2ea; --ng:#b3261e; --ng-soft:#fbe6e4; --warn:#9a6200; --warn-soft:#fbf0dc;
+  --code-bg:#eef1f5;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1a2029; --fg:#e4e8ee; --muted:#9aa5b5; --line:#2e3744;
+  --accent:#7fb0ea; --accent-soft:#1d2c40;
+  --ok:#6fcf9c; --ok-soft:#163126; --ng:#f2948c; --ng-soft:#3a1d1b; --warn:#e8b65c; --warn-soft:#3a2d14;
+  --code-bg:#222a35; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1a2029; --fg:#e4e8ee; --muted:#9aa5b5; --line:#2e3744;
+  --accent:#7fb0ea; --accent-soft:#1d2c40;
+  --ok:#6fcf9c; --ok-soft:#163126; --ng:#f2948c; --ng-soft:#3a1d1b; --warn:#e8b65c; --warn-soft:#3a2d14;
+  --code-bg:#222a35; color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+header{display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line);padding-bottom:20px}
+.ticket{font-family:var(--f-mono);font-size:13px;color:var(--accent);letter-spacing:.04em}
+h1{font-size:1.75rem;line-height:1.25;margin:0;text-wrap:balance;font-weight:700}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-size:12px;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:500}
+.chip.ng{background:var(--ng-soft);color:var(--ng)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+section{display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font-size:1.2rem;margin:0;padding-top:4px;text-wrap:balance}
+h2 .n{font-family:var(--f-mono);color:var(--muted);font-weight:500;margin-right:8px}
+h3{font-size:1rem;margin:6px 0 0}
+p,li{max-width:72ch} p{margin:0} ul,ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+code,.mono{font-family:var(--f-mono);font-size:.88em;background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.verdict{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ng);border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.verdict ol{gap:10px}
+.owner{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.owner div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.owner b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.04em;color:var(--muted);font-weight:600;background:var(--code-bg)}
+tr:last-child td{border-bottom:0}
+tr.bad td{background:var(--ng-soft)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.ng{background:var(--ng-soft);color:var(--ng)}
+pre.log{margin:0;overflow-x:auto;background:var(--code-bg);border-radius:6px;padding:12px 14px;font-family:var(--f-mono);font-size:12.5px;line-height:1.55}
+pre.log .hl{color:var(--ng);font-weight:500} pre.log .dim{color:var(--muted)}
+.note{background:var(--warn-soft);color:var(--fg);border-radius:6px;padding:10px 14px;font-size:14px}
+.note b{color:var(--warn)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cols>div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.cols h3{margin:0}
+@media (max-width:640px){.cols{grid-template-columns:1fr} h1{font-size:1.4rem}}
+.diagram{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px}
+footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="ticket">OP_BTS-72086 · IT6_3.0 · 制御No.152 · Eagle2 (AA2K021901002)</div>
+  <h1>Hạ Boot xuống IT6 1.0 khi Boot được ghi trước: MFP reboot liên tục và không update lại được</h1>
+  <div class="meta">
+    <span class="chip ng">Bricked, phải thay CPU board</span>
+    <span class="chip warn">Tần suất 1/3</span>
+    <span class="chip">Module đề xuất: BSP (chính), Subset/Thread (phụ)</span>
+    <span class="chip">Phân tích ngày 23/11/2026</span>
+  </div>
+</header>
+
+<section>
+  <h2>Kết luận</h2>
+  <div class="verdict">
+    <ol>
+      <li><b>Code ghi BootROM là của IT6 1.0, không phải IT6 3.0.</b> Khi khởi động bằng phím Stop để update từ USB, subset và kernel được nạp từ USB. Lần ghi lỗi chạy kernel <code>4.4.8</code> (build 24/04/2019), trong khi LPPP FW trong flash là <code>G00-43(T0)</code> của IT6 3.0. Tổ hợp kernel cũ + LPPP mới có lẽ chưa từng được kiểm thử.</li>
+      <li><b>Ghi flash bị đứt giữa chừng.</b> Sáu lần ghi Boot thành công đều mất 56–60 s từ <code>dd</code> đến <code>BOT write OK</code>. Lần lỗi dừng ở giây 49,6 với <code>mbox_send_message ret[-5]</code>, sau đó không còn log nào và không có trình tự tắt máy. Vùng Boot 3 MB bị ghi dở, khoảng 88%.</li>
+      <li><b>Cơ chế nghi ngờ chính: race trong khóa độc quyền QSPI giữa AP và LPPP.</b> LPPP chạy code thẳng từ QSPI (XIP), nên mỗi lần AP xóa/ghi QSPI thì kernel phải tạm dừng LPPP qua SCPI. Kernel 2019 thiếu bản sửa OP_BTS-47053, bản sửa này chặn mọi lệnh SCPI khác trong lúc LPPP đang dừng. Một lệnh chen vào thì LPPP không nhận (TX timeout 20 ms, ra mã -5), khóa độc quyền sụp.</li>
+      <li><b>Sau lỗi, máy reset theo chu kỳ cố định khoảng 16 s</b> ở bất kỳ giai đoạn nào. Đây là reset kiểu HRESET do tác nhân ngoài AP kích. Máy reset trước khi subset kịp nạp từ USB, nên không thể update ROM lại.</li>
+    </ol>
+  </div>
+  <div class="owner">
+    <div><b>BSP (chính)</b>Kernel QSPI (<code>mrvl-bspi</code>), SCPI/mailbox và giao thức tạm dừng LPPP. Cần xem source kernel 4.4.8 của IT6 1.0.</div>
+    <div><b>Subset / Thread (phụ)</b>Cho phép hạ Boot trước LPPP. Quá trình ghi Boot không có timeout và không có cách phục hồi.</div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">1</span>Phiên bản nào thực sự đã ghi BootROM</h2>
+  <p>Log có ba kernel khác nhau. Dựa vào lúc mỗi kernel xuất hiện, có thể biết code nào đã ghi Boot.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Kernel</th><th>Xuất hiện ở đâu</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">5.10.258 (23/10/2026)</td><td>Boot thường bằng W4, và update khi USB chứa FW W4</td><td>IT6 3.0, là source trong repo</td></tr>
+      <tr><td class="mono">4.4.8 (24/04/2019)</td><td>Mọi lần boot Stop-key khi USB chứa FW IT6 1.0, kể cả 10:04 khi SSD vẫn đang là W4</td><td>Kernel subset IT6 1.0, <b>nạp từ USB</b></td></tr>
+      <tr><td class="mono">4.4.8 (30/01/2019)</td><td>Boot thường sau khi hạ controller xuống IT6 1.0</td><td>Kernel chính IT6 1.0</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li>Comment của FPT trỏ vào <code>IT6_3.0_Kernel…\arm_scpi.c</code>, nhưng dòng <code>ret[-5]</code> do kernel 4.4.8 in ra. BSP cần xem arm_scpi, mailbox và mrvl-bspi <b>của IT6 1.0</b>.</li>
+    <li>Ở 5.10, TX timeout của mailbox trả <code>-ETIME</code> (-62) (<code>Kernel/Src/drivers/mailbox/mailbox.c:284</code>). Ở mainline 4.4 cùng lỗi đó trả <code>-EIO</code> (-5). Vậy -5 nghĩa là LPPP không nhận doorbell trong 20 ms (<code>arm_scpi.c:1224</code>, <code>tx_tout = 20</code>). Điểm này suy từ upstream 4.4 vì source 4.4.8 của dự án không có trong repo.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">2</span>Bảy lần ghi Boot trong log</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Giờ</th><th>Boot</th><th>Kernel ghi</th><th>LPPP lúc đó</th><th>records out → kết quả</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">10:10</td><td class="mono">43 → 09</td><td>4.4.8 cũ</td><td><b>43</b></td><td>59,9 s</td><td><span class="pill ok">OK</span></td></tr>
+      <tr><td class="mono">10:30</td><td class="mono">09 → 43</td><td>5.10</td><td>20</td><td>56,8 s</td><td><span class="pill ok">OK</span></td></tr>
+      <tr><td class="mono">13:20</td><td class="mono">43 → 08</td><td>4.4.8 cũ</td><td><b>17</b> (đã hạ LPPP trước)</td><td>55,9 s</td><td><span class="pill ok">OK</span></td></tr>
+      <tr><td class="mono">13:34</td><td class="mono">08 → 43</td><td>5.10</td><td>17</td><td>56,9 s</td><td><span class="pill ok">OK</span></td></tr>
+      <tr><td class="mono">14:57</td><td class="mono">43 → 08</td><td>4.4.8 cũ</td><td><b>43</b></td><td>60,1 s</td><td><span class="pill ok">OK</span></td></tr>
+      <tr><td class="mono">15:26</td><td class="mono">08 → 43</td><td>5.10</td><td>17</td><td>56,6 s</td><td><span class="pill ok">OK</span></td></tr>
+      <tr class="bad"><td class="mono">16:27</td><td class="mono">43 → 08</td><td>4.4.8 cũ</td><td><b>43</b></td><td>Dừng ở 49,6 s, SCPI -5</td><td><span class="pill ng">NG</span></td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li>Tổ hợp kernel cũ + LPPP 43 xảy ra 3 lần, lỗi 1 lần, khớp tần suất 1/3 trong ticket.</li>
+    <li>Không lần ghi Boot thành công nào có lỗi SCPI (0/6). Ba lỗi -5 khác trong log nằm trong lúc <b>update LPPP</b>, và comment OP-BTS_18219 (<code>arm_scpi.c:595-597</code>) ghi rằng lỗi ở đó xảy ra 100%. Triage AI cho rằng SCPI timeout không phải bằng chứng là chưa đúng: khi ghi Boot, lỗi này chỉ có ở lần NG.</li>
+    <li>Lần OK: khoảng 10–20 s sau <code>BOT write OK</code> có <code>BspPmuMainSwWorkCb</code> → <code>NVMe: Shutdown</code> → <code>/HRESET_REQ = 0</code>. Lần NG không có.</li>
+  </ul>
+  <div class="cols">
+    <div><h3>OK, 14:57</h3>
+<pre class="log"><span class="dim">14:57:51.738</span> There is BootROM in USB.
+<span class="dim">14:57:51.834</span> FLASH ROM Version = …G00-43(T0)
+<span class="dim">14:57:51.834</span> MEM ROM   Version = …G00-08(00)
+<span class="dim">14:57:51.834</span> 1+0 records out
+<span class="dim">14:58:51.925</span> CAL SUM b58e
+<span class="dim">14:58:51.925</span> ROM SUM b58e
+<span class="dim">14:58:51.925</span> BOT write OK.</pre></div>
+    <div><h3>NG, 16:27 (dòng 138373–138382)</h3>
+<pre class="log"><span class="dim">16:27:39.298</span> There is BootROM in USB.
+<span class="dim">16:27:39.362</span> FLASH ROM Version = …G00-43(T0)
+<span class="dim">16:27:39.378</span> MEM ROM   Version = …G00-08(00)
+<span class="dim">16:27:39.378</span> 1+0 records out
+<span class="dim">16:28:29.004</span> <span class="hl">mbox_send_message ret[-5]</span>
+<span class="dim">16:28:29.004</span> <span class="hl">scpi_send_message remove entry … ret[-5]</span>
+<span class="dim">            </span> <span class="dim">(95 s không có log)</span>
+<span class="dim">16:30:07.445</span> U-Boot …-svn3533 (Nov 01 2018)</pre></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Cơ chế, theo source</h2>
+  <h3>Subset ghi Boot</h3>
+  <p><code>Subset/S-S800/Src/application/mfp/system/thr/thr/fwupdate.cpp:6160</code> là bản IT6 3.0; bản IT6 1.0 có lẽ tương tự.</p>
+  <ul>
+    <li><code>dd if=…BOT.bin of=/dev/mtdblock1 bs=3M</code> chỉ ghi vào page cache, nên <code>1+0 records out</code> hiện ra ngay.</li>
+    <li><code>THRF_DoSync()</code> (<code>:6257</code>) mới là lúc thật sự xóa/ghi QSPI, mất khoảng 56 s và <b>không có timeout</b>.</li>
+    <li>Sau đó đọc lại để tính checksum rồi in <code>BOT write OK</code>.</li>
+    <li>Ghi đè tại chỗ, không có bản dự phòng. GoldenMaster chỉ dùng cho máy có secure chip, mà log ghi <code>SecureBoot disabled</code>.</li>
+  </ul>
+  <h3>Khóa độc quyền QSPI giữa AP và LPPP</h3>
+  <ul>
+    <li>LPPP chạy XIP từ QSPI CS1: <code>rom ORIGIN = 0xf8000000 /* bspi */</code> (<code>lppp_s800/Hal/quartz/asic/linker_common/memory_map.ld:25</code>). CS0 (Boot) và CS1 (LPPP) dùng chung một controller BSPI (<code>quartz-sb.dtsi:182-226</code>).</li>
+    <li>Mỗi thao tác SPI-NOR, <code>mrvl_prepare()</code> gọi <code>dvfs_set_idx(0,1)</code> để dừng R4 (<code>mrvl-bspi_winbond.c:181</code>); <code>unprepare</code> đánh thức lại bằng ngắt IPC. Ghi 3 MB nghĩa là hàng trăm vòng dừng/đánh thức.</li>
+    <li><b>Giá trị trả về bị bỏ qua.</b> Nếu lệnh dừng thất bại, AP vẫn xóa/ghi trong khi LPPP có thể đang fetch lệnh từ QSPI. <code>wait_cmd()</code> (<code>:235</code>) là vòng lặp không có timeout.</li>
+    <li>LPPP 43 khi dừng tắt toàn bộ ngắt GIC, chỉ chừa ngắt IPC giả, rồi vào WFI (<code>hal_pause.c:50-75</code>). Doorbell MHU của lệnh SCPI khác sẽ không được nhận trong lúc này.</li>
+    <li>Kernel 5.10 đã chặn việc này bằng OP_BTS-47053: <code>is_lppp_wfi</code> + <code>wait_event_timeout</code> (<code>arm_scpi.c:532-547</code>). Comment gốc của Marvell ở <code>scpi_dvfs_set_idx</code> (<code>:793</code>) cũng viết "other scpi cmds will wake the r4 before it should be woken". <b>Kernel 4.4.8 năm 2019 không có bản sửa này.</b></li>
+  </ul>
+  <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    participant S as Subset (sync)
+    participant Q as mrvl-bspi (kernel 4.4.8)
+    participant O as Thread SCPI khác
+    participant L as LPPP 43 (XIP từ CS1)
+    S->>Q: ghi khối tiếp theo của /dev/mtdblock1
+    Q->>L: SET_DVFS(0,1) dừng R4
+    L-->>Q: phản hồi, vào WFI, che ngắt MHU
+    O->>L: lệnh SCPI chen vào (không có cơ chế chặn của OP_BTS-47053)
+    Note over O,L: doorbell không được nhận trong 20 ms, ra mbox ret[-5]
+    Q->>Q: xóa/ghi CS0 trên BSPI dùng chung
+    Q->>L: ngắt IPC đánh thức R4
+    Note over Q,L: bảng xfer SCPI lệch, lần dừng sau có thể không thật sự dừng
+    Q--xL: AP và LPPP tranh BSPI, ghi treo hoặc LPPP chết
+</pre>
+  </div>
+  <h3>Kịch bản suy ra cho lần NG</h3>
+  <ol>
+    <li>Một thread khác (PMU, sensor, clock…) gửi SCPI trong khoảng LPPP đang dừng.</li>
+    <li>Doorbell không được nhận, TX timeout trả -5.</li>
+    <li>Bảng xfer SCPI lệch, khóa độc quyền sụp, AP và LPPP tranh nhau controller BSPI.</li>
+    <li>Ghi flash treo (hoặc LPPP chết).</li>
+    <li>LPPP xử lý sự kiện công tắc nguồn, nên khi LPPP chết thì không còn log <code>BspPmuMainSwWorkCb</code>.</li>
+  </ol>
+  <div class="note"><b>Vì sao hạ OtherROM trước thì không lỗi:</b> khi LPPP đã về bản 17, kernel cũ làm việc với LPPP cùng thế hệ. Hạ Boot trước thì kernel cũ phải bắt tay với LPPP 43. Mẫu còn ít (1 lần OK) và không có source LPPP 17 để so cách xử lý WFI.</div>
+</section>
+
+<section>
+  <h2><span class="n">4</span>Reset sau lỗi và vòng lặp 16 s</h2>
+  <p>Đo thời gian từ lúc reset đến banner U-Boot trên toàn bộ log: bật nguồn hoặc <code>reboot</code> thường mất 2,5–3,0 s; <code>/HRESET_REQ</code> mất 5,7–5,8 s.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Sự kiện</th><th>Reset → banner</th><th>Đánh giá</th></tr></thead>
+    <tbody>
+      <tr><td>Reset đầu tiên (16:30:04, 95 s sau lỗi SCPI)</td><td class="mono">2,5 s</td><td>Giống bật nguồn: người thao tác ngắt nguồn, hoặc toàn chip bị reset. Video không quay đoạn này.</td></tr>
+      <tr><td>Boot thường trong vòng lặp</td><td class="mono">5,5–5,7 s</td><td>Kiểu HRESET. Log bị cắt <b>giữa dòng</b> đúng khoảng 10,4 s sau banner, bất kể kernel đang in gì.</td></tr>
+      <tr><td>Boot Stop-key (gPanelKey 0x04)</td><td class="mono">chu kỳ 16 s</td><td>Bị cắt trong lúc quét USB, trước khi nạp được subset. Đây là lý do không update lại được.</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li>Ứng viên khớp nhất là CA72 WDT trong LPPP: <code>CA72WDT_Start_Short</code> có timeout 10–15 s (<code>LPPP_Task.c:621</code>), khi hết hạn thì kéo <code>HRESET_REQ</code> (<code>:704</code>). U-Boot svn3533 (2018) có lẽ không gửi REFRESH/END, vì cơ chế này thêm vào U-Boot từ OP_BTS-14005 (2019/10).</li>
+    <li><b>Chưa xác định được</b> vì sao WDT bị bật ở trạng thái lỗi trong khi lần 14:59 (cùng LPPP 43 + Boot 08 hoàn chỉnh) boot bình thường. Khác biệt duy nhất là flash bị ghi dở: từ khoảng <code>0x2A0000</code> có strdrv/hibdrv (<code>BootROM/BootROM/Emu800/Romcnv/BootROM_map.xlsx</code>), cộng khả năng vùng user CS0 hoặc LPPP CS1 bị hỏng lây do va chạm trên BSPI.</li>
+    <li>U-Boot báo <code>is_RestartOccured() … Ret=1</code>, tức vùng BSP/Thread mặt 1 không nhất quán. Thông báo dạng này cũng có lúc 11:59, nên chỉ là bằng chứng yếu.</li>
+    <li>Secure chip đã loại trừ (<code>SecureBoot disabled</code>).</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">5</span>Đánh giá báo cáo triage AI</h2>
+  <div class="cols">
+    <div><h3>Đúng</h3><ul>
+      <li>Lần NG không tới bước checksum.</li>
+      <li>Có SCPI timeout.</li>
+      <li>Boot bị ghi không hoàn chỉnh.</li>
+      <li>Có vòng reset khoảng 16 s.</li></ul></div>
+    <div><h3>Sai hoặc thiếu</h3><ul>
+      <li>Không nhận ra subset/kernel được nạp từ USB.</li>
+      <li>Coi lỗi SCPI là không có ý nghĩa.</li>
+      <li>Không biết LPPP chạy XIP và khóa độc quyền QSPI.</li>
+      <li>Không phân biệt kiểu reset.</li>
+      <li>Chia trọng số 0.40/0.35/0.25 chỉ vì thiếu input.</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">6</span>Đề xuất</h2>
+  <h3>BSP (sửa gốc)</h3>
+  <ul>
+    <li><code>mrvl_prepare</code>: nếu không xác nhận được LPPP đã dừng thì trả lỗi và không xóa/ghi. Thêm timeout cho <code>wait_cmd()</code>. Điểm yếu này vẫn còn trong IT6 3.0.</li>
+    <li>Nếu gói ROM hạ cấp (GXX-04) build lại được: backport OP_BTS-47053 (và OP_BTS-70641) vào kernel subset của gói đó.</li>
+  </ul>
+  <h3>Subset và quy trình</h3>
+  <ul>
+    <li>Bắt buộc hạ LPPP trước Boot khi về IT6 1.0, hoặc chặn hạ Boot khi LPPP mới hơn.</li>
+    <li>Đặt giới hạn thời gian cho <code>sync</code>, hiển thị "không được tắt nguồn", và ghi lại khi checksum NG.</li>
+  </ul>
+  <h3>Cần xác nhận (theo thứ tự ưu tiên)</h3>
+  <ol>
+    <li>Dùng SPI writer dump CS0 (<code>0–0x3FFFFF</code>) và CS1 (<code>0–0x1FFFFF</code>) của board lỗi, so với ảnh BOT 08/43 và LPP 43. Việc này chốt được ghi dừng ở đâu và có hỏng lây sang vùng khác không.</li>
+    <li>Gắn UART debug của LPPP trong lúc reset lặp, xem có <code>CA72WDT expire</code>, <code>START_SHORT</code> hay exception không.</li>
+    <li>Tái hiện tổ hợp subset cũ + LPPP 43 khoảng 20 lần, trace <code>scpi_send_message</code> (cmd, caller) để tìm thread gửi SCPI chen vào. So với LPPP 17.</li>
+    <li>Hỏi người báo lỗi: trong 16:28–16:30 có ngắt nguồn không, màn hình hiển thị gì.</li>
+    <li>Lấy source kernel 4.4.8 của IT6 1.0 để xác nhận <code>-EIO</code> và việc thiếu OP_BTS-47053.</li>
+  </ol>
+</section>
+
+<section>
+  <h2><span class="n">7</span>Độ chắc chắn</h2>
+  <div class="cols">
+    <div><h3>Đã xác nhận từ log/source</h3><ul>
+      <li>Phiên bản nào đã ghi Boot.</li>
+      <li>Bảng 7 lần ghi.</li>
+      <li>Lỗi SCPI chỉ có ở lần NG.</li>
+      <li>Cơ chế XIP và khóa độc quyền QSPI.</li>
+      <li>Kiểu và thời điểm reset.</li></ul></div>
+    <div><h3>Suy luận</h3><ul>
+      <li>Ý nghĩa của -5 trong kernel 4.4.</li>
+      <li>Race SCPI là nguyên nhân trực tiếp.</li>
+      <li>Nguồn gây reset 16 s.</li></ul></div>
+  </div>
+</section>
+
+<footer>Nguồn: log <span class="mono">OP_BTS-72086_1120_垂れ流しログ.log</span> (140.277 dòng), video, ticket PDF, báo cáo triage AI, và source trong repo Source_MFP (Kernel 5.10, Subset S-S800, U-Boot Emu800, lppp_s800). Source IT6 1.0 (kernel 4.4.8, Boot G00-08, LPPP 17) không có trong repo.</footer>
+</div>
+
+<!--claude-mermaid-runtime-begin:3847-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+function source(el){
+var out='';
+for(var n=el.firstChild;n;n=n.nextSibling){
+if(n.nodeType===3)out+=n.data;
+else if(n.nodeName==='BR')out+='<br>';
+else if(n.nodeType===1)out+=(out.slice(-1)==='<'&&n.textContent[0]==='>'?'<'+n.localName+'>':'')+source(n);
+}
+return out;
+}
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:source(pre),text:pre.textContent};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).catch(function(e){
+if(it.src===it.text)throw e;
+return mermaid.render(id,it.text);
+}).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+
+</body></html>

@@ -1,0 +1,1051 @@
+# DEEP-DIVE PROMPT: COMPLETE ANALYSIS OF `dbgAllClear` — NVRAM, SPI-Flash, SSD BACKUP AND BOOT INITIALIZATION
+
+## 1. ROLE – VAI TRÒ
+
+Bạn là Senior Embedded Software Engineer, BSP Engineer và Firmware Architect có chuyên môn sâu về:
+
+- VxWorks RTOS.
+- Embedded Linux.
+- NVRAM architecture.
+- SPI-Flash / FlashROM.
+- eMMC / SSD storage.
+- Bootloader và boot sequence.
+- Factory initialization.
+- Memory management.
+- Semaphore, mutex và synchronization.
+- Embedded storage drivers.
+- Hardware abstraction layer (HAL).
+- Reverse engineering và source code tracing.
+
+Bạn đang phân tích một repository firmware thực tế của hệ thống Konica Minolta bizhub.
+
+Nhiệm vụ của bạn là phân tích toàn diện chức năng `dbgAllClear` dựa trên source code thực tế trong repository.
+
+**Yêu cầu quan trọng nhất: Người mới chưa hiểu kiến trúc NVRAM, SPI-Flash, SSD, VxWorks cũng phải hiểu được toàn bộ cơ chế sau khi đọc tài liệu.**
+
+Không được chỉ giải thích chức năng ở mức tổng quan. Phải truy vết chính xác từ function gọi function, dữ liệu truyền giữa các function, điều kiện xử lý, tác động lên vùng nhớ và phần cứng.
+
+---
+
+# 2. SOURCE CODE VÀ PHẠM VI PHÂN TÍCH
+
+Repository có ba phiên bản `dbgAllClear`.
+
+### Version 1: Donau3 – Subset S-S800
+
+File:
+
+`Subset/S-S800/Src/.../nvdDonau3/NVDG_FuncDonau3.cpp`
+
+Vị trí tham khảo: dòng 6842.
+
+Đặc điểm:
+- Không có tham số.
+- Ghi zero vào vùng NVRAM.
+- Xóa vùng NVRAM backup.
+- Sử dụng signature cũ của `EraseNvramBackupArea`.
+
+### Version 2: Donau3 – KM3
+
+File:
+
+`IT6_Controller/KM3/.../nvdDonau3/NVDG_FuncDonau3.cpp`
+
+Vị trí tham khảo: dòng 5404.
+
+Đặc điểm:
+- Không có tham số.
+- Ghi zero vào vùng NVRAM.
+- Xóa backup group 1 và group 2.
+- Có sự khác biệt so với Subset S-S800.
+
+### Version 3: Zeus – KM3
+
+File:
+
+`IT6_Controller/KM3/.../nvdZeus/NVDG_FuncZeus.cpp`
+
+Vị trí tham khảo: dòng 33433.
+
+Đặc điểm:
+- Có tham số `uc_ClearCmdNo`.
+- Hỗ trợ command từ 0 đến 5.
+- Có cơ chế xóa SPI-Flash, SSD, FlashROM backup.
+- Có cơ chế đặt NVRAM Clear Flag.
+- Có cơ chế FactorySetup ở lần boot tiếp theo.
+
+### Các function liên quan đã biết
+
+1. `dbgAllClear()`
+2. `NVDF_memsetNvRam()`
+3. `EraseNvramBackupArea()`
+4. `THRG_setSoftDipSw()`
+5. `FILF_RemoveDirTree()`
+6. `NVDF_setNvramClearFlag()`
+7. `SYSF_DBMediaMapDelete()`
+8. `APIC_SPIFlashDataManage::setFlag()`
+9. `FactorySetup()`
+10. Các function khởi tạo NVRAM trong `NVDG_FuncZeus.cpp`.
+
+Các vị trí tham khảo:
+
+- `nvdg/NVDG_NVWrite.cpp:31`
+- `Linux/Platform/Mediaif.cpp:1592`
+- `NVDG_FuncZeus.cpp:28750–28810`
+
+Đây chỉ là các manh mối ban đầu. Hãy tự tìm kiếm và xác minh lại trong repository.
+
+Không được giả định rằng các vị trí hoặc mô tả trên hoàn toàn chính xác.
+
+---
+
+# 3. NGUYÊN TẮC PHÂN TÍCH SOURCE CODE
+
+Đây là phần bắt buộc phải tuân thủ.
+
+## 3.1. Phải đọc source code thực tế
+
+Không được chỉ dựa vào tên function để suy luận chức năng.
+
+Với mỗi function quan trọng:
+
+1. Tìm chính xác nơi khai báo.
+2. Tìm nơi định nghĩa.
+3. Đọc toàn bộ function.
+4. Tìm tất cả nơi gọi function.
+5. Truy vết những function được gọi bên trong.
+6. Xác định điều kiện thực thi.
+7. Xác định dữ liệu đầu vào và đầu ra.
+8. Xác định tác động thực tế lên hardware hoặc storage.
+9. Xác định các lỗi có thể xảy ra.
+
+Nếu function gọi sang một module khác, tiếp tục truy vết đến implementation thực tế nếu source có sẵn.
+
+Không dừng lại ở một function wrapper.
+
+Ví dụ:
+
+`dbgAllClear()`
+→ `NVDF_memsetNvRam()`
+→ `Set_Cs2(UNLOCK)`
+→ `memset()`
+→ `Set_Cs2(LOCK)`
+
+Hãy kiểm tra thực tế từng bước thay vì mặc định đây là toàn bộ call chain.
+
+## 3.2. Mọi kết luận phải có bằng chứng
+
+Với mỗi kết luận quan trọng, cung cấp:
+
+- File path.
+- Function name.
+- Line number chính xác.
+- Đoạn code liên quan.
+- Giải thích code thực hiện điều gì.
+
+Phân biệt rõ ba loại thông tin:
+
+- **Verified:** Được xác nhận trực tiếp từ source code.
+- **Inferred:** Suy luận từ cách triển khai, cần ghi rõ cơ sở.
+- **Unknown:** Không thể xác định từ repository hiện tại.
+
+Không được tự bịa:
+- Register address.
+- Flash layout.
+- Memory address.
+- Sector size.
+- Block size.
+- Storage partition.
+- Hardware behavior.
+- Boot sequence.
+
+Nếu không tìm thấy implementation, phải nói rõ chưa xác minh được.
+
+## 3.3. Giải thích cho người mới
+
+Khi gặp thuật ngữ lần đầu, hãy giải thích:
+
+- Thuật ngữ đó là gì?
+- Nó tồn tại để giải quyết vấn đề gì?
+- Tại sao hệ thống cần nó?
+- Nó hoạt động như thế nào?
+- Ví dụ thực tế.
+
+Ví dụ khi giải thích NVRAM:
+
+Không chỉ nói NVRAM là Non-Volatile RAM.
+
+Phải giải thích:
+- RAM thông thường mất dữ liệu khi mất nguồn như thế nào?
+- Non-Volatile có nghĩa gì?
+- NVRAM được sử dụng để lưu loại dữ liệu nào?
+- NVRAM khác DRAM, NOR Flash, NAND Flash, EEPROM và SSD ra sao?
+- Trong repository này, NVRAM thực tế được triển khai bằng công nghệ hoặc vùng lưu trữ nào?
+- Vì sao tên biến có chữ NVRAM nhưng không nhất thiết đồng nghĩa với một chip NVRAM vật lý?
+
+---
+
+# 4. PHẦN I – TỔNG QUAN KIẾN TRÚC STORAGE
+
+Trước khi phân tích `dbgAllClear`, hãy xây dựng kiến thức nền tảng.
+
+## 4.1. Giải thích kiến trúc lưu trữ
+
+Tìm hiểu và giải thích vai trò của:
+
+1. NVRAM.
+2. SPI-Flash.
+3. FlashROM.
+4. SSD.
+5. eMMC.
+6. NVRAM Backup.
+7. Boot flag.
+8. Database trên storage.
+
+Phải xác định mối quan hệ giữa các thành phần trong repository.
+
+Không được mặc định SPI-Flash và FlashROM là hai thiết bị khác nhau. Phải xác minh cách repository sử dụng các thuật ngữ này.
+
+## 4.2. Xây dựng storage architecture diagram
+
+Vẽ sơ đồ tổng quan bằng Mermaid.
+
+Ví dụ định hướng:
+
+```mermaid
+flowchart TB
+    CPU --> NVRAM
+    CPU --> SPI_FLASH
+    CPU --> SSD
+    SPI_FLASH --> BACKUP_GROUP_1
+    SPI_FLASH --> BACKUP_GROUP_2
+    SSD --> BACKUP_GROUP_3
+    SSD --> NVDATA
+    SPI_FLASH --> BOOT_FLAG
+```
+
+Đây chỉ là sơ đồ minh họa ban đầu.
+
+Hãy chỉnh sửa theo kiến trúc thực tế tìm được trong source code.
+
+Với mỗi vùng storage, ghi rõ:
+- Physical device.
+- Logical region.
+- Function truy cập.
+- Function erase/write.
+- Mục đích sử dụng.
+- Có được `dbgAllClear` tác động hay không.
+
+## 4.3. Phân biệt các loại thao tác storage
+
+Giải thích thật kỹ:
+
+- Memory write.
+- Memory clear.
+- Flash erase.
+- Flash programming.
+- File deletion.
+- Directory recursive deletion.
+- Backup erase.
+- Factory initialization.
+
+Đặc biệt phải giải thích:
+
+Tại sao `memset(address, 0, size)` có thể dùng với một vùng NVRAM nhưng không thể mặc định dùng để xóa trực tiếp NOR Flash hoặc NAND Flash?
+
+Giải thích cơ chế:
+- Erase.
+- Program.
+- Write protection.
+- Flash sector/block.
+- Flash wear.
+- 0xFF và 0x00.
+
+Chỉ áp dụng những đặc điểm phần cứng phù hợp với implementation thực tế.
+
+---
+
+# 5. PHẦN II – DEBUG COMMAND TRÊN VXWORKS
+
+Phân tích cách `dbgAllClear` được đăng ký và chạy từ console.
+
+## 5.1. Tìm hiểu TORNADO
+
+Giải thích:
+
+- Tornado là gì?
+- VxWorks là gì?
+- `#ifdef TORNADO` có ý nghĩa gì?
+- Compile-time condition hoạt động ra sao?
+- Khi build có `TORNADO`, function được biên dịch như thế nào?
+- Khi không có `TORNADO`, điều gì xảy ra?
+- `dbgAllClear` có phải một shell command mặc định của VxWorks không?
+
+## 5.2. Truy vết command registration
+
+Tìm chính xác:
+
+- `dbgAllClear` được khai báo ở đâu?
+- Nó được export hoặc register như thế nào?
+- Cơ chế để console nhận diện tên function là gì?
+- Cách truyền tham số vào function.
+- Kiểu dữ liệu của tham số.
+- Function chạy trong task/context nào nếu có thể xác định.
+
+Phân biệt rõ:
+- Function declaration.
+- Function definition.
+- Symbol export.
+- Shell registration.
+- Function invocation.
+
+Vẽ flow:
+
+```mermaid
+flowchart TD
+    A[User nhập dbgAllClear trên console]
+    B[Shell phân tích command]
+    C[Resolve function symbol]
+    D[Call dbgAllClear]
+    A --> B --> C --> D
+```
+
+Điều chỉnh theo cơ chế thực tế của repository.
+
+---
+
+# 6. PHẦN III – PHÂN TÍCH CHI TIẾT 3 PHIÊN BẢN
+
+Đây là phần quan trọng nhất.
+
+Phải phân tích độc lập từng phiên bản, không được gộp ba phiên bản thành một.
+
+## 6.1. Donau3 – Subset S-S800
+
+Đọc toàn bộ function `dbgAllClear()` tại vị trí tham khảo dòng 6842.
+
+Phân tích:
+
+1. Function được gọi trong trường hợp nào?
+2. Có parameter không?
+3. Thứ tự thực thi các statement.
+4. Điều kiện if/else.
+5. Những function được gọi.
+6. Các vùng dữ liệu bị xóa.
+7. Return value nếu có.
+8. Error handling.
+9. Có log hay không?
+10. Có kiểm tra kết quả erase hay không?
+
+### Truy vết `NVDF_memsetNvRam()`
+
+Đọc implementation tại `nvdg/NVDG_NVWrite.cpp`.
+
+Giải thích:
+
+- `NVDD_NVRam_Base` là gì?
+- Địa chỉ này được định nghĩa ở đâu?
+- `0x0` có ý nghĩa gì?
+- `0x1ffef0` tương đương bao nhiêu byte?
+- Tại sao lại là kích thước này?
+- Có phải xóa toàn bộ 2 MB hay không?
+- Phần dữ liệu còn lại được sử dụng làm gì nếu có?
+
+Truy vết chi tiết:
+- Semaphore lấy như thế nào?
+- Nếu không lấy được semaphore thì sao?
+- `Set_Cs2(UNLOCK)` thực hiện điều gì?
+- `memset()` ghi dữ liệu như thế nào?
+- `Set_Cs2(LOCK)` có vai trò gì?
+- Khi nào semaphore được release?
+- Có khả năng xảy ra lỗi giữa UNLOCK và LOCK không?
+- Có nguy cơ race condition không?
+
+Vẽ sequence diagram.
+
+### Truy vết `EraseNvramBackupArea()`
+
+Xác định signature cũ thực tế.
+
+Phân tích:
+- Tham số truyền vào.
+- Ý nghĩa từng tham số.
+- Tại sao Subset chỉ gọi `(0)`?
+- Nó xóa group nào?
+- Có khác implementation ở KM3 không?
+
+Không được suy luận group từ tên hoặc comment.
+
+## 6.2. Donau3 – KM3
+
+Đọc toàn bộ function tại `NVDG_FuncDonau3.cpp`, vị trí tham khảo dòng 5404.
+
+So sánh với Subset S-S800.
+
+Phải xác định chính xác:
+
+- Điểm giống nhau.
+- Điểm khác nhau.
+- Khác biệt về function signature.
+- Khác biệt về backup group.
+- Khác biệt về storage layout nếu có.
+- Khác biệt về semaphore.
+- Khác biệt về error handling.
+- Khác biệt về phạm vi dữ liệu bị xóa.
+
+Đặc biệt phân tích hai lời gọi:
+
+```cpp
+EraseNvramBackupArea(0, 0);
+EraseNvramBackupArea(0, 1);
+```
+
+Không chỉ giải thích rằng chúng xóa group 1 và group 2.
+
+Phải tìm implementation để xác định:
+- Tham số đầu tiên thực sự đại diện cho điều gì?
+- Tham số thứ hai đại diện cho điều gì?
+- Group mapping được khai báo ở đâu?
+- Địa chỉ vùng backup được lấy từ đâu?
+- Function thực hiện erase vật lý như thế nào?
+
+## 6.3. Zeus – KM3
+
+Đọc toàn bộ function `dbgAllClear(uc_ClearCmdNo)` tại vị trí tham khảo dòng 33433.
+
+Đây là phiên bản cần phân tích sâu nhất.
+
+### A. Phân tích parameter
+
+Giải thích:
+
+- `uc_ClearCmdNo` là kiểu dữ liệu gì?
+- Tại sao dùng kiểu `unsigned char` nếu đúng như source?
+- Giá trị hợp lệ từ 0 đến 5.
+- Điều gì xảy ra nếu truyền giá trị ngoài phạm vi?
+- Có default case không?
+- Có validation hay không?
+
+### B. Phân tích từng command
+
+Phải tạo bảng:
+
+| Command | SPI-Flash/NVRAM | SSD NVData | Backup Group 1 | Group 2 | Group 3 | Clear Flag |
+|---|---|---|---|---|---|---|
+| 0 | Phân tích | Phân tích | Phân tích | Phân tích | Phân tích | Phân tích |
+| 1 | ... | ... | ... | ... | ... | ... |
+| 2 | ... | ... | ... | ... | ... | ... |
+| 3 | ... | ... | ... | ... | ... | ... |
+| 4 | ... | ... | ... | ... | ... | ... |
+| 5 | ... | ... | ... | ... | ... | ... |
+
+Mỗi ô phải dựa trên code thực tế.
+
+Với từng command 0–5, phân tích theo cấu trúc:
+
+**1. Entry condition**
+- Điều kiện để đi vào nhánh.
+
+**2. Execution sequence**
+- Thứ tự các statement.
+- Function nào được gọi trước.
+- Function nào được gọi sau.
+
+**3. Storage operation**
+- Xóa vùng nào?
+- Xóa bao nhiêu byte?
+- Có loại trừ vùng nào không?
+- Xóa vật lý hay chỉ xóa logic?
+
+**4. Error handling**
+- Kiểm tra lỗi như thế nào?
+- Return code.
+- Logging.
+- Detail code.
+- Có tiếp tục xử lý sau lỗi không?
+
+**5. Final state**
+- Storage nào bị thay đổi?
+- Flag có được đặt không?
+- Hệ thống cần làm gì ở lần boot tiếp theo?
+
+### C. Phân tích vùng 256 byte đầu U-Boot
+
+Tìm chính xác đoạn code loại trừ 256 byte đầu khi xóa SPI-Flash/NVRAM.
+
+Giải thích:
+
+- U-Boot là gì?
+- Bootloader có nhiệm vụ gì?
+- Vì sao không xóa vùng này?
+- 256 byte được bảo vệ bằng cách nào?
+- Địa chỉ bắt đầu và độ dài thực tế.
+- Cách tính vùng được xóa.
+- Nếu xóa nhầm vùng U-Boot thì hậu quả là gì?
+- Có cách recovery nào được hỗ trợ trong repository không?
+
+Không được mặc định 256 byte này chứa toàn bộ U-Boot. Phải xác minh memory layout.
+
+### D. Phân tích `THRG_setSoftDipSw()`
+
+Truy vết toàn bộ implementation.
+
+Giải thích:
+
+- THRG là module gì?
+- Soft DIP Switch là gì?
+- Vì sao dùng function này để ghi zero?
+- Parameter thứ nhất có ý nghĩa gì?
+- `buf_zero` được tạo và khởi tạo ở đâu?
+- `size` được tính như thế nào?
+- Function ghi vào vùng nào?
+- Có gọi SPI driver không?
+- Có kiểm tra write protection không?
+- Có kiểm tra kết quả ghi không?
+- Có thực hiện verify sau khi ghi không?
+
+Truy vết đến tầng hardware driver nếu repository có source.
+
+### E. Phân tích logging và detail code
+
+Tìm các detail code:
+
+- `TYPD_NewDetailCode_Cmn_D390_004A`
+- `TYPD_NewDetailCode_Cmn_D390_004B`
+- `TYPD_NewDetailCode_Cmn_D390_004C`
+
+Giải thích:
+
+- Detail code được đăng ký ở đâu?
+- Ý nghĩa của từng mã.
+- Chúng tương ứng với command hoặc thao tác nào?
+- Mã lỗi được đưa vào 32 bit cao như thế nào?
+- Cách tạo giá trị 64-bit nếu có.
+- `SYSF_logMsg()` hoạt động như thế nào?
+- Log được ghi vào đâu?
+- Có thể tìm log sau khi reboot không?
+
+Không được tự gán ý nghĩa cho detail code nếu chưa tìm thấy định nghĩa.
+
+---
+
+# 7. PHẦN IV – PHÂN TÍCH EraseNvramBackupArea()
+
+Đây là một trong những function quan trọng nhất.
+
+Đọc implementation tại:
+
+`Linux/Platform/Mediaif.cpp:1592`
+
+Truy vết cả những function được gọi bên trong.
+
+## 7.1. Phân tích function signature
+
+Giải thích:
+- Từng parameter.
+- Kiểu dữ liệu.
+- Giá trị hợp lệ.
+- Ý nghĩa các group.
+- Giá trị trả về.
+
+## 7.2. Phân tích 3 backup group
+
+Tìm chính xác:
+
+- `c_NvramBackupGroup1`
+- `c_NvramBackupGroup2`
+- `c_NvramBackup`
+
+Xác định:
+
+| Group | Physical storage | Logical data | Erase function | Storage location |
+|---|---|---|---|---|
+| 1 | ... | ... | ... | ... |
+| 2 | ... | ... | ... | ... |
+| 3 | ... | ... | ... | ... |
+
+## 7.3. Truy vết erase function
+
+Với từng group:
+
+- Function `.erase` được implement ở đâu?
+- `eraseBackupData` được implement ở đâu?
+- Nó gọi driver nào?
+- Nó xóa file, partition hay flash block?
+- Có xóa metadata không?
+- Có xóa toàn bộ backup không?
+- Có kiểm tra checksum hoặc validity không?
+- Sau khi xóa, dữ liệu được đánh dấu invalid như thế nào?
+
+Vẽ sơ đồ call graph.
+
+## 7.4. Phân biệt backup storage
+
+Giải thích cho người mới:
+
+- Tại sao phải có NVRAM backup?
+- NVRAM chính và NVRAM backup khác nhau thế nào?
+- Backup group có phải các bản sao giống nhau không?
+- Tại sao phải chia thành nhiều group?
+- Khi boot, hệ thống chọn backup nào?
+- Khi NVRAM bị lỗi thì cơ chế recovery hoạt động ra sao?
+
+Chỉ trả lời các câu hỏi có thể xác minh. Nếu cần phân tích thêm các module restore/recovery, hãy truy vết chúng.
+
+---
+
+# 8. PHẦN V – NVRAM CLEAR FLAG
+
+Phân tích toàn bộ call chain:
+
+```text
+NVDF_setNvramClearFlag(True)
+    |
+    v
+APIC_SPIFlashDataManage::setFlag()
+    |
+    v
+TYPE_FlagKind_NVClear
+    |
+    v
+SPI-Flash boot flag storage
+```
+
+Đây là sơ đồ định hướng. Hãy xác minh implementation.
+
+## 8.1. Phân tích `NVDF_setNvramClearFlag()`
+
+- Function nằm ở đâu?
+- Parameter có ý nghĩa gì?
+- `True` và `False` được xử lý ra sao?
+- Nó có ghi trực tiếp vào flash không?
+- Có lock hoặc semaphore không?
+- Có kiểm tra lỗi không?
+
+## 8.2. Phân tích `APIC_SPIFlashDataManage::setFlag()`
+
+- Class này có nhiệm vụ gì?
+- `TYPE_FlagKind_NVClear` là gì?
+- Flag được lưu tại vùng nào?
+- Có cấu trúc dữ liệu chứa nhiều flag không?
+- Giá trị `0xAB` có ý nghĩa gì?
+- Vì sao chọn `0xAB`?
+- Cách kiểm tra flag khi boot.
+- Khi clear flag, giá trị được thay đổi thế nào?
+
+## 8.3. Phân tích tính an toàn
+
+Tại sao không xóa cờ ngay sau khi `dbgAllClear()` chạy?
+
+Điều gì xảy ra nếu:
+- Mất nguồn ngay sau khi xóa NVRAM?
+- Mất nguồn trong FactorySetup?
+- FactorySetup hoàn thành nhưng chưa clear flag?
+- Flag bị lỗi hoặc không ghi được?
+- Boot nhiều lần khi flag vẫn bật?
+
+Phân tích tính idempotent của quá trình initialization nếu có đủ bằng chứng.
+
+---
+
+# 9. PHẦN VI – BOOT SEQUENCE VÀ FACTORYSETUP
+
+Đây là phần cần kết nối toàn bộ chức năng `dbgAllClear` với hoạt động của hệ thống.
+
+Đọc vùng code tham khảo:
+
+`NVDG_FuncZeus.cpp:28750–28810`
+
+Không chỉ đọc đoạn code này. Phải truy vết toàn bộ call chain liên quan.
+
+## 9.1. Boot sequence
+
+Giải thích:
+
+- Hệ thống bắt đầu boot từ đâu?
+- Module NVD được khởi tạo lúc nào?
+- Function init NVRAM được gọi từ đâu?
+- FirstMark được kiểm tra ở đâu?
+- Clear Flag được đọc ở đâu?
+- Điều kiện nào dẫn đến FactorySetup?
+
+Vẽ boot flowchart.
+
+## 9.2. Phân tích FirstMark
+
+- FirstMark là gì?
+- Nó được lưu ở đâu?
+- Ai tạo ra FirstMark?
+- Ai đọc FirstMark?
+- Điều kiện mismatch được xác định thế nào?
+- Vì sao FirstMark mismatch dẫn đến FactorySetup?
+- FirstMark có quan hệ gì với NVRAM Clear Flag?
+
+Không được gộp FirstMark và NVRAM Clear Flag nếu chúng là hai cơ chế riêng biệt.
+
+## 9.3. Phân tích FactorySetup
+
+Truy vết toàn bộ implementation.
+
+Giải thích:
+- FactorySetup thực hiện những bước nào?
+- Những dữ liệu nào được tạo lại?
+- Có ghi lại default configuration không?
+- Có khởi tạo NVRAM không?
+- Có khởi tạo database không?
+- Có kiểm tra các storage trước khi khởi tạo không?
+- Có thể thất bại ở bước nào?
+- Nếu thất bại thì lần boot sau có chạy lại không?
+
+Phân biệt:
+- Clear data.
+- Factory reset.
+- Factory setup.
+- Database initialization.
+
+## 9.4. Phân tích `sc_InitFlgOfSSD`
+
+Giải thích:
+- Biến được khai báo ở đâu?
+- Kiểu dữ liệu.
+- Giá trị ON/OFF.
+- Ai thay đổi giá trị?
+- Nó biểu thị trạng thái nào?
+- Vì sao khi `NVDE_On` lại gọi `SYSF_DBMediaMapDelete()`?
+
+Truy vết toàn bộ `SYSF_DBMediaMapDelete()`.
+
+Phải xác định:
+- Database nào bị xóa?
+- Nằm trên storage nào?
+- Xóa file hay xóa record?
+- Có xóa toàn bộ database không?
+- Database được tạo lại ở đâu?
+- Có ảnh hưởng đến dữ liệu người dùng không?
+
+## 9.5. Clear Flag sau FactorySetup
+
+Giải thích chính xác thời điểm gọi:
+
+`NVDF_setNvramClearFlag(False)`
+
+Phân tích:
+- Tại sao gọi ở cuối?
+- Nếu mất điện trước đó thì sao?
+- Nếu mất điện sau đó thì sao?
+- Có bảo đảm FactorySetup chỉ chạy một lần không?
+- Có nguy cơ chạy lặp không?
+- Có nguy cơ dữ liệu chỉ được khởi tạo một phần không?
+
+---
+
+# 10. PHẦN VII – SO SÁNH BA VERSION
+
+Tạo bảng so sánh tổng hợp.
+
+| Feature | Donau3 Subset | Donau3 KM3 | Zeus KM3 |
+|---|---|---|---|
+| Parameter | | | |
+| NVRAM clear | | | |
+| SPI-Flash clear | | | |
+| SSD NVData clear | | | |
+| Backup group 1 | | | |
+| Backup group 2 | | | |
+| Backup group 3 | | | |
+| Clear Flag | | | |
+| FactorySetup | | | |
+| Database delete | | | |
+| Error handling | | | |
+
+Tiếp theo giải thích:
+
+1. Vì sao Zeus cần nhiều command hơn?
+2. Vì sao Zeus có Clear Flag?
+3. Vì sao Donau3 không có cơ chế tương tự?
+4. Có phải Donau3 không cần FactorySetup sau clear không?
+5. Những khác biệt nào do platform?
+6. Những khác biệt nào do evolution của software?
+7. Có function nào cùng tên nhưng khác implementation?
+8. Có nguy cơ nhầm lẫn khi port code giữa các platform không?
+
+Chỉ kết luận khi có bằng chứng.
+
+---
+
+# 11. PHẦN VIII – EXECUTION FLOW CHI TIẾT
+
+Hãy xây dựng ít nhất 4 loại diagram.
+
+## Diagram 1: Overall architecture
+
+Mô tả quan hệ giữa:
+- Console.
+- dbgAllClear.
+- NVD.
+- SPI-Flash.
+- SSD.
+- Backup groups.
+- Boot flag.
+- FactorySetup.
+- Database.
+
+## Diagram 2: Call graph
+
+Mô tả các function gọi nhau.
+
+Phải sử dụng tên function thực tế.
+
+## Diagram 3: Sequence diagram
+
+Mô tả trình tự:
+
+```text
+User
+  |
+  v
+VxWorks Console
+  |
+  v
+dbgAllClear
+  |
+  +----> Clear NVRAM
+  |
+  +----> Clear Backup
+  |
+  +----> Set Clear Flag
+  |
+  v
+Command Completed
+  |
+  v
+Power Cycle / Reboot
+  |
+  v
+NVD Initialization
+  |
+  v
+FactorySetup
+  |
+  v
+Database Initialization
+  |
+  v
+Clear Flag = False
+```
+
+Điều chỉnh đúng với từng version và từng command.
+
+## Diagram 4: Boot initialization flow
+
+Phân tích:
+- FirstMark check.
+- Clear flag check.
+- FactorySetup.
+- SSD initialization.
+- DB deletion.
+- Flag reset.
+
+Tất cả decision phải có điều kiện cụ thể.
+
+---
+
+# 12. PHẦN IX – FAILURE ANALYSIS VÀ RỦI RO
+
+Phân tích các tình huống lỗi thực tế.
+
+Tạo bảng:
+
+| Failure scenario | Possible cause | System state | Possible consequence | Recovery |
+|---|---|---|---|---|
+| SPI-Flash write failed | | | | |
+| SSD directory delete failed | | | | |
+| Backup erase failed | | | | |
+| Power loss during clear | | | | |
+| Power loss during FactorySetup | | | | |
+| Clear Flag write failed | | | | |
+| Database delete failed | | | | |
+| Semaphore acquisition failed | | | | |
+
+Phân tích sâu:
+
+### A. Power failure
+
+Nếu mất nguồn giữa các thao tác xóa:
+- Có thể chỉ một phần storage bị xóa không?
+- Các backup group có thể ở trạng thái không đồng nhất không?
+- Boot lần sau hệ thống xử lý như thế nào?
+
+### B. Concurrency
+
+- Có task khác truy cập NVRAM khi đang clear không?
+- Semaphore bảo vệ phạm vi nào?
+- Có bảo vệ toàn bộ quá trình clear hay chỉ một function?
+- Có nguy cơ race condition?
+- Có nguy cơ deadlock?
+
+### C. Data consistency
+
+- Có transaction không?
+- Có rollback không?
+- Có verify sau erase không?
+- Có checksum không?
+- Có cơ chế đánh dấu dữ liệu invalid không?
+
+### D. Boot recovery
+
+- Nếu FactorySetup chạy nhiều lần có an toàn không?
+- Có thể xảy ra boot loop không?
+- Có thể mất database quan trọng không?
+- Có thể hệ thống không boot được không?
+
+Không khẳng định rủi ro nếu chưa tìm được cơ sở trong code. Hãy phân biệt risk lý thuyết và risk đã xác nhận.
+
+---
+
+# 13. PHẦN X – HƯỚNG DẪN DEBUG THỰC TẾ
+
+Đưa ra quy trình debug khi cần kiểm tra `dbgAllClear`.
+
+Bao gồm:
+
+1. Cách tìm symbol `dbgAllClear`.
+2. Cách kiểm tra TORNADO.
+3. Cách xác định version đang chạy.
+4. Cách tìm command number.
+5. Cách đặt breakpoint.
+6. Cách theo dõi parameter.
+7. Cách theo dõi return code.
+8. Cách kiểm tra SPI-Flash write.
+9. Cách kiểm tra SSD NVData.
+10. Cách kiểm tra backup groups.
+11. Cách kiểm tra Clear Flag.
+12. Cách xác nhận FactorySetup đã chạy.
+13. Cách xác nhận database đã được xóa và khởi tạo lại.
+
+Nếu repository có debug macro, log API hoặc diagnostic command, hãy tìm và hướng dẫn sử dụng.
+
+**Cảnh báo:** Đây là chức năng có thể xóa dữ liệu không thể khôi phục. Không hướng dẫn chạy thử trực tiếp trên thiết bị production. Mọi thử nghiệm phải sử dụng thiết bị test hoặc môi trường có backup và được phê duyệt.
+
+---
+
+# 14. PHẦN XI – CÂU HỎI KIỂM TRA KIẾN THỨC
+
+Sau khi hoàn thành tài liệu, tạo ít nhất 25 câu hỏi kiểm tra kiến thức, chia thành 3 cấp độ.
+
+### Level 1 – Beginner
+
+Ví dụ:
+- NVRAM là gì?
+- SPI-Flash khác SSD thế nào?
+- `memset()` làm gì?
+- Tại sao phải có backup?
+
+### Level 2 – Intermediate
+
+Ví dụ:
+- Tại sao phải unlock trước khi ghi NVRAM?
+- Backup group 1 và group 3 khác nhau thế nào?
+- Clear Flag được sử dụng khi nào?
+- Tại sao không clear flag ngay sau khi chạy command?
+
+### Level 3 – Advanced
+
+Ví dụ:
+- Nếu mất nguồn sau khi xóa group 1 nhưng chưa xóa group 2 thì hệ thống sẽ ở trạng thái nào?
+- Nếu FactorySetup hoàn thành nhưng không clear flag thì điều gì xảy ra?
+- Nếu NVRAM Clear Flag bị ghi thành công nhưng SPI-Flash data clear thất bại thì boot lần sau xử lý thế nào?
+- Làm sao bảo đảm initialization có thể chạy lại an toàn?
+
+Mỗi câu hỏi phải có đáp án và giải thích.
+
+---
+
+# 15. CẤU TRÚC TÀI LIỆU ĐẦU RA
+
+Tổ chức tài liệu theo thứ tự:
+
+1. Executive Summary.
+2. Kiến thức nền tảng.
+3. Storage Architecture.
+4. VxWorks Debug Command.
+5. Donau3 Subset Analysis.
+6. Donau3 KM3 Analysis.
+7. Zeus KM3 Analysis.
+8. EraseNvramBackupArea Deep Dive.
+9. NVRAM Clear Flag Deep Dive.
+10. Boot Sequence.
+11. FactorySetup Deep Dive.
+12. Database Initialization.
+13. Version Comparison.
+14. Execution Diagrams.
+15. Failure Analysis.
+16. Debugging Guide.
+17. Knowledge Check.
+18. Glossary.
+19. Source Code Reference Index.
+
+## Yêu cầu trình bày
+
+- Giải thích bằng tiếng Việt.
+- Giữ nguyên tên function, variable, macro và file path bằng tiếng Anh.
+- Giải thích từng dòng code quan trọng.
+- Có bảng so sánh.
+- Có flowchart bằng Mermaid.
+- Có sequence diagram.
+- Có call graph.
+- Có ví dụ minh họa.
+- Có phần giải thích cho người mới.
+- Có phần phân tích chuyên sâu dành cho Embedded/BSP Engineer.
+
+Không viết nội dung chung chung hoặc lặp lại cùng một ý ở nhiều phần.
+
+---
+
+# 16. QUY TẮC QUAN TRỌNG NHẤT
+
+1. Phải đọc source code trước khi kết luận.
+2. Không bỏ qua các function trung gian.
+3. Không chỉ phân tích function chính.
+4. Không được nhầm lẫn giữa logical deletion và physical erase.
+5. Không được nhầm lẫn NVRAM, SPI-Flash, FlashROM, eMMC và SSD.
+6. Không được gộp ba version thành một flow chung.
+7. Phải phân tích đầy đủ cả command 0–5 của Zeus.
+8. Phải truy vết từ `dbgAllClear` đến tầng storage driver nếu source cho phép.
+9. Phải truy vết ngược từ boot initialization đến nơi gọi FactorySetup.
+10. Phải chỉ rõ những điều chưa thể xác minh.
+11. Không được tự suy diễn hardware behavior từ tên function.
+12. Mỗi flowchart phải phản ánh đúng source code, không phải flow giả định.
+
+**ĐẶC BIỆT:**
+
+Khi phân tích một function, hãy sử dụng cấu trúc:
+
+```text
+Function name
+    |
+    +-- Input parameters
+    |
+    +-- Preconditions
+    |
+    +-- Internal execution
+    |       |
+    |       +-- Function A
+    |       +-- Function B
+    |       +-- Function C
+    |
+    +-- Hardware / Storage impact
+    |
+    +-- Return value
+    |
+    +-- Error handling
+    |
+    +-- Side effects
+    |
+    +-- Callers / Callbacks
+```
+
+Hãy giải thích từ đơn giản đến phức tạp.
+
+Đừng giả định người đọc đã biết VxWorks, NVRAM, SPI-Flash hoặc cơ chế boot initialization.
+
+**Mục tiêu cuối cùng:** Sau khi đọc tài liệu, người đọc phải có thể tự mình giải thích toàn bộ vòng đời của `dbgAllClear`: từ lúc nhập command trên VxWorks console, quá trình xóa từng vùng storage, cơ chế backup, việc đặt Clear Flag, cho đến khi thiết bị reboot và thực hiện FactorySetup để đưa hệ thống về trạng thái khởi tạo.

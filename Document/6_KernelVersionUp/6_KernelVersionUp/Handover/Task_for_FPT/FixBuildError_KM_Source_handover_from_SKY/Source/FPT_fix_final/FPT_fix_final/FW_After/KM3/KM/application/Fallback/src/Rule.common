@@ -1,0 +1,81 @@
+
+####### Compiler, tools and options
+CC            = $(FBP_CROSSPREFIX)-linux-gcc
+CXX           = $(FBP_CROSSPREFIX)-linux-g++
+DEFINES       = -DLINUX -D$(FBP_ATATYPE) -DQT_NO_DEBUG -DQT_CORE_LIB -DQT_PANEL -DFBP_BUILD
+CFLAGS        = -pipe -O2 -Wall -W -D_REENTRANT $(DEFINES) -fPIC -fpermissive
+CXXFLAGS      = -pipe -O2 -Wall -W -D_REENTRANT $(DEFINES) -fPIC -fpermissive
+ifeq ($(FBP_CROSSPREFIX),mb86s72)
+CFLAGS       += -funwind-tables -fno-aggressive-loop-optimizations
+CXXFLAGS     += -funwind-tables -fno-aggressive-loop-optimizations
+endif
+INCPATH       = -I$(FBP_QTDIR)/mkspecs/linux-$(FBP_MPCTYPE)-g++ -I. -I$(FBP_QTDIR)/include/QtCore -I$(FBP_QTDIR)/include/QtNetwork -I$(FBP_QTDIR)/include/QtGui -I$(FBP_QTDIR)/include/QtWidgets -I$(FBP_QTDIR)/include -I$(FBP_SRCDIR)/../../divlib/client/Proxy -I$(FBP_SRCDIR)/../../api -I$(FBP_SRCDIR)/../../mfp/lib -I$(WKB_SRCDIR)/WebKitBrowser -I$(WKB_SRCDIR)/WebKitBrowser/public
+LINK          = $(FBP_CROSSPREFIX)-linux-g++
+LIBS          = $(SUBLIBS) -L$(FBP_QTDIR)/lib -L$(FBP_ICUDIR)/lib -lrt -L$(FBP_KMFWLIB) -lQt5Gui -lQt5Core -lQt5Widgets -lpthread -lrecover
+AR            = $(FBP_CROSSPREFIX)-linux-ar cqs
+RANLIB        = $(FBP_CROSSPREFIX)-linux-ranlib
+QMAKE         = $(FBP_QTDIR)/bin/qmake
+TAR           = tar -cf
+COMPRESS      = gzip -9f
+COPY          = cp -f
+SED           = sed
+COPY_FILE     = $(COPY)
+COPY_DIR      = $(COPY) -r
+STRIP         = $(FBP_CROSSPREFIX)-linux-strip
+INSTALL_FILE  = install -m 644 -p
+INSTALL_DIR   = $(COPY_DIR)
+INSTALL_PROGRAM = install -m 755 -p
+DEL_FILE      = rm -f
+SYMLINK       = ln -f -s
+DEL_DIR       = rmdir
+MOVE          = mv -f
+CHK_DIR_EXISTS= test -d
+MKDIR         = mkdir -p
+
+ifeq ($(FBP_CROSSPREFIX),mb86s73)
+CFLAGS        += -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mabi=aapcs-linux -mfloat-abi=hard -mlong-calls -mlittle-endian -fwrapv -marm
+CXXFLAGS      += -pipe -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mabi=aapcs-linux -mfloat-abi=hard -mlong-calls -mlittle-endian -fwrapv -marm
+endif
+
+ifeq ($(FBP_CROSSPREFIX),i386)
+CFLAGS        += -unwind-tables
+CXXFLAGS      += -unwind-tables
+endif
+
+ifeq ($(FBP_CROSSPREFIX),mv62x0)
+CFLAGS        += -mcpu=cortex-a7 -mthumb-interwork -mfloat-abi=hard -mfpu=vfpv4-d16 -mthumb -mlong-calls -mlittle-endian -funwind-tables -mtls-dialect=gnu
+CXXFLAGS      += -mcpu=cortex-a7 -mthumb-interwork -mfloat-abi=hard -mfpu=vfpv4-d16 -mthumb -mlong-calls -mlittle-endian -funwind-tables -mtls-dialect=gnu
+endif
+
+ifeq ($(ADDRESS_SANITIZER),YES)
+CFLAGS       += -funwind-tables -fno-omit-frame-pointer -fsanitize-recover=all -fsanitize=address 
+CXXFLAGS     += -funwind-tables -fno-omit-frame-pointer -fsanitize-recover=all -fsanitize=address 
+endif
+
+####### Implicit rules
+.SUFFIXES: .o .c .cpp .cc .cxx .C
+.cpp.o:
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o "$@" "$<"
+.cc.o:
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o "$@" "$<"
+.cxx.o:
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o "$@" "$<"
+.C.o:
+	$(CC) -c $(CFLAGS) $(INCPATH) -o "$@" "$<"
+.c.o:
+	$(CC) -c $(CFLAGS) $(INCPATH) -o "$@" "$<"
+
+
+####### Create moc
+moc_%.cpp : %.h
+	$(FBP_QTDIR)/bin/moc $(DEFINES) $(INCPATH) $< -o $(OBJECTS_DIR)$@
+
+####### Compile
+qrc_%.o: qrc_%.cpp
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o $(OBJECTS_DIR)$@ $(OBJECTS_DIR)$<
+
+moc_%.o: moc_%.cpp
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o $(OBJECTS_DIR)$@ $(OBJECTS_DIR)$<
+
+%.o: %.cpp
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o $(OBJECTS_DIR)$@ $<

@@ -1,0 +1,31 @@
+aws環境で実施。管理者権限がないとツールのインストールができないので
+
+1. リポジトリのクローン
+git clone http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+
+2. バージョンの切り替え v5.10.y
+git checkout origin/linux-5.10.y
+※このときの最新は5.10.202だった
+   
+3. ツールのバージョン確認と不足ツールのインストール
+※ここの作業は恐らくやらなくてもOK
+Documentation/process/changes.rst
+Minimal requirements to compile the Kernel
+カーネルをコンパイルするのに最低限必要なもの。
+
+v4.x以降と書かれているのでv5.10.xに必要なものも同じ。基本的にMFP用環境が使用できるはず。
+一応「Current Minimal Requirements」にかかれているがインストールされていなかったものはインストールした。
+バージョンは全て問題なし。
+   
+4. ビルド
+4.1 .configの用意
+make ARCH=arm64 CROSS_COMPILE=s800-linux- defconfig
+最初から入っているdefconfigを使用している。
+arのバージョンが取得できずにエラーになる。s800-linux-ar --versionで見るとバージョンの後に文字が追加されている。それを参照してエラーになる。
+
+4.2 ビルド
+make ARCH=arm64 CROSS_COMPILE=s800-linux- -j4
+アセンブラソースでエラーになる。アセンブラで使用できない表記になっているところがあるので。
+
+ビルドが完了するとarch/arm64/boot/Imageが生成される
+ビルドエラーを修正したものはパッチを用意した(a.patch)

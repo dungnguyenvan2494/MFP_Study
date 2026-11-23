@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OP_BTS-71452 Root Cause</title>
+<style>
+:root{
+  --bg:#f7f7f5; --surface:#ffffff; --surface-2:#f1f1ee; --text:#1d1d1b; --muted:#5f5f5a;
+  --border:#dcdcd6; --accent:#2f5fb3; --ok:#2e7d4f; --ng:#c2362b; --warn:#a86a00;
+  --code-bg:#f3f3ef; --mark:#fff2c6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161615; --surface:#1f1f1d; --surface-2:#272725; --text:#ececE8; --muted:#a3a39c;
+    --border:#3a3a37; --accent:#7fa6ee; --ok:#5cc48a; --ng:#ff7a6e; --warn:#e0a640;
+    --code-bg:#262624; --mark:#4a3f16;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161615; --surface:#1f1f1d; --surface-2:#272725; --text:#ececE8; --muted:#a3a39c;
+  --border:#3a3a37; --accent:#7fa6ee; --ok:#5cc48a; --ng:#ff7a6e; --warn:#e0a640;
+  --code-bg:#262624; --mark:#4a3f16;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI","Noto Sans",Roboto,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:32px 16px 64px}
+header{border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:24px}
+.kicker{color:var(--muted);font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+h1{font-size:26px;line-height:1.3;margin:6px 0 8px}
+h2{font-size:20px;margin:36px 0 12px;padding-top:8px;border-top:1px solid var(--border)}
+h3{font-size:16px;margin:22px 0 8px}
+p{margin:8px 0}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+.chip.ng{color:var(--ng);border-color:var(--ng)}
+.tldr{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:14px 18px;margin:18px 0}
+.tldr ul{margin:6px 0;padding-left:20px}
+.tldr li{margin:5px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin:12px 0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:720px){.grid3{grid-template-columns:1fr}}
+.layer h3{margin-top:4px}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--border);margin-right:6px}
+.tablewrap{overflow-x:auto;margin:10px 0;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--surface-2);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.bad td{background:color-mix(in srgb, var(--ng) 10%, transparent)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);padding:1px 5px;border-radius:4px;word-break:break-word}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:13px;line-height:1.5;margin:10px 0}
+pre code{background:none;padding:0;font-size:inherit}
+pre .hl{background:var(--mark);display:inline-block;width:100%}
+.ok{color:var(--ok);font-weight:600}.ng{color:var(--ng);font-weight:600}.warn{color:var(--warn);font-weight:600}
+.conf{font-size:13.5px;color:var(--muted)}
+figure{margin:14px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+svg text{fill:var(--muted);font-size:11px;font-family:inherit}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:6px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+ol,ul{padding-left:22px}
+li{margin:4px 0}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13.5px;margin:10px 0}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px}
+.step.bad{border-color:var(--ng);color:var(--ng);font-weight:600}
+.arrow{color:var(--muted)}
+footer{margin-top:40px;padding-top:14px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Báo cáo phân tích root cause · IT6_3.0 · EagleLBK (μSD 8GB)</div>
+  <h1>OP_BTS-71452: Cập nhật FW lặp lại qua WWRSPF bị thất bại và máy không khởi động được</h1>
+  <div class="meta">
+    <span class="chip">FW F00-W4(02)</span>
+    <span class="chip">WWRSPF 3.8.0</span>
+    <span class="chip">Tần suất 1/70</span>
+    <span class="chip ng">Mức nghiêm trọng A (không khởi động)</span>
+    <span class="chip">Log: OP_BTS-71452.log, OP_BTS-71452_1030.log</span>
+  </div>
+</header>
+
+<div class="tldr">
+  <strong>Kết luận ngắn</strong>
+  <ul>
+    <li><strong>Hiện tượng ② (dừng ở 25%) là lỗi chính.</strong> Khi MFP reboot vào chế độ IISW update, file <code>irfs.ubt</code> trên phân vùng <code>kmsda10</code> (μSD) chỉ còn <strong>0 byte</strong> trên thẻ.</li>
+    <li><strong>Nguyên nhân gốc: luồng IISW update "commit" không an toàn.</strong> Cờ yêu cầu update (<code>NWDLExec</code>) nằm ở bộ nhớ riêng và luôn được ghi bền, nhưng các file boot trên μSD không được kiểm tra xem đã ghi xong xuống thẻ chưa trước khi reboot.</li>
+    <li><strong>U-Boot không kiểm tra file boot trước khi dùng</strong> và không có đường lùi về FW cũ, nên chỉ cần hỏng một lần là máy treo vĩnh viễn cho đến khi update lại bằng USB.</li>
+    <li><strong>Hiện tượng ① (error 524337) là lỗi riêng, nhẹ hơn.</strong> Log console không đủ để kết luận nguyên nhân.</li>
+  </ul>
+</div>
+
+<h2>1. Chuỗi sự kiện của hiện tượng ②</h2>
+<p>Log mới nhất (<code>OP_BTS-71452_1030.log</code>, lần tái hiện 10/30) cho đúng cùng mẫu lỗi với lần 67 (10/28 20:37).</p>
+
+<div class="flow">
+  <span class="step">mkfs.fat kmsda10</span><span class="arrow">→</span>
+  <span class="step">tar xfm → /mnt</span><span class="arrow">→</span>
+  <span class="step">grityinte SHA256</span><span class="arrow">→</span>
+  <span class="step">umount</span><span class="arrow">→</span>
+  <span class="step">set NWDLExec</span><span class="arrow">→</span>
+  <span class="step">reboot -f</span><span class="arrow">→</span>
+  <span class="step">U-Boot DEF_UPDATE</span><span class="arrow">→</span>
+  <span class="step bad">fatload 0:A irfs.ubt = 0 byte</span>
+</div>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Thời điểm (10/30)</th><th>Sự kiện trong log</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td class="num">23:12:33</td><td><code>mkfs.fat 4.2</code> trên <code>/dev/kmsda10</code></td><td><code>prepareIISWUpdate</code> format lại vùng IISW</td></tr>
+<tr><td class="num">23:12–23:14</td><td><code>tar xfm ... -C /mnt</code></td><td>Giải nén gói FW, gồm Image, emu800.dtb, irfs.ubt, INDEX</td></tr>
+<tr><td class="num">23:14:00–07</td><td><code>[FWSV] CheckSha256 ... SUCCESS</code></td><td>Kiểm tra hash, nhưng <strong>Image, dtb và irfs.ubt không có trong danh sách</strong></td></tr>
+<tr><td class="num">23:14:07.9</td><td><code>[BootJig] BootJig file exists.</code></td><td>Chuẩn bị xong</td></tr>
+<tr><td class="num">23:14:25</td><td><code>* spawn reboot task. * Reboot after 60s.</code></td><td>Thực tế reboot sau <strong>17 giây</strong>, không phải 60 giây</td></tr>
+<tr><td class="num">23:14:42.6</td><td><code>reboot: Restarting system</code></td><td></td></tr>
+<tr><td class="num">23:14:56</td><td><code>IISW download boot.</code></td><td>U-Boot đi theo nhánh <code>DEF_UPDATE</code></td></tr>
+<tr class="bad"><td class="num">23:14:57</td><td><code>reading irfs.ubt</code> → <code>0 bytes read</code> → <code>Wrong Ramdisk Image Format</code> → <code>Marvell&gt;&gt;</code></td><td>Dừng ở prompt U-Boot</td></tr>
+</tbody></table></div>
+
+<pre><code>[2026-10-30 23:14:56.232] reading Image
+[2026-10-30 23:14:57.055] 15727104 bytes read in 822 ms (18.2 MiB/s)
+[2026-10-30 23:14:57.072] reading emu800.dtb
+[2026-10-30 23:14:57.103] 28461 bytes read in 25 ms (1.1 MiB/s)
+[2026-10-30 23:14:57.119] reading irfs.ubt
+<span class="hl">[2026-10-30 23:14:57.134] 0 bytes read in 15 ms (0 Bytes/s)</span>
+<span class="hl">[2026-10-30 23:14:57.166] Wrong Ramdisk Image Format</span>
+[2026-10-30 23:14:57.166] Ramdisk image is corrupt or invalid
+[2026-10-30 23:14:57.166] Marvell&gt;&gt;</code></pre>
+
+<h3>Đối chiếu với source</h3>
+<ul>
+  <li>Ở chế độ update, U-Boot đọc Image, dtb và irfs.ubt từ <strong><code>mmc 0:A</code> = kmsda10</strong>: <code>armada8k.h:272</code> (<code>CONFIG_IISWCMD_UPDATE_ENV ... "0:A"</code>), dùng ở <code>main.c:1990</code>. Đây chính là phân vùng vừa được format và giải nén trong cùng chu kỳ.</li>
+  <li>Nhánh <code>DEF_UPDATE</code> được bật bởi cờ <code>NWDLExec</code> = 4/7/8/9 (<code>main.c:602-610</code>). Cờ này nằm ở bộ nhớ riêng, không nằm trên μSD.</li>
+  <li>Nhánh này <strong>không có bước kiểm tra nào</strong> (cả kích thước lẫn hash). Hàm <code>fsload_hash_check()</code> đã có sẵn (<code>machine_setup.c:568</code>) nhưng chỉ được gọi ở chế độ HW-check (<code>machine_setup.c:649</code>).</li>
+  <li><code>kmsda10</code> là vùng dùng chung giữa IISW và snapshot SuperWarp (<code>THRC_PowerManager.cpp:4771</code>, <code>main.c:2301</code>), nên bị <code>mkfs</code> lại ở mỗi chu kỳ update.</li>
+</ul>
+
+<div class="card">
+  <strong>Vì sao tắt/bật nguồn không phục hồi được?</strong>
+  <p>Cờ <code>NWDLExec</code> vẫn còn, nên lần khởi động nào U-Boot cũng vào lại <code>DEF_UPDATE</code>, đọc lại đúng file <code>irfs.ubt</code> 0 byte và dừng. FW cũ ở kmsda5/kmsda7 vẫn còn nguyên, vì IISW chưa chạy được bước nào. Đó là lý do update qua USB phục hồi được máy.</p>
+</div>
+
+<h2>2. Bằng chứng định lượng: lỗi liên quan đến thời gian</h2>
+<p>Đo toàn bộ <strong>147 chu kỳ update</strong> trong 2 file log, tính khoảng thời gian từ lúc <code>mkfs</code> kmsda10 đến lúc <code>reboot: Restarting system</code>.</p>
+
+<figure>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--ok)"></span>irfs.ubt = 2218120 byte (OK)</span>
+    <span><span class="dot" style="background:var(--ng)"></span>irfs.ubt = 0 byte (NG)</span>
+  </div>
+  <div id="chart"></div>
+  <figcaption>Mỗi chấm là một chu kỳ update. Trục ngang: số giây từ mkfs kmsda10 đến reboot. Hai lần NG là hai chu kỳ có khoảng thời gian ngắn nhất, tách hẳn khỏi 145 chu kỳ OK (ngắn nhất 199,1 giây).</figcaption>
+</figure>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Thời gian mkfs → reboot</th><th>Số chu kỳ</th><th>irfs.ubt</th></tr></thead>
+<tbody>
+<tr class="bad"><td class="num">129,3 giây (10/30 23:14)</td><td>1</td><td class="ng">0 byte</td></tr>
+<tr class="bad"><td class="num">154,7 giây (lần 67, 10/28 20:37)</td><td>1</td><td class="ng">0 byte</td></tr>
+<tr><td class="num">≥ 199,1 giây</td><td>145</td><td class="ok">2218120 byte</td></tr>
+</tbody></table></div>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Chu kỳ</th><th>mkfs → prepare xong (tar + check)</th><th>prepare → reboot</th><th>Tổng</th></tr></thead>
+<tbody id="tbl"></tbody>
+</table></div>
+
+<ul>
+  <li><strong>Hai lần lỗi đều nhanh bất thường ở cả hai pha:</strong> giải nén nhanh (94 và 117 giây) và chờ reboot cũng ngắn (17 và 19 giây). Bình thường hai pha bù trừ nhau, nên tổng thời gian thường ở mức 200–280 giây.</li>
+  <li>Nhìn riêng khoảng "prepare → reboot" thì không phân biệt được (có chu kỳ OK chỉ 30 giây). Yếu tố quyết định là <strong>tuổi của dữ liệu FAT vừa ghi tính đến lúc reboot</strong>.</li>
+  <li>Log không có lỗi I/O, mmc hay FAT nào: kernel tin rằng mọi lệnh ghi đều thành công.</li>
+  <li>Thẻ là SanDisk <code>SL08G</code>. Kernel 5.10 không bật write-cache cho SD (<code>block.c:2479</code> chỉ áp dụng cho eMMC). Khi reboot, <code>mmc_sd_suspend</code> deselect rồi <code>mmc_power_off</code> ngay (<code>sd.c:1214-1230</code>, <code>.shutdown</code> ở <code>sd.c:1333</code>), không có power-off notification hay thời gian chờ. Cấu hình SSD thì có bước <code>NVMe shutdown</code> riêng. Điều này giải thích vì sao lỗi <strong>chỉ thấy ở cấu hình μSD</strong>.</li>
+</ul>
+
+<div class="card">
+  <strong>Cơ chế suy ra</strong>
+  <p>Entry <code>irfs.ubt</code> trong thư mục đã lên thẻ, nhưng phần cập nhật kích thước và chuỗi cluster (metadata FAT ghi sau cùng) chưa được lưu bền khi thẻ bị cắt nguồn lúc reboot. Đây là dấu hiệu kinh điển của FAT: file tồn tại nhưng size = 0.</p>
+  <p class="conf"><span class="ok">Chắc chắn cao:</span> kmsda10 đang chứa irfs.ubt 0 byte, U-Boot không kiểm tra file, và mối liên hệ với thời gian.<br>
+  <span class="warn">Chắc chắn trung bình:</span> chưa tách được dữ liệu mất ở page cache của Linux hay ở bên trong thẻ μSD (FTL). Muốn tách cần dump kmsda10 lúc lỗi (xem mục 6).</p>
+</div>
+
+<h2>3. Hiện tượng ① và log watchdog</h2>
+<ul>
+  <li><strong>Lần 44 không cùng lỗi với lần 67.</strong> Trong khoảng 07:03–07:12 không có <code>mkfs</code>, <code>CheckSha256</code> hay <code>prepareIISWUpdate</code>. Nghĩa là quá trình thất bại ở giai đoạn download: <code>executeDownload</code> trả về FALSE nên bị gán 524337 (<code>SYSC_IISWClient.cpp:9216-9224</code>), trước khi đụng tới kmsda10. MFP giữ FW cũ và chạy tiếp, nên lỗi này nhẹ.</li>
+  <li>Ticket đến khoảng 6 phút sau lần boot của update 43. Có thể ticket đến khi hệ thống chưa sẵn sàng, nhưng đây chỉ là <em>giả thuyết</em>: cần SysLog có bật debug cho IISWClient mới xác nhận được.</li>
+  <li><strong>Log <code>watchdog reboot</code> mà FPT nêu là một manh mối sai.</strong> Nó xuất hiện 12 lần trong 2 file log, luôn sau <code>DocInit waiting.[120]</code>, kể cả trong các giai đoạn update toàn thành công. Lần 10:34 xảy ra ngay sau khi người thao tác tắt Main SW lúc 10:32:30 (<code>MainSwOFF CallBack</code>, <code>PowerOff Syncing filesystems</code>). Lỗi watchdog có thể đáng theo dõi riêng, nhưng không phải nguyên nhân của ticket này.</li>
+</ul>
+
+<h2>4. Đề xuất solution (3 lớp)</h2>
+<div class="grid3">
+  <div class="card layer">
+    <h3><span class="tag">A</span>Thread: fix gốc</h3>
+    <p><code>CP_HDDTrans::prepareIISWUpdate</code> và nơi gọi nó: ghi bền và đọc lại kiểm tra trước khi bật cờ IISW.</p>
+    <ol>
+      <li>Sau khi giải nén: <code>sync()</code>. Gọi <code>umount2</code> <strong>không dùng <code>MNT_FORCE</code></strong> (vô tác dụng với vfat) và kiểm tra kết quả.</li>
+      <li>Đọc lại từ thẻ: <code>ioctl(BLKFLSBUF)</code> trên <code>/dev/kmsda10</code> để bỏ cache, mount read-only, kiểm tra size &gt; 0 và SHA256 của Image, emu800.dtb, irfs.ubt so với <code>@KN1</code>, <code>@DB1</code>, <code>@IUB</code> trong INDEX. Hoặc thêm 3 file này vào danh sách của <code>grityinte</code>.</li>
+      <li>Chỉ khi OK mới set <code>NWDLExec</code> và reboot. Nếu NG: giải nén lại một lần, vẫn NG thì báo lỗi lên WWRSPF và giữ FW cũ.</li>
+    </ol>
+  </div>
+  <div class="card layer">
+    <h3><span class="tag">B</span>Đường reboot</h3>
+    <p><code>SYSC_SystemServiceFunctionColor::reboot</code> / BSP.</p>
+    <ul>
+      <li>Trước <code>system("reboot -f")</code>: <code>sync()</code>, <code>BLKFLSBUF</code> trên <code>/dev/kmsda</code>, chờ khoảng 1–2 giây cho μSD.</li>
+      <li>Phía kernel: kiểm tra thẻ hết busy (CMD13) trước <code>mmc_power_off</code> ở shutdown. Nếu thẻ hỗ trợ, backport cache flush và power-off notification cho SD (có từ kernel 5.14).</li>
+    </ul>
+  </div>
+  <div class="card layer">
+    <h3><span class="tag">C</span>U-Boot: fail-safe</h3>
+    <p>BSP, nhánh <code>DEF_UPDATE</code>.</p>
+    <ul>
+      <li>Dùng lại <code>get_hash_value_from_INDEX</code> / <code>get_hash_value_from_images</code> để kiểm tra 3 file trên <code>0:A</code> so với INDEX trên <code>0:A</code> (đã được đọc sẵn để kiểm tra TYP).</li>
+      <li>Nếu NG: xóa cờ <code>NWDLExec</code>, in lỗi, <strong>boot bình thường từ kmsda5</strong> vào FW cũ còn nguyên vẹn. MFP sau đó báo lỗi update lên WWRSPF thay vì treo máy.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>5. Vì sao chọn giải pháp này</h2>
+<ul>
+  <li><strong>Bản chất là commit hai pha bị sai thứ tự.</strong> "Marker" (<code>NWDLExec</code>) thì bền, còn "payload" (file trên μSD) thì chưa được xác nhận. Cách chuẩn: payload phải được xác nhận bền trước rồi mới bật marker (A), và bên đọc phải kiểm tra trước khi dùng (C).</li>
+  <li><strong>A xử lý được dù dữ liệu mất ở page cache hay ở thẻ:</strong> đọc lại sau khi bỏ cache sẽ phát hiện mọi trường hợp mất dữ liệu phía Linux. Hạn chế: nếu thẻ có cache bên trong thì đọc lại vẫn có thể trả về dữ liệu từ cache của thẻ, vì vậy cần thêm B.</li>
+  <li><strong>Chỉ <code>fsync</code> là không đủ:</strong> với SD trên kernel 5.10, <code>blkdev_issue_flush</code> không làm gì vì thẻ không được khai báo có write-cache.</li>
+  <li><strong>Chỉ tăng thời gian chờ trước reboot cũng không đủ.</strong> Cách này giảm xác suất lỗi nhưng vẫn phụ thuộc thời gian và tình trạng thẻ (thẻ cũ đi, nhiệt độ). Thêm nữa, log ghi "Reboot after 60s" nhưng thực tế máy reboot sau khoảng 17 giây: trong <code>reboot()</code>, <code>system("reboot -f")</code> chạy chỉ khoảng 1 giây sau <code>bt_gdb</code>, còn task chờ 60 giây chỉ là dự phòng (<code>SYSC_SystemServiceFunctionColor.cpp:176-216</code>).</li>
+  <li><strong>C bắt buộc phải có, kể cả khi đã làm A và B.</strong> Ngoài hiện trường vẫn có tình huống phần mềm không chặn được: người dùng tắt Main SW đúng lúc đang chờ reboot, hoặc μSD bị hỏng. C biến hậu quả "không khởi động được" (mức A) thành "update thất bại, update lại được". Chi phí nhỏ: SHA256 khoảng 18MB ở U-Boot, cỡ dưới 1 giây.</li>
+</ul>
+
+<h2>6. Cách xác nhận</h2>
+<ol>
+  <li><strong>Xác nhận cơ chế:</strong> sửa tạm để reboot ngay sau <code>prepare</code>; kỳ vọng tỷ lệ tái hiện tăng mạnh. Khi lỗi, dump <code>kmsda10</code>, xem entry <code>irfs.ubt</code> có size 0 không và chuỗi cluster trong FAT đã được cấp chưa. Kết quả cho biết dữ liệu mất ở Linux hay ở thẻ.</li>
+  <li><strong>Ghi log phục vụ điều tra:</strong> sau <code>umount</code>, ghi kích thước của 3 file boot (đọc lại từ thẻ).</li>
+  <li><strong>Nghiệm thu:</strong> chạy tiếp ≥ 200 chu kỳ, kèm chế độ ép reboot sớm, không được xuất hiện 0 byte. Riêng C: cố ý làm hỏng <code>irfs.ubt</code> (như kịch bản OP_BTS-66449/66450) và xác nhận máy quay về FW cũ rồi báo lỗi lên WWRSPF.</li>
+</ol>
+
+<div class="card">
+  <strong>Lưu ý</strong>
+  <ul>
+    <li>Source trong repo cũ hơn FW trong log: chưa có overload <code>prepareIISWUpdate(const char*, uchar)</code> và đoạn BootJig ở dòng 17460. Cần đối chiếu lại số dòng trên bản <code>IT6_3.0.0_20261026_F00-W4-02</code>.</li>
+    <li>Phân công: A thuộc Thread, B và C thuộc BSP. Đề xuất của FPT chỉ giao cho BSP là đúng một phần.</li>
+  </ul>
+</div>
+
+<footer>
+  Nguồn: log console đính kèm ticket (10/27–10/30), source trong repo Source_MFP (BootROM, Kernel, IT6_Controller). Số liệu thời gian được tính từ timestamp của logger serial.
+</footer>
+</div>
+
+<script>
+const DATA=[[1,1,136.6,81.2,217.8,2218120],[1,2,142.9,69.6,212.5,2218120],[1,3,134.8,86.0,220.8,2218120],[1,4,138.2,69.5,207.7,2218120],[1,5,134.0,81.2,215.2,2218120],[1,6,139.5,73.7,213.1,2218120],[1,7,128.4,84.0,212.4,2218120],[1,8,139.4,74.8,214.2,2218120],[1,9,137.7,78.5,216.2,2218120],[1,10,140.8,74.0,214.7,2218120],[1,11,141.5,73.1,214.6,2218120],[1,12,134.1,79.5,213.6,2218120],[1,13,139.4,76.9,216.3,2218120],[1,14,143.4,83.3,226.6,2218120],[1,15,86.0,191.2,277.2,2218120],[1,16,109.1,175.9,285.1,2218120],[1,17,123.1,85.7,208.8,2218120],[1,18,143.6,84.3,227.9,2218120],[1,19,88.0,190.9,278.9,2218120],[1,20,98.0,204.1,302.1,2218120],[1,21,94.8,184.8,279.6,2218120],[1,22,150.9,77.1,228.1,2218120],[1,23,101.3,184.4,285.7,2218120],[1,24,156.8,74.2,230.9,2218120],[1,25,213.2,39.6,252.8,2218120],[1,26,94.0,181.7,275.7,2218120],[1,27,143.6,82.9,226.6,2218120],[1,28,123.8,187.1,310.9,2218120],[1,29,93.3,197.9,291.3,2218120],[1,30,103.5,195.4,298.8,2218120],[1,31,202.8,45.7,248.5,2218120],[1,32,95.7,201.1,296.8,2218120],[1,33,205.3,51.0,256.3,2218120],[1,34,148.2,85.8,234.0,2218120],[1,35,194.8,54.2,249.0,2218120],[1,36,103.2,197.8,301.1,2218120],[1,37,90.3,205.7,296.0,2218120],[1,38,93.4,204.2,297.5,2218120],[1,39,92.3,209.5,301.8,2218120],[1,40,114.3,201.8,316.2,2218120],[1,41,163.1,70.7,233.8,2218120],[1,42,196.1,45.9,242.0,2218120],[1,43,95.4,206.3,301.8,2218120],[1,44,191.3,53.7,245.0,2218120],[1,45,120.4,199.9,320.3,2218120],[1,46,149.4,82.9,232.3,2218120],[1,47,212.2,30.4,242.6,2218120],[1,48,202.2,44.9,247.1,2218120],[1,49,202.1,43.0,245.2,2218120],[1,50,175.0,59.0,234.0,2218120],[1,51,154.3,88.2,242.5,2218120],[1,52,162.2,79.5,241.8,2218120],[1,53,163.3,156.7,320.0,2218120],[1,54,195.6,72.0,267.5,2218120],[1,55,161.9,67.7,229.6,2218120],[1,56,153.0,98.4,251.4,2218120],[1,57,113.4,194.8,308.1,2218120],[1,58,221.8,41.1,262.8,2218120],[1,59,173.9,79.6,253.5,2218120],[1,60,197.6,44.2,241.8,2218120],[1,61,155.3,81.2,236.5,2218120],[1,62,159.9,79.6,239.4,2218120],[1,63,166.4,74.1,240.5,2218120],[1,64,159.9,71.8,231.8,2218120],[1,65,93.3,194.8,288.1,2218120],[1,66,117.5,37.1,154.7,0],[2,1,143.4,74.7,218.2,2218120],[2,2,133.1,154.1,287.2,2218120],[2,3,135.5,76.2,211.7,2218120],[2,4,140.9,96.9,237.8,2218120],[2,5,93.7,181.9,275.6,2218120],[2,6,134.9,74.8,209.7,2218120],[2,7,145.4,66.6,212.0,2218120],[2,8,145.4,68.7,214.0,2218120],[2,9,89.6,120.8,210.4,2218120],[2,10,144.4,67.7,212.1,2218120],[2,11,133.4,74.8,208.2,2218120],[2,12,135.3,76.8,212.0,2218120],[2,13,159.7,61.2,220.9,2218120],[2,14,142.5,88.7,231.2,2218120],[2,15,139.9,68.3,208.3,2218120],[2,16,138.0,72.3,210.3,2218120],[2,17,90.2,110.2,200.3,2218120],[2,18,179.4,36.3,215.6,2218120],[2,19,130.2,77.0,207.2,2218120],[2,20,139.4,69.9,209.3,2218120],[2,21,128.9,74.8,203.7,2218120],[2,22,130.8,77.2,208.0,2218120],[2,23,128.2,80.5,208.7,2218120],[2,24,140.7,74.1,214.8,2218120],[2,25,129.1,84.2,213.3,2218120],[2,26,135.1,76.1,211.2,2218120],[2,27,142.3,81.1,223.4,2218120],[2,28,136.6,71.7,208.3,2218120],[2,29,104.5,172.9,277.4,2218120],[2,30,138.0,77.0,215.0,2218120],[2,31,139.2,71.8,211.0,2218120],[2,32,124.7,74.4,199.1,2218120],[2,33,179.2,38.4,217.5,2218120],[2,34,90.2,122.6,212.8,2218120],[2,35,126.8,81.8,208.6,2218120],[2,36,132.1,73.1,205.2,2218120],[2,37,154.7,79.6,234.3,2218120],[2,38,129.0,91.5,220.5,2218120],[2,39,137.9,156.8,294.7,2218120],[2,40,161.5,82.7,244.3,2218120],[2,41,141.9,84.4,226.3,2218120],[2,42,93.5,127.6,221.2,2218120],[2,43,94.8,205.6,300.3,2218120],[2,44,132.4,99.1,231.5,2218120],[2,45,141.3,86.3,227.6,2218120],[2,46,149.3,84.6,233.8,2218120],[2,47,88.8,204.7,293.6,2218120],[2,48,182.5,64.8,247.3,2218120],[2,49,167.5,67.5,235.0,2218120],[2,50,142.4,88.4,230.9,2218120],[2,51,206.0,47.0,253.0,2218120],[2,52,92.7,197.4,290.1,2218120],[2,53,169.7,68.4,238.2,2218120],[2,54,159.5,75.0,234.4,2218120],[2,55,199.9,45.4,245.2,2218120],[2,56,146.5,152.3,298.8,2218120],[2,57,150.2,97.4,247.6,2218120],[2,58,87.2,211.1,298.3,2218120],[2,59,90.6,212.2,302.7,2218120],[2,60,150.7,80.7,231.3,2218120],[2,61,202.0,40.7,242.6,2218120],[2,62,187.8,62.2,250.0,2218120],[2,63,192.0,49.0,241.0,2218120],[2,64,153.4,79.7,233.1,2218120],[2,65,201.4,43.6,245.1,2218120],[2,66,157.6,72.5,230.1,2218120],[2,67,157.0,90.6,247.6,2218120],[2,68,194.0,53.8,247.8,2218120],[2,69,165.8,61.7,227.5,2218120],[2,70,146.2,73.0,219.2,2218120],[2,71,150.0,75.1,225.1,2218120],[2,72,189.4,42.4,231.8,2218120],[2,73,152.3,64.1,216.4,2218120],[2,74,103.7,185.9,289.6,2218120],[2,75,109.9,168.2,278.1,2218120],[2,76,124.8,78.2,203.0,2218120],[2,77,91.0,189.8,280.8,2218120],[2,78,188.8,42.8,231.6,2218120],[2,79,139.3,87.3,226.5,2218120],[2,80,144.4,67.6,212.0,2218120],[2,81,94.6,34.7,129.3,0]];
+(function(){
+  // rows: [logIdx, cycle, tarchk, prep2rst, total, irfs]
+  const rows=DATA.filter(r=>r.length===6);
+  const el=document.getElementById('chart');
+  const W=Math.max(320, Math.min(el.clientWidth||900, 940)), H=150, padL=36, padR=16, top=18, bot=34;
+  const xmin=100, xmax=Math.ceil(Math.max(...rows.map(r=>r[4]))/20)*20;
+  const x=v=>padL+(v-xmin)/(xmax-xmin)*(W-padL-padR);
+  const ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('role','img');
+  svg.setAttribute('aria-label','Phân bố thời gian mkfs đến reboot của 147 chu kỳ');
+  const mk=(t,a)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e;};
+  const css=getComputedStyle(document.documentElement);
+  const col=n=>css.getPropertyValue(n).trim();
+  mk('line',{x1:padL,x2:W-padR,y1:H-bot,y2:H-bot,stroke:col('--border')});
+  for(let v=xmin; v<=xmax; v+=20){
+    mk('line',{x1:x(v),x2:x(v),y1:top,y2:H-bot,stroke:col('--border'),'stroke-dasharray':'2 3','stroke-opacity':.6});
+    const t=mk('text',{x:x(v),y:H-bot+15,'text-anchor':'middle'}); t.textContent=v;
+  }
+  const lab=mk('text',{x:W-padR,y:H-4,'text-anchor':'end'}); lab.textContent='giây (mkfs → reboot)';
+  // threshold band between max NG and min OK
+  const ng=rows.filter(r=>r[5]===0), ok=rows.filter(r=>r[5]!==0);
+  const minOK=Math.min(...ok.map(r=>r[4]));
+  const th=mk('line',{x1:x(minOK),x2:x(minOK),y1:top-6,y2:H-bot,stroke:col('--ok'),'stroke-width':1.2});
+  const tt=mk('text',{x:x(minOK)+4,y:top+2}); tt.textContent='OK nhỏ nhất: '+minOK.toFixed(1)+' s';
+  // beeswarm-ish jitter
+  const bins={};
+  rows.slice().sort((a,b)=>a[4]-b[4]).forEach(r=>{
+    const b=Math.round(x(r[4])/7); bins[b]=(bins[b]||0)+1;
+    const k=bins[b]-1, cy=(H-bot-8)-k*7;
+    const c=mk('circle',{cx:x(r[4]),cy:Math.max(top+4,cy),r:r[5]===0?5:3.2,fill:r[5]===0?col('--ng'):col('--ok'),'fill-opacity':r[5]===0?1:.75});
+    const ti=document.createElementNS(ns,'title');
+    ti.textContent=(r[0]===1?'OP_BTS-71452.log':'OP_BTS-71452_1030.log')+' #'+r[1]+': '+r[4].toFixed(1)+' s, irfs.ubt='+r[5]+' byte';
+    c.appendChild(ti);
+  });
+  ng.forEach(r=>{const t=mk('text',{x:x(r[4]),y:H-bot-16,'text-anchor':'middle',fill:col('--ng')});t.style.fill=col('--ng');t.textContent=r[4].toFixed(1)+' s';});
+  el.appendChild(svg);
+
+  // table: NG rows + 5 shortest OK
+  const tb=document.getElementById('tbl');
+  const pick=ng.concat(ok.slice().sort((a,b)=>a[4]-b[4]).slice(0,5));
+  pick.forEach(r=>{
+    const tr=document.createElement('tr'); if(r[5]===0) tr.className='bad';
+    const name=(r[0]===1?'Log 10/27–28':'Log 10/29–30')+' #'+r[1]+(r[5]===0?' (NG)':' (OK)');
+    [name, r[2].toFixed(1)+' s', r[3].toFixed(1)+' s', r[4].toFixed(1)+' s'].forEach((v,i)=>{
+      const td=document.createElement('td'); if(i>0) td.className='num'; td.textContent=v; tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+})();
+</script>
+</body>
+</html>

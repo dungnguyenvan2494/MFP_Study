@@ -1,0 +1,321 @@
+<title>Phân tích OP_BTS-68701</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: một cột đọc 760px; bảng, log và trục thời gian được tràn ngang trong khung riêng; trục thời gian vẽ theo tỉ lệ giây */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #17202b;
+  --muted: #5b6676;
+  --line: #d9dee6;
+  --accent: #1f5f8b;
+  --root: #c2410c;
+  --root-soft: #fdeee4;
+  --hang: #9a6a00;
+  --hang-soft: #fbf3dc;
+  --ok: #2f7d4f;
+  --ok-soft: #e3f3e9;
+  --conseq: #6b7686;
+  --code-bg: #eef1f5;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --step--1: 0.86rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+    --accent: #6fb0e0; --root: #f08a4b; --root-soft: #3a2418; --hang: #e0b44a; --hang-soft: #33291a;
+    --ok: #6cc892; --ok-soft: #173126; --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+  --accent: #6fb0e0; --root: #f08a4b; --root-soft: #3a2418; --hang: #e0b44a; --hang-soft: #33291a;
+  --ok: #6cc892; --ok-soft: #173126; --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-2); font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: var(--step-1); font-weight: 600; margin-top: 8px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: var(--step--1); }
+.meta span b { color: var(--ink); font-weight: 600; }
+
+.verdict {
+  background: var(--root-soft); border: 1px solid color-mix(in srgb, var(--root) 35%, transparent);
+  border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+}
+.verdict .label { color: var(--root); font-weight: 700; font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; }
+.verdict p { font-size: 1.05rem; }
+
+.owners { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.owner { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.owner .tag { align-self: flex-start; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.root { background: var(--root-soft); color: var(--root); }
+.tag.hang { background: var(--hang-soft); color: var(--hang); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.owner h3 { margin: 0; font-size: 1.05rem; }
+.owner p { color: var(--muted); font-size: var(--step--1); }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .mono { white-space: nowrap; }
+tr.row-root td:first-child { box-shadow: inset 3px 0 0 var(--root); }
+tr.row-hang td:first-child { box-shadow: inset 3px 0 0 var(--hang); }
+tr.row-ok td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+
+pre {
+  margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.55; color: var(--ink);
+}
+pre .hl { color: var(--root); font-weight: 600; }
+pre .hh { color: var(--hang); font-weight: 600; }
+pre .cm { color: var(--muted); }
+.cap { font-size: var(--step--1); color: var(--muted); }
+
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 10px 8px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.chart text { font-family: var(--font-body); fill: var(--ink); font-size: 12px; }
+.chart .axis text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .lane-label { fill: var(--muted); font-size: 11.5px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--step--1); color: var(--muted); padding: 6px 6px 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fact h3 { margin: 0; font-size: 1.05rem; }
+.checklist li::marker { color: var(--accent); }
+footer { color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 480px) { h1 { font-size: 1.65rem; } }
+</style>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:10px">
+    <div class="eyebrow">OP_BTS-68701 · IT6_3.0 · Module ghi trên ticket: sys:ExternalIF</div>
+    <h1>In Fiery trong lúc Sleep bị kẹt ở "印刷待機中"</h1>
+    <div class="meta">
+      <span>Log: <b>NG20261026.zip</b> (teraterm + SysLogALLToUSB)</span>
+      <span>Thời điểm lỗi: <b>26/10/2026 17:59 – 18:02</b></span>
+      <span>Câu hỏi: <b>lỗi có nằm ở BSP không?</b></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="verdict">
+      <div class="label">Kết luận</div>
+      <p><b>Lỗi không nằm ở BSP.</b> <code>&gt;&gt;&gt;Fiery_disable!!</code> là hệ quả, không phải nguyên nhân: Power quyết định Sleep trước, hạ ENG_STATUS1, rồi BSP mới tắt UART. Nguyên nhân là race giữa Power và ExternalIF. DelaySleep[7] chỉ kéo dài khoảng 0,4 s, trong khi ExternalIF cần 1–3 s để xác nhận CP_READY. Trong khoảng thời gian đó, <code>isEnergySaveModeImpossibleToShift()</code> trả về False ngay lập tức và bỏ qua cờ WakeUp/InitialConnecting.</p>
+    </div>
+    <div class="owners">
+      <div class="owner"><span class="tag root">Nguyên nhân</span><h3>ExternalIF</h3><p>Hàm return sớm khi <code>b_ConnectSignal == False</code>. CP_READY chỉ được lấy mẫu mỗi 1000 ms và cần 2–3 mẫu liên tiếp.</p></div>
+      <div class="owner"><span class="tag hang">Liên quan</span><h3>Power</h3><p>Rời DelaySleep sau khoảng 0,4 s chỉ dựa vào kết quả của EXC. Không có thời gian chờ tối thiểu sau khi Fiery wake.</p></div>
+      <div class="owner"><span class="tag ok">Hoạt động đúng</span><h3>BSP</h3><p>Phát hiện WAKE, bật/tắt UART Fiery và đọc GPIO CP_READY đều đúng như thiết kế.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>1. Một chu kỳ wake bị NG, vẽ theo tỉ lệ</h2>
+    <p>Chu kỳ 18:00:27 là bằng chứng rõ nhất. Fiery thực sự có bật CP_READY, nhưng ExternalIF xác nhận <code>Controller Connect</code> lúc <b>0,9 s sau</b> khi Power đã chọn Sleep.</p>
+    <div class="chart" role="img" aria-label="Trục thời gian chu kỳ wake 18:00:27">
+      <svg viewBox="0 0 660 270" xmlns="http://www.w3.org/2000/svg">
+        <!-- x = 150 + t*150 (t tính bằng giây từ 18:00:27.293) -->
+        <g class="axis">
+          <line class="grid" x1="150" y1="230" x2="630" y2="230"/>
+          <line class="grid" x1="150" y1="20" x2="150" y2="230"/><text x="150" y="246" text-anchor="middle">0</text>
+          <line class="grid" x1="225" y1="20" x2="225" y2="230" stroke-dasharray="2 4"/><text x="225" y="246" text-anchor="middle">0,5</text>
+          <line class="grid" x1="300" y1="20" x2="300" y2="230" stroke-dasharray="2 4"/><text x="300" y="246" text-anchor="middle">1,0</text>
+          <line class="grid" x1="375" y1="20" x2="375" y2="230" stroke-dasharray="2 4"/><text x="375" y="246" text-anchor="middle">1,5</text>
+          <line class="grid" x1="450" y1="20" x2="450" y2="230" stroke-dasharray="2 4"/><text x="450" y="246" text-anchor="middle">2,0</text>
+          <line class="grid" x1="525" y1="20" x2="525" y2="230" stroke-dasharray="2 4"/><text x="525" y="246" text-anchor="middle">2,5</text>
+          <line class="grid" x1="600" y1="20" x2="600" y2="230" stroke-dasharray="2 4"/><text x="600" y="246" text-anchor="middle">3,0 s</text>
+        </g>
+        <!-- lanes -->
+        <text class="lane-label" x="8" y="44">Fiery /WAKEUP</text>
+        <rect x="150" y="32" width="99.6" height="18" rx="3" fill="var(--accent)"/>
+
+        <text class="lane-label" x="8" y="84">ENG_STATUS1 ON</text>
+        <rect x="195.2" y="72" width="177.3" height="18" rx="3" fill="var(--ok)"/>
+
+        <text class="lane-label" x="8" y="124">UART RX (BSP)</text>
+        <rect x="294.5" y="112" width="78" height="18" rx="3" fill="var(--conseq)"/>
+
+        <text class="lane-label" x="8" y="164">Power [7] Delay</text>
+        <rect x="306.2" y="152" width="66.3" height="18" rx="3" fill="var(--hang)"/>
+
+        <text class="lane-label" x="8" y="204">EXC CP_READY OK</text>
+        <circle cx="507.2" cy="201" r="6" fill="var(--root)"/>
+        <text x="517" y="205">Controller Connect (2,38 s), quá muộn</text>
+
+        <!-- decision line -->
+        <line x1="372.5" y1="20" x2="372.5" y2="230" stroke="var(--root)" stroke-width="2"/>
+        <text x="378" y="30" style="fill:var(--root);font-weight:600">Power chọn Sleep (1,48 s)</text>
+        <text x="378" y="44" style="fill:var(--root)">→ ENG_STATUS1=0 → Fiery_disable</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>Fiery kéo WAKE</span>
+        <span><i style="background:var(--ok)"></i>MFP báo ENG_STATUS1 ON</span>
+        <span><i style="background:var(--conseq)"></i>BSP bật RX (900 ms sau ENG_STATUS1)</span>
+        <span><i style="background:var(--hang)"></i>Power ở DelaySleep</span>
+      </div>
+    </div>
+    <p class="cap">Mốc 0 = 18:00:27.293, lúc <code>Fiery Wake Changed.[13]&gt;[3]</code>. Các mốc lấy từ teraterm.log dòng 2897–3026.</p>
+
+    <h3>Chu kỳ được nhắc trong ticket (17:59:27)</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="num">Thời điểm</th><th>Sự kiện</th><th>Bên ghi log</th></tr></thead>
+        <tbody>
+          <tr><td class="num">27.694</td><td>Fiery kéo /WAKEUP: <code>Fiery Wake Changed.[13]&gt;[3]</code></td><td>Power</td></tr>
+          <tr><td class="num">27.978</td><td>Now[8]&gt;Next[21], ENG_STATUS1/2 ON (<code>pmu_tx_sig(0002)</code>, <code>(002F)</code>). EXC: <code>&lt;IF&gt; WakeUP Signal Active</code></td><td>Power / BSP / EXC</td></tr>
+          <tr><td class="num">28.340</td><td>Fiery nhả WAKE ([3]&gt;[13]), đúng spec vì đã thấy ENG_STATUS1 ON</td><td>Power</td></tr>
+          <tr><td class="num">28.657</td><td><code>&gt;&gt;&gt;Fiery_enable!!</code>, delayed work 900 ms</td><td>BSP</td></tr>
+          <tr class="row-hang"><td class="num">28.752</td><td>Now[21]&gt;Next[7] (DelaySleep). EXC: <code>Exit Power Saving Mode</code></td><td>Power</td></tr>
+          <tr class="row-root"><td class="num">29.131</td><td><code>Set Next Sleep is PWRE_SleepStatusNormal(Job None :Sleep to Sleep)</code> → ENG_STATUS1=0 → <code>&gt;&gt;&gt;Fiery_disable!!</code> → Now[7]&gt;Next[22]</td><td>Power → BSP</td></tr>
+          <tr><td class="num">30.423</td><td>Now[22]&gt;Next[8]. Fiery retry wake sau khoảng 15 s và lặp lại y như vậy</td><td>Power</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Vì sao Fiery_disable không phải nguyên nhân</h2>
+    <p>BSP chỉ in <code>&gt;&gt;&gt;Fiery_disable!!</code> khi app ghi <code>suspend</code> vào sysfs <code>Fiery_ENG_STATUS1</code>:</p>
+<pre><span class="cm">// Kernel/Src/drivers/mfp/pmu/mdels800_pmu.c:612-626  BspEng1Store()</span>
+if (on)      { gpio_set_value(gpio, 1); schedule_delayed_work(&amp;fiery_enable_work, msecs_to_jiffies(900)); }
+else if (suspend) { <span class="hl">THRL_BIOS_Dev0110_Fiery_disable();</span> gpio_set_value(gpio, 0); }</pre>
+    <p>Bên ghi <code>ENG_STATUS1 = 0</code> là chính Power, trong lúc chuyển sang Sleep:</p>
+<pre><span class="cm">// pwr/pwrg/PWRC_PowerInfoManager.cpp:10318</span>
+DBUGPRINT("... Set Next Sleep is PWRE_SleepStatusNormal(Job None :Sleep to Sleep).");
+<span class="cm">// pwr/pwrc/PWRC_PowerImpColor.cpp:2969-2971  setPowerSaveModeToExControllerImp(PWRE_FieryPowerSave)</span>
+<span class="hh">CB_BitPortN&lt;...&gt;::newInstance( CBBPTN_portENGINE_SET ) = 0;   // ENG_STATE1(H)</span></pre>
+    <p>Trong log, hai dòng này in đè lên nhau, nhưng thứ tự vẫn rõ: dòng quyết định của Power bắt đầu trước, dòng của kernel chen vào giữa.</p>
+<pre>17:59:29.131 (4294962598) (sys:PowerC[ 276.509807] [PMU] pmu_tx_sig(0002,2000,0300)=[2302]
+17:59:29.131 ontrol) Set Next[  276.516168] <span class="hl">&gt;&gt;&gt;Fiery_disable!!</span>
+17:59:29.131  Sleep i[ 276.519776] [PMU] pmu_tx_sig(002F,2000,0000)=[202F]
+17:59:29.131 s <span class="hh">PWRE_SleepStatusNormal(Job None :Sleep to Sleep).</span>
+17:59:29.131 (4294962598) (sys:PowerControl) Set power save status. Now[7]&gt;Next[22]</pre>
+    <p>Power kết luận rằng Fiery bị disable trước nên Power thấy không có yêu cầu Delay. Thực tế là ngược lại: không có yêu cầu Delay, nên Power ngủ, nên Fiery bị disable.</p>
+  </section>
+
+  <section>
+    <h2>3. Nguyên nhân: EXC bỏ qua cờ WakeUp khi CP_READY chưa được xác nhận</h2>
+    <div class="fact">
+      <h3>Return sớm trước khi kiểm tra cờ InitialConnecting</h3>
+<pre><span class="cm">// exc/excc/EXCC_ExternalController.cpp:701</span>
+Bool EXCC_ExternalController::isEnergySaveModeImpossibleToShift()
+{
+    if( b_spawnExternalControllerTask == False ) return False;
+    <span class="hl">if( b_ConnectSignal == False ) return False;   // ← Power luôn nhận "được phép Sleep"</span>
+    ...
+    if( getInitialConnecting() == True ) tmpShift |= 0x08;   <span class="cm">// được bật khi WakeUp, nhưng không bao giờ tới được dòng này</span>
+    if( getWakeUpDetectNotification() == True ) tmpShift |= 0x10;
+</pre>
+      <p>Khi Power phát hiện WAKE, <code>setWakeUpDetectNotification(True)</code> (<code>:735</code>) bật <code>bl_InitialConnecting = True</code> để giữ MFP thức chờ Fiery kết nối. Nhưng chừng nào <code>b_ConnectSignal</code> còn False thì cờ này không có tác dụng.</p>
+    </div>
+    <div class="fact">
+      <h3>CP_READY cần 1–3 s mới được xác nhận</h3>
+      <p><code>procControllerStatusCheck()</code> (<code>:306-330</code>) chỉ gọi <code>getControllerConnectSignal()</code> mỗi <code>EXCD_TimerWaitChkCpRdySignal</code> = 1000 ms. Hàm đó (<code>:478-515</code>) chỉ đặt <code>b_ConnectSignal = True</code> sau 2–3 mẫu High liên tiếp. Trong khi đó, cửa sổ từ lúc WAKE tới lúc Power chọn Sleep chỉ khoảng 1,4–1,5 s.</p>
+    </div>
+
+    <h3>Thời gian ở DelaySleep[7] qua các chu kỳ (trace EXC trong SysLog)</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Chu kỳ (tick)</th><th class="num">[7] → [22]</th><th class="num">≈ thời gian</th><th>Kết quả</th></tr></thead>
+        <tbody>
+          <tr class="row-root"><td class="mono">4294960037 → 60097</td><td class="num">60 tick</td><td class="num">0,30 s</td><td>Sleep lại</td></tr>
+          <tr class="row-root"><td class="mono">4294962548 → 62602</td><td class="num">54 tick</td><td class="num">0,27 s</td><td>Sleep lại</td></tr>
+          <tr class="row-root"><td class="mono">4294965530 → 65609</td><td class="num">79 tick</td><td class="num">0,40 s</td><td>Sleep lại</td></tr>
+          <tr class="row-root"><td class="mono">1214 → 1221</td><td class="num">7 tick</td><td class="num">0,04 s</td><td>Sleep lại</td></tr>
+          <tr class="row-root"><td class="mono">4192 → 4234</td><td class="num">42 tick</td><td class="num">0,21 s</td><td>Sleep lại</td></tr>
+          <tr class="row-root"><td class="mono">7170 → 7237</td><td class="num">67 tick</td><td class="num">0,34 s</td><td>Sleep lại, Connect ở tick 7448</td></tr>
+          <tr class="row-ok"><td class="mono">31838 → (Connect 32222)</td><td class="num">≥ 384 tick</td><td class="num">≥ 1,9 s</td><td>Initial Connect Start, in được</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">1 tick ≈ 5 ms. Số liệu lấy từ <code>102620260900_001.log</code> dòng 145569–145699 (<code>&lt;IF&gt; Power Status = [..]</code>). Trong toàn log có 15 lần <code>Fiery Wake Changed.[13]&gt;[3]</code>, nhưng chỉ lần cuối cùng ở lại [7] đủ lâu để kết nối.</p>
+    <p>Lỗi hay gặp sau thời gian sleep dài, nhiều khả năng vì Fiery ngủ sâu cần lâu hơn để bật CP_READY. Đây là suy luận, vì không có log của Fiery. Khi Fiery phản hồi nhanh, hoặc nhịp lấy mẫu 1 s tình cờ trùng pha, thì lỗi không xảy ra.</p>
+  </section>
+
+  <section>
+    <h2>4. Các phần BSP đã kiểm tra</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Hạng mục</th><th>Kết quả</th><th>Vị trí</th></tr></thead>
+        <tbody>
+          <tr class="row-ok"><td>Phát hiện WAKE_FIERY</td><td>Đúng. Có <code>PMU_resume:WAKE_FIERY detect</code>, xung khoảng 650 ms, không còn vấn đề 31–47 ms như tháng 8</td><td class="mono">mdels800_pmu.c:4637</td></tr>
+          <tr class="row-ok"><td>Bật UART Fiery</td><td>Đúng, 900 ms sau ENG_STATUS1 ON</td><td class="mono">mdels800_pmu.c:617</td></tr>
+          <tr class="row-ok"><td>Tắt UART Fiery</td><td>Chỉ chạy khi app ghi suspend</td><td class="mono">thr_sbst0A800Bios.c:25753</td></tr>
+          <tr class="row-ok"><td>Đọc CP_READY</td><td>GPIO SoC <code>PI1_PIO bit 9</code>, đọc trực tiếp</td><td class="mono">thr_Sbst00022Itfc004.c:55</td></tr>
+          <tr class="row-hang"><td>Huỷ <code>fiery_enable_work</code> khi suspend</td><td>Không huỷ. Đây là lỗ hổng tiềm ẩn, không phải nguyên nhân của bug này (xem mục 5)</td><td class="mono">mdels800_pmu.c:623</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>5. Đề xuất</h2>
+    <h3>ExternalIF / Power (sửa nguyên nhân)</h3>
+    <ol class="checklist">
+      <li><b>Khuyến nghị:</b> trong <code>isEnergySaveModeImpossibleToShift()</code>, khi có WakeUp hoặc <code>bl_InitialConnecting == True</code> thì không return False sớm. Giữ trạng thái "cấm chuyển sleep" cho tới khi <code>Initial Connect Start</code>, hoặc tới khi hết guard time 3–5 s. Bắt buộc có timeout để MFP vẫn ngủ được khi Fiery không phản hồi.</li>
+      <li>Hoặc khi nhận WakeUp, EXC gọi <code>pc_APIPower-&gt;setPowerSaveDelay()</code> có thời hạn. Cơ chế này đã có sẵn ở <code>EXCC_controllerIF.cpp:793</code>.</li>
+      <li>Bổ sung: khi có WakeUp thì lấy mẫu CP_READY ngay, không chờ hết chu kỳ 1000 ms.</li>
+    </ol>
+    <h3>BSP (hardening, tuỳ chọn)</h3>
+<pre><span class="cm">// mdels800_pmu.c  BspEng1Store(), nhánh suspend</span>
+}else if(0 == strncmp(pc_Buf, pmu_state_suspend, sizeof(pmu_state_suspend)-1)){
+<span class="hl">+   cancel_delayed_work_sync(&amp;fiery_enable_work);   /* tránh bật lại RX sau khi đã disable */</span>
+    THRL_BIOS_Dev0110_Fiery_disable();
+    gpio_set_value(gpio, 0);</pre>
+    <p class="cap">Nếu ENG_STATUS1 bị hạ trong vòng 900 ms sau khi bật, work đang chờ sẽ bật lại UART RX ngay trong lúc sleep. Log NG này không gặp trường hợp đó.</p>
+  </section>
+
+  <section>
+    <h2>6. Bản nháp reply cho ticket</h2>
+<pre style="white-space:pre-wrap">PowerのThanhさん、ExternalIFの皆様
+
+BSP側でログを確認しました。
+
+・>>>Fiery_disable!! は、Power が「Set Next Sleep is PWRE_SleepStatusNormal」と判断した後に
+  setPowerSaveModeToExController() で ENG_STATUS1=L に設定した結果、BSP の BspEng1Store から呼ばれたものです。
+  Fiery disable によって Sleep に遷移したのではなく、Sleep 遷移が先で、disable はその結果です。
+  BSP 側の WAKE 検出と ENG_STATUS1 制御は正常に動作しています。
+
+・NG の原因は、DelaySleep[7] が約 0.3～0.4 s しか続かないことです。
+  その間、EXCC_ExternalController::isEnergySaveModeImpossibleToShift() が b_ConnectSignal==False のため即 False を返しており、
+  WakeUp 検出時に立てた InitialConnecting フラグが判定されていません。
+  CP_READY は 1 s 周期・2 回連続一致で確定するため、確定する前に Sleep に戻ります。
+  18:00:27 のサイクルでは、Sleep 判断の 0.9 s 後に Controller Connect が出力されています。
+
+・WakeUp 検出後のガード時間（PowerSaveDelay 等）の追加について、ExternalIF/Power 側でご検討をお願いします。
+
+以上、よろしくお願いいたします。</pre>
+  </section>
+
+  <footer>
+    Phân tích dựa trên log NG ngày 26/10 và source trong repo Source_MFP. Chưa kiểm chứng được hai điểm: zip không có log OK ngày 16/10, và không có log của Fiery để xác nhận thời gian Fiery bật CP_READY sau khi wake.
+  </footer>
+</main>

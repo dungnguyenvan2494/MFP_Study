@@ -1,0 +1,92 @@
+PROGRAM		= usrm_reqtool
+INCLUDES	= -I$(APFPATH)/
+INCLUDES	+= -I$(APFPATH)/include
+INCLUDES	+= -I$(APFPATH)/base
+INCLUDES	+= -I$(APFPATH)/adrm
+INCLUDES	+= -I$(APFPATH)/appm
+INCLUDES	+= -I$(APFPATH)/autm
+INCLUDES	+= -I$(APFPATH)/boxm
+INCLUDES	+= -I$(APFPATH)/chrm
+INCLUDES	+= -I$(APFPATH)/devm
+INCLUDES	+= -I$(APFPATH)/ntfm
+INCLUDES	+= -I$(APFPATH)/prfm
+INCLUDES	+= -I$(APFPATH)/resm
+INCLUDES	+= -I$(APFPATH)/srvm
+INCLUDES	+= -I$(APFPATH)/usrm
+INCLUDES	+= -I$(APFPATH)/stsm
+INCLUDES	+= -I$(APFPATH)/../mfp/lib/strlib
+INCLUDES	+= -I$(APFPATH)/../mfp/lib/filelib
+INCLUDES	+= -I$(APFPATH)/../mfp/lib/sysdb
+INCLUDES	+= -I$(APFPATH)/../mfp/lib/LedBuzzer
+INCLUDES	+= -I$(APFPATH)/../mfp/lib/sst
+INCLUDES	+= -I$(APFPATH)/../mfp/lib/pow
+INCLUDES	+= -I$(APFPATH)/../../shlib/LogLib
+INCLUDES	+= -I$(APFPATH)/../mfp/service/include
+INCLUDES	+= -I$(APFPATH)/../mfp
+INCLUDES	+= -I$(APFPATH)/../../shlib/tloglib
+
+ifeq ($(BASETYPE),all)
+ifeq ($(CROSS_COMPILE),s800-linux-)
+C++FLAGS	= -Werror=all -Wno-error=stringop-truncation -g -ggdb -O0 $(INCLUDES) -DDEF_64BIT_PF
+else
+ifeq ($(CROSS_COMPILE),x86_64-linux-)
+C++FLAGS	= -Werror=all -g -ggdb -O0 $(INCLUDES) -DDEF_64BIT_PF
+else
+C++FLAGS	= -Werror=all -g -ggdb -O0 $(INCLUDES)
+endif
+endif
+else
+ifeq ($(CROSS_COMPILE),mv78460-linux-)
+C++FLAGS	= -mcpu=marvell-pj4b -mfpu=vfpv3 -mabi=aapcs-linux -mlittle-endian -fwrapv -Werror=all -g -ggdb -O2 $(INCLUDES)
+else
+ifeq ($(CROSS_COMPILE),mb86s73-linux-)
+C++FLAGS	= -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mlong-calls -mlittle-endian -Werror=all -g -ggdb -O2 $(INCLUDES)
+else
+ifeq ($(CROSS_COMPILE),mb86s72-linux-)
+C++FLAGS	= -mcpu=cortex-a15 -mfpu=neon-vfpv4 -mfloat-abi=hard -mlong-calls -mlittle-endian -mthumb -funwind-tables -fno-aggressive-loop-optimizations -Werror=all -g -ggdb -O2 $(INCLUDES)
+else
+ifeq ($(CROSS_COMPILE),mv62x0-linux-)
+C++FLAGS	= -march=armv7-a -marm -mthumb-interwork -mfloat-abi=hard -mfpu=neon -mthumb -mlittle-endian -mtls-dialect=gnu -Werror=all -g -ggdb -O2 $(INCLUDES)
+else
+ifeq ($(CROSS_COMPILE),s800-linux-)
+C++FLAGS	= -mlittle-endian -Werror=all -Wno-error=stringop-truncation -g -ggdb -O2 $(INCLUDES) -DDEF_64BIT_PF
+else
+ifeq ($(CROSS_COMPILE),x86_64-linux-)
+C++FLAGS	= -Werror=all -g -ggdb -O2 $(INCLUDES) -DDEF_64BIT_PF
+else
+C++FLAGS	= -Werror=all -g -ggdb -O2 $(INCLUDES)
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+C++FLAGS	+= -DLINUX -DSFLD_POWERDISABLE -D_FILE_OFFSET_BITS=64
+LDFLAGS		= -Wl,--relax -lstdc++ -pthread -lrt -lgcc_s -lz -lresolv
+LIBS		= 
+
+ifeq ($(ADDRESS_SANITIZER),YES)
+C++FLAGS	+= -fno-omit-frame-pointer -fsanitize-recover=all -fsanitize=address
+LIBS		+= -fsanitize=address -static-libasan
+endif
+
+# Timesys Toolchain コンパイルエラー対策
+ifeq ($(IT4MACHINE_TYPE),kssfum)
+C++FLAGS	+= -DDEF_A3A4COMM -DDEF_A4_Cus -DDEF_KRONOSS_Cus
+endif
+ifeq ($(IT4MACHINE_TYPE),kss)
+C++FLAGS	+= -DDEF_A3A4COMM -DDEF_A4_Cus -DDEF_KRONOSS_Cus
+endif
+
+ifeq ($(TARGET), hw)
+GCC				= $(CROSS_COMPILE)gcc
+CC				= $(CROSS_COMPILE)gcc
+AS				= $(CROSS_COMPILE)as
+LD				= $(CROSS_COMPILE)ld
+else
+GCC				= gcc
+CC				= gcc
+AS				= as
+LD				= ld
+endif

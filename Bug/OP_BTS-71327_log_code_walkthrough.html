@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OP_BTS-71327 log và code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #17202b; --muted: #5b6676; --line: #d9dee6;
+  --accent: #1f5f8b; --accent-soft: #e4eef6;
+  --root: #c2410c; --root-soft: #fdeee4;
+  --warn: #9a6a00; --warn-soft: #fbf3dc;
+  --ok: #1f7a4d; --ok-soft: #e2f3ea;
+  --conseq: #6b7686; --code-bg: #eef1f5;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --step--1: 0.86rem; --step-0: 1rem; --step-1: 1.2rem; --step-2: 1.5rem; --step-3: 2rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+    --accent: #6fb0e0; --accent-soft: #1b2b3a; --root: #f08a4b; --root-soft: #3a2418;
+    --warn: #e0b44a; --warn-soft: #33291a; --ok: #5fc493; --ok-soft: #173126;
+    --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+  --accent: #6fb0e0; --accent-soft: #1b2b3a; --root: #f08a4b; --root-soft: #3a2418;
+  --warn: #e0b44a; --warn-soft: #33291a; --ok: #5fc493; --ok-soft: #173126;
+  --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+}
+main { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; scroll-margin-top: 16px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-2); font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h2 .n { color: var(--muted); font-weight: 500; margin-right: 8px; font-variant-numeric: tabular-nums; }
+h3 { font-size: var(--step-1); font-weight: 600; margin-top: 6px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: var(--step--1); }
+.meta b { color: var(--ink); font-weight: 600; }
+.lead { font-size: 1.05rem; color: var(--muted); }
+
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+nav.toc ol { columns: 2; column-gap: 28px; display: block; padding-left: 1.4em; font-size: var(--step--1); }
+nav.toc li { margin-bottom: 4px; break-inside: avoid; }
+@media (max-width: 560px) { nav.toc ol { columns: 1; } }
+
+.verdict { background: var(--root-soft); border: 1px solid color-mix(in srgb, var(--root) 35%, transparent); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.verdict .label { color: var(--root); font-weight: 700; font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; }
+.verdict p { font-size: 1.04rem; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card h3 { margin: 0; font-size: 1.02rem; }
+.card p { color: var(--muted); font-size: var(--step--1); }
+.tag { align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.root { background: var(--root-soft); color: var(--root); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.info { background: var(--accent-soft); color: var(--accent); }
+.tag.mute { background: var(--code-bg); color: var(--conseq); }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--font-mono); font-size: 0.82rem; }
+tr.r-root td:first-child { box-shadow: inset 3px 0 0 var(--root); }
+tr.r-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tr.r-ok td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+tr.r-mute td:first-child { box-shadow: inset 3px 0 0 var(--line); }
+.bad { color: var(--root); font-weight: 600; }
+.good { color: var(--ok); font-weight: 600; }
+.mid { color: var(--warn); font-weight: 600; }
+
+pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.76rem; line-height: 1.55; color: var(--ink); }
+pre .ln { color: var(--muted); user-select: none; }
+pre .hl { color: var(--root); font-weight: 600; }
+pre .ok { color: var(--ok); font-weight: 600; }
+pre .wn { color: var(--warn); font-weight: 600; }
+pre .cm { color: var(--muted); font-style: italic; }
+.cap { font-size: var(--step--1); color: var(--muted); }
+
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fact h3 { margin: 0; font-size: 1.04rem; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.fact h3 .k { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+
+/* Flow diagram */
+.flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 0.92rem; }
+.step b { font-weight: 600; }
+.step small { display: block; color: var(--muted); font-size: 0.8rem; font-family: var(--font-mono); margin-top: 2px; overflow-wrap: anywhere; }
+.arrow { align-self: center; width: 2px; height: 18px; background: var(--line); position: relative; }
+.arrow::after { content: ""; position: absolute; bottom: -2px; left: -4px; border: 5px solid transparent; border-top-color: var(--line); border-bottom: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .split { grid-template-columns: 1fr; } }
+.branch { display: flex; flex-direction: column; gap: 0; border-radius: 10px; padding: 10px; }
+.branch.ok { background: var(--ok-soft); }
+.branch.bad { background: var(--root-soft); }
+.branch.warn { background: var(--warn-soft); }
+.branch .title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px 2px; }
+.branch.ok .title { color: var(--ok); }
+.branch.bad .title { color: var(--root); }
+.branch.warn .title { color: var(--warn); }
+.step.end-bad { border-color: color-mix(in srgb, var(--root) 50%, transparent); }
+.step.end-ok { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+
+/* Timeline chart */
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 10px 8px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 660px; height: auto; }
+.chart text { font-family: var(--font-body); fill: var(--ink); font-size: 12px; }
+.chart .ax text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .lane { fill: var(--code-bg); }
+.chart .b-old { fill: var(--conseq); opacity: .55; }
+.chart .b-dead { fill: var(--warn); }
+.chart .b-none { fill: none; stroke: var(--root); stroke-dasharray: 4 3; stroke-width: 1.5; }
+.chart .b-new { fill: var(--root); }
+.chart .b-ok { fill: var(--ok); }
+.chart .b-mio { fill: var(--accent); }
+.chart .mk { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 2 3; }
+.chart .lbl { font-size: 11px; fill: var(--muted); }
+.chart .lblw { font-size: 11px; fill: #fff; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--step--1); color: var(--muted); padding: 6px 6px 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.opt { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.opt.rec { border-color: color-mix(in srgb, var(--ok) 55%, transparent); box-shadow: inset 4px 0 0 var(--ok); }
+.opt h3 { margin: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 1.08rem; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem; }
+@media (max-width: 600px) { .pc { grid-template-columns: 1fr; } }
+.pc div { background: var(--code-bg); border-radius: 6px; padding: 8px 12px; }
+.pc b { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+
+.check { list-style: none; padding-left: 0; }
+.check li { padding-left: 26px; position: relative; }
+.check li::before { content: ""; position: absolute; left: 4px; top: 0.45em; width: 12px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; }
+
+.note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.93rem; }
+.note.info { border-left-color: var(--accent); background: var(--accent-soft); }
+blockquote.jp { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; white-space: pre-wrap; line-height: 1.7; }
+.mmd { background: #ffffff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; }
+.mmd svg { display: block; width: 100%; min-width: 980px; height: auto; }
+
+.sc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sc.bad { border-color: color-mix(in srgb, var(--root) 45%, transparent); box-shadow: inset 4px 0 0 var(--root); }
+.sc-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-weight: 600; font-size: 1.02rem; }
+.sc-h .no { font-family: var(--font-mono); font-size: 0.8rem; background: var(--accent-soft); color: var(--accent); padding: 2px 8px; border-radius: 999px; }
+.sc.bad .sc-h .no { background: var(--root-soft); color: var(--root); }
+.sc-h .t { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+pre.log { background: #10161e; color: #d7e0ea; position: relative; padding-top: 26px; }
+pre.log .src { position: absolute; top: 6px; right: 10px; font-size: 0.68rem; color: #8ea0b4; }
+pre.log .cm { color: #8ea0b4; }
+.code { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
+.code-h { background: var(--accent-soft); color: var(--accent); font-family: var(--font-mono); font-size: 0.74rem; padding: 6px 12px; overflow-wrap: anywhere; }
+.code pre { border-radius: 0; }
+p.next { font-size: 0.93rem; color: var(--muted); }
+footer { color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <div class="eyebrow">Walkthrough · OP_BTS-71327 · log 19/11 (F00-W5(0009) + solution 3)</div>
+  <h1>Đọc log theo luồng code: từ ErP tới “eth1 không ping được”</h1>
+  <p class="lead">Mỗi dòng log quan trọng đều được giải thích theo cùng một khuôn: <b>dòng log thật</b> → <b>hàm và vị trí code in ra nó</b> → <b>đoạn code</b> → <b>đang xảy ra chuyện gì</b> → <b>bước tiếp theo</b>. Đọc từ trên xuống là đi đúng theo thứ tự thời gian.</p>
+  <div class="meta">
+    <span>Log <b>OP_BTS-71327-1119Log</b></span>
+    <span>Kernel <b>Kernel/Src (5.10.258)</b></span>
+    <span>App <b>IT6_Controller/KM3/application/mfp</b></span>
+    <span>Báo cáo liên quan <b>OP_BTS-71327_1119_analysis.html</b></span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Mục lục">
+  <ol>
+    <li><a href="#cach-doc">Cách đọc tài liệu này</a></li>
+    <li><a href="#tong-quan">Bức tranh tổng thể</a></li>
+    <li><a href="#a">A. Boot: eth1 được tạo và cấu hình</a></li>
+    <li><a href="#b">B. App quyết định vào ErP</a></li>
+    <li><a href="#c">C. Kernel suspend</a></li>
+    <li><a href="#d">D. Kernel resume: xHCI và hub 4-1</a></li>
+    <li><a href="#e">E. 4-1.4 (LAN7800) resume thất bại</a></li>
+    <li><a href="#f">F. Hết suspend: hub_wq disconnect eth1 cũ</a></li>
+    <li><a href="#g">G. LAN7800 lên lại: eth1 mới</a></li>
+    <li><a href="#h">H. App khôi phục sau ErP: bỏ sót eth1</a></li>
+    <li><a href="#so-sanh">Đúng ra phải thế nào</a></li>
+    <li><a href="#index">Bảng tra nhanh log → code</a></li>
+  </ol>
+</nav>
+
+<section id="cach-doc">
+  <h2><span class="n">1</span>Cách đọc tài liệu này</h2>
+  <div class="cards">
+    <div class="card"><span class="tag info">Log</span><h3>Khung tối</h3><p>Dòng log nguyên văn. Bên phải là file log và số dòng: <code>messages:700</code> là <code>SysLogALL/messages</code> dòng 700; <code>垂れ流し:4797</code> là <code>OP_BTS-71327_垂れ流しログ.log</code> dòng 4797.</p></div>
+    <div class="card"><span class="tag ok">Code</span><h3>Khung có tiêu đề file:line</h3><p>Đường dẫn tính từ <code>Kernel/Src/</code> (kernel) hoặc <code>IT6_Controller/KM3/application/mfp/</code> (app). Dòng tô cam là dòng in ra log hoặc dòng quyết định.</p></div>
+    <div class="card"><span class="tag warn">Suy luận</span><h3>Gắn nhãn rõ</h3><p>Chỗ nào log không in ra (do <code>dev_dbg</code> bị tắt) thì được ghi rõ là suy luận từ code.</p></div>
+  </div>
+  <p>Ba khái niệm dùng xuyên suốt:</p>
+  <ul>
+    <li><b>Số trong ngoặc vuông <code>[370.646665]</code></b> là thời gian kernel tính bằng giây kể từ lúc boot. Trong lúc máy ngủ, đồng hồ này <b>đứng yên</b>.</li>
+    <li><b><code>4-1.4</code></b> là địa chỉ USB, đọc là “bus 4 → cổng 1 của root hub (hub <code>4-1</code>) → cổng 4 của hub đó”. Cổng này gắn chip LAN mở rộng LAN7800 (<code>0424:7800</code>), và driver <code>lan78xx</code> tạo ra network interface <code>eth1</code> (NW2) cho nó.</li>
+    <li><b><code>state=N</code></b> là trạng thái thiết bị USB (<code>enum usb_device_state</code>): <code>0</code> = NOTATTACHED (coi như đã rút), <code>8</code> = SUSPENDED (đang ngủ, vẫn còn), <code>7</code> = CONFIGURED (đang chạy).</li>
+  </ul>
+</section>
+
+<section id="tong-quan">
+  <h2><span class="n">2</span>Bức tranh tổng thể</h2>
+  <div class="flow">
+    <div class="step"><b>A. Boot</b>: enumerate LAN7800 → lan78xx tạo eth1 → NIC (mio) bật eth1 và gán IP NW2<small>hub.c, lan78xx.c · mio (không có source)</small></div>
+    <div class="arrow"></div>
+    <div class="step"><b>B. App vào ErP</b>: Power quyết định ErP → BSP <code>req_DeepSleepShift()</code> → ghi <code>"mem"</code> vào <code>/sys/power/state</code><small>PWRC_PowerImpColor.cpp · THRC_PowerManager.cpp · main_BSP.cpp</small></div>
+    <div class="arrow"></div>
+    <div class="step"><b>C. Kernel suspend</b>: freeze task → suspend từng thiết bị (USB, xHCI…) → CPU ngủ. Nguồn USB bị cắt<small>kernel/power/suspend.c · drivers/usb/core/driver.c</small></div>
+    <div class="arrow"></div>
+    <div class="step"><b>D. Kernel resume</b>: xHCI phát hiện “root hub lost power” → hub 4-1 được reset-resume<small>xhci.c · hub.c</small></div>
+    <div class="arrow"></div>
+    <div class="step end-bad"><b>E. 4-1.4 resume</b>: có persist → chờ LAN7800 kết nối tối đa 2 s → không thấy → bỏ thiết bị (logical disconnect)<small>hub.c: usb_port_resume / wait_for_connected</small></div>
+    <div class="arrow"></div>
+    <div class="step end-bad"><b>F. Hết suspend</b>: hub_wq chạy → <code>usb_disconnect</code> → lan78xx huỷ eth1 cũ (mất IP)<small>hub.c: hub_event → hub_port_connect → usb_disconnect · lan78xx.c</small></div>
+    <div class="arrow"></div>
+    <div class="step"><b>G. LAN7800 lên lại</b>: enumerate như thiết bị mới → lan78xx tạo eth1 mới (DOWN)<small>hub.c: hub_port_init / usb_new_device · lan78xx_probe</small></div>
+    <div class="arrow"></div>
+    <div class="step end-bad"><b>H. App khôi phục</b>: <code>resumeAfterDeepSleep()</code> chỉ có bước khôi phục cho WLAN, <code>mioPostChangeModeToNormal</code> không cấu hình eth1 mới → ping NW2 NG<small>THRC_PowerManager.cpp:4297–4510</small></div>
+  </div>
+  <div class="mmd"><svg aria-roledescription="sequence" role="graphics-document document" viewBox="-50 -10 1497.5 1670"  xmlns="http://www.w3.org/2000/svg" width="100%" id="seq7"><g><line name="MIO" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="1316" y1="65" x1="1316" id="actor37"></line><g id="root-37"><rect class="actor actor-top" ry="3" rx="3" name="MIO" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="1241"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="1316"><tspan dy="0" x="1316">mio/NIC</tspan></text></g></g><g><line name="NET" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="1116" y1="65" x1="1116" id="actor36"></line><g id="root-36"><rect class="actor actor-top" ry="3" rx="3" name="NET" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="1041"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="1116"><tspan dy="0" x="1116">eth1</tspan></text></g></g><g><line name="DRV" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="903" y1="65" x1="903" id="actor35"></line><g id="root-35"><rect class="actor actor-top" ry="3" rx="3" name="DRV" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="828"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="903"><tspan dy="0" x="903">lan78xx</tspan></text></g></g><g><line name="HW" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="703" y1="65" x1="703" id="actor34"></line><g id="root-34"><rect class="actor actor-top" ry="3" rx="3" name="HW" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="628"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="703"><tspan dy="0" x="703">LAN7800 (4-1.4)</tspan></text></g></g><g><line name="CORE" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="486" y1="65" x1="486" id="actor33"></line><g id="root-33"><rect class="actor actor-top" ry="3" rx="3" name="CORE" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="411"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="486"><tspan dy="-16" x="486">usb_resume /</tspan></text><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="486"><tspan dy="0" x="486">usb_port_resume</tspan></text><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="486"><tspan dy="16" x="486">(4-1.4)</tspan></text></g></g><g><line name="HUB" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="277" y1="65" x1="277" id="actor32"></line><g id="root-32"><rect class="actor actor-top" ry="3" rx="3" name="HUB" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="202"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="277"><tspan dy="0" x="277">Hub 4-1 / hub_wq</tspan></text></g></g><g><line name="XH" stroke="#999" stroke-width="0.5px" class="actor-line 200" y2="2000" x2="75" y1="65" x1="75" id="actor31"></line><g id="root-31"><rect class="actor actor-top" ry="3" rx="3" name="XH" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="0"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400; font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif;" class="actor actor-box" alignment-baseline="central" dominant-baseline="central" y="32.5" x="75"><tspan dy="0" x="75">xHCI / root hub</tspan></text></g></g><style>#seq7{font-family:Be Vietnam Pro,Segoe UI,sans-serif;font-size:16px;fill:#000000;}#seq7 .error-icon{fill:#552222;}#seq7 .error-text{fill:#552222;stroke:#552222;}#seq7 .edge-thickness-normal{stroke-width:1px;}#seq7 .edge-thickness-thick{stroke-width:3.5px;}#seq7 .edge-pattern-solid{stroke-dasharray:0;}#seq7 .edge-thickness-invisible{stroke-width:0;fill:none;}#seq7 .edge-pattern-dashed{stroke-dasharray:3;}#seq7 .edge-pattern-dotted{stroke-dasharray:2;}#seq7 .marker{fill:#666;stroke:#666;}#seq7 .marker.cross{stroke:#666;}#seq7 svg{font-family:Be Vietnam Pro,Segoe UI,sans-serif;font-size:16px;}#seq7 p{margin:0;}#seq7 .actor{stroke:hsl(0, 0%, 83%);fill:#eee;}#seq7 text.actor&gt;tspan{fill:#333;stroke:none;}#seq7 .actor-line{stroke:hsl(0, 0%, 83%);}#seq7 .messageLine0{stroke-width:1.5;stroke-dasharray:none;stroke:#333;}#seq7 .messageLine1{stroke-width:1.5;stroke-dasharray:2,2;stroke:#333;}#seq7 #arrowhead path{fill:#333;stroke:#333;}#seq7 .sequenceNumber{fill:white;}#seq7 #sequencenumber{fill:#333;}#seq7 #crosshead path{fill:#333;stroke:#333;}#seq7 .messageText{fill:#333;stroke:none;}#seq7 .labelBox{stroke:hsl(0, 0%, 83%);fill:#eee;}#seq7 .labelText,#seq7 .labelText&gt;tspan{fill:#333;stroke:none;}#seq7 .loopText,#seq7 .loopText&gt;tspan{fill:#333;stroke:none;}#seq7 .loopLine{stroke-width:2px;stroke-dasharray:2,2;stroke:hsl(0, 0%, 83%);fill:hsl(0, 0%, 83%);}#seq7 .note{stroke:#999;fill:#666;}#seq7 .noteText,#seq7 .noteText&gt;tspan{fill:#fff;stroke:none;}#seq7 .activation0{fill:#f4f4f4;stroke:#666;}#seq7 .activation1{fill:#f4f4f4;stroke:#666;}#seq7 .activation2{fill:#f4f4f4;stroke:#666;}#seq7 .actorPopupMenu{position:absolute;}#seq7 .actorPopupMenuPanel{position:absolute;fill:#eee;box-shadow:0px 8px 16px 0px rgba(0,0,0,0.2);filter:drop-shadow(3px 5px 2px rgb(0 0 0 / 0.4));}#seq7 .actor-man line{stroke:hsl(0, 0%, 83%);fill:#eee;}#seq7 .actor-man circle,#seq7 line{stroke:hsl(0, 0%, 83%);fill:#eee;stroke-width:2px;}#seq7 :root{--mermaid-font-family:Be Vietnam Pro,Segoe UI,sans-serif;}</style><g></g><defs><symbol height="24" width="24" id="computer"><path d="M2 2v13h20v-13h-20zm18 11h-16v-9h16v9zm-10.228 6l.466-1h3.524l.467 1h-4.457zm14.228 3h-24l2-6h2.104l-1.33 4h18.45l-1.297-4h2.073l2 6zm-5-10h-14v-7h14v7z" transform="scale(.5)"></path></symbol></defs><defs><symbol clip-rule="evenodd" fill-rule="evenodd" id="database"><path d="M12.258.001l.256.004.255.005.253.008.251.01.249.012.247.015.246.016.242.019.241.02.239.023.236.024.233.027.231.028.229.031.225.032.223.034.22.036.217.038.214.04.211.041.208.043.205.045.201.046.198.048.194.05.191.051.187.053.183.054.18.056.175.057.172.059.168.06.163.061.16.063.155.064.15.066.074.033.073.033.071.034.07.034.069.035.068.035.067.035.066.035.064.036.064.036.062.036.06.036.06.037.058.037.058.037.055.038.055.038.053.038.052.038.051.039.05.039.048.039.047.039.045.04.044.04.043.04.041.04.04.041.039.041.037.041.036.041.034.041.033.042.032.042.03.042.029.042.027.042.026.043.024.043.023.043.021.043.02.043.018.044.017.043.015.044.013.044.012.044.011.045.009.044.007.045.006.045.004.045.002.045.001.045v17l-.001.045-.002.045-.004.045-.006.045-.007.045-.009.044-.011.045-.012.044-.013.044-.015.044-.017.043-.018.044-.02.043-.021.043-.023.043-.024.043-.026.043-.027.042-.029.042-.03.042-.032.042-.033.042-.034.041-.036.041-.037.041-.039.041-.04.041-.041.04-.043.04-.044.04-.045.04-.047.039-.048.039-.05.039-.051.039-.052.038-.053.038-.055.038-.055.038-.058.037-.058.037-.06.037-.06.036-.062.036-.064.036-.064.036-.066.035-.067.035-.068.035-.069.035-.07.034-.071.034-.073.033-.074.033-.15.066-.155.064-.16.063-.163.061-.168.06-.172.059-.175.057-.18.056-.183.054-.187.053-.191.051-.194.05-.198.048-.201.046-.205.045-.208.043-.211.041-.214.04-.217.038-.22.036-.223.034-.225.032-.229.031-.231.028-.233.027-.236.024-.239.023-.241.02-.242.019-.246.016-.247.015-.249.012-.251.01-.253.008-.255.005-.256.004-.258.001-.258-.001-.256-.004-.255-.005-.253-.008-.251-.01-.249-.012-.247-.015-.245-.016-.243-.019-.241-.02-.238-.023-.236-.024-.234-.027-.231-.028-.228-.031-.226-.032-.223-.034-.22-.036-.217-.038-.214-.04-.211-.041-.208-.043-.204-.045-.201-.046-.198-.048-.195-.05-.19-.051-.187-.053-.184-.054-.179-.056-.176-.057-.172-.059-.167-.06-.164-.061-.159-.063-.155-.064-.151-.066-.074-.033-.072-.033-.072-.034-.07-.034-.069-.035-.068-.035-.067-.035-.066-.035-.064-.036-.063-.036-.062-.036-.061-.036-.06-.037-.058-.037-.057-.037-.056-.038-.055-.038-.053-.038-.052-.038-.051-.039-.049-.039-.049-.039-.046-.039-.046-.04-.044-.04-.043-.04-.041-.04-.04-.041-.039-.041-.037-.041-.036-.041-.034-.041-.033-.042-.032-.042-.03-.042-.029-.042-.027-.042-.026-.043-.024-.043-.023-.043-.021-.043-.02-.043-.018-.044-.017-.043-.015-.044-.013-.044-.012-.044-.011-.045-.009-.044-.007-.045-.006-.045-.004-.045-.002-.045-.001-.045v-17l.001-.045.002-.045.004-.045.006-.045.007-.045.009-.044.011-.045.012-.044.013-.044.015-.044.017-.043.018-.044.02-.043.021-.043.023-.043.024-.043.026-.043.027-.042.029-.042.03-.042.032-.042.033-.042.034-.041.036-.041.037-.041.039-.041.04-.041.041-.04.043-.04.044-.04.046-.04.046-.039.049-.039.049-.039.051-.039.052-.038.053-.038.055-.038.056-.038.057-.037.058-.037.06-.037.061-.036.062-.036.063-.036.064-.036.066-.035.067-.035.068-.035.069-.035.07-.034.072-.034.072-.033.074-.033.151-.066.155-.064.159-.063.164-.061.167-.06.172-.059.176-.057.179-.056.184-.054.187-.053.19-.051.195-.05.198-.048.201-.046.204-.045.208-.043.211-.041.214-.04.217-.038.22-.036.223-.034.226-.032.228-.031.231-.028.234-.027.236-.024.238-.023.241-.02.243-.019.245-.016.247-.015.249-.012.251-.01.253-.008.255-.005.256-.004.258-.001.258.001zm-9.258 20.499v.01l.001.021.003.021.004.022.005.021.006.022.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.023.018.024.019.024.021.024.022.025.023.024.024.025.052.049.056.05.061.051.066.051.07.051.075.051.079.052.084.052.088.052.092.052.097.052.102.051.105.052.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.048.144.049.147.047.152.047.155.047.16.045.163.045.167.043.171.043.176.041.178.041.183.039.187.039.19.037.194.035.197.035.202.033.204.031.209.03.212.029.216.027.219.025.222.024.226.021.23.02.233.018.236.016.24.015.243.012.246.01.249.008.253.005.256.004.259.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.021.224-.024.22-.026.216-.027.212-.028.21-.031.205-.031.202-.034.198-.034.194-.036.191-.037.187-.039.183-.04.179-.04.175-.042.172-.043.168-.044.163-.045.16-.046.155-.046.152-.047.148-.048.143-.049.139-.049.136-.05.131-.05.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.053.083-.051.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.05.023-.024.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.023.01-.022.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.127l-.077.055-.08.053-.083.054-.085.053-.087.052-.09.052-.093.051-.095.05-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.045-.118.044-.12.043-.122.042-.124.042-.126.041-.128.04-.13.04-.132.038-.134.038-.135.037-.138.037-.139.035-.142.035-.143.034-.144.033-.147.032-.148.031-.15.03-.151.03-.153.029-.154.027-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.01-.179.008-.179.008-.181.006-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.006-.179-.008-.179-.008-.178-.01-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.027-.153-.029-.151-.03-.15-.03-.148-.031-.146-.032-.145-.033-.143-.034-.141-.035-.14-.035-.137-.037-.136-.037-.134-.038-.132-.038-.13-.04-.128-.04-.126-.041-.124-.042-.122-.042-.12-.044-.117-.043-.116-.045-.113-.045-.112-.046-.109-.047-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.05-.093-.052-.09-.051-.087-.052-.085-.053-.083-.054-.08-.054-.077-.054v4.127zm0-5.654v.011l.001.021.003.021.004.021.005.022.006.022.007.022.009.022.01.022.011.023.012.023.013.023.015.024.016.023.017.024.018.024.019.024.021.024.022.024.023.025.024.024.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.052.11.051.114.051.119.052.123.05.127.051.131.05.135.049.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.044.171.042.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.022.23.02.233.018.236.016.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.012.241-.015.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.048.139-.05.136-.049.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.051.051-.049.023-.025.023-.024.021-.025.02-.024.019-.024.018-.024.017-.024.015-.023.014-.023.013-.024.012-.022.01-.023.01-.023.008-.022.006-.022.006-.022.004-.021.004-.022.001-.021.001-.021v-4.139l-.077.054-.08.054-.083.054-.085.052-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.044-.118.044-.12.044-.122.042-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.035-.143.033-.144.033-.147.033-.148.031-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.009-.179.009-.179.007-.181.007-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.007-.179-.007-.179-.009-.178-.009-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.031-.146-.033-.145-.033-.143-.033-.141-.035-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.04-.126-.041-.124-.042-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.051-.093-.051-.09-.051-.087-.053-.085-.052-.083-.054-.08-.054-.077-.054v4.139zm0-5.666v.011l.001.02.003.022.004.021.005.022.006.021.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.024.018.023.019.024.021.025.022.024.023.024.024.025.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.051.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.043.171.043.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.021.23.02.233.018.236.017.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.013.241-.014.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.049.139-.049.136-.049.131-.051.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.049.023-.025.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.022.01-.023.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.153l-.077.054-.08.054-.083.053-.085.053-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.048-.105.048-.106.048-.109.046-.111.046-.114.046-.115.044-.118.044-.12.043-.122.043-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.034-.143.034-.144.033-.147.032-.148.032-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.024-.161.024-.162.023-.163.023-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.01-.178.01-.179.009-.179.007-.181.006-.182.006-.182.004-.184.003-.184.001-.185.001-.185-.001-.184-.001-.184-.003-.182-.004-.182-.006-.181-.006-.179-.007-.179-.009-.178-.01-.176-.01-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.023-.162-.023-.161-.024-.159-.024-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.032-.146-.032-.145-.033-.143-.034-.141-.034-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.041-.126-.041-.124-.041-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.048-.105-.048-.102-.048-.1-.05-.097-.049-.095-.051-.093-.051-.09-.052-.087-.052-.085-.053-.083-.053-.08-.054-.077-.054v4.153zm8.74-8.179l-.257.004-.254.005-.25.008-.247.011-.244.012-.241.014-.237.016-.233.018-.231.021-.226.022-.224.023-.22.026-.216.027-.212.028-.21.031-.205.032-.202.033-.198.034-.194.036-.191.038-.187.038-.183.04-.179.041-.175.042-.172.043-.168.043-.163.045-.16.046-.155.046-.152.048-.148.048-.143.048-.139.049-.136.05-.131.05-.126.051-.123.051-.118.051-.114.052-.11.052-.106.052-.101.052-.096.052-.092.052-.088.052-.083.052-.079.052-.074.051-.07.052-.065.051-.06.05-.056.05-.051.05-.023.025-.023.024-.021.024-.02.025-.019.024-.018.024-.017.023-.015.024-.014.023-.013.023-.012.023-.01.023-.01.022-.008.022-.006.023-.006.021-.004.022-.004.021-.001.021-.001.021.001.021.001.021.004.021.004.022.006.021.006.023.008.022.01.022.01.023.012.023.013.023.014.023.015.024.017.023.018.024.019.024.02.025.021.024.023.024.023.025.051.05.056.05.06.05.065.051.07.052.074.051.079.052.083.052.088.052.092.052.096.052.101.052.106.052.11.052.114.052.118.051.123.051.126.051.131.05.136.05.139.049.143.048.148.048.152.048.155.046.16.046.163.045.168.043.172.043.175.042.179.041.183.04.187.038.191.038.194.036.198.034.202.033.205.032.21.031.212.028.216.027.22.026.224.023.226.022.231.021.233.018.237.016.241.014.244.012.247.011.25.008.254.005.257.004.26.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.022.224-.023.22-.026.216-.027.212-.028.21-.031.205-.032.202-.033.198-.034.194-.036.191-.038.187-.038.183-.04.179-.041.175-.042.172-.043.168-.043.163-.045.16-.046.155-.046.152-.048.148-.048.143-.048.139-.049.136-.05.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.05.051-.05.023-.025.023-.024.021-.024.02-.025.019-.024.018-.024.017-.023.015-.024.014-.023.013-.023.012-.023.01-.023.01-.022.008-.022.006-.023.006-.021.004-.022.004-.021.001-.021.001-.021-.001-.021-.001-.021-.004-.021-.004-.022-.006-.021-.006-.023-.008-.022-.01-.022-.01-.023-.012-.023-.013-.023-.014-.023-.015-.024-.017-.023-.018-.024-.019-.024-.02-.025-.021-.024-.023-.024-.023-.025-.051-.05-.056-.05-.06-.05-.065-.051-.07-.052-.074-.051-.079-.052-.083-.052-.088-.052-.092-.052-.096-.052-.101-.052-.106-.052-.11-.052-.114-.052-.118-.051-.123-.051-.126-.051-.131-.05-.136-.05-.139-.049-.143-.048-.148-.048-.152-.048-.155-.046-.16-.046-.163-.045-.168-.043-.172-.043-.175-.042-.179-.041-.183-.04-.187-.038-.191-.038-.194-.036-.198-.034-.202-.033-.205-.032-.21-.031-.212-.028-.216-.027-.22-.026-.224-.023-.226-.022-.231-.021-.233-.018-.237-.016-.241-.014-.244-.012-.247-.011-.25-.008-.254-.005-.257-.004-.26-.001-.26.001z" transform="scale(.5)"></path></symbol></defs><defs><symbol height="24" width="24" id="clock"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.848 12.459c.202.038.202.333.001.372-1.907.361-6.045 1.111-6.547 1.111-.719 0-1.301-.582-1.301-1.301 0-.512.77-5.447 1.125-7.445.034-.192.312-.181.343.014l.985 6.238 5.394 1.011z" transform="scale(.5)"></path></symbol></defs><defs><marker orient="auto-start-reverse" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="7.9" id="arrowhead"><path d="M -1 0 L 10 5 L 0 10 z"></path></marker></defs><defs><marker refY="4.5" refX="4" orient="auto" markerHeight="8" markerWidth="15" id="crosshead"><path style="stroke-dasharray: 0, 0;" d="M 1,2 L 6,7 M 6,2 L 1,7" stroke-width="1pt" stroke="#000000" fill="none"></path></marker></defs><defs><marker orient="auto" markerHeight="28" markerWidth="20" refY="7" refX="15.5" id="filled-head"><path d="M 18,7 L9,13 L14,7 L9,1 Z"></path></marker></defs><defs><marker orient="auto" markerHeight="40" markerWidth="60" refY="15" refX="15" id="sequencenumber"><circle r="6" cy="15" cx="15"></circle></marker></defs><g><line class="loopLine" y2="415" x2="714" y1="415" x1="475"></line><line class="loopLine" y2="620" x2="714" y1="415" x1="714"></line><line class="loopLine" y2="620" x2="714" y1="620" x1="475"></line><line class="loopLine" y2="620" x2="475" y1="415" x1="475"></line><polygon class="labelBox" points="475,415 525,415 525,428 516.6,435 475,435"></polygon><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" class="labelText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="428" x="500">loop</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" class="loopText" text-anchor="middle" y="433" x="619.5"><tspan x="619.5">[wait_for_connected()-</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" class="loopText" text-anchor="middle" y="453" x="619.5"><tspan x="619.5">: mỗi 20 ms, tối đa</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" class="loopText" text-anchor="middle" y="473" x="619.5"><tspan x="619.5">2000 ms]</tspan></text></g><g><rect class="note" height="80" width="467" stroke="#666" fill="#EDF2AE" y="840" x="461"></rect><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="845" x="695"><tspan x="695">finish_port_resume / usb_reset_and_verify_device không</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="865" x="695"><tspan x="695">chạy → lan78xx_reset_resume() (solution (2)) KHÔNG được</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="885" x="695"><tspan x="695">gọi</tspan></text></g><g><rect class="note" height="60" width="150" stroke="#666" fill="#EDF2AE" y="1070" x="202"></rect><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1075" x="277"><tspan x="277">374.03 s · PM:</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1095" x="277"><tspan x="277">suspend exit</tspan></text></g><g><rect class="note" height="80" width="250" stroke="#666" fill="#EDF2AE" y="1570" x="1091"></rect><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1575" x="1216"><tspan x="1216">Vẫn không ifup / gán IP → eth1</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1595" x="1216"><tspan x="1216">flags=4098, không có route</tspan></text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1615" x="1216"><tspan x="1216">NW2 → Ping NG</tspan></text></g><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="80" x="175">369.80 s · root hub lost</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="100" x="175">power → 370.39 s hub 4-1</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="120" x="175">reset-resume</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="155" x2="273" y1="155" x1="76"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="159" x="76">1</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="170" x="278">hub_activate:</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="190" x="278">persist_enabled = 1</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="210" x="278">→ reset_resume = 1</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="230" x="278">(solution (1) có hiệu</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="250" x="278">lực)</text><path style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" d="M 278,285 C 338,275 338,315 278,305"></path><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="289" x="278">2</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="330" x="380">370.65 s · usb_resume CALL</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="350" x="380">state=8 (SUSPENDED, không</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="370" x="380">còn NOTATTACHED)</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="405" x2="482" y1="405" x1="278"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="409" x="278">3</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="505" x="593">GET_PORT_STATUS (port 4)</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="540" x2="699" y1="540" x1="487"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="544" x="487">4</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="555" x="596">chưa có CONNECTION</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="575" x="596">(LAN7800 chưa lên lại)</text><line style="stroke-dasharray: 3, 3; fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine1" y2="610" x2="490" y1="610" x1="702"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="614" x="702">5</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="635" x="487">check_port_resume_-</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="655" x="487">type → -ENODEV</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="675" x="487">(suy luận, dev_dbg</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="695" x="487">không in)</text><path style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" d="M 487,730 C 547,720 547,760 487,750"></path><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="734" x="487">6</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="775" x="383">hub_port_logical_disconnect</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="795" x="383">→ NOTATTACHED</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="830" x2="281" y1="830" x1="485"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="834" x="485">7</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="935" x="383">373.735 s · usb_resume end</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="955" x="383">(≈3,09 s sau khi bắt đầu)</text><line style="stroke-dasharray: 3, 3; fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine1" y2="990" x2="281" y1="990" x1="485"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="994" x="485">8</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1005" x="696">mdio_bus_phy_resume: read reg 0x120 = -19, PHY</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1025" x="696">resume -5</text><line style="stroke-dasharray: 3, 3; fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine1" y2="1060" x2="490" y1="1060" x1="902"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1064" x="902">9</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1145" x="589">374.033 s · USB disconnect device number 4 → lan78xx_disconnect</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="1180" x2="899" y1="1180" x1="278"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1184" x="278">10</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1195" x="1008">unregister_netdev(eth1) — IP,</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1215" x="1008">route mất</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="1250" x2="1112" y1="1250" x1="904"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1254" x="904">11</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1265" x="492">CONNECT (trong khoảng ≈372.7–374.8 s)</text><line style="stroke-dasharray: 3, 3; fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine1" y2="1300" x2="281" y1="1300" x1="702"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1304" x="702">12</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1315" x="589">374.97 s · new SuperSpeed device number 5 → lan78xx_probe</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="1350" x2="899" y1="1350" x1="278"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1354" x="278">13</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1365" x="1008">register_netdev → eth1 MỚI</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1385" x="1008">(DOWN)</text><line style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="1420" x2="1112" y1="1420" x1="904"></line><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1424" x="904">14</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1435" x="1317">≈376.1 s ·</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1455" x="1317">mioPostChangeMod-</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1475" x="1317">eToNormal (eth1 mới</text><text style="font-family: &quot;Be Vietnam Pro&quot;, &quot;Segoe UI&quot;, sans-serif; font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="1495" x="1317">đã tồn tại ~1,1 s)</text><path style="fill: none;" marker-start="url(#sequencenumber)" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" d="M 1317,1530 C 1377,1520 1377,1560 1317,1550"></path><text class="sequenceNumber" text-anchor="middle" font-size="12px" font-family="sans-serif" y="1534" x="1317">15</text></svg></div>
+  <p class="cap">Sequence diagram đầy đủ của giai đoạn D → H (sơ đồ 7 trong <code>docs/diagrams/OP_BTS-71327-root-cause-sequence.md</code>).</p>
+</section>
+
+<!-- ===================== A ===================== -->
+<section id="a">
+  <h2><span class="n">A</span>Boot: eth1 được tạo và cấu hình</h2>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">A1</span><span class="t">56.698 s</span>Hub phát hiện thiết bị mới ở cổng 4</div>
+<pre class="log"><span class="src">messages:297–300</span>
+[56.681922] usb 4-1.4: OP_BTS-69673: SS level=2 port4 initial PLS=0x000 (U0)
+[56.689607] usb 4-1.4: OP_BTS-69673: SS level=2 port4 waited=0ms final PLS=0x000 (U0-OK)
+[56.698006] usb 4-1.4: new SuperSpeed Gen 1 USB device number 4 using xhci-hcd
+[56.717080] usb 4-1.4: OP_BTS-69673: enumerated 0424:7800 speed=super-speed</pre>
+    <div class="code"><div class="code-h">drivers/usb/core/hub.c:5527 · hub_port_connect() → 5645 hub_port_init() → 5716 usb_new_device()</div>
+<pre>5606  udev = usb_alloc_dev(hdev, hdev-&gt;bus, port1);        <span class="cm">// tạo struct usb_device mới</span>
+5645  status = hub_port_init(hub, udev, port1, i, NULL);   <span class="cm">// reset cổng, gán địa chỉ</span>
+        <span class="cm">// bên trong hub_port_init():</span>
+5131      <span class="hl">"OP_BTS-69673: SS level=%d port%d initial PLS=…"</span>   <span class="cm">// log KM: trạng thái link USB3</span>
+5153      <span class="hl">"OP_BTS-69673: SS level=%d port%d waited=…"</span>
+5219      <span class="hl">"%s SuperSpeed%s%s USB device number %d using %s"</span>   <span class="cm">// "new" vì udev-&gt;config == NULL</span>
+5716  status = usb_new_device(udev);                         <span class="cm">// đọc descriptor, đăng ký device</span>
+2690      <span class="hl">"OP_BTS-69673: enumerated %04x:%04x speed=%s"</span>      <span class="cm">// in VID:PID = 0424:7800</span></pre></div>
+    <p><b>Nghĩa là:</b> hub <code>4-1</code> báo cổng 4 có thiết bị. Kernel cấp cho nó <b>device number 4</b> và nhận ra đó là LAN7800. Số device number này quan trọng: ở giai đoạn G nó sẽ đổi thành 5, chứng tỏ kernel coi đó là thiết bị khác.</p>
+    <p class="next"><b>Tiếp theo:</b> <code>usb_new_device()</code> → <code>device_add()</code> → USB core tìm driver khớp <code>0424:7800</code>, chính là <code>lan78xx</code>.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">A2</span><span class="t">60.877 s</span>Module lan78xx được nạp, eth1 ra đời</div>
+<pre class="log"><span class="src">messages:311</span>
+[60.877274] usbcore: registered new interface driver lan78xx</pre>
+    <div class="code"><div class="code-h">drivers/usb/core/driver.c:1134 · usb_register_driver()  →  drivers/net/usb/lan78xx.c:3967 · lan78xx_probe()</div>
+<pre>1134  pr_info(<span class="hl">"%s: registered new interface driver %s\n"</span>, …);  <span class="cm">// in khi insmod lan78xx.ko</span>
+
+<span class="cm">// Ngay sau đó USB core gọi probe cho interface 4-1.4:1.0</span>
+3967  static int lan78xx_probe(struct usb_interface *intf, …)
+4089      ret = <span class="wn">lan78xx_phy_init</span>(dev);      <span class="cm">// khởi tạo PHY: LED link, autoneg</span>
+4093      ret = <span class="hl">register_netdev</span>(netdev);    <span class="cm">// tạo interface tên "eth1" (DOWN, chưa có IP)</span></pre></div>
+    <p><b>Nghĩa là:</b> eth1 lúc này mới chỉ là một interface mạng trống: DOWN, không có IP. Probe không in dòng log nào, nên chỉ thấy được nó qua các dòng của eth1 ngay sau.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">A3</span><span class="t">60.90 → 71.04 s</span>NIC (mio) bật eth1 và gán IP</div>
+<pre class="log"><span class="src">messages:312–363</span>
+[60.900189] 8021q: adding VLAN 0 to HW filter on device eth1
+[60.918058] lan78xx 4-1.4:1.0 eth1: Link is Down
+[64.038056] lan78xx 4-1.4:1.0 eth1: Link is Up - 1Gbps/Full - flow control off
+[64.038066] IPv6: ADDRCONF(NETDEV_CHANGE): eth1: link becomes ready
+[67.937193] lan78xx 4-1.4:1.0 eth1: Link is Down          <span class="cm">← NIC down/up lại để áp cài đặt</span>
+[67.949554] 8021q: adding VLAN 0 to HW filter on device eth1
+[71.037734] lan78xx 4-1.4:1.0 eth1: Link is Up - 1Gbps/Full - flow control off</pre>
+    <div class="code"><div class="code-h">net/8021q/vlan.c:369 · drivers/net/phy/phy.c:113 phy_print_status() · drivers/net/usb/lan78xx.c:1911</div>
+<pre><span class="cm">/* net/8021q/vlan.c — chạy khi có sự kiện NETDEV_UP, tức là có ai đó gọi "ifconfig eth1 up" */</span>
+369   pr_info(<span class="hl">"adding VLAN 0 to HW filter on device %s\n"</span>, dev-&gt;name);
+
+<span class="cm">/* drivers/net/usb/lan78xx.c — phylib gọi callback này mỗi khi link đổi trạng thái */</span>
+1911  static void lan78xx_link_status_change(struct net_device *net)
+1915      phy_print_status(phydev);
+<span class="cm">/* drivers/net/phy/phy.c */</span>
+115       if (phydev-&gt;link) netdev_info(…, <span class="ok">"Link is Up - %s/%s %s- flow control %s\n"</span>, …);
+123       else              netdev_info(…, <span class="hl">"Link is Down\n"</span>);</pre></div>
+    <p><b>Nghĩa là:</b> dòng <code>8021q: adding VLAN 0 … eth1</code> là <b>dấu hiệu chắc chắn có người bật eth1</b> (ifup). Người đó là middleware mạng mio/NicFum ở userland; source không có trong repo. Từ đây eth1 có IP NW2 và ping được.</p>
+    <div class="note info"><b>Mấu chốt cần nhớ:</b> trong toàn bộ log, <b>chỉ có lúc boot</b> mới xuất hiện cặp dòng “8021q … eth1” + “Link is Up”. Sau ErP thì không thấy nữa (giai đoạn G, H).</div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">A4</span><span class="t">boot</span>App ghi nhận “có LAN mở rộng” (chỉ lúc init)</div>
+<pre class="log"><span class="src">垂れ流し (log 11/11:1333, 19/11 có dòng tương tự)</span>
+4294920293 : THRF_fixWIREDLANPort detection wiredlan port :2 , path:/sys/bus/usb/devices/4-1.4/</pre>
+    <div class="code"><div class="code-h">system/thr_it6/thrcom/THRC_BSPif.cpp:2525 · THRF_fixWIREDLANPort()  ←  system/sys/sysg/SYSC_SystemInit.cpp:1502</div>
+<pre>2525  void THRF_fixWIREDLANPort( void )
+        …  <span class="cm">// quét /sys/bus/usb/devices, tìm VID/PID của LAN mở rộng</span>
+2556      if( checkUsbDeviceId( buf, WIREDLAN_IDVENDOR, WIREDLAN_IDPRODUCT ) ) {
+2557          e_wiredlan_port = THRE_WIREDLAN_STATE_PORT_CONNECTED;
+2559          printf( <span class="hl">"%ld : %s detection wiredlan port :%d , path:%s\n"</span>, … );
+
+<span class="cm">/* chỉ được gọi từ lúc khởi tạo hệ thống: */</span>
+1502  if( False == THRF_isExistWIREDLAN() )   <span class="cm">// SYSC_SystemInit.cpp</span></pre></div>
+    <p><b>Nghĩa là:</b> phía app chỉ “nhìn thấy” LAN mở rộng một lần lúc khởi động. Không có code nào theo dõi việc nó biến mất rồi xuất hiện lại.</p>
+  </div>
+</section>
+
+<!-- ===================== B ===================== -->
+<section id="b">
+  <h2><span class="n">B</span>App quyết định vào ErP</h2>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">B1</span><span class="t">16:21:06 (PC)</span>Power chuyển sang ErP</div>
+<pre class="log"><span class="src">垂れ流し:4788–4797</span>
+(0000013546) (sys:PowerControl) [setErpMode]Shift Erp mode. e_PowerDeviceState｢5｣：ul_PowerControlStatus｢0｣
+(0000013547) (sys:PowerControl) ][execErpMode] Request!!
+(0000013548) (sys:PowerControl) ][execErpMode] NearTimer=[4294967295]
+(0000013548)(BSP) : req_DeepSleepShift() Start</pre>
+    <div class="code"><div class="code-h">system/pwr/pwrc/PWRC_PowerImpColor.cpp:7516 setErpMode() · 7590 execErpMode()  →  system/thr_it6/thrcom/THRC_PowerManager.cpp:5200 req_DeepSleepShift()</div>
+<pre>7516  void PWRC_PowerImpColor::setErpMode( void(*ans_setErpMode)() )
+7542      DBUGPRINT(<span class="hl">"… [setErpMode]Shift Erp mode. e_PowerDeviceState｢%d｣…"</span>);
+7590  void PWRC_PowerImpColor::execErpMode()
+7598      DBUGPRINT(<span class="hl">"… ][execErpMode] Request!!\n"</span>);
+7610      DBUGPRINT(<span class="hl">"… ][execErpMode] NearTimer=[%ld]\n"</span>, sl_NearTimer);   <span class="cm">// -1 = không có timer đánh thức</span>
+
+<span class="cm">/* THRC_PowerManager.cpp — tầng BSP của app */</span>
+5200  void THRC_PowerManager::req_DeepSleepShift( THRE_ReqShiftType e_ReqShiftType, ushort us_level )
+5215      printf( <span class="hl">"(%010u)(BSP) : req_DeepSleepShift() Start\n"</span>, SYSF_tickGet());</pre></div>
+    <p><b>Nghĩa là:</b> người dùng giữ phím nguồn phụ, và module Power (sys:PowerControl) quyết định vào ErP. Lưu ý: ở chế độ power-save thường, Power <b>chặn</b> DeepSleep khi có LAN2 (<code>PWRE_DsleepDisableLanLine2Enable</code>, PWRC_PowerImpColor.cpp:7450). Đường ErP thì không kiểm tra điều này, nên LAN2 bị ngủ sâu.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">B2</span><span class="t">16:21:06–07</span>Chuẩn bị ngủ: WLAN có xử lý riêng, LAN2 thì không</div>
+<pre class="log"><span class="src">垂れ流し:4804–4818</span>
+[ncLiDeepSleepStart] &lt;-
+[ncLiStopTimer] &lt;-   [ncLiStopTimer] -&gt;
+[ncLiStopFD][FD_EP0=150] &lt;-   [ncLiStopFD] -&gt;
+[ncLiDeepSleepStart] -&gt;
+… remove module : rmmod /km/mod…   [368.788069] in pm_suspend</pre>
+    <div class="code"><div class="code-h">system/thr_it6/thrcom/THRC_PowerManager.cpp:5335–5600 (trong req_DeepSleepShift)</div>
+<pre>5335  if( True == b_ErP ) {   <span class="cm">/* Erpモードの場合 */</span>
+5338      SwitchPowerState( THRC_PowerDeviceID_SET_KR0, …LOW );   <span class="cm">// 無線LANからの起動 (WLAN wake)</span>
+          …
+5385      if( THRF_isExistWLAN() == True ){
+5386          switch( …getReturnFromErp() ){
+5401              case TYPE_ReturnFromErp_ARP_Unicast:
+5403                  statRet = <span class="wn">mioWlanSetErPMode</span>( 0, 8 );   <span class="cm">// WLAN: cài ARP+unicast wake</span>
+          …
+5416          statRet = <span class="wn">mioWlanSuspend</span>();               <span class="cm">// WLAN: đưa vào chế độ tiết kiệm</span>
+          <span class="cm">// ← KHÔNG có nhánh nào cho LAN mở rộng (LAN7800/eth1)</span>
+5586  si_Ret = <span class="hl">mioPreChangeModeToSleep</span>(MioWakeupMode);   <span class="cm">// mio: ncLiDeepSleepStart… (log ở trên)</span></pre></div>
+    <p><b>Nghĩa là:</b> trước khi ngủ, app làm vài việc riêng cho WLAN (cài chế độ wake, suspend WLAN) và cho mạng chung (<code>mioPreChangeModeToSleep</code>). <b>LAN mở rộng không có bước chuẩn bị nào.</b></p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">B3</span><span class="t">→ 368.79 s</span>App ra lệnh cho kernel ngủ</div>
+<pre class="log"><span class="src">messages:540–542</span>
+[368.788069] in pm_suspend
+[368.791580] PM: suspend entry (deep)
+[368.791583] enter enter_state</pre>
+    <div class="code"><div class="code-h">system/thr_it6/thrcom/THRC_PowerManager.cpp:5880 → Linux/main_BSP.cpp:2097 exec_str() / taskSTR() → kernel/power/main.c:653 state_store() → kernel/power/suspend.c:754 pm_suspend()</div>
+<pre><span class="cm">/* THRC_PowerManager.cpp */</span>
+5880  exec_str();   <span class="cm">/* ★ここに入ると省電力復帰まで戻ってこない — vào đây thì chỉ quay ra khi đã thức dậy */</span>
+
+<span class="cm">/* Linux/main_BSP.cpp — taskSTR() */</span>
+      fp = SYSF_fopen( <span class="hl">"/sys/power/state"</span>, "w" );
+      fprintf( fp, "%s\n", <span class="hl">"mem"</span> );           <span class="cm">// = Suspend-To-RAM</span>
+
+<span class="cm">/* kernel/power/main.c:677 */</span>  error = pm_suspend(state);
+<span class="cm">/* kernel/power/suspend.c */</span>
+754   int pm_suspend(suspend_state_t state)
+758       printk(<span class="hl">"in %s\n"</span>, __FUNCTION__);                    <span class="cm">// "in pm_suspend"</span>
+763       pr_info(<span class="hl">"suspend entry (%s)\n"</span>, …);                 <span class="cm">// "(deep)"</span>
+767       error = enter_state(state);
+656   printk(<span class="hl">"enter %s\n"</span>, __FUNCTION__);                      <span class="cm">// trong enter_state()</span></pre></div>
+    <p class="next"><b>Tiếp theo:</b> kernel đóng băng các task userland (B3 → C1). Từ lúc này app đứng im cho tới khi kernel thức dậy.</p>
+  </div>
+</section>
+
+<!-- ===================== C ===================== -->
+<section id="c">
+  <h2><span class="n">C</span>Kernel suspend</h2>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">C0</span><span class="t">367.54 s</span>(trước đó) App đưa SoC vào Sleep1</div>
+<pre class="log"><span class="src">messages:525–532</span>
+[367.535943] enter_sleep_1:97 reached
+[367.540186] quartz_regulator_enable: Regulator power down
+[367.588178] Now in SLEEP1</pre>
+    <div class="code"><div class="code-h">drivers/regulator/quartz-ps-sleep1.c:92 enter_sleep_1() · drivers/regulator/quartz-regulator.c:222 · ← app: THRC_PowerManagerDevice.cpp:981 sysBspSleep1Command()</div>
+<pre><span class="cm">/* app ghi lệnh vào /dev/ps_sleep1 */</span>
+1004  SYSF_write( g_Sleep1Fd, (char*)&amp;sleepCmdArg, … );   <span class="cm">// 0 = SleepUL, 1 = WakeupUL</span>
+<span class="cm">/* kernel */</span>
+97    printk(<span class="hl">"%s:%d reached\n"</span>, __func__, __LINE__);      <span class="cm">// enter_sleep_1:97</span>
+      regulator_enable(ps_sleep1_regulator) → quartz_regulator_enable()
+          printk(<span class="hl">"%s: Regulator power down\n"</span>); change_power(false);  <span class="cm">// tắt domain: PCIe(iris), GPU, UL, VBO</span>
+222       printk(<span class="hl">"Now in SLEEP1\n"</span>);</pre></div>
+    <p><b>Nghĩa là:</b> trước khi suspend, app đã tắt một số power domain của SoC. Lúc thức dậy sẽ có bước ngược lại là <code>leave_sleep_1</code> (G2).</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">C1</span><span class="t">368.87–368.89 s</span>Đóng băng userland</div>
+<pre class="log"><span class="src">messages:544–549</span>
+[368.872665] Freezing user space processes ... (elapsed 0.011 seconds) done.
+[368.887846] Freezing remaining freezable tasks ... (elapsed 0.001 seconds) done.
+[368.889425] in suspend_devices_and_enter</pre>
+    <div class="code"><div class="code-h">kernel/power/process.c:235 freeze_processes() · kernel/power/suspend.c:537 suspend_devices_and_enter()</div>
+<pre>235   pr_info(<span class="hl">"Freezing user space processes ... "</span>);
+      <span class="cm">// "remaining freezable tasks" gồm cả workqueue WQ_FREEZABLE, ví dụ usb_hub_wq (hub.c:6252)</span>
+542   printk(<span class="hl">"in %s\n"</span>, __FUNCTION__);                     <span class="cm">// in suspend_devices_and_enter</span></pre></div>
+    <p><b>Điều cần nhớ cho giai đoạn F:</b> <code>usb_hub_wq</code> được tạo với cờ <code>WQ_FREEZABLE</code>:</p>
+    <div class="code"><div class="code-h">drivers/usb/core/hub.c:6252</div>
+<pre>6252  hub_wq = alloc_workqueue("usb_hub_wq", <span class="hl">WQ_FREEZABLE</span>, 0);</pre></div>
+    <p>Vì vậy mọi việc “disconnect / enumerate lại” mà hub đăng ký trong lúc resume đều <b>phải đợi tới khi kernel thả băng</b> (“Restarting tasks”, F1) mới chạy.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">C2</span><span class="t">368.90–368.96 s</span>Suspend từng thiết bị USB (con trước, cha sau)</div>
+<pre class="log"><span class="src">messages:552–585</span>
+[368.900671] usb 4-1.4: usb_suspend_both CALL
+[368.936642] usb 4-1.4: usb_suspend_both usb_resume_fin[0]
+[368.936655] usb 4-1: usb_suspend_both CALL
+[368.956658] usb 4-1: usb_suspend_both usb_resume_fin[0]
+[368.956673] usb usb4: usb_suspend_both CALL
+[368.956704] xhci-hcd 8d00d0000.usb3: xhci_plat_suspend: start
+[368.956752] xhci-hcd 8d00d0000.usb3: xhci_suspend
+[368.956755] xhci-hcd 8d00d0000.usb3: xhci_plat_suspend: end</pre>
+    <div class="code"><div class="code-h">drivers/usb/core/driver.c:1469 usb_suspend_both() (có patch KM)</div>
+<pre>1469  static int usb_suspend_both(struct usb_device *udev, pm_message_t msg)
+1475      dev_info(&amp;udev-&gt;dev, <span class="hl">"%s CALL\n"</span>, __func__);           <span class="cm">// KM OP_BTS-33777</span>
+          … usb_suspend_interface() → lan78xx_suspend() (lan78xx.c:4415)
+          … usb_suspend_device()
+          <span class="cm">/* KM: đẩy thiết bị vào "stack" để lúc resume biết thứ tự */</span>
+1553      usb_pm_stack.udev[ (usb_pm_stack.num) ] = udev;
+1557      dev_info(&amp;udev-&gt;dev, <span class="hl">"%s usb_resume_fin[%d]\n"</span>, …, usb_resume_fin);
+1558      usb_resume_fin = false;</pre></div>
+    <p><b>Nghĩa là:</b> mọi thiết bị đều suspend bình thường. Thứ tự là 4-1.4 (LAN) → 4-1 (hub) → usb4 (root hub) → controller xHCI. Sau đó CPU tắt và nguồn USB bị cắt (ErP).</p>
+  </div>
+</section>
+
+<!-- ===================== D ===================== -->
+<section id="d">
+  <h2><span class="n">D</span>Kernel resume: xHCI và hub 4-1</h2>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">D1</span><span class="t">369.80 s</span>xHCI phát hiện “mất nguồn”</div>
+<pre class="log"><span class="src">messages:650–654</span>
+[369.800242] xhci-hcd 8d00e0000.usb2: xhci_plat_resume: start
+[369.800252] usb usb1: root hub lost power or was reset
+[369.800364] usb usb3: root hub lost power or was reset
+[369.800367] usb usb4: root hub lost power or was reset</pre>
+    <div class="code"><div class="code-h">drivers/usb/host/xhci-plat.c:571 → drivers/usb/host/xhci.c:1122 xhci_resume() → drivers/usb/core/hub.c:4090 usb_root_hub_lost_power()</div>
+<pre><span class="cm">/* xhci-plat.c */</span>
+577   dev_info(dev, <span class="hl">"%s: start\n"</span>, __func__);     <span class="cm">// xhci_plat_resume: start</span>
+595   ret = xhci_resume(xhci, 0);
+<span class="cm">/* xhci.c — controller mất trạng thái, phải khởi tạo lại (reinit_xhc) */</span>
+1204  usb_root_hub_lost_power(xhci-&gt;main_hcd-&gt;self.root_hub);
+1205  usb_root_hub_lost_power(xhci-&gt;shared_hcd-&gt;self.root_hub);
+<span class="cm">/* hub.c */</span>
+4090  void usb_root_hub_lost_power(struct usb_device *rhdev)
+4092      dev_notice(&amp;rhdev-&gt;dev, <span class="hl">"root hub lost power or was reset\n"</span>);
+4093      rhdev-&gt;reset_resume = 1;      <span class="cm">// mọi thiết bị bên dưới phải "reset-resume" hoặc bị bỏ</span></pre></div>
+    <p><b>Nghĩa là:</b> kernel biết rằng trong lúc ngủ, nguồn USB đã bị cắt. Vì thế các thiết bị USB không thể “thức dậy bình thường”. Mỗi thiết bị chỉ còn hai lựa chọn: <b>reset-resume</b> (reset rồi khôi phục, giữ nguyên đối tượng, cần <code>persist</code>) hoặc <b>bị coi là đã rút</b> rồi enumerate lại từ đầu.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">D2</span><span class="t">370.16–370.65 s</span>Hub 4-1 được reset-resume thành công</div>
+<pre class="log"><span class="src">messages:682–698</span>
+[370.156651] usb 4-1: usb_resume CALL state=8
+[370.156654] usb 4-1: usb_resume first wait release
+[370.386744] usb 4-1: OP_BTS-69673: SS level=1 port1 initial PLS=0x000 (U0)
+[370.386952] usb 4-1: reset SuperSpeed Gen 1 USB device number 2 using xhci-hcd
+[370.646644] usb 4-1: usb_resume usb_pm_stack.udev release
+[370.646647] usb 4-1: usb_resume end</pre>
+    <div class="code"><div class="code-h">Call chain: driver.c:1766 usb_resume() → 1594 usb_resume_both() → 1325 usb_resume_device() → generic.c:305 → hub.c:3800 usb_port_resume() → 3638 finish_port_resume() → 6311 usb_reset_and_verify_device() → 4922 hub_port_init()</div>
+<pre><span class="cm">/* driver.c — usb_resume() (KM) */</span>
+1774  dev_info(&amp;udev-&gt;dev, <span class="hl">"%s CALL state=%d\n"</span>, __func__, udev-&gt;state);   <span class="cm">// state=8 SUSPENDED</span>
+1805  dev_info(&amp;udev-&gt;dev, <span class="hl">"%s first wait release \n"</span>, __func__);
+1814  status = usb_resume_both(udev, msg);
+<span class="cm">/* generic.c */</span>
+305   rc = usb_port_resume(udev, msg);              <span class="cm">// thiết bị không phải root hub → resume qua cổng của hub cha</span>
+<span class="cm">/* hub.c — finish_port_resume(): vì reset_resume=1 */</span>
+3672      status = usb_reset_and_verify_device(udev);   <span class="cm">// reset cổng, kiểm tra descriptor như cũ</span>
+6359          ret = hub_port_init(parent_hub, udev, port1, i, &amp;descriptor);
+5219              <span class="ok">"%s SuperSpeed… USB device number %d"</span>   <span class="cm">// "reset" vì udev-&gt;config != NULL, giữ nguyên số 2</span>
+<span class="cm">/* driver.c */</span>
+1827  dev_info(…, <span class="hl">"%s usb_pm_stack.udev release\n"</span>);   1852  dev_info(…, <span class="hl">"%s end\n"</span>);</pre></div>
+    <p><b>Nghĩa là:</b> hub 4-1 là hub, mà hub luôn có <code>persist</code> (quirks.c:748), nên nó được reset và <b>giữ nguyên device number 2</b>. Đây là kiểu “thức dậy thành công” mà ta muốn LAN7800 cũng đạt được.</p>
+    <p class="next"><b>Tiếp theo:</b> khi hub 4-1 đã sống lại, hub driver xét từng cổng con (<code>hub_activate</code>) xem cổng nào được reset-resume và cổng nào bị bỏ.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">D3</span><span class="t">(không có log)</span>hub_activate quyết định số phận từng cổng con</div>
+    <div class="code"><div class="code-h">drivers/usb/core/hub.c:1064 hub_activate(HUB_RESET_RESUME) · drivers/usb/core/quirks.c:743–(solution 3)</div>
+<pre><span class="cm">/* quirks.c — lúc enumerate ở boot, quyết định persist cho từng thiết bị */</span>
+747   /* Hubs are automatically enabled for USB-PERSIST */
+748   if (udev-&gt;descriptor.bDeviceClass == USB_CLASS_HUB) udev-&gt;persist_enabled = 1;
+      … 0bda:b812 (WLAN) → persist_enabled = 1
+      <span class="ok">… 0424:7800 (LAN7800) → persist_enabled = 1     // ← solution 3 thêm dòng này</span>
+
+<span class="cm">/* hub.c — hub_activate(): xét cổng 4 (4-1.4) */</span>
+1274  } else if (udev-&gt;persist_enabled) {
+1276      <span class="ok">udev-&gt;reset_resume = 1;</span>          <span class="cm">// ← 19/11: đi nhánh này (nhờ solution 3)</span>
+          …
+1284  } else {
+1285      /* The power session is gone; tell hub_wq */
+1286      <span class="hl">usb_set_device_state(udev, USB_STATE_NOTATTACHED);</span>   <span class="cm">// ← 11/11 (chưa fix): đi nhánh này</span>
+1287      set_bit(port1, hub-&gt;change_bits);</pre></div>
+    <p><b>Nghĩa là:</b> nhờ solution 3, LAN7800 được đánh dấu “hãy reset-resume”, thay vì bị coi là đã rút ngay (như log 11/11). Bằng chứng ở dòng tiếp theo (E1): <code>state=8</code> chứ không còn <code>state=0</code>.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">D4</span><span class="t">370.65–370.90 s</span>Đối chứng: hub 4-1.3 cùng hub cha resume OK</div>
+<pre class="log"><span class="src">messages:717–722</span>
+[370.896991] usb 4-1.3: OP_BTS-69673: SS level=2 port3 initial PLS=0x000 (U0)
+[370.897687] usb 4-1.3: reset SuperSpeed Gen 1 USB device number 3 using xhci-hcd
+[371.047758] usb 4-1.3: usb_resume end</pre>
+    <p><b>Nghĩa là:</b> cổng 3 của cùng hub 4-1 kết nối lại chỉ <b>0,25 s</b> sau khi bắt đầu resume. Vậy hub 4-1 và nguồn các cổng của nó đều ổn. Vấn đề nằm riêng ở thiết bị cổng 4 (LAN7800).</p>
+  </div>
+</section>
+
+<!-- ===================== E ===================== -->
+<section id="e">
+  <h2><span class="n">E</span>4-1.4 (LAN7800) resume thất bại</h2>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">E1</span><span class="t">370.647 s</span>Bắt đầu resume 4-1.4 với persist</div>
+<pre class="log"><span class="src">messages:700–702</span>
+[370.646665] usb 4-1.4: usb_resume CALL state=8          <span class="cm">← 11/11 là state=0</span>
+[370.646669] usb 4-1.4: usb_resume first wait release</pre>
+    <div class="code"><div class="code-h">driver.c:1774 → 1814 usb_resume_both() → 1608 usb_resume_device() → generic.c:305 → hub.c:3800 usb_port_resume()</div>
+<pre><span class="cm">/* driver.c — usb_resume_both() */</span>
+1600  if (udev-&gt;state == USB_STATE_NOTATTACHED) { status = -ENODEV; goto done; }  <span class="cm">// 11/11 dừng ở đây</span>
+1607  if (udev-&gt;state == USB_STATE_SUSPENDED || udev-&gt;reset_resume)
+1608      status = usb_resume_device(udev, msg);   <span class="cm">// 19/11 đi tiếp vào đây → usb_port_resume()</span></pre></div>
+  </div>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">E2</span><span class="t">370.65 → ~372.7 s · KHÔNG CÓ LOG</span>Kernel chờ LAN7800 kết nối, tối đa 2 giây</div>
+<pre class="log"><span class="src">messages:702 → 724</span>
+… 4-1.4 im lặng ≈3,09 s:
+   không có "OP_BTS-69673: SS level=2 port4", không có "reset SuperSpeed … 4-1.4"</pre>
+    <div class="code"><div class="code-h">drivers/usb/core/hub.c:3800 usb_port_resume() · 3745 wait_for_connected() · 3313 check_port_resume_type()</div>
+<pre><span class="cm">/* usb_port_resume() — rút gọn */</span>
+3820  status = hub_port_status(hub, port1, &amp;portstatus, &amp;portchange);
+      …
+3865  if (udev-&gt;persist_enabled)
+3866      status = <span class="hl">wait_for_connected</span>(udev, hub, &amp;port1, &amp;portchange, &amp;portstatus);
+3869  status = check_port_resume_type(udev, hub, port1, status, portchange, portstatus);
+3871  if (status == 0)
+3872      status = finish_port_resume(udev);       <span class="cm">// ← chỉ tới được đây khi đã có CONNECT → reset → reset_resume()</span>
+3873  if (status &lt; 0) {
+3874      dev_dbg(&amp;udev-&gt;dev, "can't resume, status %d\n", status);   <span class="cm">// dev_dbg: KHÔNG in (CONFIG_DYNAMIC_DEBUG tắt)</span>
+3875      <span class="hl">hub_port_logical_disconnect(hub, port1);</span>
+      }
+
+<span class="cm">/* wait_for_connected() */</span>
+3745  static int wait_for_connected(…)
+3751      while (delay_ms &lt; <span class="hl">2000</span>) {                                   <span class="cm">// tối đa 2 giây</span>
+3752          if (status || *portstatus &amp; USB_PORT_STAT_CONNECTION) break;   <span class="cm">// thấy thiết bị → thoát</span>
+3754          if (!port_is_power_on(hub, *portstatus)) { status = -ENODEV; break; }
+3758          msleep(20); delay_ms += 20;
+3760          status = hub_port_status(hub, *port1, portstatus, portchange);  <span class="cm">// hỏi hub: cổng 4 có gì chưa?</span>
+          }
+3762      dev_dbg(&amp;udev-&gt;dev, "Waited %dms for CONNECT\n", delay_ms);      <span class="cm">// KHÔNG in</span>
+
+<span class="cm">/* check_port_resume_type() */</span>
+3331  } else if (!(portstatus &amp; USB_PORT_STAT_CONNECTION)) {
+3332      if (retries--) { usleep_range(200, 300); … goto retry; }
+3338      status = <span class="hl">-ENODEV</span>;                      <span class="cm">// không có thiết bị trên cổng</span></pre></div>
+    <p><b>Nghĩa là (suy luận từ code, vì các dòng <code>dev_dbg</code> bị tắt):</b> kernel cứ 20 ms lại hỏi hub 4-1 “cổng 4 đã có thiết bị chưa?”. Sau 2 s, LAN7800 vẫn chưa báo kết nối, vì chip vừa bị mất nguồn trong ErP và chưa khởi động xong. Kernel kết luận <code>-ENODEV</code> và gọi <code>hub_port_logical_disconnect</code>.</p>
+    <p>Lý do suy luận này đáng tin:</p>
+    <ul>
+      <li>Nếu đã có kết nối thì <code>finish_port_resume → hub_port_init</code> sẽ chạy và <b>chắc chắn</b> in <code>OP_BTS-69673: SS level=2 port4</code> (hub.c:5131) và <code>reset SuperSpeed</code> (hub.c:5219), như D2 và D4. Ở đây không có dòng nào.</li>
+      <li>Khoảng thời gian ≈3,09 s phù hợp với 2 s chờ cộng ~1 s xử lý khác (chưa rõ). Nếu cổng mất nguồn thì hàm đã trả lỗi ngay (dòng 3754), không chờ lâu như vậy.</li>
+    </ul>
+    <div class="note"><b>Hệ quả quan trọng:</b> <code>finish_port_resume()</code> không chạy, nên <b><code>lan78xx_reset_resume()</code> (phần (2) của solution 3) cũng không bao giờ được gọi</b>.</div>
+  </div>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">E3</span><span class="t">(không có log)</span>Thiết bị bị đánh dấu “đã rút”</div>
+    <div class="code"><div class="code-h">drivers/usb/core/hub.c:1005 hub_port_logical_disconnect() · 4667 hub_port_disable()</div>
+<pre>1005  static void hub_port_logical_disconnect(struct usb_hub *hub, int port1)
+1007      dev_dbg(…, "logical disconnect\n");             <span class="cm">// không in</span>
+1008      hub_port_disable(hub, port1, 1);
+              <span class="cm">// hub_port_disable(): if (port_dev-&gt;child &amp;&amp; set_state)</span>
+              <span class="cm">//     usb_set_device_state(port_dev-&gt;child, <span class="hl">USB_STATE_NOTATTACHED</span>);</span>
+1019      set_bit(port1, hub-&gt;change_bits);              <span class="cm">// ghi chú cho hub_wq: "cổng 4 có thay đổi"</span>
+1020      kick_hub_wq(hub);                               <span class="cm">// xếp việc cho hub_wq, nhưng hub_wq đang bị đóng băng (C1)</span></pre></div>
+    <p class="next"><b>Tiếp theo:</b> việc “disconnect cổng 4” đã được xếp hàng, nhưng phải đợi tới F1 (khi thả băng) mới thực sự chạy.</p>
+  </div>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">E4</span><span class="t">373.735 s</span>usb_resume “kết thúc bình thường” (dù đã thất bại)</div>
+<pre class="log"><span class="src">messages:724–726</span>
+[373.735000] usb 4-1.4: usb_resume usb_pm_stack.udev release
+[373.735004] usb 4-1.4: usb_resume usb_resume_fin[1]
+[373.735007] usb 4-1.4: usb_resume end</pre>
+    <div class="code"><div class="code-h">drivers/usb/core/driver.c:1814–1853 usb_resume() (KM)</div>
+<pre>1814  status = usb_resume_both(udev, msg);     <span class="cm">// status &lt; 0 ở đây …</span>
+1815  if (status == 0) { … }
+      …
+1827  dev_info(…, <span class="hl">"%s usb_pm_stack.udev release\n"</span>);
+1841  usb_resume_fin = true;                    <span class="cm">// 4-1.4 là thiết bị cuối cùng trong stack</span>
+1846  dev_info(…, <span class="hl">"%s usb_resume_fin[%d]\n"</span>, …);
+1852  dev_info(…, <span class="hl">"%s end\n"</span>);
+1853  <span class="wn">return 0;</span>                                  <span class="cm">// … nhưng luôn trả 0: lỗi không hiện ra log</span></pre></div>
+    <p><b>Nghĩa là:</b> dòng “usb_resume end” <b>không có nghĩa là resume thành công</b>. Hàm KM này luôn trả 0, và lỗi thật (<code>-ENODEV</code>) bị nuốt mất. Đây là lý do log trông có vẻ bình thường.</p>
+  </div>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">E5</span><span class="t">373.735 s</span>PHY của LAN7800 resume lỗi: -19 rồi -5</div>
+<pre class="log"><span class="src">messages:727–729</span>
+[373.735033] lan78xx 4-1.4:1.0 eth1: Failed to read register index 0x00000120. ret = -19
+[373.735045] PM: dpm_run_callback(): mdio_bus_phy_resume+0x0/0xa0 returns -5
+[373.735049] Generic PHY usb-004:004:01: PM: failed to resume: error -5</pre>
+    <div class="code"><div class="code-h">drivers/net/phy/phy_device.c:292 mdio_bus_phy_resume() → lan78xx.c:1789 lan78xx_mdiobus_read() → 645 lan78xx_phy_wait_not_busy() → 437 lan78xx_read_reg() · drivers/base/power/main.c</div>
+<pre><span class="cm">/* PHY của LAN7800 là một "device" riêng (usb-004:004:01) nằm dưới 4-1.4, nên PM core resume nó sau 4-1.4 */</span>
+292   static int mdio_bus_phy_resume(struct device *dev)
+302       ret = phy_init_hw(phydev);            <span class="cm">// đọc/ghi thanh ghi PHY qua MDIO của lan78xx</span>
+303       if (ret &lt; 0) return ret;
+
+<span class="cm">/* lan78xx.c */</span>
+1802  ret = lan78xx_phy_wait_not_busy(dev);
+652       ret = lan78xx_read_reg(dev, <span class="hl">MII_ACC</span>, &amp;val);   <span class="cm">// MII_ACC = 0x120 (lan78xx.h:598)</span>
+653       if (unlikely(ret &lt; 0)) return <span class="hl">-EIO</span>;            <span class="cm">// -5</span>
+449   ret = usb_control_msg(dev-&gt;udev, …);                   <span class="cm">// thiết bị đã NOTATTACHED → -ENODEV (-19)</span>
+457   netdev_warn(dev-&gt;net, <span class="hl">"Failed to read register index 0x%08x. ret = %d"</span>, index, ret);
+
+<span class="cm">/* drivers/base/power/main.c */</span>
+2096  pr_err(<span class="hl">"%s(): %pS returns %d\n"</span>, …);          <span class="cm">// dpm_run_callback(): mdio_bus_phy_resume returns -5</span>
+458   dev_err(dev, <span class="hl">"failed to %s%s: error %d\n"</span>, …);   <span class="cm">// Generic PHY …: PM: failed to resume: error -5</span></pre></div>
+    <p><b>Nghĩa là:</b> đây <b>không phải nguyên nhân mà là hệ quả</b>. Thiết bị USB đã bị đánh dấu NOTATTACHED ở E3, nên mọi lệnh USB gửi tới nó đều trả <code>-19 (ENODEV)</code>. Thanh ghi <code>0x120</code> là <code>MII_ACC</code>, thanh ghi dùng để truy cập PHY.</p>
+  </div>
+</section>
+
+<!-- ===================== F ===================== -->
+<section id="f">
+  <h2><span class="n">F</span>Hết suspend: hub_wq disconnect eth1 cũ</h2>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">F1</span><span class="t">374.006–374.032 s</span>Kernel thả băng, kết thúc suspend</div>
+<pre class="log"><span class="src">messages:731–738</span>
+[374.002681] in suspend_finish
+[374.005694] Restarting tasks ... done.
+[374.032318] PM: suspend exit</pre>
+    <div class="code"><div class="code-h">kernel/power/suspend.c:637 suspend_finish() · kernel/power/process.c:314 thaw_processes() · suspend.c:780</div>
+<pre>639   printk(<span class="hl">"in %s\n"</span>, __FUNCTION__);       <span class="cm">// in suspend_finish</span>
+314   pr_info(<span class="hl">"Restarting tasks ... "</span>);      <span class="cm">// thả băng task + workqueue freezable (usb_hub_wq)</span>
+780   pr_info(<span class="hl">"suspend exit\n"</span>);            <span class="cm">// pm_suspend() trả về → /sys/power/state ghi xong → app chạy tiếp</span></pre></div>
+  </div>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">F2</span><span class="t">374.033 s</span>hub_wq disconnect LAN7800 → eth1 cũ bị huỷ</div>
+<pre class="log"><span class="src">messages:739–740</span>
+[374.033068] usb 4-1.4: USB disconnect, device number 4
+[374.035390] lan78xx 4-1.4:1.0 eth1: Link is Down</pre>
+    <div class="code"><div class="code-h">hub.c:6060 hub_event() → 5936 port_event() → 5825 hub_port_connect_change() → 5527 hub_port_connect() → 2312 usb_disconnect() → lan78xx.c:3876 lan78xx_disconnect()</div>
+<pre><span class="cm">/* hub_port_connect_change(): thiết bị NOTATTACHED → không "hồi sinh" được */</span>
+5850  if ((portstatus &amp; USB_PORT_STAT_CONNECTION) &amp;&amp; udev &amp;&amp;
+5851          udev-&gt;state != USB_STATE_NOTATTACHED) { …thử giữ lại… }
+5895  hub_port_connect(hub, port1, portstatus, portchange);
+<span class="cm">/* hub_port_connect() */</span>
+5545  if (udev) {                                    <span class="cm">/* Disconnect any existing devices under this port */</span>
+5548      <span class="hl">usb_disconnect(&amp;port_dev-&gt;child);</span>
+<span class="cm">/* usb_disconnect() */</span>
+2324  dev_info(&amp;udev-&gt;dev, <span class="hl">"USB disconnect, device number %d\n"</span>, udev-&gt;devnum);
+2358  usb_disable_device(udev, 0);                   <span class="cm">// unbind driver → lan78xx_disconnect()</span>
+2360  usb_pm_stack_pop_with_lock(udev);              <span class="cm">// (OP_BTS-69103)</span>
+<span class="cm">/* lan78xx.c */</span>
+3876  static void lan78xx_disconnect(struct usb_interface *intf)
+3893      <span class="hl">unregister_netdev(net);</span>                    <span class="cm">// huỷ eth1: IP, route, trạng thái UP đều mất</span>
+          <span class="cm">// unregister_netdev → dev_close → lan78xx_stop() (2972) → phy_stop() (2999)</span>
+          <span class="cm">//   → lan78xx_link_status_change() (1911) → phy_print_status(): <span class="hl">"Link is Down"</span> (phy.c:123)</span></pre></div>
+    <p><b>Nghĩa là:</b> đây là thời điểm <b>eth1 cũ (có IP NW2) biến mất</b>. Mọi cấu hình mạng gắn với nó (IP, route, socket bind theo IP) bị kernel xoá theo.</p>
+  </div>
+</section>
+
+<!-- ===================== G ===================== -->
+<section id="g">
+  <h2><span class="n">G</span>LAN7800 lên lại: eth1 mới</h2>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">G1</span><span class="t">374.107 s</span>App bật lại các power domain của SoC</div>
+<pre class="log"><span class="src">messages:745–747 · 垂れ流し:4896–4900</span>
+[374.106613] leave_sleep_1:120 reached
+[374.110932] quartz_regulator_disable: Regulator power up
+(0000014807)(BSP) : req_DeepSleepShift() End</pre>
+    <div class="code"><div class="code-h">THRC_PowerManagerDevice.cpp:2992 sysBspSleep1Command(WakeupUL) → quartz-ps-sleep1.c:115 leave_sleep_1() · THRC_PowerManager.cpp:6117</div>
+<pre>2992  sysBspSleep1Command( THRE_Sleep1CommandArg_WakeupUL );   <span class="cm">/* Normal復帰コマンド */</span>
+120   printk(<span class="hl">"%s:%d reached\n"</span>, __func__, __LINE__);         <span class="cm">// leave_sleep_1:120</span>
+      regulator_disable() → quartz_regulator_disable(): <span class="hl">"Regulator power up"</span>; change_power(true);
+6117  printf( <span class="hl">"(%010u)(BSP) : req_DeepSleepShift() End\n"</span>, SYSF_tickGet());</pre></div>
+    <p><b>Nghĩa là:</b> app đã chạy lại sau <code>exec_str()</code> và đảo ngược bước C0. Domain được bật lại gồm PCIe (iris), GPU, UL và VBO; không có domain nào riêng cho USB/LAN.</p>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="no">G2</span><span class="t">374.95–374.99 s</span>Enumerate LAN7800 như thiết bị mới (device number 5)</div>
+<pre class="log"><span class="src">messages:814–817</span>
+[374.951907] usb 4-1.4: OP_BTS-69673: SS level=2 port4 initial PLS=0x000 (U0)
+[374.959599] usb 4-1.4: OP_BTS-69673: SS level=2 port4 waited=0ms final PLS=0x000 (U0-OK)
+[374.968036] usb 4-1.4: new SuperSpeed Gen 1 USB device number 5 using xhci-hcd
+[374.987075] usb 4-1.4: OP_BTS-69673: enumerated 0424:7800 speed=super-speed</pre>
+    <div class="code"><div class="code-h">hub.c:5527 hub_port_connect() (tiếp sau usb_disconnect) — giống hệt A1</div>
+<pre>5606  udev = usb_alloc_dev(hdev, hdev-&gt;bus, port1);     <span class="cm">// struct usb_device MỚI</span>
+5645  status = hub_port_init(hub, udev, port1, i, NULL);
+5219      <span class="hl">"new SuperSpeed … USB device number 5"</span>          <span class="cm">// "new" (không phải "reset") + số mới = thiết bị khác</span>
+5716  status = usb_new_device(udev);
+2690      <span class="hl">"OP_BTS-69673: enumerated 0424:7800"</span>
+      → lan78xx_probe() (3967): lan78xx_phy_init() (4089) → <span class="ok">PHY autoneg → đèn link SÁNG</span>
+                              register_netdev() (4093)  → <span class="hl">eth1 MỚI: DOWN, không IP</span></pre></div>
+    <p><b>Nghĩa là:</b> lúc này LAN7800 đã kết nối, nhưng đã muộn. Kernel coi nó là thiết bị mới (số 5, chữ “new”), nên lan78xx tạo một eth1 hoàn toàn mới. <b>Đèn link sáng</b> vì PHY được khởi tạo ngay trong probe, chứ không phải vì mạng đã hoạt động.</p>
+    <div class="note">Theo log, LAN7800 có kết nối ở khoảng 372.7–374.8 s. Mốc muộn nhất được suy ra vì hub_wq cần debounce ≥100 ms (<code>HUB_DEBOUNCE_STABLE</code>, hub.c:132) trước khi gọi <code>hub_port_init</code> lúc 374.95. Tức là chip xuất hiện <b>sau khi</b> cửa sổ chờ 2 s ở E2 đã đóng.</div>
+  </div>
+</section>
+
+<!-- ===================== H ===================== -->
+<section id="h">
+  <h2><span class="n">H</span>App khôi phục sau ErP: bỏ sót eth1</h2>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">H1</span><span class="t">≈376.1 s</span>resumeAfterDeepSleep: chỉ lo cho WLAN</div>
+<pre class="log"><span class="src">垂れ流し:4967–4990</span>
+(0000014818)(BSP) @@ MC_PWR ON start
+[mioPostChangeModeToNormal](1) &lt;-          <span class="cm">← eth1 mới đã tồn tại từ 374.99 s</span>
+[mioPostChangeModeToNormal] code =0 (0) -&gt;</pre>
+    <div class="code"><div class="code-h">THRC_PowerManager.cpp:5973 taskSpawn("TASK_WakeupUSB") → 4297 resumeAfterDeepSleep()</div>
+<pre>5973  tid = SYSF_taskSpawn( "TASK_WakeupUSB", …, THRC_PowerManager::resumeAfterDeepSleep, … );
+
+4297  void THRC_PowerManager::resumeAfterDeepSleep( Bool b_ErP, … )
+        …
+4461      if( <span class="ok">waitUsbResumeWlanReady</span>() == True ){            <span class="cm">// WLAN: chờ thiết bị lên lại (hàm ở dòng 1703)</span>
+4465          ioctl( si_Fd, <span class="ok">THRD_PMU_IOCSSET_APP_REQ_WLANRESET</span>, 2 );   <span class="cm">// WLAN: yêu cầu reset/khôi phục</span>
+          }
+4480      if( THRF_isExistWLAN() == True &amp;&amp; … ){
+4487          ret = system( <span class="ok">"test `cat /proc/net/rtl8812bu/wlan0/in_suspend` -eq 0"</span> );   <span class="cm">// WLAN: poll tới khi hết suspend (≤10 s)</span>
+          }
+          <span class="hl">// ← KHÔNG có bước tương đương cho LAN mở rộng (eth1 / 4-1.4 / LAN7800)</span>
+4502      i_Ret = <span class="wn">mioPostChangeModeToNormal</span>(MioWakeupMode);   <span class="cm">// middleware mạng khôi phục — không cấu hình eth1 mới</span>
+4509      ioctl( si_Fd, THRD_PMU_IOCSSET_REQ_WLANRESET, (int64_t)2 );   <span class="cm">// WLAN lần nữa</span></pre></div>
+    <p><b>Nghĩa là:</b> sau ErP, app có hẳn một chuỗi bước để <b>chờ và khôi phục WLAN</b>, vì từ trước đã biết WLAN có thể bị enumerate lại. Với LAN mở rộng (RQ-1039) thì <b>không có bước nào</b>. <code>mioPostChangeModeToNormal</code> chạy khi eth1 mới đã có sẵn khoảng 1,1 s mà vẫn không bật nó lên. Đây là chỗ cần sửa ở userland (phương án B).</p>
+  </div>
+
+  <div class="sc bad">
+    <div class="sc-h"><span class="no">H2</span><span class="t">16:20 (SysLog)</span>Kết quả cuối: eth1 DOWN, không IP, không route</div>
+<pre class="log"><span class="src">202611191620_001.log:136153–136200</span>
+eth1: flags=4098&lt;BROADCAST,MULTICAST&gt;  mtu 1500        <span class="cm">← không có UP, không có RUNNING, không có inet</span>
+        ether 00:50:aa:64:00:54
+Kernel IP routing table
+default   10.0.0.1  0.0.0.0      UG 0 0 0 eth0
+10.0.0.0  KM1058AB  255.255.0.0  UG 0 0 0 eth0            <span class="cm">← chỉ còn route của eth0</span></pre>
+    <p><b>Nghĩa là:</b> PC ping tới IP NW2 (10.241.43.99) thì MFP không có interface nào mang IP đó → <b>ping NG</b>. Đèn link vẫn sáng (G2), đúng như triệu chứng BSDD mô tả.</p>
+  </div>
+</section>
+
+<section id="so-sanh">
+  <h2><span class="n">11</span>Đúng ra phải thế nào (so sánh 3 kịch bản)</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Bước</th><th>11/11 (chưa fix)</th><th>19/11 (solution 3)</th><th>Kịch bản mong muốn</th></tr></thead>
+    <tbody>
+      <tr><td>D3 hub_activate</td><td class="bad">NOTATTACHED ngay (hub.c:1286)</td><td class="good">reset_resume = 1 (hub.c:1276)</td><td class="good">reset_resume = 1</td></tr>
+      <tr><td>E2 wait_for_connected</td><td>— (không chạy)</td><td class="bad">2 s không thấy CONNECT</td><td class="good">thấy CONNECT trong cửa sổ chờ</td></tr>
+      <tr><td>finish_port_resume / reset</td><td>—</td><td class="bad">không chạy</td><td class="good">“reset SuperSpeed … number 4” (giữ số cũ)</td></tr>
+      <tr><td><code>lan78xx_reset_resume()</code></td><td>—</td><td class="bad">không chạy</td><td class="good">chạy (solution (2): bật lại Rx)</td></tr>
+      <tr><td>F2 USB disconnect</td><td class="bad">có</td><td class="bad">có</td><td class="good">không</td></tr>
+      <tr><td>eth1</td><td class="bad">mới, DOWN</td><td class="bad">mới, DOWN</td><td class="good">giữ nguyên eth1 cũ (UP, IP)</td></tr>
+      <tr><td>H1 app khôi phục eth1</td><td class="bad">không</td><td class="bad">không</td><td class="good">(phương án B) nếu eth1 bị tạo lại thì cấu hình lại NW2</td></tr>
+    </tbody>
+  </table></div>
+  <p>Kịch bản mong muốn cần ít nhất một trong hai điều kiện: (a) LAN7800 kết nối kịp trong lúc kernel resume, bằng cách kéo dài thời gian chờ hoặc giữ nguồn cho chip; hoặc (b) app có bước “thấy eth1 mới thì cấu hình lại”, theo đúng khuôn mẫu đã có cho WLAN ở H1. Trong hai cách, (b) không phụ thuộc vào thời gian phần cứng nên là cách chắc chắn nhất.</p>
+</section>
+
+<section id="index">
+  <h2><span class="n">12</span>Bảng tra nhanh: dòng log → code</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Dòng log (rút gọn)</th><th>In ra bởi</th><th>File:line</th><th>Bước</th></tr></thead>
+    <tbody>
+      <tr><td><code>OP_BTS-69673: SS level=… port…</code></td><td>hub_port_init()</td><td class="num">usb/core/hub.c:5131, 5153</td><td>A1 D2 G2</td></tr>
+      <tr><td><code>new/reset SuperSpeed … device number N</code></td><td>hub_port_init()</td><td class="num">usb/core/hub.c:5219</td><td>A1 D2 G2</td></tr>
+      <tr><td><code>OP_BTS-69673: enumerated VID:PID</code></td><td>usb_new_device()</td><td class="num">usb/core/hub.c:2690</td><td>A1 G2</td></tr>
+      <tr><td><code>registered new interface driver lan78xx</code></td><td>usb_register_driver()</td><td class="num">usb/core/driver.c:1134</td><td>A2</td></tr>
+      <tr><td><code>8021q: adding VLAN 0 … eth1</code></td><td>vlan_device_event (NETDEV_UP)</td><td class="num">net/8021q/vlan.c:369</td><td>A3</td></tr>
+      <tr><td><code>eth1: Link is Up / Down</code></td><td>phy_print_status()</td><td class="num">net/phy/phy.c:115/123 ← lan78xx.c:1911</td><td>A3 F2</td></tr>
+      <tr><td><code>THRF_fixWIREDLANPort detection …</code></td><td>THRF_fixWIREDLANPort()</td><td class="num">thr_it6/thrcom/THRC_BSPif.cpp:2559</td><td>A4</td></tr>
+      <tr><td><code>[setErpMode]Shift Erp mode</code></td><td>PWRC_PowerImpColor::setErpMode()</td><td class="num">pwr/pwrc/PWRC_PowerImpColor.cpp:7542</td><td>B1</td></tr>
+      <tr><td><code>][execErpMode] Request!!</code></td><td>PWRC_PowerImpColor::execErpMode()</td><td class="num">PWRC_PowerImpColor.cpp:7598</td><td>B1</td></tr>
+      <tr><td><code>req_DeepSleepShift() Start / End</code></td><td>THRC_PowerManager::req_DeepSleepShift()</td><td class="num">thr_it6/thrcom/THRC_PowerManager.cpp:5215 / 6117</td><td>B1 G1</td></tr>
+      <tr><td><code>enter_sleep_1:97 / leave_sleep_1:120</code></td><td>enter/leave_sleep_1()</td><td class="num">regulator/quartz-ps-sleep1.c:97 / 120</td><td>C0 G1</td></tr>
+      <tr><td><code>in pm_suspend / enter enter_state</code></td><td>pm_suspend(), enter_state()</td><td class="num">kernel/power/suspend.c:758 / 656</td><td>B3</td></tr>
+      <tr><td><code>Freezing … / Restarting tasks</code></td><td>freeze/thaw_processes()</td><td class="num">kernel/power/process.c:235 / 314</td><td>C1 F1</td></tr>
+      <tr><td><code>usb_suspend_both CALL / usb_resume_fin[x]</code></td><td>usb_suspend_both() (KM)</td><td class="num">usb/core/driver.c:1475 / 1557</td><td>C2</td></tr>
+      <tr><td><code>root hub lost power or was reset</code></td><td>usb_root_hub_lost_power()</td><td class="num">usb/core/hub.c:4092 ← xhci.c:1204</td><td>D1</td></tr>
+      <tr><td><code>usb_resume CALL state=N</code></td><td>usb_resume() (KM)</td><td class="num">usb/core/driver.c:1774</td><td>D2 E1</td></tr>
+      <tr><td><code>usb_resume … release / end</code></td><td>usb_resume() (KM) — luôn return 0</td><td class="num">usb/core/driver.c:1827 / 1852 / 1853</td><td>D2 E4</td></tr>
+      <tr><td><i>(không in)</i> chờ CONNECT 2 s</td><td>wait_for_connected()</td><td class="num">usb/core/hub.c:3745–3763 (gọi ở 3866)</td><td>E2</td></tr>
+      <tr><td><i>(không in)</i> logical disconnect</td><td>hub_port_logical_disconnect()</td><td class="num">usb/core/hub.c:1005</td><td>E3</td></tr>
+      <tr><td><code>Failed to read register index 0x120 ret=-19</code></td><td>lan78xx_read_reg()</td><td class="num">net/usb/lan78xx.c:457 (MII_ACC: lan78xx.h:598)</td><td>E5</td></tr>
+      <tr><td><code>mdio_bus_phy_resume returns -5</code></td><td>dpm_run_callback → suspend_report_result</td><td class="num">base/power/main.c:2096</td><td>E5</td></tr>
+      <tr><td><code>PM: failed to resume: error -5</code></td><td>pm_dev_err()</td><td class="num">base/power/main.c:458</td><td>E5</td></tr>
+      <tr><td><code>PM: suspend exit</code></td><td>pm_suspend()</td><td class="num">kernel/power/suspend.c:780</td><td>F1</td></tr>
+      <tr><td><code>USB disconnect, device number N</code></td><td>usb_disconnect()</td><td class="num">usb/core/hub.c:2324 ← 5548</td><td>F2</td></tr>
+      <tr><td><code>[mioPostChangeModeToNormal]</code></td><td>resumeAfterDeepSleep() → mio</td><td class="num">thr_it6/thrcom/THRC_PowerManager.cpp:4502</td><td>H1</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Đường dẫn kernel tính từ <code>Kernel/Src/drivers/</code> (trừ <code>kernel/</code>, <code>net/</code>), đường dẫn app tính từ <code>IT6_Controller/KM3/application/mfp/system/</code>. Phần lớn source là CP932; đọc bằng <code>iconv -f CP932 -t UTF-8 -c</code>.</p>
+</section>
+
+<footer>Tài liệu giải thích log OP_BTS-71327-1119Log theo source trong repo Source_MFP. Các bước ghi “không có log / không in” là suy luận từ code, vì các dòng <code>dev_dbg</code> bị tắt (<code>CONFIG_DYNAMIC_DEBUG</code> không bật).</footer>
+</main>
+
+</body>
+</html>

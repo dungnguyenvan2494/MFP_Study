@@ -1,0 +1,160 @@
+pcm.!default{
+	type plug
+	slave.pcm "ossmix"
+}
+
+pcm.ossmix {
+type dmix
+    ipc_key 1024 # must be unique!
+#   ipc_key_add_uid false   # let multiple users share
+#   ipc_perm 0666           # IPC permissions for multi-user sharing (octal, default 0600)
+    slave {
+        pcm "hw:S800,0"      # you cannot use a "plug" device here, darn.
+        period_time 0
+        #rate 44100 # with rate 8000 you *will* hear,
+        rate 32000 # with rate 8000 you *will* hear,
+		format S16_LE
+        period_size 1024 # must be power of 2
+		buffer_size 176400
+    }
+    # bindings are cool. This says, that only the first
+    # two channels are to be used by dmix, which is
+    # enough for (most) oss apps and also lets 
+    # multichannel chios work much faster:
+    bindings {
+        0 0 # from 0 => to 0
+        1 1 # from 1 => to 1
+    }
+}
+
+pcm.dsp0 {
+    type plug
+    slave.pcm "ossmix" # use our new PCM here
+}
+
+# mixer0 like above
+ctl.mixer0 {
+    type hw
+    card S800
+}
+
+
+# You may want to make your new ossmix the default for alsa.
+# If your alsa programs are complaining that they can't open
+# your sound devices, try uncommenting this next line
+#pcm.default pcm.dsp0
+pcm.card0 {
+	type hw
+	card S800
+}
+
+ctl.card0 {
+	type hw
+	card S800
+}
+
+### for Panel Beep (Left Speaker) ###
+pcm.beep {
+  slave.pcm pcm.ossmix
+  type route
+  # Transfer table
+  ttable {
+    # A.B G
+    # where A - input channel
+    #       B - output channel
+    #       G - volume gain (1.0 = original)
+    # Left only
+    0.0 1
+    1.1 0
+  }
+}
+
+ctl.beep {
+  type hw
+  card S800
+}
+
+### for VoiceGuide (Right Speaker) ###
+pcm.i2s_vg {
+  slave.pcm pcm.ossmix
+  type route
+  # Transfer table
+  ttable {
+    # A.B G
+    # where A - input channel
+    #       B - output channel
+    #       G - volume gain (1.0 = original)
+    # Right only
+    0.0 0 
+    1.1 1
+  }
+}
+
+ctl.i2s_vg {
+  type hw
+  card S800
+}
+
+
+### USB Audio ###
+pcm.km_usb_audio{
+	type plug
+	slave.pcm "mixer"
+}
+
+pcm.mixer{
+	type dmix
+	ipc_key 1024
+	slave{
+		pcm "hw:KmUsbAudio,0"
+		rate 44100
+		format S16_LE
+		period_size 1024
+		buffer_size 176400
+	}
+}
+ctl.mixer{
+	type hw
+	card KmUsbAudio
+}
+
+### add for VoiceGuide ###
+pcm.vg {
+	type empty
+	slave.pcm {
+		# use card-specific definition if exists
+		@func refer
+		name {
+			@func concat
+			strings [
+				"cards."
+				{
+					@func card_driver
+					card KmUsbAudio
+				}
+				".pcm.default:CARD=" KmUsbAudio
+			]
+		}
+		default {
+			# use plughw as default
+			type plug
+			slave.pcm {
+				type hw
+				card KmUsbAudio
+			}
+			hint.device 0
+		}
+	}
+	hint {
+		description "Default Audio Device"
+		device_output {
+			@func refer
+			name defaults.pcm.dmix.device
+		}
+		device_input {
+			@func refer
+			name defaults.pcm.dsnoop.device
+		}
+	}
+}
+### add for VoiceGuide ###

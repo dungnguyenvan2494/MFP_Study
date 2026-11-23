@@ -1,0 +1,236 @@
+# /etc/profile
+
+# System wide environment and startup programs, for login setup
+# Functions and aliases go in /etc/bashrc
+
+pathmunge () {
+	if ! echo $PATH | /bin/egrep -q "(^|:)$1($|:)" ; then
+	   if [ "$2" = "after" ] ; then
+	      PATH=$PATH:$1
+	else
+	      PATH=$1:$PATH
+	fi
+fi
+}
+
+# ksh workaround
+if [ -z "$EUID" -a -x /usr/bin/id ]; then 
+	EUID=`id -u`
+	UID=`id -ru`
+fi
+
+# Path manipulation
+if [ "$EUID" = "0" ]; then
+	pathmunge /sbin
+	pathmunge /usr/sbin
+	pathmunge /usr/local/sbin
+	pathmunge /usr/local/bin
+fi
+
+# No core files by default
+ulimit -S -c 0 > /dev/null 2>&1
+
+if [ -x /usr/bin/id ]; then
+	USER="`id -un`"
+	LOGNAME=$USER
+	MAIL="/var/spool/mail/$USER"
+fi
+
+HOSTNAME=`/bin/hostname`
+HISTSIZE=1000
+
+if [ -z "$INPUTRC" -a ! -f "$HOME/.inputrc" ]; then
+    INPUTRC=/etc/inputrc
+fi
+
+export PATH USER LOGNAME MAIL HOSTNAME HISTSIZE INPUTRC
+
+for i in /etc/profile.d/*.sh ; do
+	if [ -r "$i" ]; then
+		. $i
+	fi
+done
+
+unset i
+unset pathmunge
+
+export TERM=vt100
+
+# ブートパラメータを取得.
+msg=`cat /proc/cmdline`
+set -- $msg
+
+IntegrityState=0
+
+# ブートパラメータからサブフォルダ名を取得.
+# セキュリティ強化モードの情報取得.
+for arg in $@
+do
+	case $arg in
+	"FwDir="*)
+		FwDir=${arg#*=};;
+	"IntegrityState="*)
+		IntegrityState=${arg#*=};;
+	esac
+done
+
+# セキュリティ強化モードONの時、環境変数HCDPPをon.
+if [ 0 -ne $IntegrityState ]; then
+	export HCDPP=on
+else
+	export HCDPP=off
+fi
+
+# アプリ立上げ暫定対応
+# Qt5.3対応 
+export QTDIR=/usr/local/Trolltech/Qt5.3
+#
+# QTのライブラリが/usr/libにある場合
+QTLIB=$QTDIR/lib:$QTDIR/plugins/platforms
+#
+XORGDIR=/xorg
+export PATH=${XORGDIR}/bin:${PATH}
+export LD_LIBRARY_PATH=${XORGDIR}/lib:/usr/local/Trolltech/gst/lib:$LD_LIBRARY_PATH
+export QT_QPA_PLATFORM_PLUGIN_PATH=$QTDIR/plugins
+if [ $1 = "boottyp=2" -o $1 = "boottyp=3" -o $1 = "boottyp=5" -o $1 = "boottyp=9" -o $1 = "boottyp=11" -o $1 = "boottyp=12" ]; then	
+	export QT_QPA_PLATFORM="linuxfb:fb=/dev/fb1:size=1024x600"
+	export QT_QPA_GENERIC_PLUGINS=KMEvdevTouch:,EvdevHardKey:,EvdevKeyboard:
+	export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/event0
+	export QT_QPA_EVDEV_KEYBOARD_PARAMETERS=/dev/input/event1:disable-zap
+else
+	export QT_QPA_PLATFORM=kmxcb
+	export QT_QPA_GENERIC_PLUGINS=EvdevHardKey:
+	export DISPLAY=:0.0
+fi
+export QT_QPA_FONTDIR=/km
+
+# 高速ダウンロードRom判定用フラグを初期化.
+exp=0
+
+# 起動種別がUSBダウンロードの場合のみ、パスにサブフォルダを設定.
+if [ $1 = "boottyp=2" ]; then
+
+	# INDEXファイル内に高速Romを表す文字列があるかを確認.
+	while read line; do
+		line=${line%?}
+		case $line in
+		"@EXP"*)
+			exp=1
+			;;
+		esac
+	done < /bd/sdc1/$FwDir/INDEX
+
+	# 高速Romの場合、/kmにマウントされるSUB.img内にはサブフォルダは存在しないので、サブフォルダを追加しない.
+	if [ $exp -eq 1 ]; then
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+#		LD_LIBRARY_PATH=./lib:/km/fw/lib:$QTLIB:$LD_LIBRARY_PATH
+		LD_LIBRARY_PATH=./lib:/tmp/openssl/lib:/km/fw/lib:$QTLIB:$LD_LIBRARY_PATH
+		SPS_RSHA_PATH=/km/fw/bin
+		CGSCRIPT=/km/cgscript
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+		OPENSSL_ENGINES=/tmp/openssl/lib/engines
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+# OpenSSL 1.1.1 Version UP
+		OPENSSL_ENGINES11=/tmp/openssl/lib/engines-1.1
+# OpenSSL 1.1.1 Version UP
+# MOD ST 2019.10.8 D.Kuwahara OP_BTS-14999
+#		source /etc/get_fips_mode.sh /km
+		/etc/mfpImageMount.sh
+		if [ $? -eq 0 ]; then
+			MediaMapFile_PATH=`/etc/getMfpImageMountPoint.sh`
+		else
+			MediaMapFile_PATH=/km
+		fi
+		source /etc/get_fips_mode.sh $MediaMapFile_PATH
+# MOD ED 2019.10.8 D.Kuwahara OP_BTS-14999
+	else
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+#		LD_LIBRARY_PATH=./lib:/km/$FwDir/fw/lib:$QTLIB:$LD_LIBRARY_PATH
+		LD_LIBRARY_PATH=./lib:/tmp/openssl/lib:/km/$FwDir/fw/lib:$QTLIB:$LD_LIBRARY_PATH
+		SPS_RSHA_PATH=/km/$FwDir/fw/bin
+		CGSCRIPT=/km/$FwDir/cgscript
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+		OPENSSL_ENGINES=/tmp/openssl/lib/engines
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+# OpenSSL 1.1.1 Version UP
+		OPENSSL_ENGINES11=/tmp/openssl/lib/engines-1.1
+# OpenSSL 1.1.1 Version UP
+		source /etc/get_fips_mode.sh /km/$FwDir
+	fi
+# 起動種別がUSBダウンロード以外の場合は、パスは変更しない.
+else
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+#	LD_LIBRARY_PATH=./lib:/km/fw/lib:$QTLIB:$LD_LIBRARY_PATH
+	LD_LIBRARY_PATH=./lib:/tmp/openssl/lib:/km/fw/lib:$QTLIB:$LD_LIBRARY_PATH
+	SPS_RSHA_PATH=/km/fw/bin
+	CGSCRIPT=/km/cgscript
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+	OPENSSL_ENGINES=/tmp/openssl/lib/engines
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+# OpenSSL 1.1.1 Version UP
+	OPENSSL_ENGINES11=/tmp/openssl/lib/engines-1.1
+# OpenSSL 1.1.1 Version UP
+	source /etc/get_fips_mode.sh /km
+fi
+export LD_LIBRARY_PATH
+export SPS_RSHA_PATH
+export CGSCRIPT
+# IT6 FIPS 2018.1.15 NICFUM Accurev.1029858 OpenSSL FIPS切り替え対応
+export OPENSSL_ENGINES
+# OpenSSL 1.1.1 Version UP
+export OPENSSL_ENGINES11
+# OpenSSL 1.1.1 Version UP
+
+export QWS_NO_SHARE_FONTS=1
+export TCPDUMP_PATH=/usr/local/sbin
+export DHCP6_ROOT_PATH=/etc
+export UNICODEMAP_JP=cp932,nec-vdc,ibm-vdc
+# アプリ立上げ暫定対応
+export LD_PRELOAD=libxml2.so
+
+# cgroup environment
+# ↓↓↓暫定対応：QuadCore検討
+if [ -e /ata0a/QuadCore/taskgroup.ini ]; then
+	export GRPFILE=/ata0a/QuadCore/taskgroup.ini
+else
+	export GRPFILE=$CGSCRIPT/taskgroup.ini
+fi
+export CGPATH=/cgroup
+export CORE0PATH=core0
+export CORE1PATH=core1
+export CORE2PATH=core2
+export CORE3PATH=core3
+export CGCPUPATH=/etc/cgroup_cpu
+
+# ↑↑↑暫定対応：QuadCore検討
+
+export MFP_USERNAME=mfpfl
+export MFP_USERHOME=/var/${MFP_USERNAME}
+install -d -m 0700 -o ${MFP_USERNAME} -g ${MFP_USERNAME} ${MFP_USERHOME}
+export XAUTHORITY=/var/.Xauthority
+if [ -e ${XAUTHORITY} ]; then
+	chmod 606 ${XAUTHORITY}
+fi
+
+# PostgreSQL
+LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH
+#PGDATA=/ata09/data/pgdata1
+#export PGDATA
+
+# Qt5.3対応
+export GST_PLUGIN_PATH=/usr/local/Trolltech/gst
+export GST_PLUGIN_SYSTEM_PATH=/usr/local/Trolltech/gst
+export GST_PLUGIN_SCANNER=/usr/local/Trolltech/gst/libexec/gst-plugin-scanner
+alias ll="ls -Fal"
+
+ulimit -s 2048
+ulimit -c 0
+
+# IT6 Solv2 2018.08.28 NICFUM Accurev.1056234 
+mkdir /dev/mqueue
+mount -t mqueue none /dev/mqueue
+# IT6 Solv2 2018.08.28 NICFUM Accurev.1056234 
+
+# 2012/09/04 Harada CQ.369332 ISIG OFF
+/bin/stty -isig

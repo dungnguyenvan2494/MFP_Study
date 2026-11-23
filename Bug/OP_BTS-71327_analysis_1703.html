@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phân tích OP_BTS-71327</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #17202b; --muted: #5b6676; --line: #d9dee6;
+  --accent: #1f5f8b; --accent-soft: #e4eef6;
+  --root: #c2410c; --root-soft: #fdeee4;
+  --warn: #9a6a00; --warn-soft: #fbf3dc;
+  --ok: #1f7a4d; --ok-soft: #e2f3ea;
+  --conseq: #6b7686; --code-bg: #eef1f5;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --step--1: 0.86rem; --step-0: 1rem; --step-1: 1.2rem; --step-2: 1.5rem; --step-3: 2rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+    --accent: #6fb0e0; --accent-soft: #1b2b3a; --root: #f08a4b; --root-soft: #3a2418;
+    --warn: #e0b44a; --warn-soft: #33291a; --ok: #5fc493; --ok-soft: #173126;
+    --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161d; --surface: #18202a; --ink: #e4e9f0; --muted: #9aa6b5; --line: #2c3745;
+  --accent: #6fb0e0; --accent-soft: #1b2b3a; --root: #f08a4b; --root-soft: #3a2418;
+  --warn: #e0b44a; --warn-soft: #33291a; --ok: #5fc493; --ok-soft: #173126;
+  --conseq: #8d98a8; --code-bg: #1f2833; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+}
+main { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; scroll-margin-top: 16px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: var(--step-2); font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h2 .n { color: var(--muted); font-weight: 500; margin-right: 8px; font-variant-numeric: tabular-nums; }
+h3 { font-size: var(--step-1); font-weight: 600; margin-top: 6px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: var(--step--1); }
+.meta b { color: var(--ink); font-weight: 600; }
+.lead { font-size: 1.05rem; color: var(--muted); }
+
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+nav.toc ol { columns: 2; column-gap: 28px; display: block; padding-left: 1.4em; font-size: var(--step--1); }
+nav.toc li { margin-bottom: 4px; break-inside: avoid; }
+@media (max-width: 560px) { nav.toc ol { columns: 1; } }
+
+.verdict { background: var(--root-soft); border: 1px solid color-mix(in srgb, var(--root) 35%, transparent); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.verdict .label { color: var(--root); font-weight: 700; font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.08em; }
+.verdict p { font-size: 1.04rem; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card h3 { margin: 0; font-size: 1.02rem; }
+.card p { color: var(--muted); font-size: var(--step--1); }
+.tag { align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+.tag.root { background: var(--root-soft); color: var(--root); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.info { background: var(--accent-soft); color: var(--accent); }
+.tag.mute { background: var(--code-bg); color: var(--conseq); }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--font-mono); font-size: 0.82rem; }
+tr.r-root td:first-child { box-shadow: inset 3px 0 0 var(--root); }
+tr.r-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tr.r-ok td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+tr.r-mute td:first-child { box-shadow: inset 3px 0 0 var(--line); }
+.bad { color: var(--root); font-weight: 600; }
+.good { color: var(--ok); font-weight: 600; }
+.mid { color: var(--warn); font-weight: 600; }
+
+pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.76rem; line-height: 1.55; color: var(--ink); }
+pre .ln { color: var(--muted); user-select: none; }
+pre .hl { color: var(--root); font-weight: 600; }
+pre .ok { color: var(--ok); font-weight: 600; }
+pre .wn { color: var(--warn); font-weight: 600; }
+pre .cm { color: var(--muted); font-style: italic; }
+.cap { font-size: var(--step--1); color: var(--muted); }
+
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fact h3 { margin: 0; font-size: 1.04rem; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.fact h3 .k { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+
+/* Flow diagram */
+.flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 0.92rem; }
+.step b { font-weight: 600; }
+.step small { display: block; color: var(--muted); font-size: 0.8rem; font-family: var(--font-mono); margin-top: 2px; overflow-wrap: anywhere; }
+.arrow { align-self: center; width: 2px; height: 18px; background: var(--line); position: relative; }
+.arrow::after { content: ""; position: absolute; bottom: -2px; left: -4px; border: 5px solid transparent; border-top-color: var(--line); border-bottom: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .split { grid-template-columns: 1fr; } }
+.branch { display: flex; flex-direction: column; gap: 0; border-radius: 10px; padding: 10px; }
+.branch.ok { background: var(--ok-soft); }
+.branch.bad { background: var(--root-soft); }
+.branch.warn { background: var(--warn-soft); }
+.branch .title { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px 2px; }
+.branch.ok .title { color: var(--ok); }
+.branch.bad .title { color: var(--root); }
+.branch.warn .title { color: var(--warn); }
+.step.end-bad { border-color: color-mix(in srgb, var(--root) 50%, transparent); }
+.step.end-ok { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+
+/* Timeline chart */
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 10px 8px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 660px; height: auto; }
+.chart text { font-family: var(--font-body); fill: var(--ink); font-size: 12px; }
+.chart .ax text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .lane { fill: var(--code-bg); }
+.chart .b-old { fill: var(--conseq); opacity: .55; }
+.chart .b-dead { fill: var(--warn); }
+.chart .b-none { fill: none; stroke: var(--root); stroke-dasharray: 4 3; stroke-width: 1.5; }
+.chart .b-new { fill: var(--root); }
+.chart .b-ok { fill: var(--ok); }
+.chart .b-mio { fill: var(--accent); }
+.chart .mk { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 2 3; }
+.chart .lbl { font-size: 11px; fill: var(--muted); }
+.chart .lblw { font-size: 11px; fill: #fff; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--step--1); color: var(--muted); padding: 6px 6px 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.opt { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.opt.rec { border-color: color-mix(in srgb, var(--ok) 55%, transparent); box-shadow: inset 4px 0 0 var(--ok); }
+.opt h3 { margin: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 1.08rem; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem; }
+@media (max-width: 600px) { .pc { grid-template-columns: 1fr; } }
+.pc div { background: var(--code-bg); border-radius: 6px; padding: 8px 12px; }
+.pc b { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+
+.check { list-style: none; padding-left: 0; }
+.check li { padding-left: 26px; position: relative; }
+.check li::before { content: ""; position: absolute; left: 4px; top: 0.45em; width: 12px; height: 12px; border: 1.5px solid var(--muted); border-radius: 3px; }
+
+.note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.93rem; }
+.note.info { border-left-color: var(--accent); background: var(--accent-soft); }
+blockquote.jp { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; white-space: pre-wrap; line-height: 1.7; }
+footer { color: var(--muted); font-size: var(--step--1); border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <div class="eyebrow">Phân tích bug · IT6_3.0 · RQ-1039 (2-port LAN)</div>
+  <h1>OP_BTS-71327: eth1 (LAN mở rộng) không ping được sau khi thoát ErP</h1>
+  <p class="lead">【IT6_3.0】【RQ-1039】LAN2回線設定が「2ポートLAN」の場合、Erpモードから復帰した後に拡張LANポート側(NW2)へPingできない. Phân tích lần re-open ngày 11/11 (ROM F00-W4(03)), có đối chiếu với log gốc 26/10 (F00-W4(01)).</p>
+  <div class="meta">
+    <span>Model <b>EagleⅢMLK Z+</b></span>
+    <span>Lần đầu <b>26/10 · F300-F00-W4(01)</b></span>
+    <span>Re-open <b>11/11 · F00-W4(03)</b></span>
+    <span>Tái hiện <b>3/3</b></span>
+    <span>Module hiện tại <b>BSP → FPT (2-port LAN)</b></span>
+    <span>Ngày phân tích <b>13/11/2026</b></span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Mục lục">
+  <ol>
+    <li><a href="#ket-luan">Kết luận</a></li>
+    <li><a href="#boi-canh">Bối cảnh ticket và lịch sử</a></li>
+    <li><a href="#cau-hinh">Cấu hình phần cứng và mạng</a></li>
+    <li><a href="#co-che">Cơ chế lỗi (sơ đồ)</a></li>
+    <li><a href="#timeline">Chuỗi sự kiện 11/11</a></li>
+    <li><a href="#so-sanh">So sánh khởi động / 26/10 / 11/11</a></li>
+    <li><a href="#bang-chung">Bằng chứng chi tiết</a></li>
+    <li><a href="#nguyen-nhan">Nguyên nhân gốc và phân trách nhiệm</a></li>
+    <li><a href="#phuong-an">Phương án sửa</a></li>
+    <li><a href="#ket-qua-1">Về &lt;結果&gt;1: không wake được từ ErP</a></li>
+    <li><a href="#xac-minh">Cách xác minh nhanh và test</a></li>
+    <li><a href="#chua-ro">Điểm chưa xác nhận</a></li>
+    <li><a href="#jira">Bản nháp comment Jira</a></li>
+    <li><a href="#phu-luc">Phụ lục: vị trí log và source</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="ket-luan">
+  <h2><span class="n">1</span>Kết luận</h2>
+  <div class="verdict">
+    <div class="label">Nguyên nhân gốc</div>
+    <p>Khi vào ErP, root hub USB bị mất nguồn. Kernel IT6 build với <code>CONFIG_USB_DEFAULT_PERSIST</code> <b>tắt</b>, nên chip LAN mở rộng LAN7800 (<code>0424:7800</code>, cổng <code>4-1.4</code>) không có USB-persist. Lúc resume, hub coi “power session” của nó đã mất và đánh dấu <code>NOTATTACHED</code>.</p>
+    <p>Sau fix OP_BTS-69103 (F00-W4(02)), hub_wq đã chạy được disconnect/connect, nên driver <code>lan78xx</code> <b>huỷ netdev eth1 cũ</b> (mất IP, route, trạng thái UP) và <b>tạo một eth1 mới</b>. Không có tầng nào trong userland (2-port LAN / NIC) cấu hình lại eth1 mới này, nên nó nằm ở trạng thái DOWN và không có IP.</p>
+    <p>Đèn link sáng vì <code>lan78xx_probe()</code> khởi tạo PHY ngay khi probe (autoneg chạy dù interface DOWN), còn ping NW2 thất bại vì eth1 không UP và không có địa chỉ <code>192.168.43.118</code>.</p>
+  </div>
+  <div class="cards">
+    <div class="card"><span class="tag root">Trực tiếp</span><h3>2-port LAN / NIC (userland)</h3><p>Chỉ cấu hình eth1 lúc khởi động. Không xử lý trường hợp netdev bị huỷ rồi tạo lại (hotplug). Sau ErP, <code>mioPostChangeModeToNormal</code> chạy xong trước khi eth1 mới xuất hiện khoảng 0,2 s.</p></div>
+    <div class="card"><span class="tag warn">Điều kiện kích hoạt</span><h3>BSP kernel (USB core)</h3><p>LAN7800 không được bật persist (WLAN 8812BU thì có ngoại lệ). Vì vậy mỗi lần ErP, LAN mở rộng bị re-enumerate thay vì reset-resume.</p></div>
+    <div class="card"><span class="tag mute">Lộ ra do</span><h3>Fix OP_BTS-69103</h3><p>Trước fix, thiết bị “chết” mà không disconnect (eth1 cũ còn IP nhưng đọc register lỗi -19). Fix làm disconnect/connect chạy đúng, và lỗ hổng cấu hình lại ở tầng trên mới lộ ra.</p></div>
+  </div>
+  <p><b>Đề xuất:</b> (A) BSP bật persist cho <code>0424:7800</code> trong <code>quirks.c</code>, theo đúng tiền lệ của WLAN <code>0bda:b812</code>. Như vậy eth1 được giữ nguyên qua ErP. Kèm theo (B): 2-port LAN cần xử lý việc eth1 được tạo lại, vì disconnect/connect vẫn có thể xảy ra trên các đường lỗi USB khác. Có thể xác minh (A) <b>không cần build</b> bằng lệnh <code>echo 1 &gt; /sys/bus/usb/devices/4-1.4/power/persist</code> (xem <a href="#xac-minh">mục 11</a>).</p>
+</section>
+
+<!-- 2 -->
+<section id="boi-canh">
+  <h2><span class="n">2</span>Bối cảnh ticket và lịch sử</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Ngày</th><th>Sự kiện</th><th>Nội dung</th></tr></thead>
+    <tbody>
+      <tr class="r-root"><td class="num">26/10</td><td>Báo lỗi (F00-W4(01))</td><td>Sau ErP: đèn link LAN mở rộng <b>tắt</b>, ping NW2 NG. Ngoài ra, khi đang ở ErP thì ping từ PC không đánh thức được MFP (&lt;結果&gt;1).</td></tr>
+      <tr class="r-mute"><td class="num">26/10</td><td>Triage AI</td><td>BSP 0.5. “4-1.4 không được re-enumerate, lan78xx đọc register lỗi -19”.</td></tr>
+      <tr class="r-mute"><td class="num">27/10</td><td>BSP (Kawamura)</td><td>Cùng gốc với <b>OP_BTS-69103</b>: khi ErP resume, USB device (LAN mở rộng) không được disconnect/connect. Fix ở PR #530, Fix_Version F00-W4(02).</td></tr>
+      <tr class="r-mute"><td class="num">27/10</td><td>Bot review PR #530</td><td>R-1: bỏ việc chặn <code>hub_event</code> trong lúc resume (<code>!usb_resume_fin</code>) và bỏ <code>usb_kick_hub_wq</code> ở cuối resume. R-2: thêm <code>usb_pm_stack_pop_with_lock</code> trong <code>usb_disconnect</code>. Test chưa có mục cho LAN mở rộng.</td></tr>
+      <tr class="r-warn"><td class="num">11/11</td><td>Re-open (F00-W4(03))</td><td>Đèn link <b>đã sáng</b>, nhưng ping NW2 vẫn NG. &lt;結果&gt;1 vẫn xảy ra. Khởi động lại thì OK.</td></tr>
+      <tr class="r-warn"><td class="num">13/11</td><td>BSP (Kawamura)</td><td>“Lần này disconnect/connect đã chạy, nên là vấn đề khác. Không có log Link up; eth1 trong ifconfig không UP. Đã khởi tạo xong ở mức USB device nhưng chưa khởi tạo ở mức network. Nên hỏi người phụ trách 2-port LAN xem khác gì so với trước.” Giao cho FPT.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Nguồn: PDF Jira OP_BTS-71327, <code>raw/jira_ticket.md</code>, <code>triage_report.OP_BTS-71327.ja.html</code>.</p>
+</section>
+
+<!-- 3 -->
+<section id="cau-hinh">
+  <h2><span class="n">3</span>Cấu hình phần cứng và mạng (log 11/11)</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Thành phần</th><th>USB path / netdev</th><th>ID</th><th>Persist</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td>LAN onboard (NW1)</td><td><code>eth0</code> (mvri, IRQ 79)</td><td>—</td><td>—</td><td>Không phải USB. Khi ErP, LPPP tạm giữ HW (<code>lppp owns Ethernet HW</code>).</td></tr>
+      <tr class="r-root"><td>LAN mở rộng (NW2)</td><td><code>4-1.4</code> → <code>eth1</code></td><td><code>0424:7800</code> LAN7800</td><td class="bad">0</td><td>Driver <code>lan78xx</code> (module). MAC <code>00:50:AA:1C:6F:D1</code>.</td></tr>
+      <tr><td>USB hub SS</td><td><code>4-1</code></td><td><code>045b:0210</code></td><td class="good">1 (hub)</td><td>Hub luôn được bật persist.</td></tr>
+      <tr class="r-ok"><td>WLAN</td><td><code>3-1.2</code></td><td><code>0bda:b812</code> RTL8812BU</td><td class="good">1 (quirk KM)</td><td>Ngoại lệ <code>CONFIG_KM_BIZHUB</code> trong <code>quirks.c</code>.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Cài đặt NW2 (A3 csv): IPv4 đặt tay <code>192.168.43.118/255.255.254.0</code>, GW <code>192.168.42.1</code>. LAN2回線設定 = 2ポートLAN, VLAN Enable = 0.</p>
+</section>
+
+<!-- 4 -->
+<section id="co-che">
+  <h2><span class="n">4</span>Cơ chế lỗi</h2>
+  <div class="flow">
+    <div class="step"><b>Bấm giữ phím nguồn phụ → ErP</b><small>setErpMode / execErpMode → req_DeepSleepShift() → pm_suspend</small></div>
+    <div class="arrow"></div>
+    <div class="step"><b>Khi resume: “root hub lost power or was reset” (usb1–usb4)</b><small>xHCI mất trạng thái → hub 4-1 được reset-resume (hub có persist)</small></div>
+    <div class="arrow"></div>
+    <div class="step"><b>hub_activate(HUB_RESET_RESUME) duyệt từng cổng con</b><small>hub.c:1274–1287 — port không ENABLE: nếu udev-&gt;persist_enabled thì reset_resume, nếu không thì “power session is gone” → NOTATTACHED</small></div>
+    <div class="arrow"></div>
+    <div class="split">
+      <div class="branch ok">
+        <div class="title">Có persist (WLAN 3-1.2, hub 4-1.3)</div>
+        <div class="step">reset_resume = 1 → port reset → driver <code>reset_resume()</code><small>log: “usb 3-1.2: reset high-speed USB device number 4”</small></div>
+        <div class="arrow"></div>
+        <div class="step end-ok"><b>Giữ nguyên thiết bị và netdev</b>, cấu hình mạng không đổi</div>
+      </div>
+      <div class="branch bad">
+        <div class="title">Không persist (LAN7800 4-1.4)</div>
+        <div class="step">state = NOTATTACHED<small>log: “usb 4-1.4: usb_resume CALL state=0”, lan78xx đọc reg -19</small></div>
+        <div class="arrow"></div>
+        <div class="step">Đặt change_bits → chờ hub_wq disconnect/re-enumerate</div>
+      </div>
+    </div>
+    <div class="arrow"></div>
+    <div class="split">
+      <div class="branch warn">
+        <div class="title">26/10 · trước fix 69103</div>
+        <div class="step">hub_event bị chặn trong lúc resume → <b>không disconnect</b></div>
+        <div class="arrow"></div>
+        <div class="step end-bad">eth1 cũ còn UP + IP, nhưng mọi truy cập trả về -19. Đèn link tắt, ping NG.</div>
+      </div>
+      <div class="branch bad">
+        <div class="title">11/11 · sau fix 69103</div>
+        <div class="step">USB disconnect → <code>unregister_netdev(eth1)</code>: IP, route bị xoá</div>
+        <div class="arrow"></div>
+        <div class="step">Re-enumerate → <code>lan78xx_probe</code>: <code>phy_init</code> + <code>register_netdev</code> → eth1 mới (DOWN)</div>
+        <div class="arrow"></div>
+        <div class="step end-bad"><b>Không ai ifup / gán IP.</b> Đèn link sáng (PHY autoneg), ping NG.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="timeline">
+  <h2><span class="n">5</span>Chuỗi sự kiện 11/11 (F00-W4(03))</h2>
+  <p>Mốc quy đổi: kernel <code>184.631414</code> ↔ wall <code>09:05:36.332</code> (垂れ流しログ dòng 2888). Kernel time dừng trong lúc suspend (khoảng 46 s), nên mốc chỉ dùng được cho giai đoạn sau resume.</p>
+  <div class="chart">
+    <svg viewBox="0 0 700 250" role="img" aria-label="Trục thời gian quanh lúc thoát ErP">
+      <!-- x = 120 + (t-183.0)*270 ; 183.0..185.0 -> 120..660 -->
+      <g class="ax">
+        <line class="grid" x1="120" y1="28" x2="120" y2="200"/><text x="120" y="218" text-anchor="middle">183.0</text>
+        <line class="grid" x1="255" y1="28" x2="255" y2="200"/><text x="255" y="218" text-anchor="middle">183.5</text>
+        <line class="grid" x1="390" y1="28" x2="390" y2="200"/><text x="390" y="218" text-anchor="middle">184.0</text>
+        <line class="grid" x1="525" y1="28" x2="525" y2="200"/><text x="525" y="218" text-anchor="middle">184.5</text>
+        <line class="grid" x1="660" y1="28" x2="660" y2="200"/><text x="660" y="218" text-anchor="middle">185.0</text>
+        <text x="390" y="240" text-anchor="middle">kernel time [s] (09:05:34.7 → 09:05:36.7)</text>
+      </g>
+      <!-- lanes -->
+      <text x="8" y="56">USB 4-1.4</text>
+      <rect class="lane" x="120" y="42" width="540" height="22" rx="3"/>
+      <text x="8" y="100">netdev eth1</text>
+      <rect class="lane" x="120" y="86" width="540" height="22" rx="3"/>
+      <text x="8" y="144">mio / NIC</text>
+      <rect class="lane" x="120" y="130" width="540" height="22" rx="3"/>
+      <text x="8" y="188">Power</text>
+      <rect class="lane" x="120" y="174" width="540" height="22" rx="3"/>
+
+      <!-- USB lane: dead 183.26..183.86 ; gone 183.86..184.666 ; new 184.666..185 -->
+      <rect class="b-dead" x="190" y="42" width="162" height="22" rx="3"/>
+      <text class="lblw" x="196" y="57">NOTATTACHED (-19)</text>
+      <rect class="b-none" x="352" y="43" width="218" height="20" rx="3"/>
+      <text class="lbl" x="360" y="57">không có thiết bị</text>
+      <rect class="b-ok" x="570" y="42" width="90" height="22" rx="3"/>
+      <text class="lblw" x="576" y="57">device mới</text>
+
+      <!-- netdev lane: old until 183.86, none until ~184.68, new DOWN after -->
+      <rect class="b-old" x="120" y="86" width="232" height="22" rx="3"/>
+      <text class="lblw" x="126" y="101">eth1 cũ (UP, có IP)</text>
+      <rect class="b-none" x="352" y="87" width="222" height="20" rx="3"/>
+      <text class="lbl" x="360" y="101">eth1 không tồn tại</text>
+      <rect class="b-new" x="574" y="86" width="86" height="22" rx="3"/>
+      <text class="lblw" x="580" y="101">eth1 DOWN</text>
+
+      <!-- mio lane: 184.171..184.456 -->
+      <rect class="b-mio" x="436" y="130" width="77" height="22" rx="3"/>
+      <text class="lbl" x="436" y="166">mioPostChangeModeToNormal</text>
+
+      <!-- Power lane -->
+      <rect class="b-mio" x="345" y="174" width="315" height="22" rx="3" opacity=".35"/>
+      <text class="lbl" x="352" y="189">DeepSleepShift End → WakeUp → Now[21]&gt;Next[7]</text>
+
+      <!-- markers -->
+      <line class="mk" x1="352" y1="28" x2="352" y2="200"/>
+      <text x="352" y="22" text-anchor="middle" font-size="11">183.86 suspend exit + USB disconnect</text>
+    </svg>
+    <div class="legend">
+      <span><i style="background:var(--warn)"></i>thiết bị cũ “chết”</span>
+      <span><i style="border:1.5px dashed var(--root)"></i>không có thiết bị / netdev</span>
+      <span><i style="background:var(--root)"></i>eth1 mới chưa được cấu hình</span>
+      <span><i style="background:var(--accent)"></i>xử lý wake của userland</span>
+    </div>
+  </div>
+
+  <div class="scroll"><table>
+    <thead><tr><th>Wall (≈)</th><th>Kernel</th><th>Sự kiện</th><th>Log</th></tr></thead>
+    <tbody>
+      <tr class="r-mute"><td class="num">09:02:32.2</td><td class="num">65.49</td><td>Load module <code>lan78xx</code>, mở eth1 (<code>8021q: adding VLAN 0 … eth1</code>), Link Down</td><td class="num">messages:291–293</td></tr>
+      <tr class="r-ok"><td class="num">09:02:43</td><td class="num">76.39</td><td>NIC mở lại eth1 → <b>Link is Up 100Mbps/Full</b>, eth1 hoạt động bình thường</td><td class="num">messages:320–330</td></tr>
+      <tr class="r-mute"><td class="num">09:02:53.7</td><td class="num">—</td><td><code>THRF_fixWIREDLANPort</code> tìm thấy LAN tại <code>4-1.4</code> (chỉ chạy lúc init)</td><td class="num">垂れ流し:1333</td></tr>
+      <tr class="r-mute"><td class="num">09:04:48.14</td><td class="num">—</td><td><code>[setErpMode]Shift Erp mode</code> → <code>execErpMode</code> → <code>req_DeepSleepShift() Start</code>, <code>ncLiDeepSleepStart</code></td><td class="num">垂れ流し:2728–2757</td></tr>
+      <tr class="r-mute"><td class="num">09:04:49.1</td><td class="num">180.46</td><td><code>pm_suspend</code>; USB suspend (4-1.4, 4-1, usb4…); <code>mvri_suspend</code>: LPPP tạm giữ HW Ethernet</td><td class="num">messages:640–672</td></tr>
+      <tr class="r-mute"><td class="num">(resume)</td><td class="num">182.53</td><td><code>usb usb1..usb4: root hub lost power or was reset</code></td><td class="num">messages:728–732</td></tr>
+      <tr class="r-ok"><td class="num">(resume)</td><td class="num">183.11</td><td>Hub <code>4-1</code>: <code>reset SuperSpeed … number 2</code> (reset-resume, persist)</td><td class="num">messages:762</td></tr>
+      <tr class="r-root"><td class="num">09:05:34.96</td><td class="num">183.2616</td><td><b><code>usb 4-1.4: usb_resume CALL state=0</code></b> (NOTATTACHED) → <code>lan78xx … Failed to read register 0x120 ret=-19</code> → PHY resume -5</td><td class="num">messages:785–791</td></tr>
+      <tr class="r-ok"><td class="num">(resume)</td><td class="num">183.32</td><td>WLAN <code>3-1.2</code>: <code>reset high-speed … number 4</code>: reset-resume thành công (persist)</td><td class="num">messages:792–795</td></tr>
+      <tr class="r-root"><td class="num">09:05:35.56</td><td class="num">183.8601</td><td>Restarting tasks → <b><code>usb 4-1.4: USB disconnect</code></b>, <code>eth1: Link is Down</code> → netdev eth1 bị unregister</td><td class="num">messages:802–805</td></tr>
+      <tr class="r-mute"><td class="num">09:05:35.59</td><td class="num">—</td><td><code>req_DeepSleepShift() End</code>, Power Now[8]→Next[21]</td><td class="num">垂れ流し:2825–2826</td></tr>
+      <tr class="r-warn"><td class="num">09:05:35.872</td><td class="num">≈184.17</td><td><code>[mioPostChangeModeToNormal](1) &lt;-</code> (middleware mạng khôi phục sau sleep)</td><td class="num">垂れ流し:2865</td></tr>
+      <tr class="r-warn"><td class="num">09:05:36.157</td><td class="num">≈184.46</td><td><code>[mioPostChangeModeToNormal] code=0 -&gt;</code>: kết thúc, <b>lúc này eth1 chưa tồn tại</b></td><td class="num">垂れ流し:2887</td></tr>
+      <tr class="r-root"><td class="num">09:05:36.37</td><td class="num">184.666</td><td><code>usb 4-1.4: new SuperSpeed … number 4</code> → <code>enumerated 0424:7800</code> → probe lan78xx → eth1 mới</td><td class="num">messages:859–862</td></tr>
+      <tr class="r-root"><td class="num">09:05:36 → 09:07</td><td class="num">—</td><td><b>Không có</b> <code>8021q: adding VLAN 0 … eth1</code>, <code>Link is Up</code>, hay bất kỳ dòng <code>lan78xx</code> nào nữa đến hết log</td><td class="num">messages:862→EOF</td></tr>
+      <tr class="r-root"><td class="num">09:07</td><td class="num">—</td><td>SysLogALL: <code>eth1: flags=4098&lt;BROADCAST,MULTICAST&gt;</code> (DOWN), không có inet, route NW2 mất; UDP vẫn bind <code>192.168.43.118:137/138</code></td><td class="num">SysLog:127416, 127448, 127518</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 6 -->
+<section id="so-sanh">
+  <h2><span class="n">6</span>So sánh: khởi động bình thường, 26/10 và 11/11</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Hạng mục</th><th>Sau khởi động</th><th>26/10 sau ErP (W4(01))</th><th>11/11 sau ErP (W4(03))</th></tr></thead>
+    <tbody>
+      <tr><td>4-1.4 khi resume</td><td>—</td><td class="bad">state=0, không disconnect</td><td class="mid">state=0 → disconnect → enumerate lại</td></tr>
+      <tr><td>Thiết bị LAN7800</td><td class="good">OK</td><td class="bad">Chết, đọc reg lỗi -19 liên tục (≥12 lần)</td><td class="good">Thiết bị mới hoạt động</td></tr>
+      <tr><td>netdev eth1</td><td class="good">UP, RUNNING</td><td class="mid">Vẫn là eth1 cũ: <code>UP</code>, không RUNNING</td><td class="bad">eth1 mới: <code>flags=4098</code> (DOWN)</td></tr>
+      <tr><td>IPv4 trên eth1</td><td class="good">192.168.43.118/23</td><td class="mid">Còn 192.168.43.118 (vô dụng)</td><td class="bad">Không có</td></tr>
+      <tr><td>Route NW2</td><td class="good">default metric 1, 192.168.42.0/23, 224.0.0.0/4</td><td class="mid">Còn (vô dụng)</td><td class="bad">Mất hết, chỉ còn route eth0</td></tr>
+      <tr><td><code>8021q … eth1</code> / <code>Link is Up</code></td><td class="good">Có (65.5 s, 74.3 s / 67.7 s, 76.4 s)</td><td class="bad">Không</td><td class="bad">Không</td></tr>
+      <tr><td>Đèn link</td><td class="good">Sáng</td><td class="bad">Tắt</td><td class="good">Sáng (PHY init khi probe)</td></tr>
+      <tr><td>Ping NW2</td><td class="good">OK</td><td class="bad">NG</td><td class="bad">NG</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Nguồn: <code>SysLogALL/messages</code>, phần <code>- ifconfig -a -</code> và <code>- route -</code> trong <code>202610261017_001.log</code> (dòng 127003–127054) và <code>202611110907_001.log</code> (dòng 127405–127458). Hai log lấy trên hai máy khác nhau (MAC eth0 khác), nhưng cùng cấu hình.</p>
+</section>
+
+<!-- 7 -->
+<section id="bang-chung">
+  <h2><span class="n">7</span>Bằng chứng chi tiết</h2>
+
+  <div class="fact">
+    <h3>E1. LAN7800 mất power session vì không có persist <span class="k">hub.c · quirks.c · defconfig</span></h3>
+    <p><code>CONFIG_USB_DEFAULT_PERSIST</code> không bật (<code>arch/arm64/configs/EagleZp_defconfig:3416</code>, Eagle/EagleZ cũng vậy). Khi đó chỉ hub, và ngoại lệ KM cho Realtek 8812BU, mới có <code>persist_enabled = 1</code>:</p>
+<pre><span class="ln">743</span> #ifdef CONFIG_USB_DEFAULT_PERSIST
+<span class="ln">744</span>     if (!(udev-&gt;quirks &amp; USB_QUIRK_RESET))
+<span class="ln">745</span>         udev-&gt;persist_enabled = 1;
+<span class="ln">746</span> #else
+<span class="ln">747</span>     /* Hubs are automatically enabled for USB-PERSIST */
+<span class="ln">748</span>     if (udev-&gt;descriptor.bDeviceClass == USB_CLASS_HUB)
+<span class="ln">749</span>         udev-&gt;persist_enabled = 1;
+<span class="ln">750</span> #endif
+<span class="ln">751</span> <span class="ok">#ifdef CONFIG_KM_BIZHUB</span>
+<span class="ln">752</span> <span class="ok">    /* VendorID:0x0bda ProductID:0xb812 Realtek 8812BU */</span>
+<span class="ln">753</span> <span class="ok">    if (udev-&gt;descriptor.idVendor == 0x0bda &amp;&amp; udev-&gt;descriptor.idProduct == 0xb812)</span>
+<span class="ln">754</span> <span class="ok">        udev-&gt;persist_enabled = 1;</span>
+<span class="ln">755</span> #endif</pre>
+    <p class="cap">Kernel/Src/drivers/usb/core/quirks.c. Không có ngoại lệ nào cho <code>0424:7800</code>.</p>
+<pre><span class="ln">1274</span>     } else if (udev-&gt;persist_enabled) {
+<span class="ln">1276</span>         udev-&gt;reset_resume = 1;      <span class="cm">/* WLAN, hub đi nhánh này */</span>
+<span class="ln">     </span>         ...
+<span class="ln">1284</span>     } else {
+<span class="ln">1285</span> <span class="hl">        /* The power session is gone; tell hub_wq */</span>
+<span class="ln">1286</span> <span class="hl">        usb_set_device_state(udev, USB_STATE_NOTATTACHED);</span>   <span class="cm">/* LAN7800 đi nhánh này */</span>
+<span class="ln">1287</span>         set_bit(port1, hub-&gt;change_bits);</pre>
+    <p class="cap">Kernel/Src/drivers/usb/core/hub.c, <code>hub_activate()</code>. Khớp với log <code>usb 4-1.4: usb_resume CALL state=0</code> (0 = <code>USB_STATE_NOTATTACHED</code>) ở cả 26/10 (messages:704) lẫn 11/11 (messages:785).</p>
+  </div>
+
+  <div class="fact">
+    <h3>E2. Đối chứng trong cùng lần resume: WLAN có persist thì sống sót <span class="k">messages 11/11</span></h3>
+<pre><span class="ln">762</span> [183.110825] usb 4-1: <span class="ok">reset SuperSpeed Gen 1 USB device number 2</span> using xhci-hcd   <span class="cm">← hub, persist</span>
+<span class="ln">785</span> [183.261570] usb 4-1.4: <span class="hl">usb_resume CALL state=0</span>                                  <span class="cm">← LAN7800, no persist</span>
+<span class="ln">789</span> [183.261606] lan78xx 4-1.4:1.0 eth1: <span class="hl">Failed to read register index 0x00000120. ret = -19</span>
+<span class="ln">791</span> [183.261622] Generic PHY usb-004:003:01: PM: failed to resume: error -5
+<span class="ln">792</span> [183.320626] usb 3-1.2: <span class="ok">reset high-speed USB device number 4</span> using xhci-hcd        <span class="cm">← WLAN 0bda:b812, persist (quirk KM)</span>
+<span class="ln">804</span> [183.860121] usb 4-1.4: <span class="hl">USB disconnect, device number 3</span>
+<span class="ln">805</span> [183.863599] lan78xx 4-1.4:1.0 eth1: Link is Down
+<span class="ln">861</span> [184.647858] usb 4-1.4: <span class="wn">new SuperSpeed Gen 1 USB device number 4</span> using xhci-hcd
+<span class="ln">862</span> [184.665955] usb 4-1.4: OP_BTS-69673: enumerated 0424:7800 speed=super-speed</pre>
+    <p class="cap">Số thứ tự thiết bị đổi từ 3 sang 4: đây là một thiết bị USB mới, nên lan78xx probe lại và tạo netdev mới.</p>
+  </div>
+
+  <div class="fact">
+    <h3>E3. eth1 mới không được cấu hình <span class="k">SysLogALL 11/11</span></h3>
+<pre>- ifconfig -a -
+eth0: flags=4611&lt;UP,BROADCAST,ALLMULTI,MULTICAST&gt;  mtu 1500
+        inet 10.241.43.118  netmask 255.255.254.0  broadcast 10.241.43.255
+<span class="hl">eth1: flags=4098&lt;BROADCAST,MULTICAST&gt;  mtu 1500</span>          <span class="cm">← không UP, không inet</span>
+        ether 00:50:aa:1c:6f:d1  txqueuelen 1000  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)   TX packets 0  bytes 0 (0.0 B)  <span class="cm">← counter reset = netdev mới</span>
+
+- route -A inet -
+default         10.241.42.1     0.0.0.0         UG    0  0  0 eth0
+10.241.42.0     KMA83989        255.255.254.0   UG    0  0  0 eth0   <span class="cm">← không còn route của eth1</span>
+
+- netstat -anp -
+udp   0  0 <span class="wn">192.168.43.118:137</span>   0.0.0.0:*   702/mfp000_hwQt     <span class="cm">← app vẫn bind vào IP đã mất</span>
+udp   0  0 <span class="wn">192.168.43.118:138</span>   0.0.0.0:*   702/mfp000_hwQt</pre>
+    <p class="cap">Dòng 127405–127521 của <code>202611110907_001.log</code>. Socket UDP vẫn bind vào <code>192.168.43.118</code> cho thấy middleware không biết IP NW2 đã bị gỡ khỏi kernel. Ngay cả khi gán lại IP, các service bind theo IP có thể cần được khởi tạo lại.</p>
+  </div>
+
+  <div class="fact">
+    <h3>E4. Vì sao đèn link sáng mà vẫn không ping được <span class="k">lan78xx.c</span></h3>
+    <p><code>lan78xx_probe()</code> gọi <code>lan78xx_phy_init(dev)</code> (dòng 4089) trước <code>register_netdev()</code> (dòng 4093). PHY được cấu hình LED và tự autoneg ngay lúc probe, nên đèn link sáng dù chưa có ai gọi <code>ndo_open</code>. Ở lúc khởi động, mỗi lần eth1 được mở đều có dòng <code>8021q: adding VLAN 0 to HW filter on device eth1</code> (do <code>vlan_vid_add</code> khi <code>dev_open</code>). Sau re-enumerate không có dòng này, khớp với việc chưa có ai chạy <code>ifconfig eth1 up</code>.</p>
+  </div>
+
+  <div class="fact">
+    <h3>E5. Xử lý wake của tầng mạng chạy trước khi eth1 mới xuất hiện <span class="k">垂れ流しログ 11/11</span></h3>
+<pre><span class="ln">2825</span> [09:05:35.593] (4294944055)(BSP) : req_DeepSleepShift() End
+<span class="ln">2865</span> [09:05:35.872] <span class="wn">[mioPostChangeModeToNormal](1) &lt;-</span>
+<span class="ln">2887</span> [09:05:36.157] <span class="wn">[mioPostChangeModeToNormal] code =0 (0) -&gt;</span>
+<span class="ln">2888</span> [09:05:36.332] [  184.631414] usb 4-1.4: OP_BTS-69673: SS level=2 port4 initial PLS=0x000 (U0)
+<span class="ln">2890</span> [09:05:36.363] [  184.665955] usb 4-1.4: <span class="hl">OP_BTS-69673: enumerated 0424:7800</span> speed=super-speed</pre>
+    <p>Thứ tự: eth1 cũ bị xoá (≈35.56) → mio khôi phục mạng (35.87–36.16) → eth1 mới đăng ký (≥36.37). Dù mio có xử lý lại eth1 khi wake, nó cũng không thể thấy eth1 mới. Sau thời điểm đó không có trigger nào khác. <span class="mid">(Source mio/NicFum không có trong repo nên phần “mio làm gì với eth1” là suy luận từ log.)</span></p>
+  </div>
+
+  <div class="fact">
+    <h3>E6. Phát hiện LAN mở rộng chỉ chạy lúc khởi động <span class="k">THRC_BSPif.cpp · SYSC_SystemInit.cpp</span></h3>
+    <p><code>THRF_fixWIREDLANPort()</code> / <code>THRF_isExistWIREDLAN()</code> (<code>thr_it6/thrcom/THRC_BSPif.cpp:2525–2604</code>, RQ-1039) chỉ được gọi từ <code>SYSC_SystemInit.cpp:1502</code> lúc init. Trong source controller có trong repo không có chuỗi <code>eth1</code> nào, cũng không có xử lý netlink/udev cho việc LAN mở rộng được tạo lại.</p>
+    <p>Với chế độ power-save thường, Power đã chủ động <b>chặn DeepSleep</b> khi có LAN2 (<code>PWRE_DsleepDisableLanLine2Enable</code>, <code>PWRC_PowerImpColor.cpp:7450–7454</code>, “拡張有線LAN有効時のDeepSleepへの遷移抑止対応”). Đường ErP (<code>setErpMode</code>/<code>execErpMode</code>) thì vẫn vào DeepSleep mà không kiểm tra điều kiện này. Vì vậy <b>ErP là đường duy nhất</b> khiến LAN mở rộng bị cắt nguồn, và thiết kế RQ-1039 chưa tính tới trường hợp này.</p>
+  </div>
+
+  <div class="fact">
+    <h3>E7. Fix OP_BTS-69103 đã có trong source repo <span class="k">driver.c · hub.c</span></h3>
+    <p><code>usb_disconnect()</code> gọi <code>usb_pm_stack_pop_with_lock(udev)</code> (hub.c:2360, driver.c:1751–1762), và hub.c không còn đoạn chặn <code>hub_event</code> theo <code>usb_resume_fin</code>. Điều này khớp với việc disconnect chạy ngay sau <code>Restarting tasks</code>/<code>PM: suspend exit</code> (messages:802–804).</p>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="nguyen-nhan">
+  <h2><span class="n">8</span>Nguyên nhân gốc và phân trách nhiệm</h2>
+  <ol>
+    <li><b>Hành vi kernel hiện tại đúng theo thiết kế mainline.</b> Thiết bị USB mất nguồn mà không có persist thì bị disconnect và enumerate lại thành thiết bị mới. Fix 69103 chỉ trả lại hành vi đúng này.</li>
+    <li><b>Thiết kế 2-port LAN (RQ-1039) ngầm giả định eth1 tồn tại suốt vòng đời hệ thống.</b> Cấu hình eth1 (UP, IP, route, VLAN filter, service bind) chỉ chạy lúc init. Trước fix 69103 giả định này “đúng” một cách tình cờ, vì netdev cũ không bị huỷ (dù thiết bị đã chết).</li>
+    <li><b>Lỗi lộ ra chỉ ở ErP</b>, vì power-save thường đã chặn DeepSleep khi có LAN2 (E6).</li>
+  </ol>
+  <div class="note"><b>Trả lời câu hỏi của BSP (13/11) “so với trước khác gì”:</b> Trước (W4(01)): không disconnect, nên eth1 cũ vẫn UP và có IP nhưng thiết bị không truy cập được (đèn tắt). Bây giờ (W4(03)): eth1 bị huỷ rồi tạo lại, nên thiết bị chạy (đèn sáng) nhưng netdev mới chưa được cấu hình. Cả hai trường hợp đều không ping được, nhưng lý do khác nhau.</div>
+</section>
+
+<!-- 9 -->
+<section id="phuong-an">
+  <h2><span class="n">9</span>Phương án sửa</h2>
+
+  <div class="opt rec">
+    <h3><span class="tag ok">Khuyến nghị chính</span>A. BSP: bật USB-persist cho LAN7800</h3>
+    <p>Thêm <code>0424:7800</code> vào ngoại lệ persist trong <code>quirks.c</code>, giống WLAN. Khi đó hub đi nhánh <code>reset_resume = 1</code>, và driver gọi <code>lan78xx_reset_resume()</code> (lan78xx.c:4661): <code>lan78xx_reset()</code> → <code>phy_start()</code> → <code>lan78xx_resume()</code>. <code>lan78xx_reset()</code> tự nạp lại MAC (<code>lan78xx_init_mac_address</code>), features và multicast. Netdev eth1 được <b>giữ nguyên</b> (ifindex, IP, route, socket).</p>
+<pre><span class="cm">/* Kernel/Src/drivers/usb/core/quirks.c — usb_detect_quirks() */</span>
+#ifdef CONFIG_KM_BIZHUB
+    /* VendorID:0x0bda ProductID:0xb812 Realtek 8812BU */
+    if (udev-&gt;descriptor.idVendor == 0x0bda &amp;&amp; udev-&gt;descriptor.idProduct == 0xb812)
+        udev-&gt;persist_enabled = 1;
+<span class="ok">    /* OP_BTS-71327: 拡張LAN(LAN7800)をErP復帰後もreset_resumeで継続させる */
+    if (udev-&gt;descriptor.idVendor == 0x0424 &amp;&amp; udev-&gt;descriptor.idProduct == 0x7800)
+        udev-&gt;persist_enabled = 1;</span>
+#endif</pre>
+    <div class="pc">
+      <div><b>Ưu điểm</b>Sửa nhỏ, có tiền lệ, không phải sửa userland. Đồng thời sửa luôn cả triệu chứng 26/10 (không cần disconnect). Có thể kiểm chứng trước bằng sysfs mà không cần build.</div>
+      <div><b>Rủi ro / cần kiểm</b>Nếu LAN7800 lên chậm và reset thất bại, kernel vẫn rơi về đường disconnect, tức là quay lại tình trạng hiện tại, nên vẫn cần (B). Bảng VLAN HW không được <code>lan78xx_reset</code> ghi lại; cần thử với cài đặt VLAN. Cần test hồi quy OP_BTS-69103/69673.</div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="tag info">Bắt buộc để chắc chắn</span>B. 2-port LAN / NIC: xử lý eth1 được tạo lại</h3>
+    <p>Bất kỳ đường nào làm LAN7800 disconnect/connect (lỗi USB, power cycle cổng theo OP_BTS-69673, reset kiểu OP_BTS-10123…) đều tạo eth1 mới. Tầng 2-port LAN cần:</p>
+    <ul>
+      <li>Theo dõi netlink <code>RTM_NEWLINK</code>/<code>RTM_DELLINK</code> của eth1 (hoặc uevent <code>net/eth1 add</code>), hoặc sau khi thoát ErP thì poll <code>/sys/class/net/eth1</code> và <code>/sys/bus/usb/devices/4-1.4</code> có timeout.</li>
+      <li>Khi eth1 mới xuất hiện, chạy lại đúng chuỗi cấu hình như lúc boot: UP, IP/mask, default GW metric 1, route <code>192.168.42.0/23</code>, multicast <code>224.0.0.0/4</code>, VLAN (nếu có), IPv6, và khởi tạo lại các service đang bind theo IP NW2.</li>
+      <li>Có thể dựa vào tiền lệ WLAN (<code>set_WlanReset_ErrorNotify</code>, OP_BTS-10123) để đi theo một đường thông báo sẵn có từ kernel lên app.</li>
+    </ul>
+  </div>
+
+  <div class="opt">
+    <h3><span class="tag mute">Phương án phụ</span>C. Power/THR: chờ LAN mở rộng sẵn sàng rồi mới báo “wake xong” cho mạng</h3>
+    <p>Sau <code>req_DeepSleepShift() End</code>, nếu <code>getLanLine2Exist()</code> thì chờ eth1 mới đăng ký (tối đa vài giây), sau đó mới gọi phần khôi phục mạng (mio). Cách này đơn giản nhưng phụ thuộc thời gian, và không xử lý được disconnect xảy ra ngoài ErP.</p>
+  </div>
+
+  <div class="opt">
+    <h3><span class="tag warn">Không khuyến nghị</span>D. Chặn ErP khi có LAN2 (giống DeepSleep)</h3>
+    <p>Đi ngược đặc tả tiết kiệm năng lượng của ErP (副電源OFF) nên cần quyết định ở cấp spec. Chỉ nêu ra để tham khảo.</p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="ket-qua-1">
+  <h2><span class="n">10</span>Về &lt;結果&gt;1: đang ở ErP thì ping không đánh thức được MFP</h2>
+  <p>Người báo lỗi coi đây là cùng một bug. Theo log, cơ chế là khác:</p>
+  <ul>
+    <li>Khi ErP, chỉ có <code>eth0</code> (mvri) được LPPP tiếp quản (<code>mvri-iris: lppp owns Ethernet HW</code>) để làm proxy ARP/unicast và wake. LAN7800 nằm sau USB đã bị suspend hoặc mất nguồn, nên không có cơ chế nào trả lời ARP hay sinh wake từ phía NW2.</li>
+    <li>Các nguồn wake của PMU trong log gồm <code>WAKE_UP</code>, <code>WAKE_FIERY</code>, <code>WAKE_WLAN</code>; không có nguồn nào cho LAN mở rộng (messages:708–710). <code>mvri-iris: wake reason 0x00000000</code>: lần wake này là do phím.</li>
+  </ul>
+  <div class="note">Cần xác nhận: lúc test, ping được gửi tới IP NW1 hay NW2? Nếu là NW2 thì gần như chắc đây là <b>giới hạn spec</b> của RQ-1039 (NW2 không hỗ trợ ErP wake), nên tách thành vấn đề spec riêng. Nếu là NW1 mà vẫn NG thì cần kiểm tra riêng phía LPPP (liên quan OP_BTS-69981, FVT1).</div>
+</section>
+
+<!-- 11 -->
+<section id="xac-minh">
+  <h2><span class="n">11</span>Cách xác minh nhanh và test</h2>
+  <h3>Xác minh trên máy thật (không cần build)</h3>
+<pre><span class="cm"># 0) Trạng thái hiện tại (dự kiến 0)</span>
+cat /sys/bus/usb/devices/4-1.4/power/persist
+
+<span class="cm"># 1) Kiểm chứng phương án A: bật persist rồi vào/thoát ErP</span>
+echo 1 &gt; /sys/bus/usb/devices/4-1.4/power/persist
+<span class="cm">#    → Kỳ vọng: log có "usb 4-1.4: reset SuperSpeed ..." thay vì "USB disconnect",
+#      eth1 vẫn UP + 192.168.43.118, ping NW2 OK.</span>
+
+<span class="cm"># 2) Kiểm chứng phần thiếu là cấu hình: sau ErP (persist=0), cấu hình tay</span>
+ifconfig eth1 192.168.43.118 netmask 255.255.254.0 up
+route add default gw 192.168.42.1 metric 1 eth1
+<span class="cm">#    → Nếu ping NW2 OK thì xác nhận thiếu đúng bước cấu hình userland.</span>
+
+<span class="cm"># 3) Thu thêm log</span>
+ip monitor link &amp;                  <span class="cm"># thấy DELLINK/NEWLINK, ifindex đổi</span>
+cat /sys/class/net/eth1/ifindex    <span class="cm"># trước và sau ErP</span>
+ip -d link show eth1; ip addr; ip route</pre>
+  <h3>Checklist test sau khi sửa</h3>
+  <ul class="check">
+    <li>ErP vào/ra ≥ 20 lần liên tục, 2ポートLAN: đèn link, ping NW1 và NW2, SMB/IPP/RAW 9100 qua NW2.</li>
+    <li>NW2 dùng DHCP, IP tĩnh, IPv6; cài đặt LAN2 = VLAN.</li>
+    <li>Rút cáp NW2 trong lúc ErP rồi cắm lại sau khi wake (link down/up).</li>
+    <li>Power-save thường (Sleep / 低電力): không bị ảnh hưởng (DeepSleep vẫn bị chặn khi có LAN2).</li>
+    <li>WLAN (3-1.2) và FAX, USB memory: không hồi quy; hồi quy OP_BTS-69103, 69673, 44703/46374.</li>
+    <li>Giả lập disconnect ngoài ErP: <code>echo 4-1.4 &gt; /sys/bus/usb/drivers/usb/unbind</code> rồi bind lại; eth1 phải được cấu hình lại (kiểm tra phương án B).</li>
+  </ul>
+</section>
+
+<!-- 12 -->
+<section id="chua-ro">
+  <h2><span class="n">12</span>Điểm chưa xác nhận</h2>
+  <ul>
+    <li>Source của middleware mạng (mio / NicFum / ncLi) không có trong repo. Việc nó không có xử lý hotplug cho eth1 là <b>suy luận từ log</b> (E3, E5, E6).</li>
+    <li>Chưa kiểm chứng trên máy thật rằng persist cho LAN7800 thì reset-resume thành công. Cần chạy thử bước 1 ở mục 11. Nếu chip LAN7800 bị cắt nguồn hoàn toàn và lên chậm hơn lúc hub reset cổng, <code>usb_port_resume</code> có thể thất bại và rơi về logical disconnect.</li>
+    <li>eth0 trong ifconfig 11/11 không có cờ RUNNING (26/10 thì có). Nhiều khả năng lúc lấy log cáp NW1 không cắm; chưa xác nhận, và không liên quan trực tiếp tới bug này.</li>
+    <li>Không có video trong gói phân tích. Thông tin “đèn sáng / tắt” lấy từ mô tả trong ticket.</li>
+  </ul>
+</section>
+
+<!-- 13 -->
+<section id="jira">
+  <h2><span class="n">13</span>Bản nháp comment Jira (tiếng Nhật)</h2>
+<blockquote class="jp">KawamuraShinichi(FRONTIER)様
+cc: InagakiYuya様
+
+1111ログを解析しました。
+
+■現象のメカニズム
+・ErP復帰時にroot hubが電源断扱いとなり、拡張LAN(4-1.4, 0424:7800)はUSB persistが無効のため
+  hub_activate()で「power session is gone」→ NOTATTACHED（usb_resume CALL state=0）。
+・OP_BTS-69103対策後はdisconnect/connectが動作するため、lan78xxがeth1を一旦unregisterし、
+  新しいeth1をregisterしている（device number 3→4）。
+・新しいeth1に対してifup/IP設定が行われていない。
+  SysLogALL: eth1 flags=4098(DOWN)・inetなし・NW2のrouteなし、
+  一方でmfp000_hwQtは192.168.43.118:137/138をbindしたまま。
+・mioPostChangeModeToNormal（09:05:35.872〜36.157）は新eth1登録（184.666s ≒ 09:05:36.37）より前に終了。
+・リンクランプ点灯はlan78xx_probe()内のphy_init（autoneg）によるもので、IF upとは無関係。
+
+■以前との差分
+・W4(01)：disconnectされず旧eth1(UP/IPあり)のままデバイスがアクセス不可(-19) → ランプ消灯・Ping NG
+・W4(03)：eth1が再生成されるが未設定 → ランプ点灯・Ping NG
+
+■参考
+同じresume内でWLAN(3-1.2, 0bda:b812)はquirks.cのKM例外でpersist有効のため
+「reset high-speed USB device」でreset_resumeされ、継続動作しています。
+
+■対策案
+A) quirks.cで0424:7800もpersist有効化（WLANと同様）→ eth1が維持される
+   ※事前確認：echo 1 > /sys/bus/usb/devices/4-1.4/power/persist でErP試験
+B) 2ポートLAN側でeth1再生成（RTM_NEWLINK）を検知して再設定（他経路のdisconnect対策）
+AでのPing可否を実機確認のうえ、B要否を2ポートLAN担当で判断したいと考えています。</blockquote>
+</section>
+
+<!-- 14 -->
+<section id="phu-luc">
+  <h2><span class="n">14</span>Phụ lục: vị trí log và source</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Loại</th><th>File</th><th>Vị trí</th><th>Nội dung</th></tr></thead>
+    <tbody>
+      <tr><td>Log 11/11</td><td><code>SysLogALL/messages</code></td><td class="num">291–330</td><td>Khởi động: lan78xx load, 8021q eth1, Link Up</td></tr>
+      <tr><td>Log 11/11</td><td><code>SysLogALL/messages</code></td><td class="num">728–805, 859–862</td><td>Resume, state=0, -19, WLAN reset-resume, disconnect, enumerate lại</td></tr>
+      <tr><td>Log 11/11</td><td><code>OP_BTS-71327_1111_垂れ流しログ.log</code></td><td class="num">2728–2890</td><td>ErP vào/ra, mioPost, enumerate lại (CP932)</td></tr>
+      <tr><td>Log 11/11</td><td><code>SysLogALL/202611110907_001.log</code></td><td class="num">127405–127521</td><td>ifconfig, route, netstat</td></tr>
+      <tr><td>Log 11/11</td><td><code>SysLogALL/A3_…csv</code></td><td class="num">1517–1568</td><td>Cài đặt NW2 (IP, MAC)</td></tr>
+      <tr><td>Log 26/10</td><td><code>SysLogALL/messages</code></td><td class="num">687–733, 844–906</td><td>state=0, không disconnect, -19 lặp lại</td></tr>
+      <tr><td>Log 26/10</td><td><code>SysLogALL/202610261017_001.log</code></td><td class="num">127003–127054</td><td>eth1 UP + IP nhưng không RUNNING; route NW2 còn</td></tr>
+      <tr><td>Kernel</td><td><code>drivers/usb/core/hub.c</code></td><td class="num">1064, 1274–1287, 2312–2360</td><td>hub_activate, usb_disconnect (+69103)</td></tr>
+      <tr><td>Kernel</td><td><code>drivers/usb/core/quirks.c</code></td><td class="num">743–755</td><td>persist mặc định, ngoại lệ 8812BU</td></tr>
+      <tr><td>Kernel</td><td><code>drivers/usb/core/driver.c</code></td><td class="num">1751–1762, 1766–1853</td><td>usb_pm_stack_pop_with_lock, usb_resume</td></tr>
+      <tr><td>Kernel</td><td><code>drivers/net/usb/lan78xx.c</code></td><td class="num">1721, 2653, 3876–3893, 4089–4093, 4661–4676</td><td>init MAC, reset, disconnect, probe, reset_resume</td></tr>
+      <tr><td>Kernel</td><td><code>arch/arm64/configs/EagleZp_defconfig</code></td><td class="num">3416</td><td><code># CONFIG_USB_DEFAULT_PERSIST is not set</code></td></tr>
+      <tr><td>App</td><td><code>thr_it6/thrcom/THRC_BSPif.cpp</code></td><td class="num">2525–2604</td><td>THRF_fixWIREDLANPort / isExistWIREDLAN</td></tr>
+      <tr><td>App</td><td><code>sys/sysg/SYSC_SystemInit.cpp</code></td><td class="num">1499–1518</td><td>Kiểm tra LAN2 lúc init</td></tr>
+      <tr><td>App</td><td><code>pwr/pwrc/PWRC_PowerImpColor.cpp</code></td><td class="num">7450–7454, 7516–7620</td><td>Chặn DeepSleep khi có LAN2; setErpMode/execErpMode</td></tr>
+    </tbody>
+  </table></div>
+  <p class="cap">Đường dẫn source tính từ <code>Source_MFP/Kernel/Src/</code> và <code>Source_MFP/IT6_Controller/KM3/application/mfp/system/</code>. Source và log phần lớn là CP932; đọc bằng <code>iconv -f CP932 -t UTF-8 -c</code>.</p>
+</section>
+
+<footer>Phân tích dựa trên OP_BTS-71327.zip (PDF Jira, log 26/10, log 11/11, triage AI 26/10) và source trong repo Source_MFP. Những chỗ ghi “suy luận” là phần chưa được kiểm chứng bằng source.</footer>
+</main>
+</body>
+</html>

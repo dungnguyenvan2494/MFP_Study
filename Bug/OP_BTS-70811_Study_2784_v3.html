@@ -1,0 +1,1645 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OP_BTS-70811 I2C IRQ Storm</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: hồ sơ kỹ thuật — cột mục lục dính bên trái + cột nội dung 780px; "dải logic analyzer" là hình ảnh chủ đạo */
+:root{
+  --bg:#f2f5f4; --surface:#ffffff; --ink:#15201f; --muted:#596866; --line:#d3dbd9;
+  --accent:#0d6b63; --accent-soft:#dbeeeb;
+  --crit:#b3261e; --crit-soft:#f8e0dd; --warn:#8f5600; --warn-soft:#f6e7cc; --ok:#25703a; --ok-soft:#dcefe0;
+  --code-bg:#ecf1f0; --code-ink:#1c2a28; --add:#d7efdc; --del:#f6dcd9;
+  --f-body:"Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0d1312; --surface:#141c1b; --ink:#e1e9e7; --muted:#93a3a0; --line:#293533;
+  --accent:#4fc4b6; --accent-soft:#15302c;
+  --crit:#ff8177; --crit-soft:#3a1916; --warn:#f0b65c; --warn-soft:#33260e; --ok:#72d18c; --ok-soft:#14301c;
+  --code-bg:#0f1716; --code-ink:#d5e0de; --add:#14321d; --del:#3a1a17; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0d1312; --surface:#141c1b; --ink:#e1e9e7; --muted:#93a3a0; --line:#293533;
+  --accent:#4fc4b6; --accent-soft:#15302c;
+  --crit:#ff8177; --crit-soft:#3a1916; --warn:#f0b65c; --warn-soft:#33260e; --ok:#72d18c; --ok-soft:#14301c;
+  --code-bg:#0f1716; --code-ink:#d5e0de; --add:#14321d; --del:#3a1a17; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.68;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0 64px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:240px minmax(0,1fr);gap:48px}
+@media (max-width:980px){.wrap{grid-template-columns:minmax(0,1fr);gap:0}}
+
+/* TOC */
+nav.toc{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;max-height:100vh;overflow:auto;padding:32px 0 24px;font-size:13.5px}
+nav.toc .tl{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:t}
+nav.toc li a{display:block;padding:5px 10px;border-radius:6px;color:var(--ink);text-decoration:none;border-left:2px solid transparent}
+nav.toc li a:hover{background:var(--accent-soft)}
+nav.toc li a.on{border-left-color:var(--accent);background:var(--accent-soft);font-weight:600}
+nav.toc .sub a{padding-left:22px;color:var(--muted);font-size:12.5px}
+@media (max-width:980px){nav.toc{position:static;max-height:none;padding:20px 0 0}
+  nav.toc ol{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))} nav.toc .sub{display:none}}
+
+main{min-width:0;max-width:820px}
+header.hero{padding:40px 0 28px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.1;margin:10px 0 14px;font-weight:800;letter-spacing:-.02em;text-wrap:balance}
+.lede{font-size:18px;color:var(--muted);max-width:66ch;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:18px;font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+
+section{padding-top:44px}
+h2{font-size:26px;line-height:1.25;margin:0 0 6px;font-weight:700;letter-spacing:-.01em;text-wrap:balance;scroll-margin-top:16px}
+h2 .n{font-family:var(--f-mono);font-size:14px;color:var(--accent);font-weight:500;margin-right:10px;vertical-align:3px}
+h3{font-size:19px;margin:30px 0 6px;font-weight:700;text-wrap:balance;scroll-margin-top:16px}
+h4{font-size:15.5px;margin:20px 0 4px;font-weight:700}
+p,li{max-width:70ch}
+p{margin:10px 0}
+ul,ol{padding-left:22px;margin:8px 0}
+li{margin:4px 0}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+strong{font-weight:700}
+.muted{color:var(--muted)}
+.small{font-size:13.5px}
+
+/* chips: mức độ chắc chắn */
+.chip{display:inline-block;font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;padding:1px 8px;border-radius:99px;border:1px solid;vertical-align:2px;white-space:nowrap;font-weight:500}
+.c-fact{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+.c-inf{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.c-open{color:var(--crit);border-color:var(--crit);background:var(--crit-soft)}
+.c-me{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+
+/* callouts */
+.note{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:14px 18px;margin:16px 0}
+.note .k{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+.note.lesson{border-left:4px solid var(--accent)}
+.note.warn{border-left:4px solid var(--warn)}
+.note.crit{border-left:4px solid var(--crit)}
+.note p:first-of-type{margin-top:0} .note p:last-child{margin-bottom:0}
+
+/* chain */
+.chain{list-style:none;padding:0;margin:18px 0;display:grid;gap:0}
+.chain li{position:relative;padding:10px 14px 10px 46px;max-width:none;margin:0;border-left:2px solid var(--line);margin-left:14px}
+.chain li::before{content:attr(data-s);position:absolute;left:-15px;top:9px;width:28px;height:28px;border-radius:50%;background:var(--surface);border:2px solid var(--accent);font-family:var(--f-mono);font-size:12px;display:grid;place-items:center;color:var(--accent);font-weight:700}
+.chain li.bad::before{border-color:var(--crit);color:var(--crit)}
+.chain li b{display:block}
+
+/* tables */
+.tw{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--code-bg)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:13px;white-space:nowrap}
+
+/* code */
+.codebox{margin:14px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--code-bg)}
+.codebox .cap{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:7px 12px;border-bottom:1px solid var(--line);font-family:var(--f-mono);font-size:11.5px;color:var(--muted);background:var(--surface)}
+.codebox pre{margin:0;padding:12px 0;overflow-x:auto;font-family:var(--f-mono);font-size:12.8px;line-height:1.55;color:var(--code-ink);tab-size:4}
+.codebox pre .ln{display:block;padding:0 14px;white-space:pre}
+.codebox pre .ln.add{background:var(--add)}
+.codebox pre .ln.del{background:var(--del)}
+.codebox pre .ln.hl{background:var(--warn-soft)}
+.codebox pre .ln.hd{color:var(--muted)}
+
+/* figures */
+figure{margin:18px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px}
+figure .scroll{overflow-x:auto}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:8px}
+svg text{font-family:var(--f-mono)}
+.mermaid{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;overflow-x:auto;margin:16px 0}
+
+/* summary grid */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}
+.fact{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 14px;min-width:0}
+.fact .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.fact .v{font-size:15.5px;font-weight:600;margin-top:4px}
+.fact p{font-size:13.5px;color:var(--muted);margin:4px 0 0}
+
+/* steps */
+.step{border-top:1px solid var(--line);padding-top:6px;margin-top:26px}
+.step h3{margin-top:10px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.step h3 .sn{font-family:var(--f-mono);font-size:13px;color:var(--surface);background:var(--accent);padding:2px 8px;border-radius:6px;font-weight:500}
+.step h3 .who{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-weight:400}
+
+/* verdict scorecard */
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0}
+.sc{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:6px;min-width:0}
+.sc .t{font-weight:700}
+.sc .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.sc .bar i{display:block;height:100%}
+.sc p{margin:0;font-size:13.5px;color:var(--muted)}
+
+/* quiz */
+details{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 14px;margin:10px 0}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:6px}
+details p{margin:6px 0}
+
+.tag{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:40px 0 0}
+footer{margin-top:40px;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<nav class="toc" aria-label="Mục lục">
+  <div class="tl">Mục lục</div>
+  <ol id="tocList">
+    <li><a href="#tom-tat">0 · Tóm tắt</a></li>
+    <li><a href="#ho-so">1 · Hồ sơ ticket</a></li>
+    <li><a href="#nen-tang">2 · Kiến thức nền</a></li>
+    <li class="sub"><a href="#n-dw">2.1 Interrupt của DW I2C</a></li>
+    <li class="sub"><a href="#n-activity">2.1b Bit ACTIVITY</a></li>
+    <li class="sub"><a href="#n-thread">2.2 Level + forced thread + ONESHOT</a></li>
+    <li class="sub"><a href="#n-thread-seq">2.2a Bình thường vs forced thread</a></li>
+    <li class="sub"><a href="#n-two-axes">2.2b Hai trục độc lập</a></li>
+    <li class="sub"><a href="#n-prio">2.3 Priority đặc thù KM</a></li>
+    <li class="sub"><a href="#n-softirq">2.4 Softirq, timer, hrtimer</a></li>
+    <li class="sub"><a href="#n-spurious">2.5 Lưới an toàn genirq</a></li>
+    <li><a href="#timeline">3 · Dòng thời gian sự cố</a></li>
+    <li class="sub"><a href="#tl-overview">3a Toàn cảnh sự cố</a></li>
+    <li><a href="#dieu-tra">4 · Quá trình điều tra</a></li>
+    <li class="sub"><a href="#s6-deep">Bước 6 chi tiết</a></li>
+    <li><a href="#code">5 · Đọc code liên quan</a></li>
+    <li><a href="#gia-thuyet">6 · Cây giả thuyết nguồn IRQ</a></li>
+    <li><a href="#solution">7 · Solution được tạo ra</a></li>
+    <li><a href="#danh-gia">8 · Đánh giá solution</a></li>
+    <li><a href="#de-xuat">9 · Đề xuất bổ sung</a></li>
+    <li><a href="#kiem-chung">10 · Kế hoạch kiểm chứng</a></li>
+    <li><a href="#mo">11 · Câu hỏi còn mở</a></li>
+    <li><a href="#on-tap">12 · Ôn tập</a></li>
+    <li><a href="#nguon">13 · Nguồn & thuật ngữ</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">IT6_3.0 · BSP / Kernel 5.10 · DesignWare I2C · tài liệu học</div>
+  <h1>OP_BTS-70811: I2C1 IRQ storm làm softdog reboot khi boot hồi phục</h1>
+  <p class="lede">Phân tích đầy đủ từ log đến source: vì sao mã 2201EFFFFFFFFFFF chỉ là dấu vết, cơ chế một line ngắt bị kẹt làm chết cả hệ thống, các bước điều tra (cả hướng sai), solution 3 phần và đánh giá phản biện từng phần.</p>
+  <div class="meta">
+    <span>Ticket <b>OP_BTS-70811</b></span>
+    <span>Severity <b>B · 特急</b></span>
+    <span>Máy <b>SparrowⅢSFP2, Ohwashi</b></span>
+    <span>Tần suất <b>1 lần / máy</b></span>
+    <span>Fix ver <b>F300-F00-W5(01)</b></span>
+  </div>
+  <p class="small muted" style="margin-top:14px">Quy ước nhãn:
+    <span class="chip c-fact">đã kiểm chứng</span>
+    <span class="chip c-inf">suy luận</span>
+    <span class="chip c-open">chưa xác nhận</span>
+    <span class="chip c-me">tự kiểm chứng thêm</span>
+    (phần tôi tự đối chiếu log/source trong repo, không có trong báo cáo BSP/KM).</p>
+</header>
+
+<!-- 0 -->
+<section id="tom-tat">
+<h2><span class="n">0</span>Tóm tắt trong một màn hình</h2>
+<div class="facts">
+  <div class="fact"><div class="k">Triệu chứng</div><div class="v">NewDC 2201EFFFFFFFFFFF + "MFPシステム起動"</div><p>Máy tự reboot trong lúc running đêm, mỗi máy 1 lần.</p></div>
+  <div class="fact"><div class="k">Bản chất NewDC</div><div class="v">Bản ghi kết quả</div><p>BSP ghi Watchdog_Fire của lần boot trước. Không phải nguyên nhân.</p></div>
+  <div class="fact"><div class="k">Lỗi thật</div><div class="v">IRQ storm trên I2C1</div><p>GIC_SPI 45, LEVEL_HIGH, bus PS-CPU/RTC. irq/56 chiếm ~98% Core0.</p></div>
+  <div class="fact"><div class="k">Cơ chế chết</div><div class="v">Timer softirq Core0 chết</div><p>Timeout I2C 1 s không nổ → init treo → softdog 60 s reboot.</p></div>
+  <div class="fact"><div class="k">Nguồn assert</div><div class="v">Chưa chứng minh</div><p>Ứng viên mạnh nhất: khối SMBus interrupt của DW IP (upstream d3429178).</p></div>
+  <div class="fact"><div class="k">Solution</div><div class="v">3 phần phòng ngừa</div><p>Mask SMBus · Mask→Clear · log chẩn đoán. Không có storm breaker.</p></div>
+</div>
+
+<ol class="chain">
+  <li data-s="1"><b>Boot hồi phục sau deep sleep</b>Phím nguồn đặt là 副電源OFF nên hồi phục bằng U-Boot + Warp snapshot load.</li>
+  <li data-s="2" class="bad"><b>~kernel 80 s: line I2C1 bị giữ assert</b>Đúng lúc ứng dụng khởi động và bắt đầu nói chuyện nhiều với PS-CPU/RTC.</li>
+  <li data-s="3" class="bad"><b>irq/56-8e800600 lặp vô hạn trên Core0</b>Forced-thread + ONESHOT + level: unmask → bắn lại ngay → thread không bao giờ ngủ.</li>
+  <li data-s="4" class="bad"><b>Softirq trên Core0 không được xử lý</b>ksoftirqd/0 cùng mức ưu tiên 256 với irq thread (FIFO) nên không chen vào được; RT throttling bị tắt.</li>
+  <li data-s="5" class="bad"><b>Transfer I2C không xong, timeout 1 s không nổ</b>Caller giữ lock adapter mãi; mọi init cần PS-CPU/RTC xếp hàng chờ.</li>
+  <li data-s="6" class="bad"><b>SYSC_SystemInit dừng → refresh_SoftDog() dừng</b>Core1–3 vẫn rảnh: không phải thiếu CPU mà là chờ.</li>
+  <li data-s="7"><b>softdog (hrtimer, 60 s) nổ → reboot</b>hrtimer chạy trong hardirq nên không cần softirq.</li>
+  <li data-s="8"><b>Boot kế tiếp: BSP ghi Watchdog_Fire → NewDC 2201EFFFFFFFFFFF</b>Sau reboot máy khởi động bình thường: không phải hỏng HW cố định.</li>
+</ol>
+</section>
+
+<!-- 1 -->
+<section id="ho-so">
+<h2><span class="n">1</span>Hồ sơ ticket</h2>
+<div class="tw"><table>
+<tr><th>Mục</th><th>Nội dung</th></tr>
+<tr><td>Tiêu đề</td><td>【IT6_3.0】夜間ランニング中に詳細コード[2201EFFFFFFFFFFF]、かつ「MFPシステム起動」が発生される</td></tr>
+<tr><td>Phân loại</td><td>Printer, 節電 (tiết kiệm điện), DefectType: タイミング系 (lỗi timing)</td></tr>
+<tr><td>Rank</td><td>Khó hồi phục C · Nghiêm trọng B · Mức gặp A · Tái hiện C → <strong>B</strong></td></tr>
+<tr><td>Máy 1</td><td>SparrowⅢSFP2, SN AAJT017000453, Controller AAJT0Y0-0100-F00-W4(00), không SSD. Lỗi 2026-10-14 22:48</td></tr>
+<tr><td>Máy 2</td><td>Ohwashi. Lỗi 2026-10-12 09:58</td></tr>
+<tr><td>Điều kiện</td><td>ErP auto power OFF; low power 60 phút, sleep 60 phút; power save chuyển ngay; <strong>phím nguồn = 副電源OFF</strong>. Tool: nhấn phím nguồn mỗi 12 phút, in PCL mỗi 33 phút, in PS mỗi 36 phút. Chạy 2026/10/14 08:52 → 10/15 10:08 (≈25 h 18 phút).</td></tr>
+<tr><td>Tần suất</td><td>1 lần mỗi máy. Sparrow có ~105 lần "Suspending console" trong đêm, chỉ 1 lần lỗi.</td></tr>
+<tr><td>Hồi phục</td><td>Tự hồi phục sau reboot, không cần thao tác.</td></tr>
+</table></div>
+
+<div class="codebox"><div class="cap"><span>Dấu hiệu bề mặt (Sparrow)</span><span>1014-runing.log</span></div>
+<pre data-code="c_symptom"></pre></div>
+</section>
+
+<!-- 2 -->
+<section id="nen-tang">
+<h2><span class="n">2</span>Kiến thức nền cần có</h2>
+<p>Bug này nằm ở chỗ giao nhau của 5 cơ chế. Hiểu từng cái riêng lẻ thì mới thấy vì sao một bit interrupt có thể làm reboot cả máy.</p>
+
+<h3 id="n-dw">2.1 Mô hình interrupt của DesignWare I2C</h3>
+<div class="tw"><table>
+<tr><th>Register</th><th class="num">Offset</th><th>Ý nghĩa</th><th>Driver dùng?</th></tr>
+<tr><td><code>IC_INTR_STAT</code></td><td class="num">0x2C</td><td>= RAW &amp; MASK (interrupt đang báo ra)</td><td>Có</td></tr>
+<tr><td><code>IC_INTR_MASK</code></td><td class="num">0x30</td><td>Bit = 1 thì được báo ra chân interrupt</td><td>Có</td></tr>
+<tr><td><code>IC_RAW_INTR_STAT</code></td><td class="num">0x34</td><td>Trạng thái thô, không qua mask</td><td>Có (ISR đọc)</td></tr>
+<tr><td><code>IC_CLR_INTR</code></td><td class="num">0x40</td><td>Đọc vào = clear tổ hợp các interrupt khối chính</td><td>Có</td></tr>
+<tr><td><code>IC_ENABLE</code></td><td class="num">0x6C</td><td>Controller enable/disable</td><td>Có</td></tr>
+<tr><td><code>IC_TX_ABRT_SOURCE</code></td><td class="num">0x80</td><td>Lý do TX_ABRT (bị xoá khi clear TX_ABRT)</td><td>Có</td></tr>
+<tr><td><code>IC_SMBUS_INTR_STAT</code></td><td class="num">0xC8</td><td>SMBus: interrupt đang báo</td><td><strong>Không</strong></td></tr>
+<tr><td><code>IC_SMBUS_INTR_MASK</code></td><td class="num">0xCC</td><td>SMBus: mask riêng</td><td><strong>Không</strong> (trước fix)</td></tr>
+<tr><td><code>IC_SMBUS_RAW_INTR_STAT</code></td><td class="num">0xD0</td><td>SMBus: trạng thái thô</td><td><strong>Không</strong></td></tr>
+<tr><td><code>IC_CLR_SMBUS_INTR</code></td><td class="num">0xD4</td><td>SMBus: clear</td><td><strong>Không</strong></td></tr>
+</table></div>
+<p class="small muted">Offset 0xCC đã được maintainer upstream xác nhận trong commit d3429178. Các offset 0xC8/0xD0/0xD4 theo databook DW_apb_i2c; cần đối chiếu databook của SoC này. Khối SMBus chỉ tồn tại khi IP được synthesize với <code>IC_SMBUS=1</code>.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 760 300" width="760" height="300" role="img" aria-label="Sơ đồ khối interrupt DW I2C: khối chính và khối SMBus cùng đi vào một cổng OR ra GIC SPI 45">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    <marker id="arc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--crit)"/></marker>
+  </defs>
+  <!-- main block -->
+  <rect x="10" y="20" width="420" height="110" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="22" y="40" font-size="12" fill="var(--accent)" font-weight="700">KHỐI CHÍNH (driver có xử lý)</text>
+  <rect x="24" y="56" width="110" height="34" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+  <text x="79" y="77" font-size="11" text-anchor="middle" fill="var(--ink)">RAW_INTR_STAT</text>
+  <text x="152" y="78" font-size="16" text-anchor="middle" fill="var(--ink)">&amp;</text>
+  <rect x="168" y="56" width="96" height="34" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+  <text x="216" y="77" font-size="11" text-anchor="middle" fill="var(--ink)">INTR_MASK</text>
+  <line x1="264" y1="73" x2="300" y2="73" stroke="var(--muted)" marker-end="url(#ar)"/>
+  <rect x="302" y="56" width="110" height="34" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+  <text x="357" y="77" font-size="11" text-anchor="middle" fill="var(--ink)">INTR_STAT</text>
+  <text x="24" y="116" font-size="10.5" fill="var(--muted)">Guard 65237 / Diff②: CLR_INTR + INTR_MASK=0 chỉ tác động ở đây</text>
+  <!-- smbus block -->
+  <rect x="10" y="160" width="420" height="110" rx="10" fill="var(--crit-soft)" stroke="var(--crit)" stroke-dasharray="5 4"/>
+  <text x="22" y="180" font-size="12" fill="var(--crit)" font-weight="700">KHỐI SMBus (nếu IC_SMBUS=1) — driver không đụng tới</text>
+  <rect x="24" y="196" width="110" height="34" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+  <text x="79" y="212" font-size="10" text-anchor="middle" fill="var(--ink)">SMBUS_RAW</text>
+  <text x="79" y="224" font-size="10" text-anchor="middle" fill="var(--ink)">(0xD0)</text>
+  <text x="152" y="218" font-size="16" text-anchor="middle" fill="var(--ink)">&amp;</text>
+  <rect x="168" y="196" width="96" height="34" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+  <text x="216" y="212" font-size="10" text-anchor="middle" fill="var(--ink)">SMBUS_MASK</text>
+  <text x="216" y="224" font-size="10" text-anchor="middle" fill="var(--ink)">(0xCC)</text>
+  <line x1="264" y1="213" x2="300" y2="213" stroke="var(--muted)" marker-end="url(#ar)"/>
+  <rect x="302" y="196" width="110" height="34" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+  <text x="357" y="212" font-size="10" text-anchor="middle" fill="var(--ink)">SMBUS_INTR_STAT</text>
+  <text x="357" y="224" font-size="10" text-anchor="middle" fill="var(--ink)">(0xC8)</text>
+  <text x="24" y="256" font-size="10.5" fill="var(--crit)">Fix #1 ghi SMBUS_MASK=0 ở i2c_dw_init_master()</text>
+  <!-- OR gate -->
+  <path d="M470 110 Q505 110 530 145 Q505 180 470 180 Q488 145 470 110 Z" fill="var(--surface)" stroke="var(--ink)"/>
+  <text x="497" y="149" font-size="12" text-anchor="middle" fill="var(--ink)">OR</text>
+  <path d="M412 73 L450 73 L450 125 L476 125" fill="none" stroke="var(--muted)" marker-end="url(#ar)"/>
+  <path d="M412 213 L450 213 L450 165 L476 165" fill="none" stroke="var(--crit)" marker-end="url(#arc)"/>
+  <line x1="530" y1="145" x2="590" y2="145" stroke="var(--crit)" stroke-width="2" marker-end="url(#arc)"/>
+  <rect x="592" y="118" width="156" height="54" rx="8" fill="var(--surface)" stroke="var(--ink)"/>
+  <text x="670" y="140" font-size="11.5" text-anchor="middle" fill="var(--ink)" font-weight="700">GIC SPI 45</text>
+  <text x="670" y="157" font-size="10.5" text-anchor="middle" fill="var(--muted)">LEVEL_HIGH → virq 56</text>
+</svg>
+</div>
+<figcaption>Một chân interrupt, hai nguồn. Khi nguồn nằm ở khối SMBus, mọi thao tác clear/mask trên khối chính đều vô tác dụng: line vẫn ở mức cao.</figcaption>
+</figure>
+
+<h4 id="n-activity">Bit ACTIVITY trong RAW_INTR_STAT là gì? <span class="chip c-inf">suy luận</span></h4>
+<p><code>DW_IC_INTR_ACTIVITY</code> là bit 8 (<code>R_ACTIVITY</code>) của <code>IC_RAW_INTR_STAT</code>. Phần cứng set bit này khi controller có hoạt động I2C, và bit <strong>giữ nguyên (sticky)</strong>: nó không tự về 0 khi bus rảnh lại.</p>
+<div class="tw"><table>
+<tr><th></th><th>Điều kiện</th></tr>
+<tr><td>Set</td><td>Controller bắt đầu hoạt động trên bus (START, truyền/nhận)</td></tr>
+<tr><td>Giữ</td><td>Kể cả khi transfer đã xong và bus đã idle</td></tr>
+<tr><td>Clear</td><td>Đọc <code>IC_CLR_ACTIVITY</code> (0x5C) hoặc <code>IC_CLR_INTR</code> (0x40), disable controller, reset</td></tr>
+</table></div>
+<ul>
+  <li><code>ACTIVITY = 1</code> nghĩa là <em>"đã có hoạt động kể từ lần clear trước"</em>, không phải "bus đang bận". Trạng thái tức thời nằm ở <code>IC_STATUS.ACTIVITY</code> (0x70, bit 0, không sticky).</li>
+  <li>Vì sau gần như mọi transfer RAW đều còn ACTIVITY, ISR dùng <code>stat &amp; ~DW_IC_INTR_ACTIVITY</code> để hỏi: <strong>ngoài dấu vết đó ra, còn sự kiện thật nào không?</strong></li>
+  <li>ACTIVITY không nằm trong <code>DW_IC_INTR_MASTER_MASK</code>, nên nó không bao giờ kéo line và không thể là nguồn storm.</li>
+  <li>Hệ quả ở bước 6: giữa transfer, <code>ENABLE=1</code> và <code>RAW = ACTIVITY</code> là trạng thái bình thường, nên điều kiện guard 65237 bao cả lúc đang transfer.</li>
+</ul>
+<p class="small muted">Mô tả set/clear viết theo databook DW_apb_i2c và driver 5.10, chưa đối chiếu databook của SoC này.</p>
+<h3 id="n-thread">2.2 Level-triggered + forced threading + ONESHOT = vòng lặp storm</h3>
+<p>Kernel KM ép <strong>mọi</strong> IRQ chạy dạng thread: <code>force_irqthreads = true</code> vô điều kiện (khác upstream, nơi chỉ bật khi có tham số <code>threadirqs</code>).</p>
+<div class="codebox"><div class="cap"><span>kernel/irq/manage.c:27-40</span><span>KM</span></div><pre data-code="c_force"></pre></div>
+<p>Khi đó <code>irq_setup_forced_threading()</code> biến handler của driver thành thread function và thêm cờ <code>IRQF_ONESHOT</code>. Với một line level-triggered, một vòng xử lý diễn ra như sau:</p>
+<pre class="mermaid">
+sequenceDiagram
+    participant HW as DW I2C1 (output)
+    participant GIC as GIC SPI45
+    participant HI as Hardirq Core0
+    participant TH as irq/56 thread (FIFO 256)
+    HW->>GIC: line = HIGH (level)
+    GIC->>HI: interrupt
+    HI->>GIC: ONESHOT: mask line
+    HI->>TH: wake (set IRQTF_RUNTHREAD)
+    TH->>HW: i2c_dw_isr(): đọc ENABLE, RAW, CLR_INTR, MASK=0
+    Note over HW: nếu nguồn ngoài khối chính, line vẫn HIGH
+    TH->>GIC: irq_finalize_oneshot(): unmask
+    GIC->>HI: line còn HIGH nên bắn lại ngay
+    HI->>TH: set IRQTF_RUNTHREAD lần nữa
+    Note over TH: irq_wait_for_interrupt() thấy cờ, chạy tiếp, không bao giờ ngủ
+</pre>
+<div class="codebox"><div class="cap"><span>kernel/irq/manage.c:1090-1106 (forced thread function)</span><span>5.10</span></div><pre data-code="c_forced_fn"></pre></div>
+<p>Chú ý hai điểm sẽ quan trọng khi đánh giá solution:</p>
+<ul>
+  <li>Trong lúc thread chạy, line <strong>bị mask ở GIC</strong>. GIC chỉ lấy mẫu lại mức của line lúc unmask. Nên thứ tự các thao tác bên trong ISR không tạo thêm interrupt; chỉ <strong>trạng thái cuối</strong> lúc unmask mới quyết định có bắn lại hay không.</li>
+  <li><code>atomic_inc(&amp;desc-&gt;threads_handled)</code> chỉ chạy khi ISR trả <code>IRQ_HANDLED</code>. Đây là dữ liệu đầu vào của lưới an toàn ở mục 2.5.</li>
+</ul>
+
+<h4 id="n-thread-seq">So sánh luồng: xử lý bình thường và forced threading</h4>
+<p>Hai sơ đồ cùng xét line level-triggered (GIC SPI 45 → virq 56). Khác biệt nằm ở chỗ <code>i2c_dw_isr()</code> chạy ở đâu và <strong>ai unmask line, vào lúc nào</strong>.</p>
+<p><strong>(1) Bình thường:</strong> <code>force_irqthreads = false</code> (mặc định upstream)</p>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant DEV as DW I2C1 (output)
+    participant GIC as GIC SPI45
+    participant CORE as IRQ core (handle_fasteoi_irq)
+    participant DRV as i2c_dw_isr() trong hardirq
+    participant SOFT as softirq
+    DEV->>GIC: Line HIGH (level)
+    GIC->>CORE: Báo IRQ cho CPU (hardirq context)
+    CORE->>DRV: Gọi handler ngay trong hardirq
+    DRV->>DEV: Đọc RAW_INTR_STAT, clear / mask
+    DRV-->>CORE: return IRQ_HANDLED hoặc IRQ_NONE
+    CORE->>CORE: note_interrupt(): biết kết quả ngay
+    CORE->>GIC: EOI
+    alt Line đã LOW
+        GIC-->>CORE: Không có IRQ mới
+    else Line vẫn HIGH
+        GIC->>CORE: Bắn lại ngay
+    end
+    CORE->>SOFT: irq_exit() → invoke_softirq() → do_softirq()
+</pre>
+<p><strong>(2) Forced threading:</strong> KM <code>force_irqthreads = true</code> + <code>IRQF_ONESHOT</code></p>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant DEV as DW I2C1 (output)
+    participant GIC as GIC SPI45
+    participant CORE as IRQ core (handle_fasteoi_irq)
+    participant PRI as irq_default_primary_handler
+    participant TH as irq/56-8e800600 (FIFO 256)
+    participant DRV as i2c_dw_isr() là thread_fn
+    Note over CORE,DRV: request_irq() → irq_setup_forced_threading(): thread_fn = i2c_dw_isr, flags thêm IRQF_ONESHOT
+    DEV->>GIC: Line HIGH (level)
+    GIC->>CORE: Báo IRQ cho CPU (hardirq context)
+    CORE->>GIC: ONESHOT: MASK line
+    CORE->>PRI: Gọi hard handler
+    PRI-->>CORE: return IRQ_WAKE_THREAD
+    CORE->>CORE: note_interrupt(): so threads_handled với threads_handled_last
+    CORE->>TH: __irq_wake_thread() (set IRQTF_RUNTHREAD)
+    Note over CORE,GIC: Line vẫn bị mask, thoát hardirq, KHÔNG chạy do_softirq
+    TH->>DRV: irq_forced_thread_fn() gọi i2c_dw_isr()
+    DRV->>DEV: Đọc ENABLE, RAW, CLR_INTR, INTR_MASK=0
+    DRV-->>TH: return IRQ_HANDLED (OP_BTS-65237)
+    TH->>TH: atomic_inc(threads_handled)
+    TH->>GIC: irq_finalize_oneshot(): UNMASK line
+    Note over GIC: GIC chỉ lấy mẫu mức line tại thời điểm unmask
+    alt Line đã LOW
+        GIC-->>TH: Không có IRQ mới, thread ngủ
+    else Line vẫn HIGH (nguồn ngoài khối chính, ví dụ SMBus)
+        GIC->>CORE: Bắn lại ngay, quay lại bước 2
+        Note over DEV,DRV: Vòng lặp vô tận = IRQ storm. irq/56 chiếm Core0. Luôn IRQ_HANDLED nên không có nobody cared
+    end
+</pre>
+<div class="tw"><table>
+<tr><th>Điểm</th><th>Bình thường</th><th>Forced threading (KM)</th></tr>
+<tr><td>Handler của driver chạy ở</td><td>Hardirq</td><td>Kthread <code>irq/56-8e800600</code></td></tr>
+<tr><td>Line không được phát lại trong lúc</td><td>Handler chạy (rất ngắn), tới EOI</td><td>Từ hardirq tới khi thread xong</td></tr>
+<tr><td>Ai cho phép bắn lại</td><td>EOI cuối hardirq</td><td><code>irq_finalize_oneshot()</code></td></tr>
+<tr><td>IRQ core biết kết quả</td><td>Ngay lập tức</td><td>Trễ một nhịp, qua <code>threads_handled</code></td></tr>
+<tr><td>Softirq sau IRQ</td><td>Chạy ở <code>irq_exit()</code></td><td>Giao cho ksoftirqd</td></tr>
+<tr><td>Storm chiếm CPU dưới dạng</td><td>Hardirq liên tục</td><td>Thread FIFO luôn runnable</td></tr>
+</table></div>
+<p class="small muted">GIC trên ARM64 dùng flow <code>handle_fasteoi_irq()</code> (không phải <code>handle_level_irq()</code>). Kết luận không đổi: với ONESHOT, line bị mask tới <code>irq_finalize_oneshot()</code>.</p>
+
+<h4 id="n-two-axes">Hai trục độc lập: phần cứng quyết định "bắn lại", phần mềm quyết định "có cắt IRQ"</h4>
+<p><strong>Trục 1, phần cứng.</strong> Line là level-triggered: GIC không nhớ cạnh, chỉ nhìn mức hiện tại. Trong lúc bị mask, line lên xuống bao nhiêu lần cũng không sinh IRQ. Lúc unmask, GIC chỉ hỏi: <em>bây giờ line HIGH hay LOW?</em></p>
+<pre class="small">
+ hardirq        thread chạy i2c_dw_isr()           irq_finalize_oneshot()
+    | MASK |------------------------------------|  UNMASK
+GIC: [========== không chuyển IRQ lên CPU ==========] lấy mẫu line
+</pre>
+<p>Vì vậy Clear→Mask hay Mask→Clear cho <strong>cùng trạng thái cuối</strong> (MASK=0 → output khối chính = 0). Nếu nguồn ở SMBus thì cả hai đều kết thúc với:</p>
+<pre class="small">line = (RAW &amp; INTR_MASK) OR (SMBUS_RAW &amp; SMBUS_MASK) = 0 OR 1 = HIGH → bắn lại</pre>
+<p><strong>Trục 2, phần mềm.</strong> <code>atomic_inc(&amp;desc-&gt;threads_handled)</code> chỉ tăng một biến trong RAM, không ghi register nào, nên không làm line đổi mức.</p>
+<div class="tw"><table>
+<tr><th>ISR trả về</th><th><code>threads_handled</code></th><th>Line lúc unmask (nguồn còn)</th><th>Từng vòng</th><th>Về lâu dài</th></tr>
+<tr><td><code>IRQ_HANDLED</code></td><td>tăng</td><td>HIGH</td><td>bắn lại ngay</td><td>Lưới không kích hoạt, storm tới khi softdog reboot</td></tr>
+<tr><td><code>IRQ_NONE</code></td><td>không đổi</td><td>HIGH</td><td><strong>vẫn bắn lại ngay</strong></td><td>&gt;99.900/100.000 → "nobody cared" → <code>irq_disable()</code>, storm dừng</td></tr>
+</table></div>
+<div class="note warn"><span class="k">Hệ quả khi đánh giá solution</span><p>Muốn đánh giá một thay đổi trong ISR, đừng hỏi "nó làm theo thứ tự nào", mà hỏi <strong>"sau ISR, mọi nguồn có thể kéo line đã về 0 chưa?"</strong> (trục 1). Giá trị trả về không dừng storm trực tiếp, nó chỉ quyết định <strong>có để kernel tự cắt IRQ hay không</strong> (trục 2). Fix #1 tác động trục 1; fix #2 cũng ở trục 1 nhưng không đổi trạng thái cuối; nhánh <code>#if 0</code> (trả <code>IRQ_NONE</code>) là trục 2.</p></div>
+<h3 id="n-prio">2.3 Mức ưu tiên đặc thù KM <span class="chip c-me">tự kiểm chứng</span></h3>
+<div class="tw"><table>
+<tr><th>Thành phần</th><th>Policy / priority</th><th>Prio trong dump</th><th>Nguồn</th></tr>
+<tr><td><code>MAX_RT_PRIO</code></td><td>512 (do <code>CONFIG_HIGH_PRIORITY=y</code>)</td><td class="num">–</td><td><code>include/linux/sched/prio.h</code></td></tr>
+<tr><td>irq thread (irq/56…)</td><td>SCHED_FIFO, <code>MAX_RT_PRIO/2</code> = 256</td><td class="num">255</td><td><code>manage.c:1374</code> → <code>sched_set_fifo()</code></td></tr>
+<tr><td>ksoftirqd/N</td><td><strong>SCHED_RR 256</strong> (KM sửa)</td><td class="num">255</td><td><code>kernel/softirq.c:648-654</code></td></tr>
+<tr><td>rcu_preempt</td><td>RT, thấp hơn</td><td class="num">266</td><td>dump</td></tr>
+<tr><td>WdSigHan (heartbeat app)</td><td>RT, thấp hơn</td><td class="num">270</td><td>dump</td></tr>
+<tr><td>Task thường (CFS)</td><td>nice</td><td class="num">505–532</td><td>dump</td></tr>
+<tr><td>RT throttling</td><td><code>sched_rt_runtime = 1000000 = period</code> → <strong>tắt</strong></td><td class="num">–</td><td><code>kernel/sched/core.c:82-87</code></td></tr>
+</table></div>
+<p>Cột Prio trong dump là <code>p-&gt;prio</code> = <code>MAX_RT_PRIO − 1 − rt_priority</code> = 511 − 256 = 255. Số nhỏ hơn = ưu tiên cao hơn.</p>
+<div class="codebox"><div class="cap"><span>kernel/softirq.c:645-655</span><span>KM</span></div><pre data-code="c_ksoftirqd"></pre></div>
+<div class="codebox"><div class="cap"><span>kernel/sched/core.c:78-87</span><span>KM</span></div><pre data-code="c_rt"></pre></div>
+<div class="note crit"><span class="k">Hệ quả</span>
+<p>irq/56 (FIFO 256) và ksoftirqd/0 (RR 256) <strong>cùng mức</strong>. Scheduler không preempt một task FIFO bởi task cùng mức; task FIFO chỉ nhường khi tự ngủ. irq/56 không bao giờ ngủ (mục 2.2), RT throttling bị tắt, nên không có cơ chế nào trả CPU0 về cho ksoftirqd/0.</p></div>
+
+<h3 id="n-softirq">2.4 Softirq, timer_list và hrtimer</h3>
+<ul>
+  <li><code>wait_for_completion_timeout()</code> → <code>schedule_timeout()</code> → <strong>timer_list</strong>. timer_list hết hạn được xử lý trong <strong>TIMER_SOFTIRQ</strong> của CPU nơi timer được đặt.</li>
+  <li>Với <code>force_irqthreads</code>, softirq phát sinh trong hardirq không được chạy ở irq_exit mà giao cho ksoftirqd.</li>
+  <li><code>ksoftirqd_running()</code>: nếu ksoftirqd đang ở trạng thái RUNNING, cả <code>local_bh_enable()</code> trong irq thread cũng <strong>bỏ qua</strong> việc xử lý softirq (trừ HI/TASKLET).</li>
+  <li><strong>hrtimer</strong> (không có cờ SOFT) chạy thẳng trong hardirq. softdog của KM dùng hrtimer (<code>softdog.c:140, 220</code>) nên vẫn nổ đúng giờ khi softirq đã chết.</li>
+</ul>
+<div class="codebox"><div class="cap"><span>kernel/softirq.c:80-95</span><span>5.10</span></div><pre data-code="c_ksoftirqd_running"></pre></div>
+<div class="codebox"><div class="cap"><span>drivers/watchdog/softdog.c:140-153 (KM)</span><span>hrtimer callback</span></div><pre data-code="c_softdog"></pre></div>
+<p class="small muted">Ghi chú: <code>schedule_work_on(1, …)</code>: KM cố ý cho việc lấy task monitor chạy trên CPU1. Sau 1 s, hrtimer thứ hai (<code>softdog_reboot</code>) gọi <code>THRL_DispCpuStallTM()</code> in dump ngay trong hardirq rồi mới reboot. Vì thế trên Sparrow, từ "watchdog reboot 1s wait" (140.63) tới "Initiating system reboot" (147.41) mất gần 7 s: phần lớn là thời gian in dump ra UART.</p>
+
+<h3 id="n-spurious">2.5 Lưới an toàn của genirq: "nobody cared"</h3>
+<div class="codebox"><div class="cap"><span>kernel/irq/spurious.c:282-440 (rút gọn)</span><span>5.10</span></div><pre data-code="c_spurious"></pre></div>
+<p>Với IRQ dạng thread, hardirq trả <code>IRQ_WAKE_THREAD</code>. genirq so sánh <code>threads_handled</code> với lần trước: không tăng thì coi là <code>IRQ_NONE</code>. Cứ 100.000 interrupt mà hơn 99.900 lần unhandled thì in <code>irq 56: nobody cared</code> và <strong>disable line</strong>. Một vòng storm tốn cỡ vài chục µs, nên 100.000 lần chỉ mất cỡ vài giây.</p>
+<div class="note warn"><span class="k">Điểm mấu chốt</span><p>Lưới này chỉ hoạt động khi ISR trả <code>IRQ_NONE</code>. Fix cũ OP_BTS-65237 đổi upstream <code>IRQ_NONE</code> thành <code>IRQ_HANDLED</code>, nên lưới không bao giờ kích hoạt. Log thực tế không có dòng "nobody cared" nào.</p></div>
+</section>
+
+<!-- 3 -->
+<section id="timeline">
+<h2><span class="n">3</span>Dòng thời gian sự cố (theo kernel time)</h2>
+<p>Trục ngang là thời gian kernel tính bằng giây (trong boot hồi phục, kernel time nối tiếp từ snapshot). Dải đỏ là khoảng storm, suy ra từ dòng NOHZ #282 đầu tiên tới lúc softdog nổ. Số trong vòng tròn khớp với bảng bên dưới.</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-label="Timeline kernel time 50 đến 150 giây cho Sparrow và Ohwashi">
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="var(--crit-soft)"/><line x1="0" y1="0" x2="0" y2="8" stroke="var(--crit)" stroke-width="2" opacity=".45"/>
+    </pattern>
+  </defs>
+  <!-- grid -->
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="80" y1="20" x2="80" y2="340"/><line x1="170" y1="20" x2="170" y2="340"/><line x1="260" y1="20" x2="260" y2="340"/>
+    <line x1="350" y1="20" x2="350" y2="340"/><line x1="440" y1="20" x2="440" y2="340"/><line x1="530" y1="20" x2="530" y2="340"/>
+    <line x1="620" y1="20" x2="620" y2="340"/><line x1="710" y1="20" x2="710" y2="340"/><line x1="800" y1="20" x2="800" y2="340"/>
+    <line x1="890" y1="20" x2="890" y2="340"/><line x1="980" y1="20" x2="980" y2="340"/>
+  </g>
+  <g font-size="11" fill="var(--muted)" text-anchor="middle">
+    <text x="80" y="360">50</text><text x="170" y="360">60</text><text x="260" y="360">70</text><text x="350" y="360">80</text>
+    <text x="440" y="360">90</text><text x="530" y="360">100</text><text x="620" y="360">110</text><text x="710" y="360">120</text>
+    <text x="800" y="360">130</text><text x="890" y="360">140</text><text x="980" y="360">150</text>
+    <text x="530" y="384">kernel time (s)</text>
+  </g>
+
+  <!-- SPARROW -->
+  <text x="8" y="110" font-size="12" font-weight="700" fill="var(--ink)">Sparrow</text>
+  <rect x="160" y="92" width="192" height="26" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <rect x="352" y="92" width="544" height="26" fill="url(#hatch)" stroke="var(--crit)"/>
+  <rect x="896" y="92" width="61" height="26" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="600" y="109" font-size="11" text-anchor="middle" fill="var(--crit)" font-weight="700">irq/56 chiếm Core0 ~98%</text>
+  <rect x="667" y="120" width="229" height="5" fill="var(--warn)" opacity=".7"/>
+  <g stroke="var(--crit)" stroke-width="2"><line x1="730" y1="88" x2="730" y2="122"/><line x1="735" y1="88" x2="735" y2="122"/><line x1="742" y1="88" x2="742" y2="122"/><line x1="746" y1="88" x2="746" y2="122"/><line x1="755" y1="88" x2="755" y2="122"/><line x1="762" y1="88" x2="762" y2="122"/></g>
+  <!-- bracket -->
+  <path d="M352 140 L352 148 L896 148 L896 140" fill="none" stroke="var(--ink)"/>
+  <text x="624" y="164" font-size="11.5" text-anchor="middle" fill="var(--ink)">60,37 s = margin softdog</text>
+  <!-- markers -->
+  <g font-size="10.5" text-anchor="middle" font-weight="700">
+    <line x1="160" y1="74" x2="160" y2="92" stroke="var(--muted)"/><circle cx="160" cy="66" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="160" y="70" fill="var(--accent)">1</text>
+    <line x1="323" y1="74" x2="323" y2="92" stroke="var(--muted)"/><circle cx="323" cy="66" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="323" y="70" fill="var(--accent)">2</text>
+    <line x1="347" y1="56" x2="347" y2="92" stroke="var(--muted)"/><circle cx="347" cy="48" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="347" y="52" fill="var(--accent)">3</text>
+    <line x1="352" y1="38" x2="352" y2="92" stroke="var(--crit)"/><circle cx="352" cy="30" r="9" fill="var(--crit-soft)" stroke="var(--crit)"/><text x="352" y="34" fill="var(--crit)">4</text>
+    <line x1="561" y1="74" x2="561" y2="92" stroke="var(--muted)"/><circle cx="561" cy="66" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="561" y="70" fill="var(--accent)">5</text>
+    <line x1="667" y1="74" x2="667" y2="92" stroke="var(--muted)"/><circle cx="667" cy="66" r="9" fill="var(--surface)" stroke="var(--warn)"/><text x="667" y="70" fill="var(--warn)">6</text>
+    <circle cx="746" cy="66" r="9" fill="var(--crit-soft)" stroke="var(--crit)"/><text x="746" y="70" fill="var(--crit)">7</text>
+    <line x1="864" y1="74" x2="864" y2="92" stroke="var(--muted)"/><circle cx="864" cy="66" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="864" y="70" fill="var(--accent)">8</text>
+    <line x1="896" y1="56" x2="896" y2="92" stroke="var(--crit)"/><circle cx="896" cy="48" r="9" fill="var(--crit-soft)" stroke="var(--crit)"/><text x="896" y="52" fill="var(--crit)">9</text>
+    <line x1="957" y1="74" x2="957" y2="92" stroke="var(--muted)"/><circle cx="957" cy="66" r="9" fill="var(--surface)" stroke="var(--warn)"/><text x="957" y="70" fill="var(--warn)">10</text>
+  </g>
+
+  <!-- OHWASHI -->
+  <text x="8" y="276" font-size="12" font-weight="700" fill="var(--ink)">Ohwashi</text>
+  <rect x="106" y="258" width="267" height="26" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <rect x="373" y="258" width="539" height="26" fill="url(#hatch)" stroke="var(--crit)"/>
+  <rect x="912" y="258" width="61" height="26" fill="var(--warn-soft)" stroke="var(--warn)"/>
+  <text x="640" y="275" font-size="11" text-anchor="middle" fill="var(--crit)" font-weight="700">irq/56 chiếm Core0 ~98% · console im lặng 59 s</text>
+  <rect x="697" y="286" width="215" height="5" fill="var(--warn)" opacity=".7"/>
+  <path d="M373 306 L373 314 L912 314 L912 306" fill="none" stroke="var(--ink)"/>
+  <text x="642" y="330" font-size="11.5" text-anchor="middle" fill="var(--ink)">59,96 s</text>
+  <g font-size="10.5" text-anchor="middle" font-weight="700">
+    <line x1="106" y1="240" x2="106" y2="258" stroke="var(--muted)"/><circle cx="106" cy="232" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="106" y="236" fill="var(--accent)">a</text>
+    <line x1="330" y1="240" x2="330" y2="258" stroke="var(--muted)"/><circle cx="330" cy="232" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="330" y="236" fill="var(--accent)">b</text>
+    <line x1="369" y1="222" x2="369" y2="258" stroke="var(--muted)"/><circle cx="369" cy="214" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="369" y="218" fill="var(--accent)">c</text>
+    <line x1="373" y1="204" x2="373" y2="258" stroke="var(--crit)"/><circle cx="373" cy="196" r="9" fill="var(--crit-soft)" stroke="var(--crit)"/><text x="373" y="200" fill="var(--crit)">d</text>
+    <line x1="385" y1="186" x2="385" y2="258" stroke="var(--muted)"/><circle cx="397" cy="178" r="9" fill="var(--surface)" stroke="var(--accent)"/><text x="397" y="182" fill="var(--accent)">e</text>
+    <line x1="697" y1="240" x2="697" y2="258" stroke="var(--muted)"/><circle cx="697" cy="232" r="9" fill="var(--surface)" stroke="var(--warn)"/><text x="697" y="236" fill="var(--warn)">f</text>
+    <line x1="912" y1="222" x2="912" y2="258" stroke="var(--crit)"/><circle cx="912" cy="214" r="9" fill="var(--crit-soft)" stroke="var(--crit)"/><text x="912" y="218" fill="var(--crit)">g</text>
+    <line x1="973" y1="240" x2="973" y2="258" stroke="var(--muted)"/><circle cx="973" cy="232" r="9" fill="var(--surface)" stroke="var(--warn)"/><text x="973" y="236" fill="var(--warn)">h</text>
+  </g>
+</svg>
+</div>
+<figcaption>Dải xanh: boot tiến triển bình thường. Dải đỏ gạch: storm. Thanh cam mảnh: khoảng lịch sử mà task monitor còn giữ được (~25 s cuối). Vạch đỏ đứng ở Sparrow: 6 dòng NOHZ #282 lúc 122–126 s. Vẽ theo cùng một thang, 1 s = 9 px.</figcaption>
+</figure>
+
+<h3>Sparrow (2026-10-14)</h3>
+<div class="tw"><table>
+<tr><th>#</th><th class="num">Giờ máy</th><th class="num">kernel s</th><th>Sự kiện</th><th class="num">Dòng log</th></tr>
+<tr><td>–</td><td class="num">22:45:32.866</td><td class="num">66219.9</td><td>Suspending console → vào deep sleep</td><td class="num">L67784</td></tr>
+<tr><td>–</td><td class="num">22:47:02.933</td><td class="num">–</td><td>U-Boot khởi động (hồi phục = full boot)</td><td class="num">L67787</td></tr>
+<tr><td>1</td><td class="num">22:47:05.816</td><td class="num">≈58.9</td><td>Warp!! snapshot load completed</td><td class="num">L67908</td></tr>
+<tr><td>2</td><td class="num">22:47:23.956</td><td class="num">≈77.0</td><td>..DocInit waiting.[0]</td><td class="num">L68514</td></tr>
+<tr><td>3</td><td class="num">22:47:26.642</td><td class="num">≈79.7</td><td>appStart End / Application StartUp End</td><td class="num">L68691</td></tr>
+<tr><td>4</td><td class="num">22:47:27.172</td><td class="num">80.260888</td><td><strong>NOHZ tick-stop error #282 đầu tiên → storm đã chạy</strong></td><td class="num">L68699</td></tr>
+<tr><td>5</td><td class="num">22:47:50.332</td><td class="num">≈103.4</td><td>wait HddStatus end: <strong>status=1 elapsed_ms=30000</strong> (bình thường status=3, ~19 s)</td><td class="num">L68724</td></tr>
+<tr><td>–</td><td class="num">22:47:51.550</td><td class="num">≈104.6</td><td>PostgreSQL "server started" (chạy trên core khác)</td><td class="num">L68737</td></tr>
+<tr><td>6</td><td class="num">–</td><td class="num">115.26</td><td>Điểm bắt đầu lịch sử còn lại trong task monitor</td><td class="num">L68749</td></tr>
+<tr><td>7</td><td class="num">22:48:09–12</td><td class="num">122.27–125.76</td><td>NOHZ #282 lặp 6 lần</td><td class="num">L68738-43</td></tr>
+<tr><td>8</td><td class="num">22:48:23.967</td><td class="num">≈137.1</td><td>..DocInit waiting.[120] (đã chờ 60 s)</td><td class="num">L68744</td></tr>
+<tr><td>9</td><td class="num">22:48:27.525</td><td class="num">140.634925</td><td><strong>watchdog reboot 1s wait</strong> → watchdog_thread</td><td class="num">L68746-47</td></tr>
+<tr><td>10</td><td class="num">22:48:34.324</td><td class="num">147.408050</td><td>softdog: Initiating system reboot</td><td class="num">L69555</td></tr>
+<tr><td>–</td><td class="num">22:48:58.831</td><td class="num">–</td><td>Boot sau: (BSP) ## Watchdog_Fire → NewDC 2201EFFFFFFFFFFF</td><td class="num">L70161-62</td></tr>
+<tr><td>–</td><td class="num">22:49:11.312</td><td class="num">–</td><td>Boot sau: $$initOSdriver OK, bình thường</td><td class="num">L70635</td></tr>
+</table></div>
+
+<h3>Ohwashi (2026-10-12)</h3>
+<div class="tw"><table>
+<tr><th>#</th><th class="num">Giờ máy</th><th class="num">kernel s</th><th>Sự kiện</th><th class="num">Dòng log</th></tr>
+<tr><td>–</td><td class="num">09:56:44.579</td><td class="num">–</td><td>U-Boot khởi động</td><td class="num">L3814</td></tr>
+<tr><td>a</td><td class="num">09:56:45.860</td><td class="num">≈52.9</td><td>Warp!! snapshot load completed</td><td class="num">L3919</td></tr>
+<tr><td>b</td><td class="num">09:57:10.826</td><td class="num">≈77.8</td><td>$$initOSdriver OK (storage init xong, khác Sparrow)</td><td class="num">L4956</td></tr>
+<tr><td>c</td><td class="num">09:57:15.185</td><td class="num">≈82.2</td><td>wait HddStatus end: status=3 elapsed_ms=16300 (bình thường)</td><td class="num">L5065</td></tr>
+<tr><td>d</td><td class="num">09:57:15.466</td><td class="num">82.506480</td><td><strong>NOHZ tick-stop error #282 → storm</strong></td><td class="num">L5077</td></tr>
+<tr><td>e</td><td class="num">09:57:16.888</td><td class="num">≈83.9</td><td>server started → "dbdeffile already exists" = dòng log cuối, sau đó console im lặng 59 s</td><td class="num">L5107-08</td></tr>
+<tr><td>f</td><td class="num">–</td><td class="num">118.51</td><td>Điểm bắt đầu lịch sử task monitor</td><td class="num">L5114</td></tr>
+<tr><td>g</td><td class="num">09:58:15.483</td><td class="num">142.469990</td><td><strong>watchdog reboot 1s wait</strong></td><td class="num">L5109</td></tr>
+<tr><td>h</td><td class="num">09:58:22.232</td><td class="num">149.215344</td><td>softdog: Initiating system reboot</td><td class="num">L5919</td></tr>
+<tr><td>–</td><td class="num">09:58:41.574</td><td class="num">–</td><td>Boot sau: Watchdog_Fire → NewDC 2201EFFFFFFFFFFF</td><td class="num">L6509-10</td></tr>
+<tr><td>–</td><td class="num">09:58:53.385</td><td class="num">–</td><td>Boot sau: init bình thường ($$initOSdriver OK → DB → server started)</td><td class="num">L7096-7259</td></tr>
+</table></div>
+<p class="small muted">Kernel time "≈" được nội suy từ giờ máy qua một dòng có cả hai mốc (Sparrow: 80.260888 ↔ 22:47:27.172; Ohwashi: 82.241475 ↔ 09:57:15.263). Dòng log của Ohwashi là số dòng trong file đã chuyển sang UTF-8; có thể lệch ±1 so với số dòng BSP trích.</p>
+<h3 id="tl-overview">Toàn cảnh: sequence diagram high level của cả sự cố</h3>
+<p>Đi từ lúc hồi phục sau deep sleep tới lúc reboot và ghi mã ở boot sau. Nguồn giữ line (SMBus) và việc guard 65237 chạy giữa transfer là <span class="chip c-inf">suy luận</span>; mốc thời gian và trạng thái CPU lấy từ log và task monitor dump <span class="chip c-fact">đã kiểm chứng</span>.</p>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant APP as App init (SYSC_SystemInit)
+    participant I2C as i2c_dw_xfer (driver)
+    participant HW as DW I2C1 + khối SMBus
+    participant GIC as GIC SPI45 (virq 56)
+    participant TH as irq/56 thread (Core0, FIFO 256)
+    participant SIRQ as ksoftirqd/0 (Core0, RR 256)
+    participant DOG as softdog (hrtimer 60 s)
+    rect rgb(230, 245, 255)
+    Note over APP,DOG: Giai đoạn 1 - Hồi phục sau deep sleep (bình thường)
+    APP->>APP: U-Boot, Warp snapshot load (kernel khoảng 59 s)
+    APP->>DOG: refresh_SoftDog() định kỳ
+    APP->>I2C: App khởi động, giao tiếp nhiều với PS-CPU/RTC
+    end
+    rect rgb(255, 240, 220)
+    Note over APP,DOG: Giai đoạn 2 - Storm bắt đầu (kernel khoảng 80 s)
+    I2C->>I2C: i2c_transfer() lấy bus_lock của I2C1
+    I2C->>HW: Bật INTR_MASK, gửi lệnh tới PS-CPU/RTC
+    I2C->>I2C: Ngủ trong wait_for_completion_timeout (1 s, timer_list)
+    HW->>GIC: Line HIGH và bị giữ HIGH (giả thuyết: SMBus interrupt driver không xử lý)
+    end
+    rect rgb(255, 225, 225)
+    Note over GIC,TH: Giai đoạn 3 - Vòng lặp storm (forced thread + ONESHOT + level)
+    loop Liên tục
+        GIC->>TH: IRQ, mask line, đánh thức thread
+        TH->>HW: i2c_dw_isr(): guard 65237 ghi CLR_INTR và INTR_MASK = 0
+        TH->>TH: return IRQ_HANDLED, threads_handled tăng
+        TH->>GIC: irq_finalize_oneshot(): unmask
+        GIC->>GIC: Line vẫn HIGH nên bắn lại ngay
+    end
+    Note over TH: Luôn IRQ_HANDLED nên không có nobody cared
+    end
+    rect rgb(245, 230, 255)
+    Note over I2C,SIRQ: Giai đoạn 4 - Hai đường thoát của transfer đều chết
+    Note over I2C,HW: Đường A: INTR_MASK = 0 nên ISR không thấy STOP_DET, không complete()
+    I2C-->>SIRQ: Đường B: timeout 1 s hết hạn, TIMER_SOFTIRQ pending
+    SIRQ--xTH: Cùng mức 256, RT throttling tắt, không chen vào Core0 được
+    Note over SIRQ: Log NOHZ #282, không có controller timed out
+    Note over I2C: Task ngủ mãi, vẫn giữ bus_lock
+    end
+    rect rgb(235, 235, 235)
+    Note over APP,DOG: Giai đoạn 5 - Cả hệ thống đứng chờ (Core1-3 vẫn rảnh)
+    APP->>I2C: Các task cần PS-CPU/RTC xếp hàng chờ bus_lock
+    Note over APP: DocInit waiting, HddStatus timeout. SYSC_SystemInit dừng
+    APP--xDOG: Không còn refresh_SoftDog()
+    end
+    rect rgb(255, 210, 210)
+    Note over APP,DOG: Giai đoạn 6 - Reboot (khoảng 60 s sau khi storm bắt đầu)
+    DOG->>DOG: hrtimer chạy trong hardirq nên vẫn nổ đúng giờ
+    DOG->>DOG: watchdog reboot 1s wait, task monitor dump (Core0: irq/56 khoảng 98%)
+    DOG->>APP: Initiating system reboot
+    end
+    rect rgb(225, 245, 225)
+    Note over APP,DOG: Giai đoạn 7 - Boot kế tiếp
+    APP->>APP: BSP thấy Watchdog_Fire, ghi NewDC 2201EFFFFFFFFFFF
+    APP->>APP: Khởi động bình thường
+    end
+</pre>
+<div class="tw"><table>
+<tr><th>Ý</th><th>Nội dung</th><th>Phần solution tác động</th></tr>
+<tr><td>Mồi lửa</td><td>Nguồn ngoài phạm vi driver giữ line HIGH (ứng viên: SMBus)</td><td>Fix #1 dập ở giai đoạn 2</td></tr>
+<tr><td>Khuếch đại</td><td>Forced thread + ONESHOT + level thành vòng lặp; luôn <code>IRQ_HANDLED</code> nên kernel không cắt</td><td>Fix #2, #3 nằm trong vòng lặp nhưng không phá được</td></tr>
+<tr><td>Lây lan</td><td>Core0 bị chiếm → timeout 1 s không nổ → task giữ <code>bus_lock</code> treo → init treo</td><td>Storm breaker (chưa có) sẽ cắt ở giai đoạn 3</td></tr>
+<tr><td>Kết thúc</td><td>softdog (hrtimer) reboot; boot sau BSP chỉ ghi lại kết quả</td><td>–</td></tr>
+</table></div>
+</section>
+
+<!-- 4 -->
+<section id="dieu-tra">
+<h2><span class="n">4</span>Quá trình điều tra, từng bước</h2>
+<p>Thứ tự dưới đây theo đúng diễn biến trên Jira, kèm phần tôi tự kiểm chứng lại. Hai bước đầu là hướng chưa đúng; chúng đáng học vì cho thấy vì sao log tầng ứng dụng dễ dẫn sai đường.</p>
+
+<div class="step">
+<h3><span class="sn">Bước 1</span>Đọc NewDC: đây là kết quả, không phải nguyên nhân <span class="who">mọi bên</span></h3>
+<div class="codebox"><div class="cap"><span>Sparrow L70161-70162 (boot kế tiếp)</span></div><pre data-code="c_newdc"></pre></div>
+<ul>
+  <li>Byte đầu <code>0x22</code> = module BSP. Phần còn lại là định dạng chi tiết riêng của BSP cho sự kiện watchdog; ý nghĩa từng byte cần tra spec mã chi tiết của BSP (trong <code>softdog.c</code>, <code>watchdog_record_info()</code> có ghi thêm thông tin tiến độ với byte đầu 0xFF để tách với lỗi khi suspend/resume).</li>
+  <li>Dòng này xuất hiện ở <strong>lần boot sau</strong>: BSP thấy cờ Watchdog_Fire của lần trước và ghi lại. Module ghi mã không phải module gây lỗi.</li>
+</ul>
+<div class="note lesson"><span class="k">Bài học 1</span><p>Với mã dạng "ghi nhận reboot", luôn lùi về <strong>lần boot ngay trước</strong> và tìm xem cái gì làm watchdog không được refresh.</p></div>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 2</span>AI triage: không chốt được module <span class="who">10/15 15:08 · KikuchiRei</span></h3>
+<p>AI so sánh lần boot lỗi với 6 lần boot bình thường của Sparrow và tìm ra các dòng chỉ có ở lần lỗi:</p>
+<ul>
+  <li><code>wait HddStatus end: status=1 elapsed_ms=30000</code> (rank A)</li>
+  <li><code>..DocInit waiting.[120]</code> (rank A)</li>
+  <li>Thiếu dòng <code>CP_HDDTrans::initOSdriver</code></li>
+</ul>
+<p>Kết quả: Thread 0.25, sys:DBMS 0.20. Tỷ lệ 1.25 không đạt ngưỡng 2.5 nên "không có module chính". AI còn xếp <code>NOHZ tick-stop error</code> vào nhóm <strong>vô hại</strong> vì nó cũng xuất hiện ở lần boot bình thường.</p>
+<div class="note warn"><span class="k">Vì sao không ra</span><p>Mọi dòng tìm được đều là log của <strong>bên bị bắt chờ</strong>. Hai máy dừng ở hai chỗ khác nhau (Sparrow: trước initOSdriver; Ohwashi: sau dbdeffile) nên ở tầng ứng dụng không có điểm chung. Còn dòng NOHZ bị loại vì chỉ đếm "có hay không", không xét thời điểm (xem bước 6).</p></div>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 3</span>BSP nhận định lần 1 (DOC) và Thread phản bác <span class="who">10/15 18:00 → 10/16 12:29</span></h3>
+<ul>
+  <li>BSP: <code>DocInit waiting</code> vượt 60 s, giống OP_BTS-69958 → nghi <code>DOCC_Init</code>. DOC chuyển sang Thread.</li>
+  <li>Thread (BuiNgocHung) phản bác: ở Ohwashi, <code>$$initOSdriver OK</code> đã xong, <code>status=3</code> bình thường, mà vẫn bị watchdog. Yêu cầu BSP điều tra lại.</li>
+</ul>
+<div class="note lesson"><span class="k">Bài học 2</span><p>Hai máy chết cùng kiểu nhưng dừng ở hai điểm khác nhau thì nguyên nhân chung nằm ở <strong>tầng thấp hơn</strong> (kernel, scheduler, bus). Một ứng viên chỉ giải thích được một máy thì chưa phải nguyên nhân.</p></div>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 4</span>Bước ngoặt: đọc task monitor dump <span class="who">BSP · 10/16</span></h3>
+<p>Khi softdog nổ, KM in lịch sử chuyển task của từng core. Mỗi dòng: số thứ tự, jiffies, thời điểm bắt đầu chạy, tên[PID], thời gian chạy, prio, &lt;PID cha&gt;.</p>
+<div class="codebox"><div class="cap"><span>Sparrow L68748-68760 · Core0</span><span>HZ=200 → 1 jiffy = 5 ms</span></div><pre data-code="c_tm"></pre></div>
+<p><span class="chip c-me">tự kiểm chứng</span> Thống kê toàn bộ phần Core0 trong dump:</p>
+<div class="tw"><table>
+<tr><th>Máy</th><th>Task trên Core0</th><th class="num">Số lần</th><th class="num">Tổng thời gian</th><th class="num">Tỷ lệ</th></tr>
+<tr><td rowspan="2">Sparrow</td><td>irq/56-8[221]</td><td class="num">100</td><td class="num">25,71 s</td><td class="num">≈98%</td></tr>
+<tr><td>swapper/0 (idle)</td><td class="num">100</td><td class="num">0,55 s</td><td class="num">≈2%</td></tr>
+<tr><td rowspan="2">Ohwashi</td><td>irq/56-8[228]</td><td class="num">100</td><td class="num">24,26 s</td><td class="num">≈98%</td></tr>
+<tr><td>swapper/0 (idle)</td><td class="num">100</td><td class="num">0,50 s</td><td class="num">≈2%</td></tr>
+</table></div>
+<ul>
+  <li>Không có ksoftirqd/0, không có kworker, không có task ứng dụng nào chạy trên Core0 suốt ~25 s.</li>
+  <li>Core1–3 gần như rảnh (swapper, WdSigHan, ksoftirqd/1, rcu_preempt, chrome…). <strong>Hệ thống không thiếu CPU</strong>; các task init đang <strong>ngủ chờ</strong>.</li>
+  <li>Hai máy khác model, khác cá thể, dump gần như y hệt → loại trừ hỏng HW cá biệt.</li>
+</ul>
+<div class="note lesson"><span class="k">Bài học 3</span><p>Khi watchdog nổ mà log ứng dụng chỉ toàn "đang chờ", hãy nhìn <strong>ai đang chiếm CPU</strong>. Task monitor / ftrace / <code>/proc/interrupts</code> thường trả lời nhanh hơn mọi log ứng dụng.</p></div>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 5</span>Từ tên thread lần ra phần cứng</h3>
+<ul>
+  <li>Tên kthread: <code>irq/&lt;virq&gt;-&lt;dev_name&gt;</code>, cắt còn 15 ký tự do <code>TASK_COMM_LEN</code> = 16. <code>irq/56-8e800600</code> ← dev_name <code>8e8006000.i2c1</code>.</li>
+  <li>56 là <strong>số virq Linux tự cấp</strong>, không phải số SPI. GIC_SPI 45 tương ứng hwirq 77.</li>
+  <li>DTS <code>arch/arm64/boot/dts/marvell/quartz-sb.dtsi:340-381</code>:</li>
+</ul>
+<div class="codebox"><div class="cap"><span>quartz-sb.dtsi:340-381 (rút gọn)</span></div><pre data-code="c_dts"></pre></div>
+<p>Không node nào khác trong quartz-sb.dtsi dùng SPI 45. Hai slave duy nhất là <strong>PS-CPU (0x3E)</strong> và <strong>RTC của PS-CPU (0x3D)</strong>. Vậy storm nằm trên bus PS-CPU/RTC.</p>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 6</span>Vì sao storm ở 1 core làm treo cả máy</h3>
+<ol>
+  <li>Một task ứng dụng gọi <code>i2c_transfer()</code> tới PS-CPU/RTC. <code>i2c_transfer()</code> lấy <code>bus_lock</code> của adapter, <code>i2c_dw_xfer()</code>, start transfer, rồi chờ <code>wait_for_completion_timeout(&amp;dev-&gt;cmd_complete, adap-&gt;timeout)</code> (<code>i2c-designware-master.c:518</code>).</li>
+  <li>Transfer không complete. <span class="chip c-inf">suy luận</span> Bản thân guard 65237 có thể góp phần: khi ISR rơi vào nhánh guard, nó ghi <code>INTR_MASK=0</code>, tắt luôn TX_EMPTY/STOP_DET mà transfer đang cần (chi tiết ở phần "Bước 6 giải thích chi tiết" bên dưới).</li>
+  <li>Timeout 1 s lẽ ra cứu được: in <code>controller timed out</code>, gọi <code>i2c_recover_bus()</code> và <code>i2c_dw_init_master()</code>. Nhưng timer_list cần TIMER_SOFTIRQ, mà trên Core0 ksoftirqd/0 không được chạy. <strong>60 s không có dòng "controller timed out" nào.</strong></li>
+  <li>Caller giữ lock adapter mãi; mọi task khác cần PS-CPU/RTC xếp hàng chờ. <code>SYSC_SystemInit</code> dừng nên <code>refresh_SoftDog()</code> không được gọi.</li>
+  <li>softdog (hrtimer) nổ đúng 60 s sau lần refresh cuối.</li>
+</ol>
+<p><span class="chip c-me">tự kiểm chứng</span> <strong>Bằng chứng thời gian:</strong></p>
+<div class="tw"><table>
+<tr><th>Máy</th><th class="num">NOHZ #282 đầu tiên</th><th class="num">watchdog fire</th><th class="num">Chênh</th><th class="num">Pha so với khe idle trong dump</th></tr>
+<tr><td>Sparrow</td><td class="num">80.260888</td><td class="num">140.634925</td><td class="num"><strong>60,37 s</strong></td><td class="num">115.260878 − 80.260888 = 35,000 s = 140 × 0,25</td></tr>
+<tr><td>Ohwashi</td><td class="num">82.506480</td><td class="num">142.469990</td><td class="num"><strong>59,96 s</strong></td><td class="num">118.506472 − 82.506480 = 36,000 s = 144 × 0,25</td></tr>
+</table></div>
+<div class="codebox"><div class="cap"><span>Sparrow L68738-68743</span><span>trùng đúng các khe swapper 5 ms</span></div><pre data-code="c_nohz"></pre></div>
+<ul>
+  <li><code>#282</code> = bit 1 TIMER + bit 7 SCHED + bit 9 RCU đang pending. <strong>Timer softirq có việc mà không ai làm.</strong></li>
+  <li>Dòng này được in từ <code>can_stop_idle_tick()</code> (<code>kernel/time/tick-sched.c:982-990</code>) khi CPU vào idle mà còn softirq pending, giới hạn tối đa 10 dòng mỗi boot. Nó in ra đúng trong các khe 5 ms Core0 chạy swapper.</li>
+  <li>Dòng NOHZ cũng có ở boot bình thường (Sparrow 33 dòng, Ohwashi 89 dòng trong toàn log), nên <strong>riêng nó không chứng minh gì</strong>. Giá trị nằm ở: cách watchdog đúng 60 s ở cả hai máy, và cùng pha 0,25 s với storm.</li>
+</ul>
+<div class="note lesson"><span class="k">Bài học 4</span><p>Một dòng log "vô hại vì cũng có ở lần bình thường" vẫn có thể là bằng chứng mạnh nếu <strong>thời điểm</strong> của nó khớp với cơ chế. Đừng chỉ so tập dòng log; hãy so cả vị trí trên trục thời gian.</p></div>
+<h4 id="s6-deep">Bước 6 giải thích chi tiết</h4>
+<p>Câu hỏi: <strong>storm chỉ chiếm Core0, Core1–3 vẫn rảnh, sao cả máy bị reboot?</strong> Máy không thiếu CPU, nó bị kẹt trong một chuỗi chờ, mà mắt xích đầu nằm trên Core0.</p>
+
+<p><strong>(a) Tín hiệu nào cho biết transfer hoàn thành?</strong> <code>wait_for_completion_timeout()</code> chỉ kết thúc theo hai đường:</p>
+<div class="tw"><table>
+<tr><th>Đường</th><th>Ai đánh thức</th><th>Kết quả</th></tr>
+<tr><td>A</td><td>ISR gọi <code>complete(&amp;dev-&gt;cmd_complete)</code></td><td>Trả về &gt; 0, transfer xong</td></tr>
+<tr><td>B</td><td>Hết <code>adap-&gt;timeout</code> (1 s)</td><td>Trả về 0, vào nhánh <code>controller timed out</code></td></tr>
+</table></div>
+<p>Chỗ duy nhất gọi <code>complete()</code> là cuối <code>i2c_dw_irq_handler_master()</code>, khi <code>stat</code> có <strong><code>STOP_DET</code></strong> (bit 9, controller thấy STOP trên bus) hoặc <strong><code>TX_ABRT</code></strong> (bit 6, NACK/mất arbitration), hoặc <code>dev-&gt;msg_err</code>. <code>TX_EMPTY</code> chỉ có nghĩa "FIFO còn chỗ, nạp thêm", không phải "đã xong". Thức dậy rồi <code>i2c_dw_xfer()</code> còn kiểm <code>msg_err</code>, <code>cmd_err</code>, <code>status</code> mới kết luận thành công.</p>
+
+<p><strong>(b) Vì sao guard 65237 cắt đường A?</strong> <span class="chip c-inf">suy luận</span> Guard <code>return IRQ_HANDLED</code> ngay nên ở <em>lần ISR đó</em> handler chính không chạy. Vấn đề nằm ở <strong>các lần sau</strong>, vì guard để lại <code>INTR_MASK = 0</code> cho tới transfer kế tiếp, và:</p>
+<div class="tw"><table>
+<tr><th>Chỗ</th><th>Register đọc</th><th>Bị INTR_MASK ảnh hưởng?</th></tr>
+<tr><td>Điều kiện guard trong <code>i2c_dw_isr()</code></td><td><code>RAW_INTR_STAT</code> (0x34)</td><td>Không</td></tr>
+<tr><td><code>i2c_dw_read_clear_intrbits()</code> trong handler chính</td><td><code>INTR_STAT</code> (0x2C) = RAW &amp; MASK</td><td><strong>Có</strong></td></tr>
+</table></div>
+<p>Điều kiện guard dùng <code>||</code> nên có hai lối vào: <code>!enabled</code> (controller idle, vô hại) và <code>enabled=1</code> + RAW chỉ có ACTIVITY (<strong>đang transfer</strong>, có hại). Lối thứ hai chỉ mở trong khoảng hẹp: FIFO vừa được nạp và còn trên ngưỡng <code>TX_TL</code>; ngoài khoảng đó RAW đã có <code>TX_EMPTY</code>. Nghĩa là guard chạy giữa transfer là <strong>có thể nhưng cần đúng thời điểm</strong>.</p>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant APP as Task app (i2c_dw_xfer)
+    participant ISR as irq/56: i2c_dw_isr()
+    participant HM as i2c_dw_irq_handler_master()
+    participant REG as DW I2C registers
+    participant SMB as Khối SMBus
+    participant GIC as GIC SPI45
+    APP->>REG: i2c_dw_xfer_init(): INTR_MASK = MASTER_MASK, ENABLE = 1
+    APP->>APP: Giữ bus_lock, ngủ trong wait_for_completion_timeout(1 s)
+    SMB->>GIC: Giữ line HIGH (nguồn ngoài khối chính)
+    rect rgb(255, 235, 235)
+    Note over ISR,REG: ISR #1: giữa transfer
+    GIC->>ISR: IRQ
+    ISR->>REG: Đọc ENABLE = 1, RAW = ACTIVITY
+    Note over ISR: Ngoài ACTIVITY không có bit nào, vào guard 65237
+    ISR->>REG: Đọc CLR_INTR, ghi INTR_MASK = 0
+    ISR-->>GIC: return IRQ_HANDLED (handler chính KHÔNG chạy)
+    end
+    Note over REG: FIFO còn lệnh có bit STOP: controller tự đẩy nốt, phát STOP, RAW latch STOP_DET (và TX_EMPTY)
+    Note over REG: INTR_STAT = RAW AND 0 = 0
+    GIC->>GIC: Unmask, line vẫn HIGH do SMBus nên bắn lại
+    rect rgb(255, 245, 220)
+    Note over ISR,HM: ISR #N sau đó (thời điểm tùy tốc độ bus, khoảng 90 us/byte ở 100 kHz)
+    GIC->>ISR: IRQ
+    ISR->>REG: Đọc RAW = ACTIVITY + TX_EMPTY + STOP_DET
+    Note over ISR: Có bit khác ACTIVITY nên KHÔNG vào guard
+    ISR->>HM: Gọi handler chính
+    HM->>REG: Đọc INTR_STAT
+    REG-->>HM: 0 (bị mask chặn)
+    Note over HM: Không thấy STOP_DET, TX_ABRT nên KHÔNG complete(). STOP_DET ở RAW không được clear
+    ISR-->>GIC: return IRQ_HANDLED, unmask, lặp lại
+    end
+    Note over APP: Đường A chết. Đường B cần TIMER softirq trên Core0 đang bị irq/56 chiếm
+    APP->>APP: Ngủ mãi, giữ bus_lock
+</pre>
+<div class="tw"><table>
+<tr><th>Tình huống lúc guard chạy</th><th>Diễn biến</th><th>Kết quả</th></tr>
+<tr><td>FIFO đã có lệnh STOP</td><td>STOP_DET latch ở RAW nhưng INTR_STAT = 0</td><td>Không complete</td></tr>
+<tr><td>FIFO chưa nạp xong</td><td><code>TX_EMPTY</code> bị mask nên không nạp tiếp; master giữ bus chờ, không có STOP_DET</td><td>Không complete</td></tr>
+<tr><td>Line không bị nguồn khác giữ</td><td>MASK = 0 làm line về LOW, không còn ISR nào</td><td>Không complete</td></tr>
+<tr><td>Upstream (<code>IRQ_NONE</code>, không đụng mask)</td><td>Lần ISR sau STOP_DET đi qua mask</td><td><code>complete()</code> bình thường</td></tr>
+</table></div>
+<p>Dù không có guard, nếu storm làm ISR không bao giờ thấy STOP_DET thì transfer vẫn có thể treo. Vì vậy guard là <strong>yếu tố góp phần khả dĩ</strong>, chưa có log xác nhận (code không log khi vào guard).</p>
+
+<p><strong>(c) Vì sao đường B (timeout 1 s) cũng chết?</strong> Timeout không tự chạy khi hết giờ:</p>
+<pre class="small">
+wait_for_completion_timeout() → schedule_timeout() → timer_list đặt trên CPU task đang chạy (giả sử Core0)
+Mỗi tick 5 ms (hardirq): timer hết hạn → chỉ ĐÁNH DẤU TIMER_SOFTIRQ pending
+Phải có ai trên Core0 chạy run_timer_softirq() → callback → đánh thức task
+</pre>
+<p>Trên KM người đó gần như chỉ có <code>ksoftirqd/0</code> (<code>irq_exit()</code> không chạy softirq do force_irqthreads; <code>local_bh_enable()</code> bỏ qua khi ksoftirqd RUNNING). Mà <code>ksoftirqd/0</code> (RR 256) cùng mức với <code>irq/56</code> (FIFO 256), RT throttling tắt, nên không chen vào được.</p>
+<div class="note lesson"><span class="k">Ví dụ đời thường</span><p>Chuông báo thức 1 giờ chỉ bật đèn "đã tới giờ"; phải có người bấm nút đánh thức bạn, và người đó đang kẹt sau một khách chiếm quầy số 0 không chịu đi. Bạn đứng chờ mãi, tay vẫn cầm chìa khóa kho chung; ba quầy kia trống nhưng ai cần vào kho cũng phải chờ chìa khóa. Quản lý (softdog) thấy cả văn phòng đứng im 60 s thì đóng cửa làm lại.</p></div>
+
+<p><strong>(d) Nếu timeout nổ được thì sao?</strong></p>
+<div class="tw"><table>
+<tr><th>Bước</th><th>Làm gì</th><th>Trong sự cố</th></tr>
+<tr><td>① <code>dev_err("controller timed out")</code></td><td>Để lại dấu vết</td><td>Không có dòng nào trong 60 s</td></tr>
+<tr><td>② <code>i2c_recover_bus()</code></td><td>Đảo SCL bằng GPIO (OP_BTS-45386) để slave nhả SDA</td><td>Không chạy</td></tr>
+<tr><td>③ <code>i2c_dw_init_master()</code></td><td>Reset controller; với fix mới còn ghi <code>SMBUS_INTR_MASK = 0</code></td><td>Không chạy → storm tiếp tục</td></tr>
+<tr><td>④⑤ <code>-ETIMEDOUT</code>, return</td><td><code>i2c_transfer()</code> nhả <code>bus_lock</code>, task khác chạy tiếp</td><td>Không chạy → mọi người chờ khóa</td></tr>
+</table></div>
+<div class="note crit"><span class="k">Vòng tròn bế tắc</span><p>Đường timeout chính là đường tự cứu (bước ③ mask SMBus), nhưng nó không chạy được <strong>vì</strong> storm: storm → softirq Core0 chết → timeout không nổ → không init_master → không mask SMBus → storm tiếp tục. Fix #1 phá vòng này vì đã chạy từ probe/resume. Nếu nguồn không phải SMBus, vòng vẫn còn: cần storm breaker không phụ thuộc softirq của core bị chiếm (ví dụ <code>disable_irq_nosync()</code> trong ISR, phương án B mục 9.2).</p></div>
+<ul>
+  <li><strong>Đính chính về "lock adapter":</strong> khóa các task khác phải chờ là <code>adapter-&gt;bus_lock</code> (rt_mutex) do I2C core lấy trong <code>i2c_transfer()</code> trước khi gọi <code>i2c_dw_xfer()</code>. <code>i2c_dw_acquire_lock()</code> chỉ là semaphore phần cứng cho bus chia sẻ với PUNIT, gần như không làm gì trên SoC này (theo code 5.10 upstream, chưa đối chiếu source KM).</li>
+  <li><strong>Điều kiện để lập luận đúng:</strong> timer của task giữ <code>bus_lock</code> phải nằm trên Core0. Nếu task đi ngủ trên Core1–3, timer lẽ ra vẫn nổ. Xem câu hỏi mở số 3 (mục 11).</li>
+</ul>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 7</span>Vì sao guard OP_BTS-65237 (04/2026) không chặn được</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c:680-705 (Before)</span><span>có OP_BTS-65237</span></div><pre data-code="c_isr_before"></pre></div>
+<p>Theo thiết kế, khi controller disable hoặc stat rỗng, đọc CLR_INTR + ghi MASK=0 thì output khối chính phải về 0. Nhưng storm vẫn kéo dài 27–60 s. Chỉ có hai khả năng, và log hiện tại không phân biệt được:</p>
+<div class="tw"><table>
+<tr><th>Khả năng</th><th>Diễn giải</th><th>Ý nghĩa</th></tr>
+<tr><td>(a) ISR vào guard mỗi lần</td><td>clear/mask đã chạy nhưng line vẫn HIGH</td><td>Nguồn assert nằm <strong>ngoài</strong> phạm vi 2 register này: khối SMBus, trạng thái IP sau disable, hoặc pending kẹt ở GIC/ICU</td></tr>
+<tr><td>(b) ISR không vào guard</td><td><code>enabled=1</code> và có bit thật giữ ở mức level → handler chính chạy, return, line vẫn HIGH</td><td>Có bit level mà handler chính không giải quyết được</td></tr>
+</table></div>
+<div class="note crit"><span class="k">Tác dụng phụ của 65237</span><p>Upstream trả <code>IRQ_NONE</code>; KM đổi thành <code>IRQ_HANDLED</code>. Lưới "nobody cared" (mục 2.5) mất tác dụng, nên vòng storm chỉ dừng khi softdog reboot máy. Đây là lý do một sự cố lẽ ra chỉ làm hỏng I2C1 lại thành reboot cả máy.</p></div>
+</div>
+
+<div class="step">
+<h3><span class="sn">Bước 8</span>Bế tắc ở BSP, chuyển KM, tìm ra upstream <span class="who">10/16 18:40 → KM</span></h3>
+<p>BSP gửi báo cáo lần 2 cho KM (<code>OP_BTS-70811_KM_SupportRequest_JP_20261016.html</code>), nêu đã khoanh tới cơ chế nhưng không cắt được nguồn assert, và hỏi về chính sách <code>force_irqthreads</code> + IRQ thread FIFO ưu tiên cao. KM tìm thấy commit upstream mô tả đúng kịch bản (a) với nguồn là khối SMBus, rồi đưa ra solution phòng ngừa (mục 7).</p>
+</div>
+</section>
+
+<!-- 5 -->
+<section id="code">
+<h2><span class="n">5</span>Đọc code liên quan</h2>
+<p>File <code>Kernel/Src/drivers/i2c/busses/i2c-designware-master.c</code> và <code>i2c-designware-core.h</code> trong repo giống hệt bản <code>1_Before</code> trong PG.zip <span class="chip c-me">đã diff</span>.</p>
+
+<h3>5.1 Nơi transfer chờ và timeout</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c:506-526 · i2c_dw_xfer()</span></div><pre data-code="c_xfer"></pre></div>
+<p>Đây là chỗ caller bị kẹt: lock đã lấy ở <code>i2c_dw_acquire_lock()</code>, còn <code>wait_for_completion_timeout()</code> thì không bao giờ trả về vì timer của nó không được xử lý.</p>
+
+<h3>5.2 Khởi động transfer: chỗ INTR_MASK được bật</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c:249-261 · i2c_dw_xfer_init()</span></div><pre data-code="c_xfer_init"></pre></div>
+<p>Driver bật <code>INTR_MASK = DW_IC_INTR_MASTER_MASK</code> khi bắt đầu transfer. Guard trong ISR ghi <code>INTR_MASK = 0</code> là tắt sạch chỗ này.</p>
+
+<h3>5.3 Handler chính</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c:638-678 · i2c_dw_irq_handler_master()</span></div><pre data-code="c_handler"></pre></div>
+<p>Handler chính chỉ biết các bit khối chính (RX_UNDER…GEN_CALL). Nó clear từng bit qua các <code>IC_CLR_*</code> riêng chứ không dùng <code>IC_CLR_INTR</code>, để không mất interrupt đến giữa hai lần đọc. Không có dòng nào đụng tới 0xC8–0xD4.</p>
+
+<h3>5.4 Probe: thứ tự init và request_irq</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c:858-892 · i2c_dw_probe_master()</span></div><pre data-code="c_probe"></pre></div>
+<ul>
+  <li><code>dev-&gt;init()</code> (= <code>i2c_dw_init_master</code>) chạy <strong>trước</strong> <code>devm_request_irq</code>. Fix #1 đặt trong init nên SMBus đã bị mask trước khi IRQ được đăng ký.</li>
+  <li><code>IRQF_SHARED</code>: với line có thể chia sẻ, <code>IRQ_NONE</code> là cách nói đúng chuẩn "interrupt này không phải của tôi". Trên SoC này SPI 45 chỉ có I2C1.</li>
+</ul>
+
+<h3>5.5 Resume và restore snapshot</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-platdrv.c:383-416</span></div><pre data-code="c_pm"></pre></div>
+<p><code>SET_LATE_SYSTEM_SLEEP_PM_OPS</code> gán cả <code>resume_early</code>, <code>thaw_early</code> và <code>restore_early</code>, nên khi Warp snapshot khôi phục, <code>dw_i2c_plat_resume()</code> → <code>i_dev-&gt;init()</code> → fix #1 cũng chạy. Đây là điều kiện cần để fix có hiệu lực đúng trong kịch bản ticket (boot hồi phục bằng snapshot). Cần xác nhận trên máy thật rằng Warp gọi đúng callback restore của driver.</p>
+
+<h3>5.6 Bản upstream gốc của ISR (để so sánh)</h3>
+<div class="codebox"><div class="cap"><span>nhánh !CONFIG_KM_BIZHUB</span><span>upstream 5.10</span></div><pre data-code="c_isr_upstream"></pre></div>
+</section>
+
+<!-- 6 -->
+<section id="gia-thuyet">
+<h2><span class="n">6</span>Cây giả thuyết: cái gì giữ line assert?</h2>
+<div class="tw"><table>
+<tr><th>Ứng viên</th><th>Lý lẽ ủng hộ</th><th>Lý lẽ chống / thiếu</th><th>Trạng thái</th></tr>
+<tr><td><strong>Khối SMBus interrupt</strong> (clock-extend timeout SEXT/MEXT)</td>
+<td>Nằm ngoài INTR_MASK/CLR_INTR · driver không bao giờ clear · interrupt latched nên giữ tới khi reset (khớp "kéo dài tới reboot, boot sau bình thường") · PS-CPU có tiền sử clock stretching (OP_BTS-45386) · storm bắt đầu ~27 s sau restore, đúng lúc app nói chuyện nhiều với PS-CPU · upstream d3429178 mô tả đúng kịch bản</td>
+<td>Chưa xác nhận IP này có <code>IC_SMBUS=1</code> · chưa biết giá trị reset của <code>IC_SMBUS_INTR_MASK</code> / ai đã unmask</td>
+<td><span class="chip c-inf">mạnh nhất</span></td></tr>
+<tr><td>(b) Bit level trong khối chính</td><td>Ví dụ RX_FULL khi msgs đã xử lý xong nên <code>i2c_dw_read()</code> không đọc FIFO</td><td>Sau transfer driver disable adapter → lần ISR sau sẽ vào guard và MASK=0</td><td><span class="chip c-open">chưa loại được</span></td></tr>
+<tr><td>TX_ABRT tự assert lại (ABRT_SBYTE_NORSTRT)</td><td>Databook: clear mà không sửa điều kiện thì bit 9 re-assert sau 1 chu kỳ</td><td>Handler chính gặp TX_ABRT là ghi MASK=0 → khó kéo dài</td><td><span class="chip c-inf">yếu</span></td></tr>
+<tr><td>Pending kẹt ở GIC / ICU / đường ngắt trong SoC</td><td>Giải thích được (a)</td><td>Không có dữ liệu</td><td><span class="chip c-open">chưa loại được</span></td></tr>
+<tr><td>PS-CPU "kéo" line ngắt</td><td>–</td><td>Line là output của controller DW, không phải của slave. PS-CPU chỉ có thể là <strong>tác nhân kích hoạt</strong> qua hành vi trên bus</td><td><span class="chip c-fact">loại</span></td></tr>
+</table></div>
+
+<h3>Commit upstream d3429178ee51</h3>
+<div class="codebox"><div class="cap"><span>i2c: designware: Disable SMBus interrupts to prevent storms from mis-configured firmware</span><span>Jinhui Guo · Reviewed-by Andy Shevchenko · Acked-by Mika Westerberg</span></div><pre data-code="c_upstream" class="diff"></pre></div>
+<p>Thông điệp commit: SMBus Master/Slave extend-clock timeout bị cấu hình sai có thể làm ngập CPU bằng interrupt, và handler của driver không bao giờ service chúng. Link: <a href="https://github.com/torvalds/linux/commit/d3429178ee51dd7155445d15a5ab87a45fae3c73" target="_blank" rel="noopener">torvalds/linux@d3429178</a>.</p>
+</section>
+
+<!-- 7 -->
+<section id="solution">
+<h2><span class="n">7</span>Solution được tạo ra</h2>
+<p>Lập trường của KM (ghi trong <code>OP_BTS-70811_I2C IRQ storm.txt</code>): tái hiện thấp, chưa xác định duy nhất nguồn storm, nên làm 3 việc: <strong>#1 phòng ngừa theo upstream</strong>, <strong>#2 cải thiện phòng thủ cho xử lý hồi phục đang có</strong>, <strong>#3 thêm thông tin chẩn đoán cho lần tái phát</strong>. KM tự ghi rõ cả #1 và #2 đều <em>không</em> phải đối sách cho nguyên nhân đã xác định.</p>
+
+<h3>7.1 Diff cuối cùng (Before → After trong PG.zip)</h3>
+<div class="codebox"><div class="cap"><span>i2c-designware-core.h</span><span>#1</span></div><pre data-code="d_core" class="diff"></pre></div>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c · i2c_dw_init_master()</span><span>#1</span></div><pre data-code="d_init" class="diff"></pre></div>
+<div class="codebox"><div class="cap"><span>i2c-designware-master.c · i2c_dw_isr()</span><span>#2 + #3</span></div><pre data-code="d_isr" class="diff"></pre></div>
+
+<h3>7.2 Ý đồ của từng phần</h3>
+<div class="tw"><table>
+<tr><th>Phần</th><th>Làm gì</th><th>Ý đồ theo KM</th></tr>
+<tr><td>#1 予防</td><td>Ghi <code>IC_SMBUS_INTR_MASK = 0</code> ngay sau khi disable adapter trong <code>i2c_dw_init_master()</code></td><td>Chặn storm từ SMBus interrupt mà Linux driver không xử lý</td></tr>
+<tr><td>#2 既存対策の改善</td><td>Thứ tự: Mask → lưu TX_ABRT_SOURCE → Clear → read-back</td><td>Giảm khả năng re-assert trong khoảng giữa clear và mask</td></tr>
+<tr><td>#3 診断強化</td><td>Kiểm tra lỗi regmap; đọc lại INTR_MASK, INTR_STAT, RAW_INTR_STAT; log "incomplete" (warn) hoặc "done" (dbg); lưu TX_ABRT_SOURCE</td><td>Không coi <code>IC_ENABLE==0</code> là "đã idle"; nếu tái phát thì biết mask có ăn không, RAW còn gì</td></tr>
+</table></div>
+<p class="small muted">Khác biệt giữa Diff② của KM và bản After cuối: bản After bỏ hẳn <code>#if defined(CONFIG_KM_BIZHUB)</code>, nên nhánh upstream (<code>IRQ_NONE</code>) cho build không phải KM cũng không còn. Nhánh <code>#if 0</code> (trả <code>IRQ_NONE</code> khi không có nguồn) được viết sẵn nhưng không bật.</p>
+</section>
+
+<!-- 8 -->
+<section id="danh-gia">
+<h2><span class="n">8</span>Đánh giá solution</h2>
+<div class="score">
+  <div class="sc"><div class="t">#1 Mask SMBus</div><div class="bar"><i style="width:75%;background:var(--ok)"></i></div><p>Có giá trị, rủi ro thấp. Hiệu lực phụ thuộc vào việc IP có khối SMBus hay không.</p></div>
+  <div class="sc"><div class="t">#2 Mask → Clear</div><div class="bar"><i style="width:15%;background:var(--warn)"></i></div><p>Vô hại nhưng gần như không đổi hành vi trong chế độ forced-thread + ONESHOT.</p></div>
+  <div class="sc"><div class="t">#3 Chẩn đoán</div><div class="bar"><i style="width:35%;background:var(--warn)"></i></div><p>Đúng hướng nhưng câm đúng ở kịch bản cần nhất.</p></div>
+  <div class="sc"><div class="t">Storm breaker</div><div class="bar"><i style="width:0%;background:var(--crit)"></i></div><p>Không có. Nếu nguồn không phải SMBus, máy vẫn reboot y như cũ.</p></div>
+</div>
+<p class="small muted">Thanh màu là đánh giá định tính của tôi về mức đóng góp vào việc ngăn tái phát, không phải số đo.</p>
+
+<h3>8.1 #1 Mask SMBus</h3>
+<ul>
+  <li><strong>Ưu:</strong> chặn đúng ứng viên mạnh nhất; code upstream đã qua review của maintainer DW I2C; chạy ở probe (trước request_irq), resume/restore và sau mỗi lần timeout.</li>
+  <li><strong>Rủi ro:</strong> nếu IP không có SMBus, 0xCC là vùng reserved trong cửa sổ <code>reg</code> 0x800 của IP; DW APB thường bỏ qua ghi vào offset không có. Rủi ro thấp.</li>
+  <li><strong>Giới hạn:</strong> nếu IP không có SMBus, fix #1 không làm gì cả. Chưa ai đọc register để xác nhận. Lỗi xảy ra 1 lần trên khoảng 100 lần hồi phục mỗi máy, nên chạy lại night-running không ra lỗi cũng không chứng minh được fix.</li>
+  <li><strong>Khoảng hở nhỏ:</strong> fix chỉ chạy ở các điểm gọi <code>init</code>. Nếu có thành phần nào khác (U-Boot, firmware) bật lại SMBus mask sau đó trong cùng boot, fix không bắt được. Khả năng thấp.</li>
+</ul>
+
+<h3>8.2 #2 Đổi thứ tự Mask → Clear</h3>
+<p>Trong chế độ forced-thread + ONESHOT (mục 2.2), line bị mask ở GIC suốt thời gian thread chạy. GIC chỉ lấy mẫu lại lúc unmask. Hai thứ tự cho cùng trạng thái cuối:</p>
+<div class="tw"><table>
+<tr><th>Thứ tự</th><th>Trạng thái lúc unmask</th><th>Output khối chính</th><th>Nếu nguồn ở SMBus</th></tr>
+<tr><td>Clear → Mask (cũ)</td><td>MASK=0, RAW có thể còn bit re-latch</td><td>RAW &amp; 0 = 0</td><td>Line vẫn HIGH</td></tr>
+<tr><td>Mask → Clear (mới)</td><td>MASK=0, RAW có thể còn bit re-latch</td><td>RAW &amp; 0 = 0</td><td>Line vẫn HIGH</td></tr>
+</table></div>
+<p>Thứ tự mới là thói quen tốt (đóng cửa trước rồi mới dọn), nhưng với cấu hình hiện tại không thay đổi hành vi. Kể cả khi driver chạy hardirq thật, với line <strong>level</strong> GIC vẫn không phát lại IRQ đó trước EOI/unmask, nên thứ tự vẫn gần như không quan trọng; nó chỉ có ý nghĩa với line <strong>edge</strong>, nơi một cạnh giữa chừng có thể bị chốt pending <span class="chip c-inf">suy luận</span>. Xem "Hai trục độc lập" ở mục 2.2. KM cũng tự gọi đây là "防御的改善".</p>
+<p>Phần kiểm tra mã trả về của <code>regmap_read/write</code>: regmap-mmio thực tế gần như không bao giờ trả lỗi (trừ khi clock enable thất bại). Vô hại nhưng ít giá trị.</p>
+
+<h3>8.3 #3 Chẩn đoán: điểm mù</h3>
+<p>Điều kiện in warning là <code>mask_after || intr_after</code>. Áp vào các kịch bản:</p>
+<div class="tw"><table>
+<tr><th>Kịch bản tái phát</th><th class="num">mask_after</th><th class="num">intr_after</th><th class="num">raw_after</th><th>Log in ra</th></tr>
+<tr><td>Nguồn ngoài khối chính (SMBus, GIC) — <strong>giả thuyết chính</strong></td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td><span class="chip c-open">dev_dbg → không hiện</span></td></tr>
+<tr><td>Bit RAW re-assert sau Clear</td><td class="num">0</td><td class="num">0</td><td class="num">≠0</td><td><span class="chip c-open">dev_dbg → không hiện</span></td></tr>
+<tr><td>Ghi MASK=0 không ăn</td><td class="num">≠0</td><td class="num">–</td><td class="num">–</td><td><span class="chip c-fact">warn</span></td></tr>
+<tr><td>Có TX_ABRT khi disable</td><td class="num">0</td><td class="num">0</td><td class="num">?</td><td><span class="chip c-fact">warn TX_ABRT_SOURCE</span></td></tr>
+<tr><td>Kịch bản (b): handler chính chạy</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td><span class="chip c-open">không đi qua guard → không log</span></td></tr>
+</table></div>
+<ul>
+  <li><code>dev_dbg</code> chỉ in khi bật <code>DEBUG</code> hoặc dynamic debug; trên máy sản phẩm thường không in.</li>
+  <li>Comment trong code nói read-back để phát hiện "a RAW interrupt condition remains after CLR_INTR", nhưng <code>raw_after</code> chỉ xuất hiện trong log dbg.</li>
+  <li>Không đọc register SMBus, không đọc <code>IC_STATUS</code>, không đếm số lần đi vào guard. Nếu storm tái phát đúng giả thuyết chính, log sẽ trông y như lần này.</li>
+  <li>Kịch bản (b) hoàn toàn không có log vì không đi qua guard.</li>
+</ul>
+
+<h3>8.4 Điểm còn thiếu lớn nhất: không có cơ chế dừng storm</h3>
+<p>Cả 3 phần đều không trả lời câu hỏi: nếu storm vẫn xảy ra vì một nguồn khác SMBus, hệ thống có sống được không? Câu trả lời hiện tại: không. Vòng lặp vẫn không có điểm dừng ngoài softdog.</p>
+
+<h3>8.5 Các điểm nhỏ khác</h3>
+<ul>
+  <li><strong>Lỗi tiềm ẩn từ 65237, vẫn còn:</strong> guard ghi <code>INTR_MASK=0</code> cả khi <code>enabled=1</code> và stat chỉ có ACTIVITY hoặc rỗng. Một lần wake giả trong lúc đang có transfer sẽ giết transfer đó (phải chờ timeout 1 s rồi recovery).</li>
+  <li><code>dev-&gt;abort_source</code> bị ghi từ guard ngoài ngữ cảnh transfer. Vô hại vì <code>i2c_dw_xfer()</code> reset nó ở đầu mỗi transfer.</li>
+  <li>Bỏ <code>CONFIG_KM_BIZHUB</code>: đổi hành vi của build không phải KM và lệch quy ước bọc code KM trong repo. Ảnh hưởng thực tế thấp.</li>
+  <li><code>dev_warn_ratelimited</code> mặc định 10 dòng / 5 s, nên không làm storm nặng thêm do in UART.</li>
+</ul>
+</section>
+
+<!-- 9 -->
+<section id="de-xuat">
+<h2><span class="n">9</span>Đề xuất bổ sung (phác thảo, chưa build/test)</h2>
+
+<h3>9.1 Chẩn đoán không còn điểm mù</h3>
+<p>Mục tiêu: lần tái phát sau phải cho biết nguồn nằm ở đâu. Đếm số lần vào guard trong 1 giây; khi vượt ngưỡng thì in một dòng đầy đủ, gồm cả register SMBus.</p>
+<div class="codebox"><div class="cap"><span>đề xuất · trong nhánh guard của i2c_dw_isr()</span><span>sketch</span></div><pre data-code="p_diag"></pre></div>
+<p class="small muted">Dùng <code>jiffies</code> được vì jiffies cập nhật trong hardirq tick, không phụ thuộc softirq. Nếu IP không có khối SMBus thì 0xC8/0xD0 đọc ra 0, cũng là một thông tin.</p>
+
+<h3>9.2 Storm breaker: cho hệ thống sống sót</h3>
+<div class="tw"><table>
+<tr><th>Phương án</th><th>Ưu</th><th>Nhược</th></tr>
+<tr><td>A. Bật nhánh <code>#if 0</code>: trả <code>IRQ_NONE</code> khi không có nguồn nào</td><td>Lấy lại lưới "nobody cared"; storm tự dừng sau vài giây; log rõ <code>Disabling IRQ #56</code></td><td>I2C1 mất IRQ vĩnh viễn trong boot đó: PS-CPU/RTC lỗi (nhưng lỗi rõ ràng, không reboot im lặng). Có thể làm sống lại kịch bản mà 65237 đã sửa</td></tr>
+<tr><td>B. Đếm storm → <code>disable_irq_nosync()</code> → delayed work reset controller → <code>enable_irq()</code></td><td>Tự hồi phục, giữ chức năng; có log</td><td>Phức tạp hơn; cần xử lý đồng bộ với transfer đang chờ; cần test kỹ</td></tr>
+<tr><td>C. Xem lại thiết kế priority (irq thread = ksoftirqd = 256, throttling tắt)</td><td>Một line kẹt không còn giết timer của cả core</td><td>Ảnh hưởng toàn hệ thống và hiệu năng RT; không nên làm trong ticket này</td></tr>
+</table></div>
+<div class="codebox"><div class="cap"><span>đề xuất · phương án B</span><span>sketch</span></div><pre data-code="p_breaker"></pre></div>
+<p>Khi IRQ bị disable, <code>irq_finalize_oneshot()</code> không unmask line nữa, irq/56 ngủ, Core0 được giải phóng, timer softirq chạy lại. Transfer đang chờ sẽ timeout sau 1 s và tự gọi <code>i2c_recover_bus()</code> + <code>i2c_dw_init_master()</code> (trong đó có mask SMBus). Work chỉ cần bật lại IRQ sau một khoảng nghỉ, và tự tắt hẳn nếu storm lặp lại nhiều lần.</p>
+</section>
+
+<!-- 10 -->
+<section id="kiem-chung">
+<h2><span class="n">10</span>Kế hoạch kiểm chứng giả thuyết SMBus</h2>
+<p>Chạy lại night-running không ra lỗi gần như không chứng minh được gì (xác suất gốc ~1/100 lần hồi phục). Cách mạnh hơn là <strong>chủ động gây lỗi</strong>.</p>
+<ol>
+  <li><strong>IP có khối SMBus không?</strong> Base vật lý của I2C1 là <code>0x8_E800_6000</code> (từ <code>reg = &lt;0x8 0xe8006000 0 0x800&gt;</code>).</li>
+</ol>
+<div class="codebox"><div class="cap"><span>trên máy thật (kernel cũ)</span><span>offset theo databook, cần đối chiếu</span></div><pre data-code="p_devmem"></pre></div>
+<ol start="2">
+  <li><strong>Đọc trạng thái lúc lỗi:</strong> nếu có thể giữ máy lại khi storm (ví dụ tạm tắt softdog trên máy debug), đọc 0xC8/0xCC/0xD0 và RAW_INTR_STAT 0x34. SMBUS_RAW ≠ 0 và SMBUS_MASK ≠ 0 là bằng chứng trực tiếp.</li>
+  <li><strong>Gây lỗi có chủ đích trên kernel cũ:</strong> unmask bit timeout SMBus (MST/SLV clock-extend timeout theo databook), đặt <code>IC_SMBUS_CLK_LOW_MEXT</code> (0xC0) thật nhỏ, rồi tạo transfer tới PS-CPU/RTC (ví dụ <code>hwclock -r</code>). Kỳ vọng: <code>/proc/interrupts</code> dòng 56 tăng vọt, <code>top</code> thấy irq/56 ~100% một core.</li>
+  <li><strong>Lặp lại trên kernel mới:</strong> sau khi driver init, SMBUS_MASK phải về 0, không có storm. Nếu bước 3 tái hiện được storm và bước 4 thì không, giả thuyết được nâng từ "ứng viên" lên "đã chứng minh trong phòng lab".</li>
+  <li><strong>Regression:</strong> I2C tới PS-CPU/RTC (đọc/ghi RTC, lệnh PS-CPU), suspend/resume và Warp restore nhiều vòng, night-running theo đúng điều kiện ticket; theo dõi số interrupt irq 56 mỗi vòng, CPU của irq/56, log "IRQ recovery".</li>
+</ol>
+</section>
+
+<!-- 11 -->
+<section id="mo">
+<h2><span class="n">11</span>Câu hỏi còn mở (đáng tự đào thêm)</h2>
+<ol>
+  <li><strong>Nhịp 245 ms / 5 ms đều tăm tắp.</strong> RT throttling đã tắt, và 5 ms đúng bằng 1 tick (HZ=200). Vậy cứ 250 ms irq/56 thật sự ngủ một tick? Nghĩa là line deassert ~5 ms theo chu kỳ 4 Hz? Hay đó là cách task monitor đo? Nếu line thật sự deassert theo chu kỳ, đây là manh mối mạnh về bản chất nguồn (một bộ đếm timeout, một polling định kỳ từ PS-CPU…).</li>
+  <li><strong>Trong các khe 5 ms đó, vì sao Core0 chạy swapper chứ không phải ksoftirqd/0,</strong> trong khi softirq đang pending (dòng NOHZ in ra đúng lúc đó)? Nếu ksoftirqd/0 không ở trạng thái RUNNING thì softirq bị kẹt theo cơ chế khác "starvation thuần". Có thể kiểm bằng ftrace <code>sched_switch</code> + <code>softirq_raise/entry</code> trên máy tái hiện.</li>
+  <li><strong>Caller nào giữ lock adapter, timer của nó ở core nào?</strong> Nếu caller chạy ở Core1–3, timer của nó lẽ ra vẫn nổ sau 1 s. Cần stack của các task D-state lúc watchdog (ví dụ thêm <code>show_state_filter(TASK_UNINTERRUPTIBLE)</code> vào đường softdog).</li>
+  <li><strong>Vì sao chỉ 1 lần trên ~100 lần hồi phục?</strong> Phụ thuộc thời điểm PS-CPU stretch clock đúng lúc app khởi động (~kernel 80 s)? Có thể đối chiếu với log PS-CPU nếu có.</li>
+  <li><strong>OP_BTS-65237 trước đây sửa storm gì?</strong> Nếu storm đó cũng có nguồn ngoài khối chính, guard 65237 có thể chỉ che triệu chứng. Nên đọc lại ticket đó.</li>
+</ol>
+</section>
+
+<!-- 12 -->
+<section id="on-tap">
+<h2><span class="n">12</span>Ôn tập</h2>
+<p class="muted small">Tự trả lời trước, rồi mở đáp án.</p>
+<details><summary>1. Vì sao ghi INTR_MASK=0 mà line vẫn có thể assert?</summary><p>Vì output ra GIC là OR của khối chính và khối SMBus (nếu có). INTR_MASK chỉ mask khối chính. Khối SMBus có mask/clear riêng ở 0xCC/0xD4. Ngoài ra pending có thể kẹt ở GIC/đường ngắt SoC.</p></details>
+<details><summary>2. Đổi IRQ_NONE thành IRQ_HANDLED thì mất cơ chế gì?</summary><p>Spurious detection của genirq: sau 100.000 interrupt mà hơn 99.900 unhandled thì in "irq N: nobody cared" và disable line. Với IRQ_HANDLED, <code>threads_handled</code> luôn tăng nên genirq luôn coi là đã xử lý.</p></details>
+<details><summary>3. Vì sao softdog vẫn nổ mà timeout 1 s của I2C thì không?</summary><p>softdog dùng hrtimer, callback chạy trong hardirq. <code>wait_for_completion_timeout</code> dùng timer_list, cần TIMER_SOFTIRQ; softirq trên Core0 không được xử lý vì ksoftirqd/0 không giành được CPU từ irq/56.</p></details>
+<details><summary>4. Vì sao ksoftirqd/0 không chen được vào?</summary><p>KM đặt ksoftirqd là SCHED_RR 256, irq thread là SCHED_FIFO 256: cùng mức. Task FIFO không bị preempt bởi task cùng mức, chỉ nhường khi tự ngủ; irq/56 không bao giờ ngủ vì cờ RUNTHREAD luôn được set lại. RT throttling bị tắt (runtime = period).</p></details>
+<details><summary>5. Vì sao đổi Mask→Clear gần như không có tác dụng ở đây?</summary><p>Với forced-thread + ONESHOT, line bị mask ở GIC suốt lúc thread chạy; chỉ trạng thái cuối lúc unmask mới quyết định có bắn lại. Cả hai thứ tự đều kết thúc ở MASK=0 đã clear.</p></details>
+<details><summary>6. Dòng NOHZ #282 bị AI xếp vô hại. Vì sao nó vẫn là bằng chứng mạnh?</summary><p>Riêng dòng log thì có cả ở boot bình thường. Nhưng ở cả hai máy, dòng đầu tiên cách watchdog đúng ~60 s (bằng margin softdog), và cùng pha 0,25 s với các khe idle của storm trong dump.</p></details>
+<details><summary>7. irq/56 có phải GIC SPI 45 không?</summary><p>Không. 56 là số virq Linux cấp động. SPI 45 tương ứng hwirq 77 (SPI bắt đầu từ 32).</p></details>
+<details><summary>8. Trong kịch bản SMBus, diagnostic #3 của solution in ra gì?</summary><p>Không in gì ở mức mặc định: mask_after=0, intr_after=0 nên chỉ có dev_dbg. Cần thêm điều kiện theo raw_after, đếm storm và đọc register SMBus.</p></details>
+<details><summary>9. Vì sao fix #1 đặt trong i2c_dw_init_master() lại bao được kịch bản boot hồi phục bằng snapshot?</summary><p>Vì init được gọi ở probe, ở <code>dw_i2c_plat_resume()</code> (gán cho cả resume_early/thaw_early/restore_early qua SET_LATE_SYSTEM_SLEEP_PM_OPS), và sau mỗi lần transfer timeout.</p></details>
+<details><summary>10. Vì sao chạy lại night-running không ra lỗi chưa đủ để kết luận fix đúng?</summary><p>Xác suất gốc khoảng 1 lần trên ~100 lần hồi phục. Không ra lỗi trong một đêm chỉ là bằng chứng rất yếu. Cần fault injection (mục 10) để tái hiện có chủ đích.</p></details>
+</section>
+
+<!-- 13 -->
+<section id="nguon">
+<h2><span class="n">13</span>Nguồn &amp; thuật ngữ</h2>
+<h3>Tài liệu đã dùng</h3>
+<ul class="small">
+  <li><code>OP_BTS-70811_Summary.md</code>: tóm tắt Jira, diễn biến 10/15–10/16.</li>
+  <li><code>primary_triage_…/triage_report.OP_BTS-70811.ja_translated_vi.html</code>: AI triage.</li>
+  <li><code>primary_triage_…/OP_BTS-70811_KM_SupportRequest_JP_20261016.html</code>: báo cáo BSP lần 2.</li>
+  <li><code>From KM/OP_BTS-70811_RA.txt</code>, <code>OP_BTS-70811_I2C IRQ storm.txt</code>, <code>Readme.html</code>, 2 file diff.</li>
+  <li><code>AI/OP_BTS-70811_Investigation_Report_VI_Final.html</code>.</li>
+  <li><code>PG.zip</code>: 1_Before / 2_After của <code>i2c-designware-core.h</code>, <code>i2c-designware-master.c</code>.</li>
+  <li>Log: Sparrow <code>垂れ流しログ/1014-runing.log</code>, Ohwashi <code>LOG/垂れ流しログ.log</code> (Shift-JIS, đã chuyển UTF-8).</li>
+  <li>Source repo <code>Kernel/Src</code>: driver I2C, <code>kernel/irq/manage.c</code>, <code>kernel/irq/spurious.c</code>, <code>kernel/softirq.c</code>, <code>kernel/sched/core.c</code>, <code>include/linux/sched/prio.h</code>, <code>kernel/time/tick-sched.c</code>, <code>drivers/watchdog/softdog.c</code>, <code>quartz-sb.dtsi</code>, <code>arch/arm64/configs/Sparrow_defconfig</code>.</li>
+</ul>
+<h3>Thuật ngữ</h3>
+<div class="tw"><table>
+<tr><th>Thuật ngữ</th><th>Nghĩa</th></tr>
+<tr><td>IRQ storm</td><td>Interrupt bắn liên tục không dứt, ăn hết CPU</td></tr>
+<tr><td>Level-triggered</td><td>GIC báo ngắt chừng nào line còn ở mức active (không phải theo cạnh)</td></tr>
+<tr><td>ONESHOT</td><td>Line bị mask từ lúc hardirq tới khi thread xử lý xong</td></tr>
+<tr><td>force_irqthreads</td><td>Ép mọi handler chạy trong kthread thay vì hardirq</td></tr>
+<tr><td>virq / hwirq</td><td>Số IRQ Linux cấp / số ngắt phần cứng của GIC (SPI n = hwirq n+32)</td></tr>
+<tr><td>softirq / ksoftirqd</td><td>Xử lý trì hoãn (timer, net, RCU…) / kthread chạy softirq mỗi CPU</td></tr>
+<tr><td>timer_list / hrtimer</td><td>Timer độ phân giải jiffies chạy qua softirq / timer độ phân giải cao chạy trong hardirq</td></tr>
+<tr><td>softdog</td><td>Watchdog phần mềm; không được refresh trong margin (60 s) thì reboot</td></tr>
+<tr><td>Warp snapshot</td><td>Khởi động nhanh bằng cách nạp lại ảnh bộ nhớ đã chụp (tương tự hibernate restore)</td></tr>
+<tr><td>Clock stretching</td><td>Slave giữ SCL ở mức thấp để kéo dài thời gian; SMBus có timeout cho việc này (SEXT/MEXT)</td></tr>
+</table></div>
+</section>
+
+<footer>Tài liệu học nội bộ cho OP_BTS-70811. Nhãn "tự kiểm chứng" là phần đối chiếu thêm từ log và source trong repo; các đề xuất ở mục 9 là phác thảo, chưa được build hay test.</footer>
+</main>
+</div>
+
+<!-- ===== code sources (plain text, injected into <pre data-code>) ===== -->
+<script type="text/plain" id="c_symptom">[2026-10-14 22:48:58.831] APIC_setNewDetailCode_FC [0000] _NewDC [2201EFFFFFFFFFFF] _OldDC [0000]
+[2026-10-14 22:49:03.582] MFPシステム起動</script>
+
+<script type="text/plain" id="c_force">#if defined(CONFIG_IRQ_FORCED_THREADING) && !defined(CONFIG_PREEMPT_RT)
+#ifndef CONFIG_KM_BIZHUB  /* RT性能改善のため、ペンディングされたソフト割り込み処理をハード割り込み処理から呼び出さない様にする */
+__read_mostly bool force_irqthreads;
+EXPORT_SYMBOL_GPL(force_irqthreads);
+
+static int __init setup_forced_irqthreads(char *arg)
+{
+	force_irqthreads = true;
+	return 0;
+}
+early_param("threadirqs", setup_forced_irqthreads);
+#else
+/* 常にtrueにすることで invoke_softirq から do_softirq を呼び出すことを禁止する */
+__read_mostly bool force_irqthreads = true;
+#endif
+#endif</script>
+
+<script type="text/plain" id="c_forced_fn">static irqreturn_t
+irq_forced_thread_fn(struct irq_desc *desc, struct irqaction *action)
+{
+	irqreturn_t ret;
+
+	local_bh_disable();
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		local_irq_disable();
+	ret = action->thread_fn(action->irq, action->dev_id);   /* = i2c_dw_isr() */
+	if (ret == IRQ_HANDLED)
+		atomic_inc(&desc->threads_handled);                  /* dữ liệu cho spurious detection */
+
+	irq_finalize_oneshot(desc, action);                      /* unmask line ở GIC */
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		local_irq_enable();                                  /* hardirq kế tiếp vào ngay tại đây */
+	local_bh_enable();
+	return ret;
+}</script>
+
+<script type="text/plain" id="c_ksoftirqd">static void run_ksoftirqd(unsigned int cpu)
+{
+#if defined(CONFIG_KM_BIZHUB)
+	struct sched_param sp;
+
+	/* Set real-time priority. */
+	sp.sched_priority = 256;
+	sched_setscheduler(current, SCHED_RR, &sp);
+#endif
+	local_irq_disable();
+	if (local_softirq_pending()) {
+		__do_softirq();
+		...</script>
+
+<script type="text/plain" id="c_rt">/*
+ * part of the period that we allow rt tasks to run in us.
+ * default: 0.95s
+ */
+#if defined(CONFIG_KM_BIZHUB)
+/* hatono 統合検証FumのVSSからマージ */
+int sysctl_sched_rt_runtime = 1000000;   /* = sysctl_sched_rt_period → không throttle */
+#else
+int sysctl_sched_rt_runtime = 950000;
+#endif</script>
+
+<script type="text/plain" id="c_ksoftirqd_running">/*
+ * If ksoftirqd is scheduled, we do not want to process pending softirqs
+ * right now. Let ksoftirqd handle this at its own rate, to get fairness,
+ * unless we're doing some of the synchronous softirqs.
+ */
+#define SOFTIRQ_NOW_MASK ((1 << HI_SOFTIRQ) | (1 << TASKLET_SOFTIRQ))
+static bool ksoftirqd_running(unsigned long pending)
+{
+	struct task_struct *tsk = __this_cpu_read(ksoftirqd);
+
+	if (pending & SOFTIRQ_NOW_MASK)
+		return false;
+	return tsk && (tsk->state == TASK_RUNNING) &&
+		!__kthread_should_park(tsk);
+}</script>
+
+<script type="text/plain" id="c_softdog">static enum hrtimer_restart softdog_fire(struct hrtimer *timer)
+{
+#ifdef CONFIG_THREADDRV
+	is_wdt_CA72_softdog_stop = true;
+#endif
+	printk("watchdog reboot 1s wait\n");
+	INIT_WORK(&watchdog_work,watchdog_thread);
+	schedule_work_on(1,&watchdog_work);            /* chạy trên CPU1 */
+	if (!hrtimer_active(&softdog_reboot_ticktock)) {
+		__module_get(THIS_MODULE);
+	}
+	/* リブート処理のタイマは、旧Kernel相当の1sec */
+	hrtimer_start(&softdog_reboot_ticktock, ktime_set(1, 0), HRTIMER_MODE_REL);
+	return HRTIMER_NORESTART;
+}
+/* softdog_reboot(): THRL_DispCpuStallTM() in task monitor → "Initiating system reboot" */</script>
+
+<script type="text/plain" id="c_spurious">void note_interrupt(struct irq_desc *desc, irqreturn_t action_ret)
+{
+	...
+	if (action_ret & IRQ_WAKE_THREAD) {           /* IRQ dạng thread */
+		...
+		handled = atomic_read(&desc->threads_handled);
+		handled |= SPURIOUS_DEFERRED;
+		if (handled != desc->threads_handled_last) {
+			action_ret = IRQ_HANDLED;               /* thread đã trả IRQ_HANDLED */
+			desc->threads_handled_last = handled;
+		} else {
+			action_ret = IRQ_NONE;                  /* thread trả IRQ_NONE */
+		}
+	}
+	if (unlikely(action_ret == IRQ_NONE)) {
+		if (time_after(jiffies, desc->last_unhandled + HZ/10))
+			desc->irqs_unhandled = 1;
+		else
+			desc->irqs_unhandled++;
+		desc->last_unhandled = jiffies;
+	}
+	...
+	desc->irq_count++;
+	if (likely(desc->irq_count < 100000))
+		return;
+
+	desc->irq_count = 0;
+	if (unlikely(desc->irqs_unhandled > 99900)) {
+		__report_bad_irq(desc, action_ret);         /* "irq 56: nobody cared" */
+		printk(KERN_EMERG "Disabling IRQ #%d\n", irq);
+		desc->istate |= IRQS_SPURIOUS_DISABLED;
+		desc->depth++;
+		irq_disable(desc);
+		...
+	}
+	desc->irqs_unhandled = 0;
+}</script>
+
+<script type="text/plain" id="c_newdc">[2026-10-14 22:48:58.831] (4294922178)(BSP) ## Watchdog_Fire
+[2026-10-14 22:48:58.831] APIC_setNewDetailCode_FC[0000]_NewDC[2201EFFFFFFFFFFF]_OldDC[0000]</script>
+
+<script type="text/plain" id="c_tm">[  140.634925] watchdog reboot 1s wait
+[  140.638468] watchdog_thread
+[  141.638467] No, Tick, Sec.USec, Name(PID), Sec.USec, Prio (, Name<pPID>)
+[  141.645272] 00000, 4294930347, 115.260878, swapper/[0], 0.004998, 532, <0>
+[  141.652247] 00001, 4294930348, 115.265876, irq/56-8[221], 0.245003, 255, <2>
+[  141.659393] 00002, 4294930397, 115.510879, swapper/[0], 0.004997, 532, <0>
+[  141.666363] 00003, 4294930398, 115.515876, irq/56-8[221], 0.245003, 255, <2>
+[  141.673509] 00004, 4294930447, 115.760879, swapper/[0], 0.004998, 532, <0>
+[  141.680481] 00005, 4294930448, 115.765877, irq/56-8[221], 0.245003, 255, <2>
+...
+[  143.056924] ----Core1----
+[  143.073339] 00001, 4294935599, 141.520874, ksoftirq[15], 0.000016, 255, <2>
+[  143.087368] 00003, 4294935599, 141.523799, WdSigHan[1109], 0.000008, 270, <1066></script>
+
+<script type="text/plain" id="c_dts">i2c1@8e8006000 {
+	compatible = "snps,designware-i2c";
+	reg = <0x8 0xe8006000 0 0x800>;
+	interrupts = <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>;
+	clock-frequency = <100000>;
+#ifdef CONFIG_KM_BIZHUB
+	i2c-sda-hold-time-ns = <200>;
+	scl-gpios = <&gpio 0 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;   /* OP_BTS-45386: GPIO bus recovery */
+	sda-gpios = <&gpio 1 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+#endif
+	clocks = <&bus_clk>;
+#ifdef CONFIG_KM_BIZHUB
+	pscpu_rtc: pscpu_rtc@3d { compatible = "km,pscpu-rtc"; reg = <0x3d>; rtc_clock_freq = <40000>; };
+	pscpu@3e                { compatible = "km,pscpu";     reg = <0x3e>; };
+#endif
+};</script>
+
+<script type="text/plain" id="c_nohz">[2026-10-14 22:48:09.178] [  122.265882] NOHZ tick-stop error: Non-RCU local softirq work is pending, handler #282!!!
+[2026-10-14 22:48:09.677] [  122.760882] NOHZ tick-stop error: Non-RCU local softirq work is pending, handler #282!!!
+[2026-10-14 22:48:10.414] [  123.510883] NOHZ tick-stop error: Non-RCU local softirq work is pending, handler #282!!!
+[2026-10-14 22:48:10.908] [  124.010882] NOHZ tick-stop error: Non-RCU local softirq work is pending, handler #282!!!
+[2026-10-14 22:48:11.920] [  125.010882] NOHZ tick-stop error: Non-RCU local softirq work is pending, handler #282!!!
+[2026-10-14 22:48:12.678] [  125.760882] NOHZ tick-stop error: Non-RCU local softirq work is pending, handler #282!!!
+# khe swapper trong dump: 115.260878 + n*0.25 → 122.260878, 122.760878, 123.510878 ... (lệch ~5 ms = cuối khe idle)</script>
+
+<script type="text/plain" id="c_isr_before">static irqreturn_t i2c_dw_isr(int this_irq, void *dev_id)
+{
+	struct dw_i2c_dev *dev = dev_id;
+	u32 stat, enabled;
+
+	regmap_read(dev->map, DW_IC_ENABLE, &enabled);
+	regmap_read(dev->map, DW_IC_RAW_INTR_STAT, &stat);
+	dev_dbg(dev->dev, "enabled=%#x stat=%#x\n", enabled, stat);
+#if defined(CONFIG_KM_BIZHUB)
+	if (!enabled || !(stat & ~DW_IC_INTR_ACTIVITY)) {
+		/* 2026/04/08 河村 - OP_BTS-65237 IRQ Storm問題の対応
+		 * 割り込みが入り続けるパターンに対応するため割り込み要因クリア/マスクを行う
+		 */
+		regmap_read(dev->map, DW_IC_CLR_INTR, &stat);	/* Clear IRQs */
+		regmap_write(dev->map, DW_IC_INTR_MASK, 0);		/* Mask IRQs */
+		return IRQ_HANDLED;                             /* ← upstream: IRQ_NONE */
+	}
+#else /* defined(CONFIG_KM_BIZHUB) */
+	if (!enabled || !(stat & ~DW_IC_INTR_ACTIVITY))
+		return IRQ_NONE;
+#endif /* defined(CONFIG_KM_BIZHUB) */
+
+	i2c_dw_irq_handler_master(dev);
+
+	return IRQ_HANDLED;
+}</script>
+
+<script type="text/plain" id="c_xfer">	ret = i2c_dw_acquire_lock(dev);
+	if (ret)
+		goto done_nolock;
+
+	ret = i2c_dw_wait_bus_not_busy(dev);
+	if (ret < 0)
+		goto done;
+
+	/* Start the transfers */
+	i2c_dw_xfer_init(dev);
+
+	/* Wait for tx to complete */
+	if (!wait_for_completion_timeout(&dev->cmd_complete, adap->timeout)) {   /* ← kẹt ở đây */
+		dev_err(dev->dev, "controller timed out\n");                        /* ← 60 s không in lần nào */
+		/* i2c_dw_init implicitly disables the adapter */
+		i2c_recover_bus(&dev->adapter);
+		i2c_dw_init_master(dev);
+		ret = -ETIMEDOUT;
+		goto done;
+	}</script>
+
+<script type="text/plain" id="c_xfer_init">	/* Enforce disabled interrupts (due to HW issues) */
+	i2c_dw_disable_int(dev);
+
+	/* Enable the adapter */
+	__i2c_dw_enable(dev);
+
+	/* Dummy read to avoid the register getting stuck on Bay Trail */
+	regmap_read(dev->map, DW_IC_ENABLE_STATUS, &dummy);
+
+	/* Clear and enable interrupts */
+	regmap_read(dev->map, DW_IC_CLR_INTR, &dummy);
+	regmap_write(dev->map, DW_IC_INTR_MASK, DW_IC_INTR_MASTER_MASK);</script>
+
+<script type="text/plain" id="c_handler">static int i2c_dw_irq_handler_master(struct dw_i2c_dev *dev)
+{
+	u32 stat;
+
+	stat = i2c_dw_read_clear_intrbits(dev);      /* đọc INTR_STAT, clear từng bit qua IC_CLR_* */
+	if (stat & DW_IC_INTR_TX_ABRT) {
+		dev->cmd_err |= DW_IC_ERR_TX_ABRT;
+		dev->status = STATUS_IDLE;
+		regmap_write(dev->map, DW_IC_INTR_MASK, 0);
+		goto tx_aborted;
+	}
+
+	if (stat & DW_IC_INTR_RX_FULL)
+		i2c_dw_read(dev);
+
+	if (stat & DW_IC_INTR_TX_EMPTY)
+		i2c_dw_xfer_msg(dev);
+
+tx_aborted:
+	if ((stat & (DW_IC_INTR_TX_ABRT | DW_IC_INTR_STOP_DET)) || dev->msg_err)
+		complete(&dev->cmd_complete);            /* đánh thức i2c_dw_xfer() */
+	else if (unlikely(dev->flags & ACCESS_INTR_MASK)) {
+		/* Workaround to trigger pending interrupt */
+		regmap_read(dev->map, DW_IC_INTR_MASK, &stat);
+		i2c_dw_disable_int(dev);
+		regmap_write(dev->map, DW_IC_INTR_MASK, stat);
+	}
+
+	return 0;
+}</script>
+
+<script type="text/plain" id="c_probe">	ret = dev->init(dev);                        /* i2c_dw_init_master(): fix #1 chạy ở đây */
+	if (ret)
+		return ret;
+	...
+	if (dev->flags & ACCESS_NO_IRQ_SUSPEND) {
+		irq_flags = IRQF_NO_SUSPEND;
+	} else {
+		irq_flags = IRQF_SHARED | IRQF_COND_SUSPEND;
+	}
+
+	i2c_dw_disable_int(dev);
+	ret = devm_request_irq(dev->dev, dev->irq, i2c_dw_isr, irq_flags,
+			       dev_name(dev->dev), dev);   /* force_irqthreads → thành irq/56 + ONESHOT */</script>
+
+<script type="text/plain" id="c_pm">static int dw_i2c_plat_suspend(struct device *dev)
+{
+	struct dw_i2c_dev *i_dev = dev_get_drvdata(dev);
+
+	i_dev->suspended = true;
+	if (i_dev->shared_with_punit)
+		return 0;
+	i_dev->disable(i_dev);
+	i2c_dw_prepare_clk(i_dev, false);
+	return 0;
+}
+
+static int dw_i2c_plat_resume(struct device *dev)
+{
+	struct dw_i2c_dev *i_dev = dev_get_drvdata(dev);
+
+	if (!i_dev->shared_with_punit)
+		i2c_dw_prepare_clk(i_dev, true);
+	i_dev->init(i_dev);                          /* → i2c_dw_init_master → SMBUS_INTR_MASK = 0 */
+	i_dev->suspended = false;
+	return 0;
+}
+
+static const struct dev_pm_ops dw_i2c_dev_pm_ops = {
+	.prepare = dw_i2c_plat_prepare,
+	.complete = dw_i2c_plat_complete,
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(dw_i2c_plat_suspend, dw_i2c_plat_resume)
+	SET_RUNTIME_PM_OPS(dw_i2c_plat_suspend, dw_i2c_plat_resume, NULL)
+};</script>
+
+<script type="text/plain" id="c_isr_upstream">	if (!enabled || !(stat & ~DW_IC_INTR_ACTIVITY))
+		return IRQ_NONE;          /* "không phải của tôi" → genirq đếm unhandled */
+
+	i2c_dw_irq_handler_master(dev);
+	return IRQ_HANDLED;</script>
+
+<script type="text/plain" id="c_upstream">--- a/drivers/i2c/busses/i2c-designware-core.h
++++ b/drivers/i2c/busses/i2c-designware-core.h
+@@ -78,6 +78,7 @@
+ #define DW_IC_TX_ABRT_SOURCE			0x80
+ #define DW_IC_ENABLE_STATUS			0x9c
+ #define DW_IC_CLR_RESTART_DET			0xa8
++#define DW_IC_SMBUS_INTR_MASK			0xcc
+ #define DW_IC_COMP_PARAM_1			0xf4
+--- a/drivers/i2c/busses/i2c-designware-master.c
++++ b/drivers/i2c/busses/i2c-designware-master.c
+@@ -220,6 +220,13 @@ static int i2c_dw_init_master(struct dw_i2c_dev *dev)
+ 	/* Disable the adapter */
+ 	__i2c_dw_disable(dev);
+
++	/*
++	 * Mask SMBus interrupts to block storms from broken
++	 * firmware that leaves IC_SMBUS=1; the handler never
++	 * services them.
++	 */
++	regmap_write(dev->map, DW_IC_SMBUS_INTR_MASK, 0);
++
+ 	/* Write standard speed timing parameters */</script>
+
+<script type="text/plain" id="d_core">@@ -75,6 +75,7 @@
+ #define DW_IC_TX_ABRT_SOURCE	0x80
+ #define DW_IC_ENABLE_STATUS	0x9c
+ #define DW_IC_CLR_RESTART_DET	0xa8
++#define DW_IC_SMBUS_INTR_MASK	0xcc
+ #define DW_IC_COMP_PARAM_1	0xf4
+ #define DW_IC_COMP_VERSION	0xf8</script>
+
+<script type="text/plain" id="d_init">@@ -191,6 +191,13 @@ static int i2c_dw_init_master(struct dw_i2c_dev *dev)
+ 	/* Disable the adapter */
+ 	__i2c_dw_disable(dev);
+
++	/*
++	 * Mask SMBus interrupts to block storms from broken
++	 * firmware that leaves IC_SMBUS=1; the handler never
++	 * services them.
++	 */
++	regmap_write(dev->map, DW_IC_SMBUS_INTR_MASK, 0);
++
+ 	/* Write standard speed timing parameters */
+ 	regmap_write(dev->map, DW_IC_SS_SCL_HCNT, dev->ss_hcnt);</script>
+
+<script type="text/plain" id="d_isr">@@ -681,23 +688,162 @@
+ {
+ 	struct dw_i2c_dev *dev = dev_id;
+ 	u32 stat, enabled;
++	int ret;
++
++	ret = regmap_read(dev->map, DW_IC_ENABLE, &enabled);
++	if (ret) {
++		dev_err_ratelimited(dev->dev, "failed to read DW_IC_ENABLE: %d\n", ret);
++		return IRQ_NONE;
++	}
++	ret = regmap_read(dev->map, DW_IC_RAW_INTR_STAT, &stat);
++	if (ret) {
++		dev_err_ratelimited(dev->dev, "failed to read DW_IC_RAW_INTR_STAT: %d\n", ret);
++		return IRQ_NONE;
++	}
+
+-	regmap_read(dev->map, DW_IC_ENABLE, &enabled);
+-	regmap_read(dev->map, DW_IC_RAW_INTR_STAT, &stat);
+ 	dev_dbg(dev->dev, "enabled=%#x stat=%#x\n", enabled, stat);
+-#if defined(CONFIG_KM_BIZHUB)
++#if 0
++	if (!(stat & ~DW_IC_INTR_ACTIVITY))
++		return IRQ_NONE;            /* nhánh lấy lại lưới genirq — KHÔNG được bật */
++	if (!enabled) {
++#else
+ 	if (!enabled || !(stat & ~DW_IC_INTR_ACTIVITY)) {
+-		/* 2026/04/08 河村 - OP_BTS-65237 IRQ Storm問題の対応 ... */
+-		regmap_read(dev->map, DW_IC_CLR_INTR, &stat);	/* Clear IRQs */
+-		regmap_write(dev->map, DW_IC_INTR_MASK, 0);		/* Mask IRQs */
++#endif
++		u32 raw_before = stat;
++		u32 dummy, mask_after = 0, intr_after = 0, raw_after = 0, abort_source = 0;
++		bool tx_abrt = !!(stat & DW_IC_INTR_TX_ABRT);
++
++		/* 1. Mask IRQs first. */
++		ret = regmap_write(dev->map, DW_IC_INTR_MASK, 0);
++		if (ret) { dev_err_ratelimited(...); return IRQ_HANDLED; }
++
++		/* 2. Preserve TX_ABRT_SOURCE before clearing interrupts. */
++		if (tx_abrt) {
++			ret = regmap_read(dev->map, DW_IC_TX_ABRT_SOURCE, &abort_source);
++			if (!ret) {
++				dev->abort_source = abort_source;
++				dev_warn_ratelimited(dev->dev, "IRQ recovery: TX_ABRT_SOURCE=%#x\n", abort_source);
++			}
++		}
++
++		/* 3. Clear pending IRQ sources. */
++		ret = regmap_read(dev->map, DW_IC_CLR_INTR, &dummy);
++		if (ret) { dev_err_ratelimited(...); return IRQ_HANDLED; }
++
++		/* 4. Read back interrupt registers. */
++		regmap_read(dev->map, DW_IC_INTR_MASK, &mask_after);
++		regmap_read(dev->map, DW_IC_INTR_STAT, &intr_after);
++		regmap_read(dev->map, DW_IC_RAW_INTR_STAT, &raw_after);
++
++		if (mask_after || intr_after)
++			dev_warn_ratelimited(dev->dev, "IRQ recovery incomplete: enable=%#x raw=%#x->%#x mask=%#x intr=%#x\n", ...);
++		else
++			dev_dbg(dev->dev, "IRQ recovery done: ...");      /* ← mặc định không in */
++
+ 		return IRQ_HANDLED;
+ 	}
+-#else /* defined(CONFIG_KM_BIZHUB) */
+-	if (!enabled || !(stat & ~DW_IC_INTR_ACTIVITY))
+-		return IRQ_NONE;
+-#endif /* defined(CONFIG_KM_BIZHUB) */
+
+ 	i2c_dw_irq_handler_master(dev);
+# (đã rút gọn phần log lỗi lặp lại; nội dung đầy đủ xem 2_After/.../i2c-designware-master.c)</script>
+
+<script type="text/plain" id="p_diag">#define DW_IC_SMBUS_INTR_STAT      0xc8   /* theo databook, cần đối chiếu */
+#define DW_IC_SMBUS_RAW_INTR_STAT  0xd0
+
+	/* --- trong nhánh guard, sau bước read-back --- */
+	{
+		static unsigned long win_start;
+		static unsigned int hits;
+
+		if (time_after(jiffies, win_start + HZ)) {   /* cửa sổ 1 giây */
+			win_start = jiffies;
+			hits = 0;
+		}
+		if (++hits == 1000) {                         /* >1000 lần vào guard / giây = storm */
+			u32 smb_stat = 0, smb_raw = 0, smb_mask = 0, ic_status = 0, en_status = 0;
+
+			regmap_read(dev->map, DW_IC_SMBUS_INTR_STAT, &smb_stat);
+			regmap_read(dev->map, DW_IC_SMBUS_INTR_MASK, &smb_mask);
+			regmap_read(dev->map, DW_IC_SMBUS_RAW_INTR_STAT, &smb_raw);
+			regmap_read(dev->map, DW_IC_STATUS, &ic_status);
+			regmap_read(dev->map, DW_IC_ENABLE_STATUS, &en_status);
+			dev_err(dev->dev,
+				"IRQ storm: en=%#x en_st=%#x raw=%#x->%#x mask=%#x intr=%#x "
+				"smb_stat=%#x smb_mask=%#x smb_raw=%#x status=%#x\n",
+				enabled, en_status, raw_before, raw_after,
+				mask_after, intr_after,
+				smb_stat, smb_mask, smb_raw, ic_status);
+		}
+	}
+
+	/* và đổi điều kiện warn: raw_after cũng là thông tin quan trọng */
+	if (mask_after || intr_after || raw_after)
+		dev_warn_ratelimited(dev->dev, "IRQ recovery incomplete: ...");</script>
+
+<script type="text/plain" id="p_breaker">/* struct dw_i2c_dev: thêm
+ *   unsigned long storm_win; unsigned int storm_hits, storm_trips;
+ *   struct delayed_work storm_work;
+ * probe: INIT_DELAYED_WORK(&dev->storm_work, i2c_dw_storm_work);
+ */
+
+static void i2c_dw_storm_work(struct work_struct *w)
+{
+	struct dw_i2c_dev *dev = container_of(to_delayed_work(w),
+					      struct dw_i2c_dev, storm_work);
+
+	/* transfer đang kẹt sẽ tự timeout sau khi storm dừng
+	 * và gọi i2c_recover_bus() + i2c_dw_init_master() (có mask SMBus) */
+	if (dev->storm_trips > 3) {
+		dev_err(dev->dev, "IRQ storm repeated, keep irq %d disabled\n", dev->irq);
+		return;
+	}
+	dev_warn(dev->dev, "re-enable irq %d after storm\n", dev->irq);
+	enable_irq(dev->irq);
+}
+
+	/* --- trong nhánh guard của i2c_dw_isr() --- */
+	if (time_after(jiffies, dev->storm_win + HZ)) {
+		dev->storm_win = jiffies;
+		dev->storm_hits = 0;
+	}
+	if (++dev->storm_hits > 10000) {              /* ngưỡng cần đo thực tế */
+		dev->storm_hits = 0;
+		dev->storm_trips++;
+		dev_err(dev->dev, "IRQ storm on irq %d, disabling\n", this_irq);
+		disable_irq_nosync(this_irq);             /* finalize_oneshot sẽ không unmask nữa */
+		schedule_delayed_work(&dev->storm_work, msecs_to_jiffies(500));
+	}
+	return IRQ_HANDLED;</script>
+
+<script type="text/plain" id="p_devmem"># Base I2C1 = 0x8E8006000
+devmem 0x8E80060F8 32        # IC_COMP_VERSION (ví dụ "2.xx" dạng ASCII hex)
+devmem 0x8E80060F4 32        # IC_COMP_PARAM_1
+devmem 0x8E80060CC 32        # IC_SMBUS_INTR_MASK: đọc giá trị hiện tại
+devmem 0x8E80060D0 32        # IC_SMBUS_RAW_INTR_STAT
+devmem 0x8E80060C8 32        # IC_SMBUS_INTR_STAT
+
+# Thử ghi rồi đọc lại để biết register có tồn tại không (làm khi bus rảnh)
+devmem 0x8E80060CC 32 0x1
+devmem 0x8E80060CC 32        # đọc lại 0x1 → có khối SMBus; luôn 0 → nhiều khả năng không có
+devmem 0x8E80060CC 32 0x0    # trả về như cũ
+
+cat /proc/interrupts | grep -i i2c   # số interrupt của irq 56 trước/sau</script>
+
+<script>
+(function(){
+  // inject plain-text code blocks
+  document.querySelectorAll('pre[data-code]').forEach(function(pre){
+    var src=document.getElementById(pre.getAttribute('data-code'));
+    if(!src) return;
+    var text=src.textContent.replace(/^\n/,'').replace(/\s+$/,'');
+    var isDiff=pre.classList.contains('diff');
+    pre.textContent='';
+    text.split('\n').forEach(function(line){
+      var s=document.createElement('span');
+      s.className='ln';
+      if(isDiff){
+        if(/^\+(?!\+\+)/.test(line)) s.classList.add('add');
+        else if(/^-(?!--)/.test(line)) s.classList.add('del');
+        else if(/^(@@|---|\+\+\+|#)/.test(line)) s.classList.add('hd');
+      } else if(/←/.test(line)) s.classList.add('hl');
+      s.textContent=line.length?line:' ';
+      pre.appendChild(s);
+    });
+  });
+  // TOC active state
+  try{
+    var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+    var map={}; links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+    var obs=new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if(e.isIntersecting){
+          links.forEach(function(a){a.classList.remove('on');});
+          var a=map[e.target.id]; if(a) a.classList.add('on');
+        }
+      });
+    },{rootMargin:'0px 0px -70% 0px'});
+    Object.keys(map).forEach(function(id){var el=document.getElementById(id); if(el) obs.observe(el);});
+  }catch(e){}
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>try{mermaid.initialize({startOnLoad:true,theme:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"default"});}catch(e){}</script>
+</body>
+</html>

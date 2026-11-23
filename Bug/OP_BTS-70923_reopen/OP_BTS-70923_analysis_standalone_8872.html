@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>OP_BTS-70923 Watchdog Resume Hang</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: báo cáo kỹ thuật một cột (≤ 860px) + mục lục dính bên trái trên màn rộng; mỗi luồng đi kèm chip tham chiếu file:line và listing có số dòng thật. */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --surface-2:#eaeef3; --ink:#152030; --muted:#566578; --line:#d6dde6;
+  --accent:#0a6a86; --accent-soft:#dcedf3;
+  --fail:#b9400f; --fail-soft:#fbe6dc; --ok:#17784a; --ok-soft:#dcf1e6; --warn:#9a5a06; --warn-soft:#f8ecd6;
+  --code-bg:#0f1823; --code-ink:#dbe4ee; --code-dim:#7f90a3; --code-kw:#7cc7e3; --code-str:#e9c07a; --code-hl:rgba(250,118,72,.18); --code-hl-bar:#f47a4c; --code-ln:#5b6b7d;
+  --f-display:"Space Grotesk","Segoe UI",system-ui,sans-serif;
+  --f-body:"Be Vietnam Pro","Segoe UI",system-ui,-apple-system,sans-serif;
+  --f-mono:"JetBrains Mono","Cascadia Mono",Consolas,"SF Mono",monospace;
+  --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d131a; --surface:#141c26; --surface-2:#1b2532; --ink:#e2e9f0; --muted:#94a3b4; --line:#273444;
+    --accent:#56c2de; --accent-soft:#16303b;
+    --fail:#ff8a5c; --fail-soft:#3a2018; --ok:#5fd394; --ok-soft:#14301f; --warn:#f2b453; --warn-soft:#352914;
+    --code-bg:#0a1018; --code-ink:#dbe4ee; --code-dim:#76879a; --code-kw:#7cc7e3; --code-str:#e9c07a; --code-hl:rgba(255,138,92,.16); --code-hl-bar:#ff8a5c; --code-ln:#4b5a6b;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d131a; --surface:#141c26; --surface-2:#1b2532; --ink:#e2e9f0; --muted:#94a3b4; --line:#273444;
+  --accent:#56c2de; --accent-soft:#16303b;
+  --fail:#ff8a5c; --fail-soft:#3a2018; --ok:#5fd394; --ok-soft:#14301f; --warn:#f2b453; --warn-soft:#352914;
+  --code-bg:#0a1018; --code-ink:#dbe4ee; --code-dim:#76879a; --code-kw:#7cc7e3; --code-str:#e9c07a; --code-hl:rgba(255,138,92,.16); --code-hl-bar:#ff8a5c; --code-ln:#4b5a6b;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15.5px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.25;margin:0}
+h2{font-size:1.55rem;font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.12rem;font-weight:600;margin-top:28px}
+p{margin:0}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+p code,li code,td code{background:var(--surface-2);padding:1px 5px;border-radius:4px}
+.shell{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+@media (max-width:1060px){.shell{grid-template-columns:minmax(0,1fr);gap:0}.toc{display:none}}
+
+/* ---------- header ---------- */
+.mast{grid-column:1/-1;padding-block:44px 30px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 16px}
+.eyebrow b{color:var(--accent);font-weight:600}
+.mast h1{font-size:clamp(1.8rem,4.2vw,2.75rem);font-weight:700;letter-spacing:-.02em;margin:14px 0 12px;max-width:22ch}
+.mast h1 .dc{font-family:var(--f-mono);font-weight:600;font-size:.62em;letter-spacing:0;display:inline-block;background:var(--fail-soft);color:var(--fail);padding:2px 10px;border-radius:6px;vertical-align:middle}
+.lede{color:var(--muted);max-width:68ch;font-size:1.02rem}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-top:26px}
+.meta div{background:var(--surface);padding:11px 14px;min-width:0}
+.meta dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.meta dd{margin:2px 0 0;font-weight:500;font-size:.92rem;overflow-wrap:anywhere}
+
+/* ---------- toc ---------- */
+.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 20px);align-self:start;padding-top:28px;font-size:.86rem}
+.toc p{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:t}
+.toc a{display:grid;grid-template-columns:26px 1fr;color:var(--muted);text-decoration:none;padding:5px 8px;border-radius:6px;counter-increment:t}
+.toc a::before{content:counter(t,decimal-leading-zero);font-family:var(--f-mono);font-size:.75rem;padding-top:1px}
+.toc a:hover,.toc a.on{background:var(--surface);color:var(--ink)}
+.toc a.on::before{color:var(--accent)}
+
+/* ---------- sections ---------- */
+main{min-width:0}
+section{padding-top:52px;display:grid;gap:16px}
+.sec-head{display:grid;gap:6px;margin-bottom:4px}
+.sec-num{font-family:var(--f-mono);font-size:.74rem;color:var(--accent);letter-spacing:.1em}
+.prose{max-width:70ch;display:grid;gap:12px}
+ul.tight{margin:0;padding-left:20px;display:grid;gap:6px}
+
+/* ref chip */
+.ref{font-family:var(--f-mono);font-size:.76rem;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;padding:1px 7px 1px 6px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--accent);vertical-align:1px;cursor:help}
+.ref::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--accent);opacity:.7}
+.ref.log{color:var(--warn)}
+.ref.log::before{background:var(--warn)}
+
+/* verdict */
+.verdict{border:1px solid var(--fail);background:var(--fail-soft);border-radius:var(--radius);padding:18px 20px;display:grid;gap:8px}
+.verdict .tag{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--fail);font-weight:600}
+.verdict p{font-size:1.05rem;font-weight:500}
+
+/* findings */
+.findings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.findings{grid-template-columns:minmax(0,1fr)}}
+.finding{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;display:grid;gap:6px;align-content:start}
+.finding .k{font-family:var(--f-mono);font-size:.72rem;color:var(--muted)}
+.finding h4{margin:0;font-family:var(--f-display);font-size:1.02rem;font-weight:600}
+.finding p{font-size:.92rem;color:var(--muted)}
+
+/* chips */
+.chip{display:inline-block;font-family:var(--f-mono);font-size:.7rem;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.chip.fail{background:var(--fail-soft);color:var(--fail)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.info{background:var(--accent-soft);color:var(--accent)}
+.chip.mute{background:var(--surface-2);color:var(--muted)}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.bad td{background:var(--fail-soft)}
+
+/* log excerpt */
+.log{background:var(--code-bg);color:var(--code-ink);border-radius:var(--radius);overflow-x:auto;font-family:var(--f-mono);font-size:.78rem;line-height:1.65;padding:12px 0}
+.log div{display:grid;grid-template-columns:70px max-content;white-space:pre;padding:0 16px 0 0}
+.log span.n{color:var(--code-ln);text-align:right;padding-right:14px;user-select:none}
+.log .gap{color:var(--code-dim);font-style:italic}
+.log .cut{background:var(--code-hl);box-shadow:inset 3px 0 0 var(--code-hl-bar)}
+.cap{font-size:.82rem;color:var(--muted)}
+
+/* code listing */
+figure.listing{margin:0;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--code-bg)}
+figure.listing figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:8px 14px;background:var(--surface-2);font-family:var(--f-mono);font-size:.74rem;color:var(--muted);border-bottom:1px solid var(--line)}
+figure.listing figcaption b{color:var(--ink);font-weight:600}
+pre.code{margin:0;padding:10px 0;overflow-x:auto;color:var(--code-ink);font-family:var(--f-mono);font-size:.78rem;line-height:1.6;tab-size:4}
+pre.code .l{display:block;padding:0 16px 0 0;white-space:pre}
+pre.code .l::before{content:attr(data-n);display:inline-block;width:52px;padding-right:14px;text-align:right;color:var(--code-ln);user-select:none}
+pre.code .l.hl{background:var(--code-hl);box-shadow:inset 3px 0 0 var(--code-hl-bar)}
+pre.code .c{color:var(--code-dim);font-style:italic}
+pre.code .k{color:var(--code-kw)}
+pre.code .s{color:var(--code-str)}
+pre.code .note{font-family:var(--f-body);font-style:normal;font-size:.74rem;color:var(--code-bg);background:var(--code-hl-bar);border-radius:4px;padding:0 6px;margin-left:12px;font-weight:600}
+pre.code.diff .l.add{background:rgba(95,211,148,.12);box-shadow:inset 3px 0 0 #5fd394}
+
+/* flow */
+.flow{display:grid;gap:0;position:relative}
+.step{display:grid;grid-template-columns:118px minmax(0,1fr);gap:18px;padding:14px 0;border-top:1px dashed var(--line)}
+.step:first-child{border-top:0}
+@media (max-width:600px){.step{grid-template-columns:minmax(0,1fr);gap:6px}}
+.phase{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding-top:3px}
+.phase.s{color:var(--accent)} .phase.z{color:var(--muted)} .phase.r{color:var(--ok)} .phase.x{color:var(--fail)} .phase.b{color:var(--warn)}
+.step h4{margin:0 0 4px;font-family:var(--f-display);font-size:1rem;font-weight:600}
+.step p{font-size:.92rem;color:var(--muted);max-width:66ch}
+.step .refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.step.hot{background:linear-gradient(90deg,var(--fail-soft),transparent 85%);border-radius:8px;padding-left:12px;margin-left:-12px}
+
+/* device order strip */
+.order{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dev{font-family:var(--f-mono);font-size:.76rem;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);display:grid;gap:1px}
+.dev small{font-family:var(--f-body);font-size:.68rem;color:var(--muted)}
+.dev.hang{border-color:var(--fail);background:var(--fail-soft);color:var(--fail)}
+.dev.old{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.dev.tail{border-style:dashed}
+.arr{color:var(--muted);font-family:var(--f-mono)}
+
+/* decoder */
+.decoder{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;display:grid;gap:14px}
+.dc-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dc-row label{font-size:.82rem;color:var(--muted)}
+#dc-input{font-family:var(--f-mono);font-size:1rem;letter-spacing:.06em;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:15.5em;max-width:100%;text-transform:uppercase}
+button{font-family:var(--f-body);font-size:.8rem;padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+.bits{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:4px}
+@media (max-width:640px){.bits{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.bit{border:1px solid var(--line);border-radius:8px;padding:8px 6px;text-align:center;background:var(--bg);min-width:0}
+.bit .v{font-family:var(--f-mono);font-size:1.05rem;font-weight:600}
+.bit .lab{font-size:.66rem;color:var(--muted);line-height:1.3;margin-top:2px}
+.bit .ch{font-family:var(--f-mono);font-size:.75rem;color:var(--accent)}
+.bit.key{border-color:var(--accent)}
+.dc-out{display:grid;gap:6px;font-size:.9rem}
+.dc-out .match{font-family:var(--f-mono);font-size:.84rem}
+.dc-out .match mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 1px}
+
+/* chart */
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px 8px;overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:520px;height:auto}
+.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.chart .bar{fill:var(--accent)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .axis{stroke:var(--muted);stroke-width:1}
+.chart .val{fill:var(--ink);font-weight:600}
+.scale{display:grid;gap:8px;margin-top:6px}
+.scale .row{display:grid;grid-template-columns:150px minmax(0,1fr) 70px;gap:12px;align-items:center;font-size:.82rem}
+@media (max-width:560px){.scale .row{grid-template-columns:96px minmax(0,1fr) 56px}}
+.scale .track{height:12px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+.scale .fill{height:100%;border-radius:999px}
+.scale .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+
+/* hypothesis */
+.hyp{display:grid;gap:12px}
+.h{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;display:grid;gap:10px}
+.h-top{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.h-top h4{margin:0;font-family:var(--f-display);font-size:1.02rem;font-weight:600}
+.h-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;font-size:.88rem}
+@media (max-width:760px){.h-grid{grid-template-columns:minmax(0,1fr)}}
+.h-grid b{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px}
+.h.ruled{opacity:.92;border-style:dashed}
+
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 8px 8px 0;font-size:.93rem;max-width:72ch}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}
+.qa{counter-reset:q;display:grid;gap:10px;list-style:none;padding:0;margin:0}
+.qa li{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px 14px 52px;position:relative;counter-increment:q;font-size:.93rem}
+.qa li::before{content:"Q" counter(q);position:absolute;left:16px;top:14px;font-family:var(--f-mono);font-weight:600;color:var(--accent)}
+.foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:.8rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="shell">
+<header class="mast">
+  <div class="eyebrow"><span><b>OP_BTS-70923</b></span><span>IT6_3.0 · BSP / Kernel PM</span><span>Phân tích lại sau khi áp fix · 2026-11-16</span></div>
+  <h1>Watchdog reboot khi resume từ DeepSleep <span class="dc">2201E38385F79F10</span></h1>
+  <p class="lede">Fix thêm timeout cho vòng poll trong <code>start_pll()</code> đã có trong build, nhưng NewDC vẫn xuất hiện 2 lần trong đợt chạy 11/12–11/16, với cùng thiết bị và cùng giai đoạn. Báo cáo này giải thích vì sao fix không trúng, khoanh vùng lại các điểm có thể treo và đề xuất cách đo để chốt nguyên nhân.</p>
+  <dl class="meta">
+    <div><dt>Máy</dt><dd>SBKIII MLK 0SFP</dd></div>
+    <div><dt>Log mới</dt><dd>70923-1112.log · 581 158 dòng<br>11-12 15:59 → 11-16 10:08</dd></div>
+    <div><dt>Số lần tái hiện</dt><dd>2 / 3 659 chu kỳ DeepSleep</dd></div>
+    <div><dt>Kernel</dt><dd>Linux 5.10 arm64 · CONFIG_HZ=200</dd></div>
+    <div><dt>Fix đang test</dt><dd>phy-utm-mv.c:115–120, 211–236</dd></div>
+    <div><dt>Thực hiện</dt><dd>FPT BSP Team</dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="Mục lục">
+  <p>Mục lục</p>
+  <ol>
+    <li><a href="#tom-tat">Kết luận nhanh</a></li>
+    <li><a href="#log-moi">Log sau khi áp fix</a></li>
+    <li><a href="#giai-ma">Giải mã NewDC</a></li>
+    <li><a href="#luong">Luồng suspend → reboot</a></li>
+    <li><a href="#fix">Vì sao fix không trúng</a></li>
+    <li><a href="#diem-treo">Điểm có thể treo</a></li>
+    <li><a href="#lien-he">Liên hệ OP_BTS-49578</a></li>
+    <li><a href="#gia-thuyet">Giả thuyết</a></li>
+    <li><a href="#ke-hoach">Kế hoạch đo</a></li>
+    <li><a href="#km">Câu hỏi cho KM</a></li>
+    <li><a href="#tham-chieu">Bảng tham chiếu</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 01 -->
+<section id="tom-tat">
+  <div class="sec-head"><span class="sec-num">01</span><h2>Kết luận nhanh</h2></div>
+  <div class="verdict">
+    <span class="tag">Kết luận</span>
+    <p>Thread <code>dpm_resume</code> vẫn kẹt trong lúc resume <code>8d00e8000.usb2h0p2_phy</code>, nhưng không kẹt ở vòng poll PLL/calibration. Fix chỉ chặn một điểm treo không xảy ra trong thực tế, nên NewDC vẫn còn.</p>
+  </div>
+  <div class="findings">
+    <div class="finding"><span class="k">F1 · fix có trong build</span><h4>Ba vòng poll đã có timeout</h4><p>Tổng thời gian chờ tối đa khoảng 1,2 s (<span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:117-119">phy-utm-mv.c:117</span>). Một lần treo 60 s không thể nằm ở đây.</p></div>
+    <div class="finding"><span class="k">F2 · timeout chưa từng xảy ra</span><h4>0 / 3 657 dòng <code>PHY poll timeout</code></h4><p>Khi resume thành công, PLL/CAL/SQCAL luôn xong đúng hạn. Không có dấu hiệu phần cứng PHY lock chậm.</p></div>
+    <div class="finding"><span class="k">F3 · treo kiểu được hoặc chết</span><h4>Không có chu kỳ resume chậm rồi tự hồi</h4><p>Khoảng thời gian chứa resume PHY luôn nằm trong 0,392–0,432 s. Lỗi xảy ra là treo hẳn, giống deadlock hoặc chờ vô hạn.</p></div>
+    <div class="finding"><span class="k">F4 · NewDC chỉ vị trí, không chỉ thủ phạm</span><h4><code>dev_watchdog</code> chỉ cho biết thread đang đứng ở đâu</h4><p>Giá trị này được ghi ngay trước <code>device_resume()</code> (<span class="ref" title="Kernel/Src/drivers/base/power/main.c:1128">main.c:1128</span>). Điểm treo thật có thể là clk lock, bus Iris SB hoặc một lock khác.</p></div>
+  </div>
+</section>
+
+<!-- 02 -->
+<section id="log-moi">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Log sau khi áp fix</h2></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Mục</th><th>Lần 1</th><th>Lần 2</th><th>Lần gốc (10/16)</th></tr></thead>
+    <tbody>
+      <tr><td>Dòng cuối trước khi mất log</td><td><code>21:24:34.155</code> <span class="ref log" title="70923-1112.log:34396">L34396</span></td><td><code>10:58:11.713</code> <span class="ref log" title="70923-1112.log:122700">L122700</span></td><td><code>15:27:07.972</code> <span class="ref log" title="垂れ流し.log:252668">L252668</span></td></tr>
+      <tr><td>U-Boot khởi động lại</td><td><code>21:25:43.338</code> <span class="ref log" title="70923-1112.log:34399">L34399</span></td><td><code>10:59:21.033</code> <span class="ref log" title="70923-1112.log:122703">L122703</span></td><td><code>15:28:15.628</code></td></tr>
+      <tr><td>Khoảng trống</td><td class="num">69,2 s</td><td class="num">69,3 s</td><td class="num">≈ 67,7 s</td></tr>
+      <tr class="bad"><td>NewDC</td><td><code>2201E38385F79F10</code> <span class="ref log" title="70923-1112.log:35001">L35001</span></td><td><code>2201E38385F79F10</code> <span class="ref log" title="70923-1112.log:123294">L123294</span></td><td><code>2201E38385F79F10</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Cả hai lần đều dừng ngay sau <code>Suspending console</code></h3>
+  <div class="log" role="region" aria-label="Trích log lần 1">
+    <div><span class="n">34392</span>[2026-11-12 21:24:34.058] setDisableSSDAccess():uc_disableSSDAccess=1[19400.174353] in pm_suspend</div>
+    <div><span class="n">34394</span>[2026-11-12 21:24:34.058] [19400.177178] enter enter_state</div>
+    <div><span class="n">34395</span>[2026-11-12 21:24:34.155] [19400.255766] in suspend_devices_and_enter</div>
+    <div class="cut"><span class="n">34396</span>[2026-11-12 21:24:34.155] [19400.260050] Suspending console(s) (use no_console_suspend to debug)</div>
+    <div><span class="n"></span><span class="gap">        … 69,2 s không có dòng nào (console đang bị suspend, buffer không bao giờ được flush) …</span></div>
+    <div><span class="n">34399</span>[2026-11-12 21:25:43.338] U-Boot 2015.01-devel-16.07.2 (Sep 30 2026 - 07:34:21)</div>
+    <div><span class="n">35000</span>[2026-11-12 21:25:55.839] (4294920926)(BSP) ## Watchdog_Fire</div>
+    <div class="cut"><span class="n">35001</span>[2026-11-12 21:25:55.839] APIC_setNewDetailCode_FC[0000]_NewDC[2201E38385F79F10]_OldDC[0000]</div>
+  </div>
+
+  <h3>So sánh với một chu kỳ bình thường</h3>
+  <div class="prose"><p>Khi resume thành công, toàn bộ log của quá trình suspend/resume chỉ hiện ra một lần, lúc <code>resume_console()</code> chạy (<span class="ref" title="Kernel/Src/kernel/power/suspend.c:610">suspend.c:610</span>). Vì vậy khi treo trong <code>dpm_resume</code>, buffer không bao giờ được flush và UART im lặng hoàn toàn.</p></div>
+  <div class="log" role="region" aria-label="Trích log chu kỳ bình thường">
+    <div><span class="n">1645</span>[16:08:03.651] [ 1983.052235] Suspending console(s) (use no_console_suspend to debug)</div>
+    <div><span class="n">1654</span>[16:08:10.028] [ 1983.642157] CPU3: shutdown                       <span class="gap">← vào DeepSleep</span></div>
+    <div><span class="n">1656</span>[16:08:10.028] [ 1983.880489] PMU_resume:WAKE_UP not detect        <span class="gap">← đã wake</span></div>
+    <div><span class="n">1659</span>[16:08:10.028] [ 1983.940953] ==&gt;mvri_resume  GIDontInitPhy=1 Suspended=1</div>
+    <div class="cut"><span class="n">1662</span>[16:08:10.028] [ 1984.052016] &lt;==mvri_resume                       <span class="gap">← thiết bị kế tiếp: 8d00e8000.usb2h0p2_phy</span></div>
+    <div><span class="n">1663</span>[16:08:10.028] [ 1984.459448] usb usb1: root hub lost power or was reset</div>
+    <div><span class="n">1673</span>[16:08:10.035] [ 1985.650280] in suspend_finish</div>
+  </div>
+  <p class="cap">Timestamp kernel không tính thời gian ngủ (sched_clock dừng trong DeepSleep). Các khoảng đo dưới đây đều tính theo timestamp kernel.</p>
+
+  <h3>Phân bố thời gian từ <code>&lt;==mvri_resume</code> tới <code>root hub lost power</code> (3 657 chu kỳ)</h3>
+  <div class="prose"><p>Resume của <code>usb2h0p2_phy</code> nằm trong khoảng này. Nếu PHY thỉnh thoảng lock chậm, ta sẽ thấy một đuôi kéo dài. Thực tế không có: 3 657/3 657 mẫu đều nằm trong khoảng 40 ms.</p></div>
+  <figure class="chart" style="margin:0">
+    <svg viewBox="0 0 640 250" role="img" aria-label="Histogram thời gian mvri_resume tới root hub, các bin 5 ms từ 390 đến 435 ms">
+      <line class="grid" x1="56" y1="34.6" x2="620" y2="34.6"/><line class="grid" x1="56" y1="93.1" x2="620" y2="93.1"/><line class="grid" x1="56" y1="151.5" x2="620" y2="151.5"/>
+      <line class="axis" x1="56" y1="210" x2="620" y2="210"/>
+      <text x="48" y="214" text-anchor="end">0</text><text x="48" y="155.5" text-anchor="end">400</text><text x="48" y="97.1" text-anchor="end">800</text><text x="48" y="38.6" text-anchor="end">1200</text>
+      <rect class="bar" x="62" y="56.1" width="50" height="153.9" rx="3"/>
+      <rect class="bar" x="124.7" y="32.4" width="50" height="177.6" rx="3"/>
+      <rect class="bar" x="187.3" y="109.3" width="50" height="100.7" rx="3"/>
+      <rect class="bar" x="250" y="150.5" width="50" height="59.5" rx="3"/>
+      <rect class="bar" x="312.7" y="180" width="50" height="30" rx="3"/>
+      <rect class="bar" x="375.3" y="199.6" width="50" height="10.4" rx="2"/>
+      <rect class="bar" x="438" y="207.7" width="50" height="2.3" rx="1"/>
+      <rect class="bar" x="563.3" y="208.5" width="50" height="1.5" rx="1"/>
+      <text class="val" x="87" y="50" text-anchor="middle">1053</text><text class="val" x="149.7" y="26" text-anchor="middle">1215</text><text class="val" x="212.3" y="103" text-anchor="middle">689</text><text class="val" x="275" y="144" text-anchor="middle">407</text><text class="val" x="337.7" y="174" text-anchor="middle">205</text><text class="val" x="400.3" y="193" text-anchor="middle">71</text><text class="val" x="463" y="201" text-anchor="middle">16</text><text class="val" x="525.7" y="204" text-anchor="middle">0</text><text class="val" x="588.3" y="202" text-anchor="middle">1</text>
+      <text x="87" y="228" text-anchor="middle">390</text><text x="149.7" y="228" text-anchor="middle">395</text><text x="212.3" y="228" text-anchor="middle">400</text><text x="275" y="228" text-anchor="middle">405</text><text x="337.7" y="228" text-anchor="middle">410</text><text x="400.3" y="228" text-anchor="middle">415</text><text x="463" y="228" text-anchor="middle">420</text><text x="525.7" y="228" text-anchor="middle">425</text><text x="588.3" y="228" text-anchor="middle">430</text>
+      <text x="338" y="246" text-anchor="middle">ms (bin 5 ms) · số chu kỳ</text>
+    </svg>
+    <div class="scale" aria-label="So sánh tỷ lệ thực">
+      <div class="row"><span>Bình thường, max</span><div class="track"><div class="fill" style="width:.72%;background:var(--ok)"></div></div><span class="num">0,432 s</span></div>
+      <div class="row"><span>Resume tổng, max</span><div class="track"><div class="fill" style="width:7.6%;background:var(--accent)"></div></div><span class="num">4,59 s</span></div>
+      <div class="row"><span>Lần lỗi (softdog)</span><div class="track"><div class="fill" style="width:100%;background:var(--fail)"></div></div><span class="num">≥ 60 s</span></div>
+    </div>
+    <p class="cap" style="margin-top:8px">Thanh dưới cùng vẽ theo tỷ lệ tuyến tính so với ngưỡng softdog 60 s (<span class="ref" title="Kernel/Src/drivers/watchdog/softdog.c:36">softdog.c:36</span>).</p>
+  </figure>
+</section>
+
+<!-- 03 -->
+<section id="giai-ma">
+  <div class="sec-head"><span class="sec-num">03</span><h2>Giải mã NewDC</h2></div>
+  <div class="prose"><p>Sau khi reboot, BSP đọc vùng THR <code>0x0025</code> (cờ Watchdog_Fire) và <code>0x0034</code> (DevInfo), rồi ghép thành NewDC (<span class="ref" title="IT6_Controller/KM3/application/mfp/Linux/main_BSP.cpp:3472-3493">main_BSP.cpp:3472–3493</span>). Bốn byte tên thiết bị được rút gọn theo độ dài tên (<span class="ref" title="Kernel/Src/drivers/base/power/main.c:1042-1081">main.c:1042–1081</span>). Nhập mã bất kỳ để giải mã; trang tự so khớp với danh sách thiết bị lấy từ DT.</p></div>
+
+  <div class="decoder">
+    <div class="dc-row">
+      <label for="dc-input">NewDC</label>
+      <input id="dc-input" value="2201E38385F79F10" maxlength="16" spellcheck="false" autocomplete="off">
+      <button type="button" data-code="2201E38385F79F10">OP_BTS-70923</button>
+      <button type="button" data-code="2201E38306E69F10">OP_BTS-49578</button>
+      <button type="button" data-code="2201E38385F79F13">Ví dụ sau patch A (x=3)</button>
+    </div>
+    <div class="bits" id="dc-bits">
+      <div class="bit"><div class="v">22</div><div class="lab">module<br>BSP</div></div>
+      <div class="bit"><div class="v">01E</div><div class="lab">serial<br>WDT reboot</div></div>
+      <div class="bit key"><div class="v">38</div><div class="ch">'8'</div><div class="lab">name[0]</div></div>
+      <div class="bit key"><div class="v">38</div><div class="ch">'8'</div><div class="lab">name[5]</div></div>
+      <div class="bit key"><div class="v">5F</div><div class="ch">'_'</div><div class="lab">name[len-4]</div></div>
+      <div class="bit key"><div class="v">79</div><div class="ch">'y'</div><div class="lab">name[len-1]</div></div>
+      <div class="bit"><div class="v">F</div><div class="lab">len ≥ 15</div></div>
+      <div class="bit key"><div class="v">1</div><div class="lab">stage<br>dpm_resume</div></div>
+      <div class="bit key"><div class="v">0</div><div class="lab">progress<br>ull_SEQ_REC</div></div>
+    </div>
+    <div class="dc-out" id="dc-out" aria-live="polite">
+      <div>Giai đoạn: <b>dpm_resume</b> (<code>dev_resume_suspend_flg = 1</code>, main.c:1120)</div>
+      <div>Thiết bị khớp: <span class="match">8d00e8000.usb2h0p2_phy</span>, <span class="match">8d00d8000.usb3h0p0_phy</span></div>
+    </div>
+  </div>
+
+  <div class="callout">Có hai tên khớp chữ ký. FPT đã loại <code>usb3h0p0_phy</code> vì mọi vòng chờ trong <code>phy-usb3-mv.c</code> đều có timeout. Lưu ý thêm: driver đó build dạng module (<code>CONFIG_USB_MV_USB3_PHY=m</code>), còn <code>phy-utm-mv</code> là built-in (<code>CONFIG_USB_MV_UTM_PHY=y</code>). Các phần sau giả định thiết bị là <code>8d00e8000.usb2h0p2_phy</code>; patch A ở mục 09 sẽ xác nhận luôn điểm này.</div>
+</section>
+
+<!-- 04 -->
+<section id="luong">
+  <div class="sec-head"><span class="sec-num">04</span><h2>Luồng từ suspend tới NewDC</h2></div>
+  <div class="prose"><p>Đây là đường đi của thread PM từ lúc bắt đầu DeepSleep tới lúc NewDC được ghi ở lần boot sau. Bước tô đỏ là nơi thread bị kẹt.</p></div>
+  <div class="flow">
+    <div class="step"><div class="phase s">Suspend</div><div><h4>Console bị suspend</h4><p><code>suspend_devices_and_enter()</code> gọi <code>suspend_console()</code>. Từ đây mọi printk chỉ vào ring buffer. <code>watchdog_record_flg</code> bật lên để softdog biết đang trong PM.</p><div class="refs"><span class="ref" title="Kernel/Src/kernel/power/suspend.c:537">suspend.c:537</span><span class="ref" title="Kernel/Src/kernel/power/suspend.c:564">suspend.c:564</span><span class="ref log" title="70923-1112.log:34396">L34396</span></div></div></div>
+    <div class="step"><div class="phase s">Suspend</div><div><h4>dpm_suspend → từng thiết bị</h4><p><code>dpm_suspend_start()</code> gọi <code>dpm_suspend()</code> (<code>flg = 2</code>) và duyệt <code>dpm_prepared_list</code> theo thứ tự ngược. mvri chuyển quyền Ethernet HW cho LPPP.</p><div class="refs"><span class="ref" title="Kernel/Src/kernel/power/suspend.c:577">suspend.c:577</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:1857">main.c:1857</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:1871">main.c:1871</span><span class="ref" title="Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c:2891">mvri_nonpci.c:2891</span></div></div></div>
+    <div class="step"><div class="phase z">DeepSleep</div><div><h4>suspend_enter, CPU1–3 offline, 0.5 W</h4><p>Hrtimer của softdog được dời về CPU0 khi các CPU khác offline. Đồng hồ monotonic dừng trong lúc ngủ.</p><div class="refs"><span class="ref" title="Kernel/Src/kernel/power/suspend.c:589">suspend.c:589</span></div></div></div>
+    <div class="step"><div class="phase r">Resume</div><div><h4>noirq → early → dpm_resume</h4><p><code>dpm_resume_end()</code> chạy lần lượt các phase. Phase noirq ghi <code>flg = 4</code>, phase early không ghi flag, <code>dpm_resume()</code> ghi <code>flg = 1</code>. NewDC có stage = 1, nên noirq và early đã qua.</p><div class="refs"><span class="ref" title="Kernel/Src/kernel/power/suspend.c:594">suspend.c:594</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:740">main.c:740</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:1120">main.c:1120</span></div></div></div>
+    <div class="step"><div class="phase r">Resume</div><div><h4>mvri_resume (8d0010000.sky2_nonpci) xong</h4><p>Lấy lại Ethernet HW từ LPPP qua <code>mvri_fw_firmware_stop()</code>. Khi xong, <code>ull_SEQ_REC</code> được đặt về <code>0</code>. Điều này khớp với nibble progress = 0.</p><div class="refs"><span class="ref" title="Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c:2730">mvri_nonpci.c:2730</span><span class="ref" title="Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c:2768">mvri_nonpci.c:2768</span><span class="ref" title="Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c:2883">mvri_nonpci.c:2883</span></div></div></div>
+    <div class="step hot"><div class="phase x">Kẹt ở đây</div><div><h4>dev_watchdog = 8d00e8000.usb2h0p2_phy → device_resume()</h4><p>Thiết bị sync nên chạy <code>__device_resume()</code> ngay trên thread PM: <code>dpm_wait_for_superior</code>, <code>device_lock</code>, rồi callback <code>phy_utm_mv_resume()</code> → <code>phy_utm_mv_init()</code> → <code>clk_prepare_enable</code> + <code>start_pll()</code>. Callback không trả về, nên vòng lặp không bao giờ sang thiết bị kế tiếp.</p><div class="refs"><span class="ref" title="Kernel/Src/drivers/base/power/main.c:1128">main.c:1128</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:1093">main.c:1093</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:946">main.c:946</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:950">main.c:950</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:994">main.c:994</span><span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:356">phy-utm-mv.c:356</span></div></div></div>
+    <div class="step"><div class="phase x">Watchdog</div><div><h4>softdog hết 60 s → +1 s → ghi QSPI → emergency_restart</h4><p><code>softdog_fire()</code> chạy trong hrtimer. Lời printk "watchdog reboot 1s wait" của nó cũng không ra UART vì console vẫn đang suspend. Một giây sau, <code>softdog_reboot()</code> ghi cờ fire, gọi <code>watchdog_device_info()</code> để ghi tên thiết bị đang giữ <code>dev_watchdog</code>, rồi gọi <code>emergency_restart()</code>.</p><div class="refs"><span class="ref" title="Kernel/Src/drivers/watchdog/softdog.c:140">softdog.c:140</span><span class="ref" title="Kernel/Src/drivers/watchdog/softdog.c:160">softdog.c:160</span><span class="ref" title="Kernel/Src/drivers/watchdog/softdog.c:207-212">softdog.c:207–212</span><span class="ref" title="Kernel/Src/drivers/base/power/main.c:1032">main.c:1032</span><span class="ref" title="Kernel/Src/drivers/mtd/spi-nor/mrvl-bspi_winbond.c:1735">mrvl-bspi_winbond.c:1735</span></div></div></div>
+    <div class="step"><div class="phase b">Boot sau</div><div><h4>BSP mã hoá thành NewDC</h4><p><code>main()</code> đọc vùng <code>0x0025</code> và <code>0x0034</code>, log <code>## Watchdog_Fire</code> rồi gọi <code>APIC_setNewDetailCode()</code>.</p><div class="refs"><span class="ref" title="IT6_Controller/KM3/application/mfp/Linux/main_BSP.cpp:3472">main_BSP.cpp:3472</span><span class="ref" title="IT6_Controller/KM3/application/mfp/Linux/main_BSP.cpp:3482">main_BSP.cpp:3482</span><span class="ref" title="IT6_Controller/KM3/application/mfp/Linux/main_BSP.cpp:3493">main_BSP.cpp:3493</span><span class="ref log" title="70923-1112.log:35000-35001">L35000</span></div></div></div>
+  </div>
+
+  <h3>Vòng lặp ghi dev_watchdog</h3>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/base/power/main.c</b><span>dpm_resume() · 1120–1143 · rút gọn comment</span></figcaption>
+<pre class="code" data-start="1120" data-hl="1128,1129" data-notes="1128|ghi trước khi gọi;;1129|không trả về;;1143|chưa bao giờ tới">	dev_resume_suspend_flg = 1;			/* OP_BTS-15098 */
+	while (!list_empty(&amp;dpm_suspended_list)) {
+		dev = to_device(dpm_suspended_list.next);
+
+		get_device(dev);
+
+		mutex_unlock(&amp;dpm_list_mtx);
+
+		dev_watchdog = dev;				/* OP_BTS-15098 */
+		device_resume(dev);
+
+		mutex_lock(&amp;dpm_list_mtx);
+
+		if (!list_empty(&amp;dev-&gt;power.entry))
+			list_move_tail(&amp;dev-&gt;power.entry, &amp;dpm_prepared_list);
+
+		mutex_unlock(&amp;dpm_list_mtx);
+
+		put_device(dev);
+
+		mutex_lock(&amp;dpm_list_mtx);
+	}
+	mutex_unlock(&amp;dpm_list_mtx);
+	dev_resume_suspend_flg = 0;				/* OP_BTS-15098 */</pre>
+  </figure>
+
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/base/power/main.c</b><span>device_resume() + dpm_async_fn() · 1093–1098, 694–708</span></figcaption>
+<pre class="code" data-start="1093" data-hl="1095" data-notes="1095|thiết bị async: lên lịch rồi return ngay">static void device_resume(struct device *dev)
+{
+	if (dpm_async_fn(dev, async_resume))
+		return;
+
+	__device_resume(dev, pm_transition, false);</pre>
+  </figure>
+  <div class="callout">Thiết bị async (xHCI, usb device, port…) chỉ được lên lịch rồi vòng lặp chạy tiếp. Vậy nếu vòng lặp đứng ở <code>usb2h0p2_phy</code>, thread PM đang chạy <code>__device_resume()</code> đồng bộ cho chính PHY này. Driver <code>phy-utm-mv</code> không gọi <code>device_enable_async_suspend()</code>. Còn xHCI (async, <span class="ref" title="Kernel/Src/drivers/usb/host/xhci-plat.c:415">xhci-plat.c:415</span>) đã bị <code>device_link_add()</code> của OP_BTS-68040 dời xuống cuối <code>dpm_list</code> (<span class="ref" title="Kernel/Src/drivers/usb/host/xhci-plat.c:51-53">xhci-plat.c:51</span>).</div>
+
+  <h3>Thứ tự resume trên Iris SB (theo DT)</h3>
+  <div class="order" aria-label="Thứ tự thiết bị trong dpm_list">
+    <span class="dev old">8d0010000.sky2_nonpci<small>mvri · OP_BTS-49578 kẹt ở đây</small></span><span class="arr">→</span>
+    <span class="dev hang">8d00e8000.usb2h0p2_phy<small>OP_BTS-70923 kẹt ở đây</small></span><span class="arr">→</span>
+    <span class="dev">8d00dc000.usb2h0p1_phy<small>phy-utm-mv</small></span><span class="arr">→</span>
+    <span class="dev">8d00d8000.usb3h0p0_phy<small>phy-usb3-mv (=m)</small></span><span class="arr">→</span>
+    <span class="dev">8d0098000.pcie<small>msb0125-pcie</small></span><span class="arr">→ … →</span>
+    <span class="dev tail">8d00e0000.usb2 / 8d00d0000.usb3<small>xHCI, bị dời xuống cuối list</small></span>
+  </div>
+  <p class="cap">Nguồn: <span class="ref" title="Kernel/Src/arch/arm64/boot/dts/marvell/quartz-iris-sb-0.dtsi:35-102">quartz-iris-sb-0.dtsi:35–102</span>. <code>of_platform_populate</code> đăng ký thiết bị theo thứ tự node, và <code>dpm_resume</code> đi theo thứ tự đăng ký.</p>
+</section>
+
+<!-- 05 -->
+<section id="fix">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Vì sao fix không trúng</h2></div>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/usb/phy/phy-utm-mv.c</b><span>start_pll() · fix FPT · 211–236</span></figcaption>
+<pre class="code" data-start="211" data-hl="216,221,225" data-notes="216|≤ 100 ms;;221|≤ 100 ms;;225|≤ 1 s;;230|chưa từng in ra">	// [IT6_3.0] [OP_BTS-70923] FPT MOD Start.
+	/*
+	 * Was an unbounded while loop (WDT reboot in dpm_resume).
+	 * On timeout keep going as before (the PHY may still lock late) and log the stage.
+	 */
+	if (readl_poll_timeout(reg + CAL_CNTL, val,
+			(val &amp; (PLLCAL_DONE | IMPCAL_DONE)) == (PLLCAL_DONE | IMPCAL_DONE),
+			PHY_UTM_MV_POLL_INTERVAL_US, PHY_UTM_MV_CAL_TIMEOUT_US)) {
+		fail |= 0x1;
+	}
+	if (readl_poll_timeout(reg + RX_CC1, val, val &amp; REG_SQCAL_DONE,
+			PHY_UTM_MV_POLL_INTERVAL_US, PHY_UTM_MV_CAL_TIMEOUT_US)) {
+		fail |= 0x2;
+	}
+	if (readl_poll_timeout(reg + PHY_PLL0, val, val &amp; (1 &lt;&lt; PLL_READY_SHIFT),
+			PHY_UTM_MV_POLL_INTERVAL_US, PHY_UTM_MV_PLL_TIMEOUT_US)) {
+		fail |= 0x4;
+	}
+	if (fail) {
+		dev_err(pdata-&gt;phy.dev,
+			"OP_BTS-70923 FIX: PHY poll timeout stage=0x%x(1:CAL 2:SQCAL 4:PLL) "
+			"PHY_PLL0=0x%08x PHY_PLL1=0x%08x CAL_CNTL=0x%08x RX_CC1=0x%08x TX_CCR0=0x%08x\n",
+			fail, readl(reg + PHY_PLL0), readl(reg + PHY_PLL1),
+			readl(reg + CAL_CNTL), readl(reg + RX_CC1), readl(reg + TX_CCR0));
+	}
+	// [IT6_3.0] [OP_BTS-70923] FPT MOD End.</pre>
+  </figure>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>#</th><th>Bằng chứng</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td>E1</td><td>NewDC không đổi sau fix, cả 4 byte tên lẫn stage. Xảy ra 2 lần.</td><td>Thread vẫn đứng ở cùng thiết bị và cùng phase.</td></tr>
+      <tr><td>E2</td><td>Chuỗi <code>OP_BTS-70923 FIX</code> xuất hiện 0 lần trong log UART, <code>messages</code> và <code>202611160950_001.log</code>.</td><td>Khi resume thành công, các bit DONE/READY luôn lên trước timeout. <code>dev_err</code> có hiện trên console; ví dụ <code>msb0125-pcie … Link not up</code> vẫn thấy ở L1655.</td></tr>
+      <tr><td>E3</td><td>Khoảng <code>&lt;==mvri_resume</code> → root hub: 0,392–0,432 s. Resume tổng: max 4,59 s.</td><td>Không có chu kỳ nào chậm rồi tự hồi. Lỗi là treo vô hạn, không phải PHY lock chậm.</td></tr>
+      <tr><td>E4</td><td>Softdog chạy bằng hrtimer, vẫn fire được và vẫn ghi được QSPI.</td><td>Ít nhất một CPU vẫn xử lý interrupt. Thread PM nhiều khả năng đang ngủ hoặc chờ lock; nếu nó bị bus stall thì phải đang ở CPU khác CPU0.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn">Ghi chú về báo cáo gửi KM ngày 10/19: phần "đã xác nhận" chỉ đúng tới mức thiết bị. Kết luận "treo trong vòng poll của <code>start_pll()</code>" là suy luận vì đó là chỗ duy nhất không có timeout, chưa từng được chứng minh bằng log. Dữ liệu đợt mới bác bỏ suy luận này.</div>
+</section>
+
+<!-- 06 -->
+<section id="diem-treo">
+  <div class="sec-head"><span class="sec-num">06</span><h2>Các điểm còn có thể treo vô hạn</h2></div>
+  <div class="prose"><p>Sau fix, trong đường gọi <code>phy_utm_mv_resume()</code> vẫn còn bốn loại điểm không có giới hạn thời gian. Các dòng tô đỏ bên dưới là những điểm đó.</p></div>
+
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/usb/phy/phy-utm-mv.c</b><span>phy_utm_mv_resume() · 356–364</span></figcaption>
+<pre class="code" data-start="356" data-hl="360" data-notes="360|callback PM">static int phy_utm_mv_resume(struct device *dev)
+{
+	struct phy_utm_mv_data	*phy_utm_mv_data = dev_get_drvdata(dev);
+	dev_info(dev, "%s: start\n", __func__);
+	phy_utm_mv_init(&amp;phy_utm_mv_data-&gt;phy);
+	dev_info(dev, "%s: end \n", __func__);
+
+	return 0;
+}</pre>
+  </figure>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/usb/phy/phy-utm-mv.c</b><span>phy_utm_mv_init() · 255–268</span></figcaption>
+<pre class="code" data-start="255" data-hl="260" data-notes="260|global prepare_lock (clk.c:28)">static int phy_utm_mv_init(struct usb_phy *phy) {
+	struct phy_utm_mv_data *pdata =
+		container_of(phy, struct phy_utm_mv_data, phy);
+
+	if (pdata-&gt;running == 0) {
+		clk_prepare_enable(pdata-&gt;clk);
+
+		start_pll(pdata);
+
+		pdata-&gt;running = 1;
+	}
+
+	return 0;
+}</pre>
+  </figure>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/usb/phy/phy-utm-mv.c</b><span>pll_lock + start_pll() · 113, 138–152, 185–210</span></figcaption>
+<pre class="code" data-start="113" data-hl="113" data-notes="113|static: dùng chung mọi instance">static DEFINE_MUTEX(pll_lock);</pre>
+<pre class="code" data-start="138" data-hl="144,146" data-notes="144|không timeout;;146|truy cập Iris SB đầu tiên">static void start_pll(struct phy_utm_mv_data *pdata) {
+	void __iomem *reg = pdata-&gt;reg;
+	const struct mv_phy_settings *settings = pdata-&gt;settings;
+	u32 val;
+	unsigned int fail = 0;
+
+	mutex_lock(&amp;pll_lock);
+
+	val = readl(reg + TX_CCR0);
+	val &amp;= ~(DRV_EN_LS_MASK &lt;&lt; DRV_EN_LS_SHIFT);
+	val &amp;= ~(IMP_SEL_LS_MASK &lt;&lt; IMP_SEL_LS_SHIFT);
+	val |= (PU_BY_REG | PU_ANA);
+	val |= ((settings-&gt;drv_en_ls) &lt;&lt; DRV_EN_LS_SHIFT);
+	val |= ((settings-&gt;imp_sel_ls) &lt;&lt; IMP_SEL_LS_SHIFT);
+	writel(val, reg + TX_CCR0);</pre>
+<pre class="code" data-start="185" data-hl="189,195,201,206" data-notes="189|timer wheel;;195|timer wheel;;201|timer wheel;;206|timer wheel">	val = readl(reg + PHY_PLL1);
+	val |= PU_PLL;
+	writel(val, reg + PHY_PLL1);
+
+	msleep(1);
+	val = readl(reg + CAL_CNTL);
+	val &amp;= ~(PLLCAL_START | IMPCAL_START);
+	writel(val, reg + CAL_CNTL);
+
+	/* VTH -- set Impedence Calibration Threshold */
+	msleep(1);
+	val = readl(reg + CAL_CNTL) &amp; ~(IMPCAL_VTH_MASK &lt;&lt; IMPCAL_VTH_SHIFT);
+	val |= (PLLCAL_START | IMPCAL_START |
+			((settings-&gt;impcal_vth) &lt;&lt; IMPCAL_VTH_SHIFT));
+	writel(val, reg + CAL_CNTL);
+
+	msleep(1);
+	val = readl(reg + RX_CC1);
+	val &amp;= ~REG_SQCAL_START;
+	writel(val, reg + RX_CC1);
+
+	msleep(1);</pre>
+  </figure>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Điểm</th><th>Vị trí</th><th>Timeout</th><th>Treo khi nào</th></tr></thead>
+    <tbody>
+      <tr><td><code>clk_prepare_enable(bus_clk)</code></td><td><span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:260">phy-utm-mv.c:260</span></td><td><span class="chip fail">không</span></td><td><code>bus_clk</code> là fixed clock (<span class="ref" title="Kernel/Src/arch/arm64/boot/dts/marvell/quartz-iris-sb-0.dtsi:50">dtsi:50</span>), nhưng hàm vẫn phải lấy mutex toàn cục <code>prepare_lock</code> (<span class="ref" title="Kernel/Src/drivers/clk/clk.c:28-30">clk.c:28</span>). Treo nếu một async resume hoặc kthread đang giữ lock này và bị block.</td></tr>
+      <tr><td><code>mutex_lock(&amp;pll_lock)</code></td><td><span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:144">phy-utm-mv.c:144</span></td><td><span class="chip fail">không</span></td><td>Lock là static, dùng chung cho mọi instance <code>phy-utm-mv</code>: <code>8e8274000.usb2_phy</code> (<span class="ref" title="Kernel/Src/arch/arm64/boot/dts/marvell/quartz-sb.dtsi:762">quartz-sb.dtsi:762</span>), <code>8d00dc000</code>, các PHY trên NB-Iris. Treo nếu bên giữ lock bị kẹt.</td></tr>
+      <tr><td><code>readl</code>/<code>writel</code> lên <code>0x8_D00E8000</code></td><td><span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:146-210">phy-utm-mv.c:146–210</span></td><td><span class="chip fail">không thể</span></td><td>Nếu Iris SB chưa trả response (đang reset, mất clock, LPPP đang thao tác), lệnh load không hoàn tất và CPU đó đứng luôn. Phần mềm không thể đặt timeout cho trường hợp này.</td></tr>
+      <tr><td><code>msleep(1)</code> × 4</td><td><span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:189">phy-utm-mv.c:189</span> <span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:195">195</span> <span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:201">201</span> <span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:206">206</span></td><td><span class="chip warn">phụ thuộc timer</span></td><td>Chỉ treo nếu timer wheel trên CPU đó không chạy sau khi wake.</td></tr>
+      <tr><td>3 vòng poll</td><td><span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:216-228">phy-utm-mv.c:216–228</span></td><td><span class="chip ok">≤ 1,2 s</span></td><td>Đã loại trừ, xem E1–E3.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 07 -->
+<section id="lien-he">
+  <div class="sec-head"><span class="sec-num">07</span><h2>Liên hệ với OP_BTS-49578</h2></div>
+  <div class="prose">
+    <p>Ticket cũ OP_BTS-49578 có NewDC <code>2201E38306E69F10</code>. Giải mã bằng cùng công thức (bấm nút OP_BTS-49578 ở mục 03) ra <code>8d0010000.sky2_nonpci</code>: đó là driver mvri, cùng phase <code>dpm_resume</code>, cùng chế độ DeepSleep.</p>
+    <p>Trong <code>dpm_list</code>, mvri là <b>thiết bị đứng ngay trước</b> <code>usb2h0p2_phy</code>, và cả hai đều nằm trên Iris SB. Nguyên nhân của OP_BTS-49578 là mvri chờ phản hồi LPPP vô hạn; biện pháp khi đó là bỏ bước chờ.</p>
+  </div>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c</b><span>mvri_resume() · trả Ethernet HW từ LPPP · 2746–2777</span></figcaption>
+<pre class="code" data-start="2746" data-hl="2768" data-notes="2768|LPPP thả HW, retry tối đa 5 lần;;2777|ngay sau đó tới PHY">	if(fw_ctx-&gt;fw_state &amp; MVRI_FW_STATE_OWN_HW)
+	{
+		fw_ctx-&gt;fw_state |= MVRI_FW_STATE_RELINQUISH_HW;
+		fw_ctx-&gt;fw_state &amp;= ~MVRI_FW_STATE_OWN_HW;
+
+		ull_SEQ_REC = 0x01;
+		/* 2024/07/12 Sky OP_BTS-49318 */
+		if (bl_wlan_reset_resume_flg) {
+			/* 2024/07/12 Sky OP_BTS-49318 (reset WLAN) */
+			wake_reason = MVRI_WAKE_REASON_RESET_WLAN;
+			printk(KERN_ERR DBG_PREFIX"set wake reason RESET_WLAN(0x%08x)\n", MVRI_WAKE_REASON_RESET_WLAN);
+		} else {
+			if (mvri_fw_wait_for_wakeup(pAC))
+				printk(KERN_ERR DBG_PREFIX"waking up due to internal error\n");
+
+			ull_SEQ_REC = 0x04;
+			wake_reason = mvri_fw_get_wake_reason(pAC);
+		}
+		printk(KERN_ERR DBG_PREFIX"wake reason 0x%08x\n", wake_reason);
+
+		ull_SEQ_REC = 0x05;
+		/* 2019/04/11 Retry add */
+		while( mvri_fw_firmware_stop(pAC) &amp;&amp; ( LoopCnt &lt; 5 ))
+		{
+			printk(KERN_ERR DBG_PREFIX"failed to stop firmware\n");
+			LoopCnt++;		/* 2019/04/11 Retry add */
+			if( LoopCnt == 5 )
+				fw_ctx-&gt;fw_state |= MVRI_FW_ERROR_RELINQUISH_HW_UNCONFIRMED;
+		}
+		fw_ctx-&gt;fw_state &amp;= ~MVRI_FW_STATE_RELINQUISH_HW;
+		dbgl_raw(DBG_PREFIX"driver owns Ethernet HW\n");
+	}</pre>
+  </figure>
+  <div class="callout">Câu hỏi then chốt: sau khi <code>mvri_fw_firmware_stop()</code> trả về, LPPP còn thao tác gì trên Iris SB (reset block, đổi clock, power) hay không. Nếu có, lần truy cập register đầu tiên của <code>usb2h0p2_phy</code> (<span class="ref" title="Kernel/Src/drivers/usb/phy/phy-utm-mv.c:146">phy-utm-mv.c:146</span>), diễn ra chỉ vài ms sau đó, có thể rơi vào lúc bus chưa sẵn sàng.</div>
+</section>
+
+<!-- 08 -->
+<section id="gia-thuyet">
+  <div class="sec-head"><span class="sec-num">08</span><h2>Giả thuyết còn lại</h2></div>
+  <div class="prose"><p>Chưa giả thuyết nào được xác nhận. Thứ tự dưới đây dựa trên mức khớp với bằng chứng hiện có. Mỗi giả thuyết có một giá trị nibble riêng trong patch A (mục 09) để phân biệt.</p></div>
+  <div class="hyp">
+    <div class="h">
+      <div class="h-top"><h4>H1 · Bus stall khi truy cập Iris SB ngay sau khi LPPP trả HW</h4><span class="chip warn">nghi vấn chính · chờ đo</span></div>
+      <div class="h-grid">
+        <div><b>Ủng hộ</b>OP_BTS-49578 kẹt ở thiết bị liền trước, cùng Iris SB, cùng phase. Tần suất rất thấp (1/1800), hợp với một race phần cứng. Không có chu kỳ nào chậm rồi tự hồi.</div>
+        <div><b>Chống</b>Softdog vẫn fire. Để H1 đúng, thread PM phải đang ở CPU khác CPU0. Điều này có thể xảy ra vì mvri_resume có các điểm ngủ, sau đó thread được đánh thức trên CPU khác.</div>
+        <div><b>Xác nhận</b>Nibble <code>x = 4</code>. Thêm <code>sched_show_task()</code> ở patch B: nếu task ở trạng thái <b>R</b> và nằm trên CPU≠0 thì H1 đúng.</div>
+      </div>
+    </div>
+    <div class="h">
+      <div class="h-top"><h4>H2 · Chờ <code>prepare_lock</code> của clk framework</h4><span class="chip mute">trung bình–thấp</span></div>
+      <div class="h-grid">
+        <div><b>Ủng hộ</b><code>clk_prepare_enable</code> luôn lấy mutex toàn cục. Lúc này các thiết bị async khác đang resume song song.</div>
+        <div><b>Chống</b>Chưa tìm ra bên giữ lock cụ thể nào bị block lâu.</div>
+        <div><b>Xác nhận</b>Nibble <code>x = 2</code>. In <code>prepare_owner</code> (<span class="ref" title="Kernel/Src/drivers/clk/clk.c:30">clk.c:30</span>) trong <code>softdog_fire</code>.</div>
+      </div>
+    </div>
+    <div class="h">
+      <div class="h-top"><h4>H3 · Chờ <code>pll_lock</code> (mutex static dùng chung)</h4><span class="chip mute">thấp</span></div>
+      <div class="h-grid">
+        <div><b>Ủng hộ</b>Một lock dùng chung cho ít nhất 4 instance PHY, trong đó có PHY gadget <code>8e8274000.usb2_phy</code>.</div>
+        <div><b>Chống</b>Trong PM, các PHY này đều resume sync và tuần tự. Ngoài PM, <code>usb_phy_init</code> chỉ được gọi ở probe (<span class="ref" title="Kernel/Src/drivers/usb/chipidea/ci_hdrc_imx.c:449">ci_hdrc_imx.c:449</span>).</div>
+        <div><b>Xác nhận</b>Nibble <code>x = 3</code>. In owner của <code>pll_lock</code> trong <code>softdog_fire</code>.</div>
+      </div>
+    </div>
+    <div class="h">
+      <div class="h-top"><h4>H4 · <code>msleep()</code> không trở về</h4><span class="chip mute">thấp</span></div>
+      <div class="h-grid">
+        <div><b>Ủng hộ</b>Có 4 lời gọi <code>msleep(1)</code> ngay trong đường resume.</div>
+        <div><b>Chống</b>Hrtimer vẫn chạy (softdog fire được). <code>msleep</code> được dùng ở rất nhiều driver khác trong cùng phase mà không lỗi.</div>
+        <div><b>Xác nhận</b>Nibble <code>x = 5…8</code>.</div>
+      </div>
+    </div>
+    <div class="h ruled">
+      <div class="h-top"><h4>H0 · Vòng poll PLL/CAL không thoát</h4><span class="chip ok">đã loại trừ</span></div>
+      <div class="h-grid">
+        <div><b>Lý do</b>Fix đã chặn trên ≤ 1,2 s mà lỗi vẫn còn (E1).</div>
+        <div><b>Thêm</b>Chưa từng timeout trong 3 657 chu kỳ (E2), không có đuôi thời gian (E3).</div>
+        <div><b>Giữ fix?</b>Nên giữ như một biện pháp phòng thủ, nhưng không coi là bản sửa của ticket này.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 -->
+<section id="ke-hoach">
+  <div class="sec-head"><span class="sec-num">09</span><h2>Kế hoạch đo</h2></div>
+  <div class="prose"><p>Không nên ship thêm một fix dựa trên phỏng đoán. Hạ tầng ghi tiến độ đã có sẵn: <code>uc_data[6] = ull_SEQ_REC</code> (<span class="ref" title="Kernel/Src/drivers/base/power/main.c:1085">main.c:1085</span>) chính là nibble cuối của NewDC (<span class="ref" title="IT6_Controller/KM3/application/mfp/Linux/main_BSP.cpp:3492">main_BSP.cpp:3492</span>, mask <code>0xF</code>). Hiện nibble này bằng 0 vì <code>mvri_resume</code> đặt lại về 0 khi kết thúc (<span class="ref" title="Kernel/Src/drivers/net/ethernet/marvell/mvri_nonpci.c:2883">mvri_nonpci.c:2883</span>). Cả hai driver đều built-in nên chỉ cần dùng <code>extern</code>.</p></div>
+
+  <h3>Patch A: ghi tiến độ trong phy_utm_mv_resume (không đổi timing)</h3>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/usb/phy/phy-utm-mv.c</b><span>đề xuất · debug</span></figcaption>
+<pre class="code diff" data-start="1" data-add="1,2,3,4,5,6,9,10,11,13,14,15,16,17,19,20,21,23,24,25">// [IT6_3.0] [OP_BTS-70923] FPT DEBUG Start.
+extern unsigned long long ull_SEQ_REC;          /* mvri_nonpci.c:2725 */
+#define UTM_SEQ(p, v) \
+	do { if ((p)-&gt;in_resume) WRITE_ONCE(ull_SEQ_REC, (v)); } while (0)
+/* struct phy_utm_mv_data: thêm  int in_resume; */
+// [IT6_3.0] [OP_BTS-70923] FPT DEBUG End.
+
+static int phy_utm_mv_resume(struct device *dev) {
+	struct phy_utm_mv_data *p = dev_get_drvdata(dev);
+	p-&gt;in_resume = 1;
+	UTM_SEQ(p, 0x1);
+	if (p-&gt;running) UTM_SEQ(p, 0xD);
+	phy_utm_mv_init(&amp;p-&gt;phy);
+	UTM_SEQ(p, 0x0);
+	p-&gt;in_resume = 0;
+	return 0;
+}
+/* phy_utm_mv_init():  UTM_SEQ(pdata, 0x2); trước clk_prepare_enable()  */
+/* start_pll():        UTM_SEQ(pdata, 0x3); trước mutex_lock(&amp;pll_lock) */
+/*                     UTM_SEQ(pdata, 0x4); sau mutex_lock, trước readl(TX_CCR0) */
+/*                     UTM_SEQ(pdata, 0x5..0x8); trước mỗi msleep(1)   */
+/*                     UTM_SEQ(pdata, 0x9 / 0xA / 0xB); trước từng poll */
+/*                     UTM_SEQ(pdata, 0xC); trước mutex_unlock()       */
+/* Cờ in_resume để các lời gọi lúc probe (usb_phy_init) không ghi đè. */
+/* NewDC mong đợi: 2201E38385F791x, với x là bước đang treo.       */</pre>
+  </figure>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th class="num">x</th><th>Thread đang ở</th><th>Kết luận nếu treo tại đây</th></tr></thead>
+    <tbody>
+      <tr><td class="num"><code>1</code></td><td>Vào resume, trước init</td><td>Bất thường (chỉ có dev_info). Kiểm tra lại printk/console lock.</td></tr>
+      <tr><td class="num"><code>2</code></td><td>Trước <code>clk_prepare_enable</code></td><td>H2: chờ <code>prepare_lock</code>.</td></tr>
+      <tr><td class="num"><code>3</code></td><td>Trước <code>mutex_lock(&amp;pll_lock)</code></td><td>H3: instance khác đang giữ <code>pll_lock</code>.</td></tr>
+      <tr><td class="num"><code>4</code></td><td>Đang <code>readl</code>/<code>writel</code> cấu hình</td><td>H1: bus stall trên Iris SB. Chuyển câu hỏi cho KM.</td></tr>
+      <tr><td class="num"><code>5–8</code></td><td>Trong <code>msleep(1)</code> #1–#4</td><td>H4: timer không chạy sau wake.</td></tr>
+      <tr><td class="num"><code>9 / A / B</code></td><td>Đang poll CAL / SQCAL / PLL</td><td>Timeout của fix không hoạt động (không nên xảy ra).</td></tr>
+      <tr><td class="num"><code>C</code></td><td>Trước <code>mutex_unlock</code></td><td>Kẹt trong <code>dev_err</code>. Rất khó xảy ra.</td></tr>
+      <tr><td class="num"><code>D</code></td><td><code>running == 1</code>, bỏ qua init</td><td>PHY không chạm HW. Điểm treo nằm ngoài callback (<code>device_lock</code> hoặc <code>dpm_list_mtx</code>).</td></tr>
+      <tr><td class="num"><code>0</code></td><td>Callback đã return</td><td>Treo ở <code>mutex_lock(&amp;dpm_list_mtx)</code> (<span class="ref" title="Kernel/Src/drivers/base/power/main.c:1131">main.c:1131</span>) hoặc trong <code>dpm_wait_for_superior</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Patch B: bản debug lấy stack của thread bị treo</h3>
+  <ul class="tight">
+    <li>Boot param <code>no_console_suspend ignore_loglevel</code>: printk trong lúc suspend/resume ra thẳng UART, kể cả <code>phy_utm_mv_resume: start</code>. Lưu ý điều này làm đổi timing, nên chạy patch A trước.</li>
+    <li>Lưu <code>current</code> vào biến toàn cục <code>dpm_resume_task</code> ở đầu <code>dpm_resume()</code> (<span class="ref" title="Kernel/Src/drivers/base/power/main.c:1108">main.c:1108</span>).</li>
+    <li>Trong <code>softdog_fire()</code> (<span class="ref" title="Kernel/Src/drivers/watchdog/softdog.c:140">softdog.c:140</span>) dump đủ thông tin trong cửa sổ 1 s trước khi reboot:</li>
+  </ul>
+  <figure class="listing">
+    <figcaption><b>Kernel/Src/drivers/watchdog/softdog.c</b><span>đề xuất · chỉ cho bản debug</span></figcaption>
+<pre class="code diff" data-start="1" data-add="1,2,3,4,5,6,7,8,9,10,11,12,13,14">#ifdef OP_BTS_70923_DEBUG
+extern struct task_struct *dpm_resume_task;   /* gán trong dpm_resume() */
+extern struct device *dev_watchdog;
+extern char dev_resume_suspend_flg;
+extern void phy_utm_mv_dump_lock_owner(void); /* đọc pll_lock.owner &amp; ~0x7 */
+extern void clk_dump_prepare_owner(void);     /* in prepare_owner, clk.c:30 */
+	pr_emerg("OP_BTS-70923: flg=%d dev=%s\n", dev_resume_suspend_flg,
+		 dev_watchdog ? dev_name(dev_watchdog) : "-");
+	if (dpm_resume_task)
+		sched_show_task(dpm_resume_task);     /* state R/D, CPU, backtrace */
+	phy_utm_mv_dump_lock_owner();
+	clk_dump_prepare_owner();
+#endif
+	/* … giữ nguyên code hiện tại: printk("watchdog reboot 1s wait") … */</pre>
+  </figure>
+  <div class="callout">Trên arm64 kernel 5.10, <code>trigger_all_cpu_backtrace()</code> không có tác dụng (chưa có IPI backtrace), nên dùng <code>sched_show_task()</code> cho đúng task cần xem. Với tần suất hiện tại, khoảng 2 lần mỗi 3–4 ngày, chạy vài ngày là đủ dữ liệu.</div>
+</section>
+
+<!-- 10 -->
+<section id="km">
+  <div class="sec-head"><span class="sec-num">10</span><h2>Câu hỏi cập nhật cho KM</h2></div>
+  <ol class="qa">
+    <li>Fix timeout cho <code>start_pll()</code> đã được kiểm chứng là <b>không</b> giải quyết lỗi: NewDC <code>2201E38385F79F10</code> vẫn xảy ra 2 lần trong 3 659 chu kỳ. Chúng tôi rút lại kết luận "treo trong vòng poll" của báo cáo ngày 10/19.</li>
+    <li>Sau khi <code>mvri_fw_firmware_stop()</code> trả Ethernet HW từ LPPP về CA72, LPPP còn reset, đổi clock hay power gì trên Iris SB (<code>0x8_D00xxxxx</code>) không? Có cần chờ trước khi truy cập register của các khối khác trên Iris SB không?</li>
+    <li>Nếu CA72 truy cập register Iris SB khi khối đó chưa sẵn sàng, interconnect có trả abort sau một thời gian không, hay bus treo vô hạn? Có thanh ghi trạng thái nào cho biết Iris SB đã sẵn sàng sau khi wake từ DeepSleep 0.5 W không?</li>
+    <li>USB2 PHY <code>8D00E8000</code> (msb0125) có mất nguồn hoặc clock trong DeepSleep 0.5 W không? Có yêu cầu về trình tự hoặc độ trễ trước lần ghi <code>TX_CCR0</code> đầu tiên sau khi wake không?</li>
+  </ol>
+</section>
+
+<!-- 11 -->
+<section id="tham-chieu">
+  <div class="sec-head"><span class="sec-num">11</span><h2>Bảng tham chiếu</h2></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Vị trí</th><th>Nội dung</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ref">kernel/power/suspend.c:564 / 577 / 589 / 594 / 610</span></td><td>suspend_console → dpm_suspend_start → suspend_enter → dpm_resume_end → resume_console</td></tr>
+      <tr><td><span class="ref">drivers/base/power/main.c:72–73</span></td><td>Biến toàn cục <code>dev_watchdog</code>, <code>dev_resume_suspend_flg</code></td></tr>
+      <tr><td><span class="ref">drivers/base/power/main.c:694–708</span></td><td><code>dpm_async_fn()</code>: thiết bị async được lên lịch rồi return</td></tr>
+      <tr><td><span class="ref">drivers/base/power/main.c:740</span></td><td>noirq resume, <code>flg = 4</code></td></tr>
+      <tr><td><span class="ref">drivers/base/power/main.c:946–1000</span></td><td><code>__device_resume()</code>: wait_for_superior, device_lock, callback</td></tr>
+      <tr><td><span class="ref">drivers/base/power/main.c:1032–1091</span></td><td><code>watchdog_device_info()</code>: rút gọn tên, ghi stage và <code>ull_SEQ_REC</code></td></tr>
+      <tr><td><span class="ref">drivers/base/power/main.c:1108–1143</span></td><td><code>dpm_resume()</code>, gán <code>dev_watchdog</code> ở dòng 1128</td></tr>
+      <tr><td><span class="ref">drivers/watchdog/softdog.c:36, 140–217</span></td><td>Margin 60 s, softdog_fire, softdog_reboot ghi QSPI rồi emergency_restart</td></tr>
+      <tr><td><span class="ref">drivers/usb/phy/phy-utm-mv.c:113, 138–239, 255–268, 356–364</span></td><td>pll_lock, start_pll (kèm fix), init, resume</td></tr>
+      <tr><td><span class="ref">drivers/usb/host/xhci-plat.c:34–63, 341, 359, 415</span></td><td>device_link xHCI→PHY (OP_BTS-68040), async suspend</td></tr>
+      <tr><td><span class="ref">drivers/net/ethernet/marvell/mvri_nonpci.c:2725–2883</span></td><td><code>ull_SEQ_REC</code>, mvri_resume, handoff với LPPP</td></tr>
+      <tr><td><span class="ref">arch/arm64/boot/dts/marvell/quartz-iris-sb-0.dtsi:35–102</span></td><td>Node Iris SB: gmac1, các PHY, xHCI</td></tr>
+      <tr><td><span class="ref">arch/arm64/boot/dts/marvell/quartz-sb.dtsi:762–781</span></td><td><code>8e8274000.usb2_phy</code> + chipidea gadget (dùng chung pll_lock)</td></tr>
+      <tr><td><span class="ref">IT6_Controller/…/Linux/main_BSP.cpp:3472–3493</span></td><td>Đọc vùng THR 0x0025/0x0034 và mã hoá NewDC</td></tr>
+      <tr><td><span class="ref log">70923-1112.log: 34396, 34399, 35001, 122700, 122703, 123294</span></td><td>Hai lần tái hiện sau khi áp fix</td></tr>
+    </tbody>
+  </table></div>
+  <p class="foot">Số dòng lấy từ source trong repo Source_MFP (nhánh hiện tại); source kernel đường dẫn gốc <code>Kernel/Src/</code>. Thống kê thời gian tính trên 3 657 chu kỳ resume thành công có đủ các mốc PMU_resume, &lt;==mvri_resume, root hub và suspend_finish. Phần giả thuyết là suy luận và cần được xác nhận bằng patch A/B.</p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function(){
+  /* ---- code listings: line numbers, highlight, light syntax ---- */
+  var KW=/\b(static|int|void|struct|unsigned|char|bool|return|if|else|while|for|do|extern|const|u32|long|true|false|NULL)\b/g;
+  function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  function paintCode(s){
+    var out="",i=0,re=/("(?:[^"\\]|\\.)*")/g,m,last=0;
+    while((m=re.exec(s))){out+=esc(s.slice(last,m.index)).replace(KW,'<span class="k">$1</span>');out+='<span class="s">'+esc(m[1])+'</span>';last=re.lastIndex;}
+    out+=esc(s.slice(last)).replace(KW,'<span class="k">$1</span>').replace(/^(\s*)(#\w+)/,'$1<span class="k">$2</span>');
+    return out;
+  }
+  function paintLine(raw){
+    var idx=-1,a=raw.indexOf("//"),b=raw.indexOf("/*");
+    if(a>=0&&b>=0)idx=Math.min(a,b);else idx=Math.max(a,b);
+    if(idx>=0){var q=raw.slice(0,idx).split('"').length-1; if(q%2) idx=-1;}
+    if(idx<0)return paintCode(raw);
+    return paintCode(raw.slice(0,idx))+'<span class="c">'+esc(raw.slice(idx))+'</span>';
+  }
+  document.querySelectorAll("pre.code").forEach(function(pre){
+    try{
+      var start=parseInt(pre.dataset.start||"1",10);
+      var hl=(pre.dataset.hl||"").split(",").filter(Boolean).map(Number);
+      var add=(pre.dataset.add||"").split(",").filter(Boolean).map(Number);
+      var notes={};(pre.dataset.notes||"").split(";;").forEach(function(p){var k=p.split("|");if(k.length===2)notes[+k[0]]=k[1];});
+      var lines=pre.textContent.replace(/\n$/,"").split("\n");
+      pre.innerHTML=lines.map(function(l,i){
+        var n=start+i,cls="l"+(hl.indexOf(n)>=0?" hl":"")+(add.indexOf(n)>=0?" add":"");
+        return '<span class="'+cls+'" data-n="'+n+'">'+(paintLine(l)||" ")+(notes[n]?'<span class="note">'+esc(notes[n])+'</span>':"")+'</span>';
+      }).join("");
+    }catch(e){}
+  });
+
+  /* ---- NewDC decoder ---- */
+  var DEVICES=["8d0010000.sky2_nonpci","8d00e8000.usb2h0p2_phy","8d00e0000.usb2","8d00dc000.usb2h0p1_phy","8d00d8000.usb3h0p0_phy","8d00d0000.usb3","8d0098000.pcie","8d0060000.sata","8e8274000.usb2_phy","8e8250000.usb2dev","ci_hdrc.0"];
+  function sig(n){ /* main.c:1042-1081 */
+    var L=n.length,p;
+    if(L<=4){p=[0,1,2,3].map(function(i){return i<L?i:-1;});}
+    else if(L===5)p=[0,2,L-2,L-1];
+    else if(L===6)p=[0,3,L-2,L-1];
+    else if(L===7)p=[0,4,L-2,L-1];
+    else if(L===8)p=[0,5,L-2,L-1];
+    else if(L===9)p=[0,5,L-3,L-1];
+    else p=[0,5,L-4,L-1];
+    return {idx:p,bytes:p.map(function(i){return i<0?0:n.charCodeAt(i);}),size:L<16?(L&15):15};
+  }
+  var STAGE={1:"dpm_resume (main.c:1120)",2:"dpm_suspend (main.c:1871)",4:"dpm_noirq_resume_devices (main.c:740)"};
+  var MVRI={0:"0x00: chưa bắt đầu hoặc đã xong",1:"0x01: bắt đầu thả HW",4:"0x04: sau wait_for_wakeup",5:"0x05: trong firmware_stop"};
+  var PHYA={0:"0: callback đã return / chưa ghi",1:"1: vào resume",2:"2: chờ clk prepare_lock (H2)",3:"3: chờ pll_lock (H3)",4:"4: readl/writel Iris SB (H1)",5:"5: msleep #1 (H4)",6:"6: msleep #2 (H4)",7:"7: msleep #3 (H4)",8:"8: msleep #4 (H4)",9:"9: poll CAL",10:"A: poll SQCAL",11:"B: poll PLL",12:"C: trước unlock",13:"D: running=1, bỏ qua init"};
+  function ch(b){return b>=32&&b<127?"'"+String.fromCharCode(b)+"'":"·";}
+  var inp=document.getElementById("dc-input"),bits=document.getElementById("dc-bits"),out=document.getElementById("dc-out");
+  function cell(v,lab,c,key){return '<div class="bit'+(key?" key":"")+'"><div class="v">'+v+'</div>'+(c?'<div class="ch">'+c+'</div>':"")+'<div class="lab">'+lab+'</div></div>';}
+  function decode(){
+    var s=(inp.value||"").trim().toUpperCase().replace(/[^0-9A-F]/g,"");
+    if(s.length!==16){out.innerHTML='<div>Nhập đủ 16 ký tự hex (hiện có '+s.length+').</div>';return;}
+    var h=function(a,b){return parseInt(s.slice(a,b),16);};
+    var mod=s.slice(0,2),ser=s.slice(2,5),d=[h(5,7),h(7,9),h(9,11),h(11,13)],sz=h(13,14),st=h(14,15),pg=h(15,16);
+    var rec=d[0]===0xFF;
+    bits.innerHTML=cell(mod,"module<br>"+(mod==="22"?"BSP":"?"))+cell(ser,"serial<br>"+(ser==="01E"?"WDT reboot":"?"))+
+      (rec?cell("FF","chế độ<br>record_info","",true)+cell(s.slice(7,9),"CPU đang<br>shutdown","",true)+cell(s.slice(9,11),"watchdog_<br>record_point","",true)+cell(s.slice(11,13),"record_<br>point_warp","",true)
+          :cell(s.slice(5,7),"name[0]",ch(d[0]),true)+cell(s.slice(7,9),"name[5]*",ch(d[1]),true)+cell(s.slice(9,11),"name[len-4]*",ch(d[2]),true)+cell(s.slice(11,13),"name[len-1]",ch(d[3]),true))+
+      cell(s[13],sz===15?"len ≥ 15":"len = "+sz)+cell(s[14],"stage<br>"+(STAGE[st]?STAGE[st].split(" ")[0]:"—"),"",true)+cell(s[15],"progress<br>ull_SEQ_REC","",true);
+    if(rec){out.innerHTML='<div>Đây là mã từ <code>watchdog_record_info()</code> (softdog.c:106–120): không có thiết bị đang resume/suspend; byte 3 là <code>watchdog_record_point</code>.</div>';return;}
+    var hits=DEVICES.filter(function(n){var g=sig(n);return g.size===sz&&g.bytes.every(function(b,i){return b===d[i];});});
+    var html='<div>Giai đoạn: <b>'+(STAGE[st]||("stage "+st+" (xem 新詳細コード管理一覧.xlsm)"))+'</b></div>';
+    html+='<div>Thiết bị khớp trong danh sách DT: '+(hits.length?hits.map(function(n){var g=sig(n),t="";for(var i=0;i<n.length;i++){var c=esc(n[i]);t+=g.idx.indexOf(i)>=0?"<mark>"+c+"</mark>":c;}return '<span class="match">'+t+'</span>';}).join(", "):"không có (thiết bị ngoài danh sách rút gọn)")+'</div>';
+    if(hits.indexOf("8d0010000.sky2_nonpci")>=0)html+='<div>Progress (mvri_resume): <b>'+(MVRI[pg]||("0x0"+pg.toString(16)+": xem mvri_nonpci.c:2741–2883"))+'</b></div>';
+    if(hits.indexOf("8d00e8000.usb2h0p2_phy")>=0)html+='<div>Progress (sau patch A): <b>'+(PHYA[pg]||pg)+'</b>'+(pg===0?' · với build hiện tại luôn là 0':'')+'</div>';
+    html+='<div class="cap">* tên dài hơn 9 ký tự: byte 2 = name[5], byte 3 = name[len-4] (main.c:1071–1075).</div>';
+    out.innerHTML=html;
+  }
+  if(inp){inp.addEventListener("input",decode);document.querySelectorAll("button[data-code]").forEach(function(b){b.addEventListener("click",function(){inp.value=b.dataset.code;decode();});});decode();}
+
+  /* ---- toc highlight ---- */
+  var links=[].slice.call(document.querySelectorAll(".toc a"));
+  if("IntersectionObserver" in window&&links.length){
+    var map={};links.forEach(function(a){map[a.getAttribute("href").slice(1)]=a;});
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(a){a.classList.remove("on");});var a=map[e.target.id];if(a)a.classList.add("on");}});},{rootMargin:"-20% 0px -70% 0px"});
+    document.querySelectorAll("main section[id]").forEach(function(s){io.observe(s);});
+  }
+})();
+</script>
+
+</html>

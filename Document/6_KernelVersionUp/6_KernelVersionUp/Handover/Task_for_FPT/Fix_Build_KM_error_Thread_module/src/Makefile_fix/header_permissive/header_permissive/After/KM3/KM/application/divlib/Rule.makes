@@ -1,0 +1,929 @@
+# Rule.makes
+
+include $(BASEPATH)/rule_sw.makes
+
+ifeq ($(CROSS_COMPILE),ppc440-linux-)
+	CPU				= PPC440
+else
+	CPU				= PPC603
+endif
+
+DF_TYPE					= EDH
+INCLUDE_PIC				= YES
+INCLUDE_MIO				= YES
+NETFAX					= YES
+IOPTIONCOM				= YES
+IEEE1284_INTERFACE 		= NO
+USB20_INTERFACE			= YES
+ROM_DIV					= YES
+ROM_DIV_2				= YES
+ROM_DIV_3				= YES
+AES_FTP_OFF				= NO
+AUTH_LIB				= YES
+OSWRAPPER_LIB			= NO
+MNG_LIB					= YES
+FOREMP_LIB				= NO
+EMPRIPPERFORM			= NO
+SOFTWARE_PERFORM		= NO
+EMPPROCESS_DIVIDE	 	= NO
+DIVLIB_DEBUG_LOG		= NO
+
+CC_OPTIM_TARGET 		=     -fno-builtin -fno-inline -fsigned-char 
+
+#XWINDOW definition
+ifeq ($(XWINDOW_ENABLE), YES)
+ TSS_DEFINES   += -DXWINDOW_ENABLE
+endif
+
+#NODE-BLACK TEST TOOLS
+ifeq ($(DEF_NODEBLACK_TEST),YES)
+ TSS_DEFINES   += -DDEF_NODEBLACK_TEST
+endif
+
+
+ifeq ($(BASETYPE),hw)
+ifeq ($(CROSS_COMPILE),mpc8536-linux-)
+CC_ARCH_SPEC			= -mstrict-align -mlongcall -DINET6
+else
+ifeq ($(CROSS_COMPILE),ppc440-linux-)
+CC_ARCH_SPEC			= -mstrict-align -mlongcall -DINET6
+else
+ifeq ($(CROSS_COMPILE),mv78460-linux-)
+CC_ARCH_SPEC			= -mcpu=marvell-pj4b -mfpu=vfpv3 -mabi=aapcs-linux -mlittle-endian -fwrapv -DINET6
+else
+ifeq ($(CROSS_COMPILE),mb86s73-linux-)
+CC_ARCH_SPEC			= -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mlong-calls -mlittle-endian -funwind-tables -DINET6
+else
+ifeq ($(CROSS_COMPILE),mb86s72-linux-)
+CC_ARCH_SPEC			= -mcpu=cortex-a15 -mfpu=neon-vfpv4 -mfloat-abi=hard -mlong-calls -mlittle-endian -mthumb -funwind-tables -fno-aggressive-loop-optimizations -DINET6
+else
+ifeq ($(CROSS_COMPILE),mv62x0-linux-)
+CC_ARCH_SPEC			= -march=armv7-a -marm -mthumb-interwork -mfloat-abi=hard -mfpu=neon -mthumb -mlittle-endian -mtls-dialect=gnu -DINET6
+else
+ifeq ($(CROSS_COMPILE),s800-linux-)
+CC_ARCH_SPEC			=  -mlittle-endian -DINET6
+else
+CC_ARCH_SPEC			= -mcpu=604 -mstrict-align -mlongcall -DINET6
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+else
+CC_ARCH_SPEC			= 
+endif
+
+ifeq ($(ADDRESS_SANITIZER),YES)
+CC_ARCH_SPEC			+= -fno-omit-frame-pointer -fsanitize-recover=all -fsanitize=address
+endif
+
+UTMODE					= NO
+CTMODE					= NO
+DMYCOMMONAPI			= NO
+DEBUGMODE				= NO
+AR						= $(CROSS_COMPILE)ar
+AS						= $(CROSS_COMPILE)as
+CC						= $(CROSS_COMPILE)gcc
+CF						=
+CP						= cp
+LD						= $(CROSS_COMPILE)ld
+LDOUT_CONV				= @rem
+LDOUT_SYMS				= @rem
+NM						= $(CROSS_COMPILE)nm
+SIZE					= $(CROSS_COMPILE)size
+RANLIB					= $(CROSS_COMPILE)ranlib
+RM						= rm
+LN						= ln
+
+ARCH_DIR				= ppc
+ifeq ($(BASETYPE),all)
+ifeq ($(SIM_DIVLIB_ENABLE_GGDB), YES)
+DBGFLAGS = -g -ggdb -O2
+else
+DBGFLAGS = -O2
+endif
+else
+DBGFLAGS = -g -ggdb -O2
+endif
+
+CPP						= $(CC) -E -P -xc
+
+LDFLAGS					= -X -N -Map DonauBoot.map
+ifeq ($(CROSS_COMPILE),s800-linux-)
+	LDFLAGS			+= 
+endif
+
+###############################################################################
+# depend名設定
+ifeq ($(IT4MACHINE_TYPE),Minerva)
+DEPEND_INC		= _minerva.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),MinervaBK)
+TSS_DEFINES	   += -DDEF_MinervaBKCus -DDEF_MonoCus
+DEPEND_INC		= _minervabk.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),Zeus)
+TSS_DEFINES	   += -DDEF_ZeusCus
+DEPEND_INC		= _zeus.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),SoCZeus)
+	ifeq ($(THRMACHINE_TYPE),ZeusS)
+		TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_Asic777_PMS
+		DEPEND_INC		= _ZeusS.depend
+	else
+		TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard
+		DEPEND_INC		= _SoCZeus.depend
+	endif
+endif
+ifeq ($(IT4MACHINE_TYPE),arxp)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_ARMADAXP -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _arxp.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),he2)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_HELIOS_EMU2 -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _he2.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),z5be2)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_HELIOS_EMU2 -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_MonoCus -DDEF_Zeus5BkCus
+DEPEND_INC		= _z5be2.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),z5be3)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_IT5EMU3 -DDEF_Zeus5BkCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _z5be3.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),z5b)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_Zeus5BkCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _z5b.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse3)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_ZEUSS_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zse3.depend
+ifeq ($(MACHINE_CAPACITY),a4)
+ TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_A3A4ENGSTUB  -DDIV_MACHINE_CAPACITY_A4
+endif
+ifeq ($(MACHINE_CAPACITY),a3)
+ TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_A3A4ENGSTUB -DDIV_MACHINE_CAPACITY_A3
+endif
+endif
+ifeq ($(IT4MACHINE_TYPE),mse73)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_ZEUSS_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_MinervaS_PF -DDEF_MINERVAS_CUS
+DEPEND_INC		= _mse73.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),msbe73)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_IT5EMU3 -DDEF_Zeus5BkCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_MinervaS_PF -DDEF_MINERVASBK_CUS
+DEPEND_INC		= _msbe73.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),mse72)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_ZEUSS_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_MinervaS_PF -DDEF_MINERVAS_CUS
+DEPEND_INC		= _mse72.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),msbe72)
+TSS_DEFINES	   += -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_MinervaS_PF -DDEF_MINERVASBK_CUS
+DEPEND_INC		= _msbe72.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zs)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_ZEUSS_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_EaglePanel_Low
+DEPEND_INC		= _zs.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsb)
+TSS_DEFINES	   += -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_ZEUSSBK12_CUS -DDEF_ZeusCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zsb.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsbx)
+TSS_DEFINES	   += -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_ZEUSSBKX0_CUS -DDEF_ZeusCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zsbx.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsbe)
+TSS_DEFINES	   += -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_ZEUSSBK12_CUS -DDEF_ZEUSS_BASE_EMU -DDEF_ZeusCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zsbe.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsb2)
+TSS_DEFINES	   += -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_ZEUSSBK2ND_12_CUS -DDEF_ZeusCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zsb2.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsb2z)
+TSS_DEFINES	   += -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_ZEUSSBK2ND_ZX0_CUS -DDEF_ZeusCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zsb2z.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),msb)
+TSS_DEFINES	   += -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_MINERVASBK_CUS -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS
+DEPEND_INC		= _msb.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),msbe3)
+TSS_DEFINES	   += -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_IT5EMU3 -DDEF_MINERVASBK_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS
+DEPEND_INC		= _msbe3.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),MinervaSBKPreEmu)
+TSS_DEFINES	   += -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_MINERVASBK_CUS
+DEPEND_INC		= _MinervaSBKPreEmu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),ZeusSPreEmu)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_ZEUSS_CUS
+DEPEND_INC		= _ZeusSPreEmu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),he3)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_HeliosCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _he3.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),he)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_HeliosCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _he.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),ic)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_HeliosCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_ICARUS_CUS
+DEPEND_INC		= _ic.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),ice)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_HeliosCus -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_ICARUS_CUS -DDEF_HELIOS_BASE_EMU
+DEPEND_INC		= _ice.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),HeliosLPreEmu)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_HeliosCus
+DEPEND_INC		= _HeliosLPreEmu.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),MinervaEmu)
+TSS_DEFINES	   += -DDEF_MinervaEmu
+DEPEND_INC		= _minervaemu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),MinervaBKEmu)
+TSS_DEFINES	   += -DDEF_MinervaBKEmu -DDEF_MonoCus
+DEPEND_INC		= _minervabkemu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),ZeusEmu)
+TSS_DEFINES	   += -DDEF_ZeusEmu
+DEPEND_INC		= _zeusemu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),DonauLinux)
+TSS_DEFINES	   += -DDEF_MinervaPreEmu
+DEPEND_INC		= _donaulinux.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),ZeusRevEmu)
+TSS_DEFINES	   += -DDEF_ZeusRevCus
+DEPEND_INC		= _zeusrevemu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),SoCDonauEmu)
+TSS_DEFINES	   += -DDEF_MinervaEmu -DDEF_Soc1200
+DEPEND_INC		= _SoCDonauEmu.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),SoCZeusEmu)
+TSS_DEFINES	   += -DDEF_ZeusEmu -DDEF_Soc1200
+DEPEND_INC		= _SoCZeusEmu.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),SoCZeusEmu2ndAmur)
+TSS_DEFINES	   += -DDEF_ZeusEmu -DDEF_ZeusMLKEmu -DDEF_Soc1200 -DDEF_ZeusMLKBoard
+DEPEND_INC		= _SoCZeusEmu2ndAmur.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),SoCZeusEmu2ndZeus)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKEmu -DDEF_Soc1200 -DDEF_ZeusMLKBoard
+DEPEND_INC		= _SoCZeusEmu2ndZeus.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),ZeusBKPreEmu)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKEmu -DDEF_MonoCus
+DEPEND_INC		= _zeusBKPreEmu.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),SoCZeusBKEmu)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKEmu -DDEF_ZeusBKEmu -DDEF_Soc1200 -DDEF_MonoCus -DDEF_ZeusMLKBoard
+DEPEND_INC		= _SoCZeusBKEmu.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),SoCZeusBK)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_MonoCus -DDEF_ZeusMLKBoard
+DEPEND_INC		= _SoCZeusBK.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),zsze3)
+TSS_DEFINES	   += -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS -DDEF_LITTLEENDIAN -DDEF_EaglePanel_Hi
+DEPEND_INC		= _zsze3.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),ZeusS_ZX0PreEmu)
+TSS_DEFINES	   += -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard
+DEPEND_INC		= _ZeusS_ZX0PreEmu.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsze72)
+TSS_DEFINES	   += -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS -DDEF_LITTLEENDIAN
+DEPEND_INC		= _zsze72.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsz)
+TSS_DEFINES	   += -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS -DDEF_LITTLEENDIAN -DDEF_EaglePanel_Hi
+DEPEND_INC		= _zsz.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsbe800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleBKCus -DDEF_S800
+DEPEND_INC		= _zsbe800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_EaglePanel_Low
+DEPEND_INC		= _zse800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zsbe800zx)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800
+DEPEND_INC		= _zsbe800zx.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse800zx)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _zse800zx.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),egl)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_EaglePanel_Low
+DEPEND_INC		= _egl.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglz)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _eglz.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),dnbmlk)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_DenebMLKCus -DDEF_S800
+DEPEND_INC		= _dnbmlk.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),dnbmlke800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_DenebMLKCus -DDEF_S800
+DEPEND_INC		= _dnbmlke800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglb)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_EaglePanel_Low
+DEPEND_INC		= _eglb.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbz)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _eglbz.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbee)
+TSS_DEFINES	   +=-DDEF_EagleEmu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_EaglePanel_Low
+DEPEND_INC		= _eglbee.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbzee)
+TSS_DEFINES	   +=-DDEF_EagleEmu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _eglbzee.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbe800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_EaglePanel_Low
+DEPEND_INC		= _eglbe800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbze800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _eglbze800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),spam)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_S800 -DDEF_SparrowCus -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_ZEUSS_CUS
+DEPEND_INC		= _spam.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),spaaiosfp)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_S800 -DDEF_SparrowCus -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_SparrowAIOSFPCus -DDEF_ZEUSS_CUS
+DEPEND_INC		= _spaaiosfp.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse800spa)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_SparrowCus -DDEF_S800 -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_ZEUSS_ZX0_CUS -DDEF_A3A4ENGSTUB  -DDEF_SYS_EVA_3RD
+DEPEND_INC		= _zse800spa.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse800spa7)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_SparrowCus -DDEF_S800 -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_SparrowAIOSFPCus -DDEF_ZEUSS_ZX0_CUS -DDEF_A3A4ENGSTUB  -DDEF_SYS_EVA_3RD
+DEPEND_INC		= _zse800spa7.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),spamb)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus  -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_S800 -DDEF_SparrowCus -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_ZEUSS_CUS -DDEF_SparrowBKCus
+DEPEND_INC		= _spabm.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),spaaiosfpb)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus  -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_S800 -DDEF_SparrowCus -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_SparrowAIOSFPCus -DDEF_ZEUSS_CUS -DDEF_SparrowBKCus -DDEF_SparrowBKAIOSFPCus
+DEPEND_INC		= _spaaiosfbp.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),esspamb)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus  -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_S800 -DDEF_SparrowCus -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_ZEUSS_CUS -DDEF_SparrowBKCus  -DDEF_SparrowEmu
+DEPEND_INC		= _esspamb.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),esspaaiosfpb)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus  -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_S800 -DDEF_SparrowCus -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_SparrowAIOSFPCus -DDEF_ZEUSS_CUS -DDEF_SparrowBKCus -DDEF_SparrowBKAIOSFPCus -DDEF_SparrowEmu
+DEPEND_INC		= _esspaaiosfpb.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse800spab)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus  -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_SparrowCus -DDEF_S800 -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_ZEUSS_ZX0_CUS -DDEF_A3A4ENGSTUB  -DDEF_SYS_EVA_3RD -DDEF_SparrowBKCus
+DEPEND_INC		= _zse800spab.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse800spa7b)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus  -DDEF_MonoCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_A3A4PANEL -DDEF_SparrowCus -DDEF_S800 -DDEF_A4_Cus -DDEF_A3A4COMM -DDEF_SparrowAIOSFPCus -DDEF_ZEUSS_ZX0_CUS -DDEF_A3A4ENGSTUB  -DDEF_SYS_EVA_3RD -DDEF_SparrowBKCus -DDEF_SparrowBKAIOSFPCus
+DEPEND_INC		= _zse800spa7b.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglzp)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi -DDEF_EagleZpCus
+DEPEND_INC		= _eglzp.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbzp)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi -DDEF_EagleZpCus -DDEF_EagleZBKpCus
+DEPEND_INC		= _eglbzp.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglzpee)
+TSS_DEFINES	   +=-DDEF_EagleEmu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi -DDEF_EagleZpCus -DDEF_ZeusMLKCus
+DEPEND_INC		= _eglzpee.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbzpee)
+TSS_DEFINES	   +=-DDEF_EagleEmu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi -DDEF_EagleZpCus -DDEF_EagleZBKpCus
+DEPEND_INC		= _eglbzpee.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglzpe800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi -DDEF_EagleZpCus
+DEPEND_INC		= _eglzpe800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),eglbzpe800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_EagleBKCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi -DDEF_EagleZpCus -DDEF_EagleZBKpCus
+DEPEND_INC		= _eglbzpe800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),hemlk)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_EaglePanel_Low -DDEF_HeliosMLKCus
+DEPEND_INC		= _hemlk.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),hemlkee)
+TSS_DEFINES	   +=-DDEF_EagleEmu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_EaglePanel_Low -DDEF_HeliosMLKCus
+DEPEND_INC		= _hemlkee.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),hemlke800)
+TSS_DEFINES	   +=-DDEF_S800Emu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_3RD -DDEF_64BIT_PF -DDEF_EagleCus -DDEF_S800 -DDEF_EaglePanel_Low -DDEF_HeliosMLKCus
+DEPEND_INC		= _hemlke800.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),mssb)
+TSS_DEFINES	   +=-DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MinervaSSBKCus -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_EagleBKCus -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _mssb.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),mssbee)
+TSS_DEFINES	   +=-DDEF_EagleEmu -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MinervaSSBKCus -DDEF_MonoCus -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_64BIT_PF -DDEF_LITTLEENDIAN -DDEF_EagleBKCus -DDEF_EagleCus -DDEF_S800 -DDEF_A800 -DDEF_EaglePanel_Hi
+DEPEND_INC		= _mssbee.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),mmlke72)
+TSS_DEFINES	   += -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MINERVAMLK_CUS -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS -DDEF_LITTLEENDIAN
+DEPEND_INC		= _mmlke72.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),mmlk)
+TSS_DEFINES	   += -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_MINERVAMLK_CUS -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS -DDEF_LITTLEENDIAN
+DEPEND_INC		= _mmlk.depend
+endif
+
+ifeq ($(MINERVAZEUS_VERUP),YES)
+TSS_DEFINES	   += -DDEF_MinervaZeusVerUp
+ifeq ($(IT4MACHINE_TYPE),Minerva)
+DEPEND_INC		= _minervaverup.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),Zeus)
+DEPEND_INC		= _zeusverup.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),MinervaBK)
+DEPEND_INC		= _minervabkverup.depend
+endif
+endif
+
+ifeq ($(IT4MACHINE_TYPE),Zeus5BKPreEmu)
+TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusBKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_MonoCus -DDEF_Zeus5BkCus
+DEPEND_INC		= _Zeus5BKPreEmu.depend
+endif
+
+ifeq ($(IT4MACHINE_TYPE),zse3_a3)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_A3A4ENGSTUB -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_ZEUSS_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zse3_a3.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),zse3_a4)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_A3A4ENGSTUB -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT
+DEPEND_INC		= _zse3_a4.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),vmlk)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_A4_Cus -DDEF_VenusMLK
+DEPEND_INC		= _vmlk.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),vmlke)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_A3A4ENGSTUB -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_A4_Cus -DDEF_VenusMLK -DDEF_A4_Cus_EMU_A3
+DEPEND_INC		= _vmlke.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),vmlkeve)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_A3A4ENGSTUB -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_A4_Cus -DDEF_VenusMLK -DDEF_A4_Cus_EMU_Venus
+DEPEND_INC		= _vmlkeve.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),kssfum)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_A4_Cus -DDEF_VenusMLK -DDEF_KRONOSS_Cus
+DEPEND_INC		= _kssfum.depend
+endif
+ifeq ($(IT4MACHINE_TYPE),kss)
+TSS_DEFINES	   += -DDEF_A3A4COMM -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_SYS_EVA_1ST -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_A4_Cus -DDEF_KRONOSS_Cus -DDEF_MonoCus
+DEPEND_INC		= _kss.depend
+endif
+
+ifeq ($(OEM_TYPE),SINDOH)
+TSS_DEFINES	   += -DDEF_SINDOH_CUS
+endif
+
+ifeq ($(AIRPRINT_DEF),yes)
+TSS_DEFINES	   += -DAIRPRINT_CUS
+endif
+
+
+ifeq ($(OEM_TYPE),MURATAKIKAI)
+TSS_DEFINES	   += -DDEF_MURATA_CUS
+endif
+
+ifeq ($(IT4MACHINE_TYPE),a64_mv7040)
+	TSS_DEFINES	   += -DDEF_IT5EMU3 -DDEF_Helios_PF -DDEF_MinervaS_PF -DDEF_ZEUSS_ZX0_CUS -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_SharedMemMCPF_IF -DDEF_SYS_EVA_3RD -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_Asic777_PMS -DDEF_LITTLEENDIAN -DDEF_64BIT_PF
+#	TSS_DEFINES	   += -DDEF_ZeusCus -DDEF_ZeusMLKCus -DDEF_Soc1200 -DDEF_ZeusMLKBoard -DDEF_IT5EMU3 -DDEF_ZEUSS_CUS -DDEF_Helios_PF -DDEF_SharedMemMCPF_IF -DDEF_LITTLEENDIAN -DDEF_NOT_PERMIT_ASIC30_PRINT -DDEF_MinervaS_PF -DDEF_ZEUSS_ZX0_CUS -DDEF_64BIT_PF -DDEF_SYS_EVA_3RD
+	DEPEND_INC		= _a64_mv7040.depend
+endif
+ifeq ($(BASETYPE),all)
+DEPEND_INC       	:= $(DEPEND_INC).all
+endif
+
+###############################################################################
+## Include Directries 
+CC_INCLUDE	+=	-I. \
+
+CC_INCLUDE	+=	-I$(COMMONPATH)/../api/include \
+
+CC_INCLUDE	+=	-I$(COMMONPATH)/../../shlib/GUI/gfw/include
+CC_INCLUDE	+=	-I$(COMMONPATH)/../../shlib/GUI/graphicdata
+
+## BlackAPI@Proxy-Stub 2011.08.03 tri ishida ->
+CC_INCLUDE	+=	-I$(COMMONPATH)/panel/plibl/FT/include \
+## BlackAPI@Proxy-Stub 2011.08.03 tri ishida <-
+
+# hosono reduction of ui sourcecodes.
+CC_INCLUDE  += -I$(COMMONPATH)/../divlib/Common
+
+ifeq ($(BASETYPE),hw)
+#ifeq ($(GCC_VER_KM),5.2.1)
+ifeq ($(GCC_VER_KM),11.4.0)
+ifeq ($(CROSS_COMPILE),s800-linux-)
+CC_INCLUDE	+=  \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/include/c++/5.2.1 \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/include/c++/5.2.1/aarch64-linux-gnu \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/include/c++/5.2.1/backward \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/libc/usr/include \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/5.2.1/include \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/5.2.1/include-fixed \
+			-I/opt/marvell/s800/toolchain/aarch64-linux-gnu/include
+endif
+endif
+ifeq ($(GCC_VER_KM),4.3.3)
+ifeq ($(CROSS_COMPILE),mpc8536-linux-)
+CC_INCLUDE	+=	-nostdinc \
+			-I/opt/timesys/mpc8536a_dk/toolchain/powerpc-timesys-linux-gnuspe/include/c++/4.3.3 \
+			-I/opt/timesys/mpc8536a_dk/toolchain/powerpc-timesys-linux-gnuspe/include/c++/4.3.3/powerpc-timesys-linux-gnuspe \
+			-I/opt/timesys/mpc8536a_dk/toolchain/lib/gcc/powerpc-timesys-linux-gnuspe/4.3.3/include \
+			-I/opt/timesys/mpc8536a_dk/toolchain/lib/gcc/powerpc-timesys-linux-gnuspe/4.3.3/include-fixed \
+			-I/opt/timesys/mpc8536a_dk/toolchain/include \
+			-I/opt/timesys/mpc8536a_dk/toolchain/include/linux 
+else
+ifeq ($(CROSS_COMPILE),mpc8641-linux-)
+CC_INCLUDE	+=	-nostdinc \
+				-I/opt/timesys/mpc8641_hpcn/toolchain/powerpc-timesys-linux-gnu/include/c++/4.3.3 \
+				-I/opt/timesys/mpc8641_hpcn/toolchain/powerpc-timesys-linux-gnu/include/c++/4.3.3/powerpc-timesys-linux-gnu \
+				-I/opt/timesys/mpc8641_hpcn/toolchain/lib/gcc/powerpc-timesys-linux-gnu/4.3.3/include \
+				-I/opt/timesys/mpc8641_hpcn/toolchain/lib/gcc/powerpc-timesys-linux-gnu/4.3.3/include-fixed \
+				-I/opt/timesys/mpc8641_hpcn/toolchain/include \
+				-I/opt/timesys/mpc8641_hpcn/toolchain/include/linux 
+else
+ifeq ($(CROSS_COMPILE),ppc440-linux-)
+CC_INCLUDE	+=	-nostdinc \
+			-I/opt/timesys/amcc440epx/toolchain/powerpc-timesys-linux-gnu/include/c++/4.3.3 \
+			-I/opt/timesys/amcc440epx/toolchain/powerpc-timesys-linux-gnu/include/c++/4.3.3/powerpc-timesys-linux-gnu \
+			-I/opt/timesys/amcc440epx/toolchain/lib/gcc/powerpc-timesys-linux-gnu/4.3.3/include \
+			-I/opt/timesys/amcc440epx/toolchain/lib/gcc/powerpc-timesys-linux-gnu/4.3.3/include-fixed \
+			-I/opt/timesys/amcc440epx/toolchain/include \
+			-I/opt/timesys/amcc440epx/toolchain/include/linux 
+endif
+endif
+endif
+else
+ifeq ($(GCC_VER_KM),4.2.1)
+CC_INCLUDE	+=  -nostdinc \
+				-I/opt/timesys/toolchains/lib/gcc/powerpc-timesys-linux-gnu/4.2.1/include \
+				-I/opt/timesys/toolchains/lib/gcc/powerpc-timesys-linux-gnu/4.2.1/include-fixed \
+				-I/opt/timesys/toolchains/powerpc-timesys-linux-gnu/libc/usr/include \
+				-I/opt/timesys/toolchains/powerpc-timesys-linux-gnu/libc/usr/include/linux \
+				-I/opt/timesys/toolchains/powerpc-timesys-linux-gnu/include/c++/4.2.1 \
+				-I/opt/timesys/toolchains/powerpc-timesys-linux-gnu/include/c++/4.2.1/powerpc-timesys-linux-gnu/74xx \
+				-I/opt/timesys/toolchains/powerpc-timesys-linux-gnu/include/c++/4.2.1/backward \
+				-I/opt/timesys/toolchains/ppc74xx-linux/powerpc-timesys-linux-gnu/include
+else
+ifeq ($(GCC_VER_KM),3.4)
+CC_INCLUDE	+=  -nostdinc \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/lib/gcc/powerpc-linux/3.4/include \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/include/ \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/include/linux \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/include/c++/3.4 \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/include/c++/3.4/powerpc-linux \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/include/c++/3.4/backward \
+				-I/opt/timesys/linux/5.0/toolchains/ppc74xx-linux/include/asm
+else
+ifeq ($(GCC_VER_KM),4.6.4)
+ifeq ($(CROSS_COMPILE),mv78460-linux-)
+CC_INCLUDE	+=	-nostdinc \
+			-I/opt/marvell/mv78460/toolchain/arm-marvell-linux-gnueabi/include/c++/4.6.4 \
+			-I/opt/marvell/mv78460/toolchain/arm-marvell-linux-gnueabi/include/c++/4.6.4/arm-marvell-linux-gnueabi \
+			-I/opt/marvell/mv78460/toolchain/arm-marvell-linux-gnueabi/include/c++/4.6.4/backward \
+			-I/opt/marvell/mv78460/toolchain/arm-marvell-linux-gnueabi/libc/usr/include \
+			-I/opt/marvell/mv78460/toolchain/lib/gcc/arm-marvell-linux-gnueabi/4.6.4/include \
+			-I/opt/marvell/mv78460/toolchain/lib/gcc/arm-marvell-linux-gnueabi/4.6.4/include-fixed \
+			-I/opt/marvell/mv78460/toolchain/include 
+endif
+else
+ifeq ($(GCC_VER_KM),4.7.3)
+ifeq ($(CROSS_COMPILE),mb86s73-linux-)
+CC_INCLUDE	+=	-nostdinc \
+			-I/opt/linaro/linaro473_20130221/toolchain/arm-linux-gnueabihf/include/c++/4.7.3 \
+			-I/opt/linaro/linaro473_20130221/toolchain/arm-linux-gnueabihf/include/c++/4.7.3/arm-linux-gnueabihf/arm-linux-gnueabi \
+			-I/opt/linaro/linaro473_20130221/toolchain/arm-linux-gnueabihf/libc/usr/include \
+			-I/opt/linaro/linaro473_20130221/toolchain/arm-linux-gnueabihf/libc/usr/include/arm-linux-gnueabihf \
+			-I/opt/linaro/linaro473_20130221/toolchain/lib/gcc/arm-linux-gnueabihf/4.7.3/include \
+			-I/opt/linaro/linaro473_20130221/toolchain/lib/gcc/arm-linux-gnueabihf/4.7.3/include-fixed
+endif
+else
+
+ifeq ($(GCC_VER_KM),4.8.3)
+ifeq ($(CROSS_COMPILE),mb86s72-linux-)
+CC_INCLUDE	+=	-I/opt/linaro/mb86s72/toolchain/arm-linux-gnueabihf/include/c++/4.9.2 \
+				-I/opt/linaro/mb86s72/toolchain/arm-linux-gnueabihf/include/c++/4.9.2/arm-linux-gnueabihf \
+				-I/opt/linaro/mb86s72/toolchain/arm-linux-gnueabihf/libc/usr/include \
+				-I/opt/linaro/mb86s72/toolchain/lib/gcc/arm-linux-gnueabihf/4.9.2/include \
+				-I/opt/linaro/mb86s72/toolchain/lib/gcc/arm-linux-gnueabihf/4.9.2/include-fixed
+endif
+else
+ifeq ($(GCC_VER_KM),4.9.3)
+ifeq ($(CROSS_COMPILE),mv62x0-linux-)
+CC_INCLUDE	+=	-nostdinc \
+			-I/opt/km/6270/toolchain/bin/../lib/gcc/armv7l-timesys-linux-gnueabihf/4.9.3/include \
+			-I/opt/km/6270/toolchain/bin/../lib/gcc/armv7l-timesys-linux-gnueabihf/4.9.3/include-fixed \
+			-I/opt/km/6270/toolchain/bin/../lib/gcc/armv7l-timesys-linux-gnueabihf/4.9.3/../../../../armv7l-timesys-linux-gnueabihf/include \
+			-I/opt/km/6270/toolchain/bin/../../toolchain/usr/include \
+			-I/opt/km/6270/toolchain/bin/../lib/gcc/armv7l-timesys-linux-gnueabihf/4.9.3/../../../../armv7l-timesys-linux-gnueabihf/include/c++/4.9.3 \
+			-I/opt/km/6270/toolchain/bin/../lib/gcc/armv7l-timesys-linux-gnueabihf/4.9.3/../../../../armv7l-timesys-linux-gnueabihf/include/c++/4.9.3/armv7l-timesys-linux-gnueabihf \
+			-I/opt/km/6270/toolchain/bin/../lib/gcc/armv7l-timesys-linux-gnueabihf/4.9.3/../../../../armv7l-timesys-linux-gnueabihf/include/c++/4.9.3/backward
+endif
+else
+# Error !!
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+
+# LibP11 include path NICFUM7.6
+CC_INCLUDE += -I$(TOPPATH)/application/divlib/client/Proxy/lib/libp11/libp11-0.4.7-include
+
+ifeq ($(USB20_INTERFACE), YES)
+TSS_DEFINES	   += -DINCLUDE_MIO_NCLI
+DRIVERS		   += ncLiEnd.o
+endif
+
+ifeq ($(IEEE1284_INTERFACE), YES)
+TSS_DEFINES	   += -DINCLUDE_MIO_PPLI
+DRIVERS		   += ppLiEnd.o
+endif
+
+ifeq ($(ROM_DIV), YES)
+TSS_DEFINES	   += -DROM_DIV
+endif
+
+ifeq ($(ROM_DIV_2), YES)
+TSS_DEFINES	   += -DROM_DIV_2
+endif
+
+ifeq ($(ROM_DIV_3), YES)
+TSS_DEFINES	   += -DROM_DIV_3
+endif
+
+ifeq ($(DF_TYPE), EDH)
+TSS_DEFINES	    += -DDEF_SCN1000 -DDEF_EDH_COLOR
+endif
+
+ifeq ($(BASETYPE),all)
+#TSS_DEFINES += -DSIMULATOR -D_SIM -D_USE_IGC -DUFST_LINUX -DIMP_MFPSHELL
+TSS_DEFINES += -D_USE_IGC -DUFST_LINUX -DIMP_MFPSHELL -DUSE_SIMHEADER
+ifeq ($(ISQT),yes)
+TSS_DEFINES += -DSIMQT2WAY
+endif
+endif
+
+ifeq ($(BASETYPE),hw)
+TSS_DEFINES += -DTORNADO -D_REAL -DIMP_MFPSHELL
+ifeq ($(ISQT),yes)
+TSS_DEFINES += -DDEF_PANELDRV
+endif
+endif
+
+ifeq ($(ISQT),yes)
+TSS_DEFINES += -DQT_PANEL
+CC_INCLUDE  += -I$(QTDIR)/include
+ifeq ($(QTVERSION),q530)
+CC_INCLUDE  += -I$(QTDIR)/include/QtWidgets
+else
+CC_INCLUDE  += -I$(QTDIR)/include/Qt
+endif
+CC_INCLUDE  += -I$(QTDIR)/include/QtCore \
+			   -I$(QTDIR)/include/QtGui
+endif
+
+CC_WARNING		= -Werror=all -Wno-unused-but-set-variable -Wno-char-subscripts -Wno-error=sign-compare -Wno-error=conversion-null -Wno-error=narrowing
+CC_WARNING		+= -Wno-write-strings  -Wno-strict-aliasing -Wconversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Werror=overflow
+CC_WARNING		+= -fpermissive -Wno-error=misleading-indentation -Wno-error=parentheses -Wno-error=nonnull-compare -Wno-error=nonnull -Wno-error=address -Wno-error=restrict -Wno-error=address -Wno-error=catch-value -Wno-error=unused-const-variable -Wno-error=register -Wno-error=sizeof-array-div -Wno-error=return-type -Wno-error=maybe-uninitialized -Wno-error=tautological-compare -Wno-error=int-in-bool-context -Wno-error=sizeof-pointer-div
+C++_WARNING		= -Werror=all -Wno-unused-but-set-variable -Wno-char-subscripts -Wno-error=sign-compare -Wno-error=conversion-null -Wno-error=narrowing
+C++_WARNING		+= -Wno-write-strings  -Wno-strict-aliasing -Wconversion -Werror=pointer-to-int-cast -Werror=int-to-pointer-cast -Werror=overflow
+C++_WARNING		+= -fpermissive -Wno-error=misleading-indentation -Wno-error=parentheses -Wno-error=nonnull-compare -Wno-error=nonnull -Wno-error=address -Wno-error=restrict -Wno-error=address -Wno-error=catch-value -Wno-error=unused-const-variable -Wno-error=register -Wno-error=sizeof-array-div -Wno-error=return-type -Wno-error=maybe-uninitialized -Wno-error=tautological-compare -Wno-error=int-in-bool-context -Wno-error=sizeof-pointer-div
+
+CFLAGS        = $(CC_ARCH_SPEC) $(CC_INCLUDE) -DTORV22 -D_REENTRANT -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 $(CC_OPTIM_TARGET) $(CC_WARNING) $(TSS_DEFINES) $(DBGFLAGS)
+#ZeusMLKPre mfp_archi_merge 2011.03.25 triarc 渡邊 start
+#C++FLAGS      = $(CC_ARCH_SPEC) $(CC_INCLUDE) -DTORV22 -D_REENTRANT -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 $(CC_OPTIM_TARGET) $(C++_WARNING) $(TSS_DEFINES) -fno-for-scope
+C++FLAGS      = $(CC_ARCH_SPEC) $(CC_INCLUDE) -DTORV22 -D_REENTRANT -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 $(CC_OPTIM_TARGET) $(C++_WARNING) $(TSS_DEFINES) $(DBGFLAGS) -fno-for-scope
+#ZeusMLKPre mfp_archi_merge 2011.03.25 triarc 渡邊 end
+ifeq ($(DEBUGMODE), YES)
+C++FLAGS      += $(DBGFLAGS)
+endif
+
+CFLAGS_AS     = $(CC_ARCH_SPEC) $(CC_INCLUDE) $(CC_OPTIM_TARGET) $(TSS_DEFINES)  $(DBGFLAGS) -P -x assembler-with-cpp
+
+CFLAGS_LIB    = -fPIC
+
+ifeq ($(COSIM), YES)
+DBG_FLAG = -g -O0
+else
+#DBG_FLAG = -O2
+DBG_FLAG = -g -O0
+endif
+
+ifeq ($(BASETYPE),all)
+ TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_LITTLEENDIAN -DLINUX
+else
+ifeq ($(CROSS_COMPILE),mv78460-linux-)
+TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_LITTLEENDIAN -DLINUX
+else
+ifeq ($(CROSS_COMPILE),mb86s73-linux-)
+TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_LITTLEENDIAN -DLINUX
+else
+ifeq ($(CROSS_COMPILE),mb86s72-linux-)
+TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_LITTLEENDIAN -DLINUX
+else
+ifeq ($(CROSS_COMPILE),mv62x0-linux-)
+TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_LITTLEENDIAN -DLINUX
+else
+ifeq ($(CROSS_COMPILE),s800-linux-)
+TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_LITTLEENDIAN -DLINUX
+else
+TSS_DEFINES	+= -DCPU=$(CPU) -DTORNADO -DDEF_COLOR -DDEF_BIGENDIAN -DLINUX
+endif
+endif
+endif
+endif
+endif
+endif
+
+ifeq ($(strip $(CROSS_PREFIX)),)
+TSS_DEFINES += -DDEF_PANELDRV
+endif
+
+ifeq ($(INCLUDE_MIO), YES)
+TSS_DEFINES	+= -DINCLUDE_MIO
+endif
+
+# Network-FAX
+ifeq ($(NETFAX), YES)
+TSS_DEFINES   += -DDEF_NETFAX
+endif
+
+ifeq ($(AES_FTP_OFF), YES)
+TSS_DEFINES	    += -DDEF_AES_FTP_OFF
+endif
+
+# ThamesCus削除対応(2007.05.29 松尾)
+ifeq ($(IOPTIONCOM), YES)
+TSS_DEFINES   += -DDEF_IoptionCom
+endif
+
+ifeq ($(COSIM), YES)
+TSS_DEFINES	+= -DCOSIM
+else
+endif
+
+ifeq ($(THR_SIMWIN), YES)
+TSS_DEFINES	+= -DTHR_SIMWIN
+endif
+
+TSS_DEFINES		+= -DDEF_MoselBoard
+
+# 06/04/17 R.Suzuki SimWinのパネルで実機を動作させる 
+TSS_DEFINES		+= -DDEF_SIM_NETPNL
+
+ifeq ($(PRODUCT_TYPE), DONAU)
+ TSS_DEFINES		+= -DDEF_Donau
+endif
+TSS_DEFINES		+= -DDEF_MoselCom -DDEF_Donau
+ifeq ($(PRODUCT_TYPE), EMU)
+ TSS_DEFINES		+= -DDEF_EMU
+endif
+
+# Mes3.0 ビルドエラー対応
+TSS_DEFINES		+= -DNO_PEM
+
+TSS_DEFINES		+= -DDEF_CLCD
+
+TSS_DEFINES	    += -DDEF_MIDDLE_AUTH_SERVER
+
+ifeq ($(BOARD_PRE_TYPE), YES)
+TSS_DEFINES	    += -DDEF_PreBoard
+endif
+
+ifeq ($(BOARD_FUM_TYPE), YES)
+TSS_DEFINES		+= -DDEF_FumBoard
+endif
+
+ifeq ($(AUTO_TEST_MODE), YES)
+TSS_DEFINES		+= -DDEF_SimAutoTest
+endif
+
+ifeq ($(DIVLIB_DEBUG_LOG), YES)
+TSS_DEFINES		+= -DDEF_BLACKAPI_DEBUGLOG
+endif
+
+ifeq ($(COSIM), NO)
+ifeq ($(MACHINE_TYPE), MOSELCOM)
+#TSS_DEFINES		+= -DMSVC
+#TSS_DEFINES		+= -DVXWORKS
+TSS_DEFINES		+= -DUFST_LINUX
+endif
+endif
+
+#【Thames-i試験環境作成対応】start.
+ifeq ($(COSIM), NO)
+ifeq ($(MACHINE_TYPE), MOSELCOM)
+TSS_DEFINES		+= -DDEF_THAMES_I
+TSS_DEFINES		+= -DDEF_THAMES_ICUSTOM
+endif
+endif
+#【Thames-i試験環境作成対応】end.
+
+ifeq ($(LCDTYPE),7inch)
+TSS_DEFINES	+= -DDEF_LCD_7INCH
+endif
+
+ifeq ($(RESTYPE),WQVGA)
+C++FLAGS	+= -DDEF_RES_WQVGA
+else
+ifeq ($(RESTYPE),WSVGA)
+# 2019/02/19 OP_BTS-2076 LocalUI東島 IT6機種では3ペイン表示のためWVGAで画面表示制御を行っている.
+# そのためmmlk(IT5機種)を除きIT6機種ではDEF_RES_WSVGAを定義しないように対応.
+  ifeq ($(IT4MACHINE_TYPE),mmlk)
+   C++FLAGS	+= -DDEF_RES_WSVGA
+  endif
+else
+ifeq ($(RESTYPE),FullHD)
+C++FLAGS	+= -DDEF_RES_FHD
+else
+ifeq ($(RESTYPE),WXGA)
+C++FLAGS	+= -DDEF_RES_WXGA
+endif
+endif
+endif
+endif
+
+##ZeusMLKPre mfp_archi_merge 2011.02.28 ADS 内田 start
+TSS_DEFINES	+= -DDEF_UI_FUM5
+##ZeusMLKPre mfp_archi_merge 2011.02.28 ADS 内田 end
+## BlackAPI@Proxy-Stub 2011.07.27 tri ishida ->
+TSS_DEFINES += -DDEF_Stub_UIv5
+## BlackAPI@Proxy-Stub 2011.07.27 tri ishida <-
+# //伊丹Sky(福井) 2012/01/16 パフォーマンス改善 ↓.
+TSS_DEFINES	   += -DDEF_PerformanceUp
+# //伊丹Sky(福井) 2012/01/16 パフォーマンス改善 ↑.
+# //伊丹Sky(福井) 2012/02/20 パフォーマンス改善 ↓.
+ifeq ($(BASETYPE),all)
+TSS_DEFINES		+= -DFUM_LINUX
+endif
+# //伊丹Sky(福井) 2012/02/20 パフォーマンス改善 ↑.
+#
+# // 2013/06/05 BlackAPI制御見直し（未使用API削除） ↓.
+# 無効にする場合下記を有効にする. 有効時　Makefile修正要(DEL_DISUSED_API_PART2で検索).
+# TSS_DEFINES	   += -DDEL_DISUSED_API_PART2
+# // 2013/06/05 BlackAPI制御見直し（未使用API削除） ↑.
+# // 2013/06/05 BlackAPI制御見直し（パフォーマンス改善）_BlackAPI呼び出し回数削減_doc) ↓.
+# 無効にする場合下記を有効にする.
+# TSS_DEFINES	   += -DDEF_DISABLE_DOC_CALLCOUNT_REDUCTION
+# // 2013/06/05 BlackAPI制御見直し（パフォーマンス改善）_BlackAPI呼び出し回数削減_doc) ↑.
+# // 2013/06/05 BlackAPI制御見直し（パフォーマンス改善）_ProxyStub見直し) ↓.
+# 無効にする場合下記を有効にする.
+# TSS_DEFINES	   += -DDEF_DISABLE_PerformanceUp2
+# // 2013/06/05 BlackAPI制御見直し（パフォーマンス改善）_ProxyStub見直し) ↑.
+# // 2013/06/05 BlackAPI制御見直し（パフォーマンス改善）_Observer通知処理見直し) ↓.
+# 無効にする場合下記を有効にする. アプリpanel/brw側ソースの修正も必要.
+# TSS_DEFINES	   += -DDEF_DISABLE_SELECT_OBSERVER_METHOD
+# // 2013/06/05 BlackAPI制御見直し（パフォーマンス改善）_Observer通知処理見直し) ↑.
+#
+# // 2013/06/05 BlackAPI制御見直し（RAM 削減(スレッド数削減)) ↓.
+# 無効にする場合下記を有効にする.
+# TSS_DEFINES	+= -DDEF_DISABLE_DIVLIB_DEL_RAM_THREAD
+# // 2013/06/05 BlackAPI制御見直し（RAM 削減(スレッド数削減)) ↑.
